@@ -27,24 +27,26 @@ struct AccountDetailView: View {
 
     @ViewBuilder
     private func accountContent(_ account: Account) -> some View {
-        if account.holdings.isEmpty {
-            ContentUnavailableView {
-                Label("No Holdings", systemImage: "tray")
-            } description: {
-                Text("This account has no holdings yet.")
-            } actions: {
-                if account.kind == .exchange {
-                    Button("Sync Account") {
-                        // TODO: Sync from exchange
+        Group {
+            if account.holdings.isEmpty {
+                ContentUnavailableView {
+                    Label("No Holdings", systemImage: "tray")
+                } description: {
+                    Text("This account has no holdings yet.")
+                } actions: {
+                    if account.kind == .exchange {
+                        Button("Sync Account") {
+                            // TODO: Sync from exchange
+                        }
                     }
                 }
-            }
-        } else {
-            List(account.holdings) { holding in
-                HoldingRow(
-                    holding: holding,
-                    price: appState.prices[holding.asset?.coinGeckoId ?? ""]
-                )
+            } else {
+                List(account.holdings) { holding in
+                    HoldingRow(
+                        holding: holding,
+                        price: appState.prices[holding.asset?.coinGeckoId ?? ""]
+                    )
+                }
             }
         }
         .navigationTitle(account.name)

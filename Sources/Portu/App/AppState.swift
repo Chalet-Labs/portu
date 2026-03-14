@@ -1,3 +1,4 @@
+import Foundation
 import SwiftData
 
 /// Root transient UI state. Does NOT hold SwiftData model arrays.
