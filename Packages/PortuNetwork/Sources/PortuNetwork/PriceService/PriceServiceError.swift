@@ -1,6 +1,6 @@
 import Foundation
 
-public enum PriceServiceError: Error, Sendable {
+public enum PriceServiceError: Error, Sendable, Equatable {
     case rateLimited
     case networkUnavailable
     case decodingFailed
