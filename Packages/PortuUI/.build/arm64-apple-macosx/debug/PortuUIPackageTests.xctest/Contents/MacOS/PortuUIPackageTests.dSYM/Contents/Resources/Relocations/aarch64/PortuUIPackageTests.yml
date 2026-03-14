@@ -1,0 +1,5 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/work/conductor/workspaces/portu/mumbai/.claude/worktrees/agent-a77977b9/Packages/PortuUI/.build/arm64-apple-macosx/debug/PortuUIPackageTests.xctest/Contents/MacOS/PortuUIPackageTests'
+relocations:     []
+...
