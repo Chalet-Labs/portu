@@ -842,7 +842,7 @@ import Foundation
 import PortuCore
 
 /// Fetches and caches cryptocurrency prices from CoinGecko's free API.
-/// Rate-limited to 10 requests/minute. Cache TTL: 30 seconds.
+/// Rate-limited to 10 requests/minute (sliding window). Cache TTL: 30 seconds.
 public final class PriceService {
     private let session: URLSession
     private let baseURL = URL(string: "https://api.coingecko.com/api/v3")!
@@ -850,18 +850,37 @@ public final class PriceService {
     private var lastFetchDate: Date?
     private let cacheTTL: TimeInterval
 
-    public init(session: URLSession = .shared, cacheTTL: TimeInterval = 30) {
+    // Sliding-window rate limiter: max 10 requests per 60 seconds
+    private let maxRequestsPerWindow: Int
+    private let windowDuration: TimeInterval
+    private var requestTimestamps: [Date] = []
+
+    public init(
+        session: URLSession = .shared,
+        cacheTTL: TimeInterval = 30,
+        maxRequestsPerWindow: Int = 10,
+        windowDuration: TimeInterval = 60
+    ) {
         self.session = session
         self.cacheTTL = cacheTTL
+        self.maxRequestsPerWindow = maxRequestsPerWindow
+        self.windowDuration = windowDuration
     }
 
     /// Fetch current USD prices for the given CoinGecko coin IDs.
-    /// Returns cached data if within TTL.
+    /// Returns cached data if within TTL. Enforces client-side rate limit.
     public func fetchPrices(for coinIds: [String]) async throws(PriceServiceError) -> [String: Decimal] {
         if let lastFetch = lastFetchDate,
            Date.now.timeIntervalSince(lastFetch) < cacheTTL,
            !cache.isEmpty {
             return cache
+        }
+
+        // Proactive rate limiting — reject before sending the request
+        let now = Date.now
+        requestTimestamps.removeAll { now.timeIntervalSince($0) > windowDuration }
+        guard requestTimestamps.count < maxRequestsPerWindow else {
+            throw .rateLimited
         }
 
         let ids = coinIds.joined(separator: ",")
@@ -879,6 +898,8 @@ public final class PriceService {
             throw .networkUnavailable
         }
 
+        requestTimestamps.append(.now)
+
         if let http = response as? HTTPURLResponse {
             switch http.statusCode {
             case 200: break
@@ -891,6 +912,31 @@ public final class PriceService {
         cache = parsed.prices
         lastFetchDate = .now
         return parsed.prices
+    }
+
+    /// Returns an async stream that polls prices at the given interval.
+    /// The stream yields price dictionaries keyed by coinGeckoId.
+    /// Errors propagate through the stream; the caller decides how to handle them.
+    public func priceStream(
+        for coinIds: [String],
+        interval: TimeInterval = 30
+    ) -> AsyncThrowingStream<[String: Decimal], any Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                while !Task.isCancelled {
+                    do {
+                        let prices = try await fetchPrices(for: coinIds)
+                        continuation.yield(prices)
+                    } catch {
+                        continuation.finish(throwing: error)
+                        return
+                    }
+                    try await Task.sleep(for: .seconds(interval))
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
     /// Clear the price cache, forcing a fresh fetch on next call.
@@ -955,7 +1001,7 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
-@Suite("PriceService Tests")
+@Suite("PriceService Tests", .serialized)
 struct PriceServiceTests {
     let session: URLSession
 
@@ -1009,6 +1055,58 @@ struct PriceServiceTests {
 
         let second = try await service.fetchPrices(for: ["bitcoin"])
         #expect(second["bitcoin"] == 62400) // cached
+    }
+
+    @Test func invalidateCacheForcesRefetch() async throws {
+        let json = """
+        {"bitcoin":{"usd":62400}}
+        """
+        MockURLProtocol.mockData = json.data(using: .utf8)
+        MockURLProtocol.mockStatusCode = 200
+
+        let service = PriceService(session: session, cacheTTL: 60)
+
+        // First fetch
+        let first = try await service.fetchPrices(for: ["bitcoin"])
+        #expect(first["bitcoin"] == 62400)
+
+        // Update mock and invalidate cache
+        MockURLProtocol.mockData = """
+        {"bitcoin":{"usd":99999}}
+        """.data(using: .utf8)
+
+        service.invalidateCache()
+
+        // Should fetch fresh data, not cached
+        let second = try await service.fetchPrices(for: ["bitcoin"])
+        #expect(second["bitcoin"] == 99999)
+    }
+
+    @Test func rateLimiterRejectsExcessiveRequests() async throws {
+        let json = """
+        {"bitcoin":{"usd":62400}}
+        """
+        MockURLProtocol.mockData = json.data(using: .utf8)
+        MockURLProtocol.mockStatusCode = 200
+
+        // Create service with strict limit (3 requests per 60s) and no cache
+        let service = PriceService(
+            session: session,
+            cacheTTL: 0,
+            maxRequestsPerWindow: 3,
+            windowDuration: 60
+        )
+
+        // First 3 requests succeed
+        for _ in 0..<3 {
+            _ = try await service.fetchPrices(for: ["bitcoin"])
+            service.invalidateCache() // force re-fetch each time
+        }
+
+        // 4th request should be rate-limited
+        await #expect(throws: PriceServiceError.rateLimited) {
+            try await service.fetchPrices(for: ["bitcoin"])
+        }
     }
 }
 ```
