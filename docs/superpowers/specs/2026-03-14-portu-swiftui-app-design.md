@@ -6,14 +6,29 @@ Portu is a native macOS SwiftUI app for monitoring crypto portfolios. It aggrega
 
 ## Requirements
 
-- **Platform**: macOS 14.0+ (Sonoma)
-- **Language**: Swift 6.x
+- **Platform**: macOS 15.0+ (Sequoia)
+- **Language**: Swift 6.2+
 - **UI Framework**: SwiftUI with AppKit bridges where needed
+- **Concurrency**: Default Main Actor isolation via `SwiftSetting.defaultIsolation(.MainActor)` in all targets
 - **Build System**: XcodeGen (`project.yml`) + xcodebuild
 - **Privacy**: All data local. Keychain for secrets, SwiftData for everything else. No cloud dependency.
 - **Sandbox**: Not sandboxed (direct distribution, no Mac App Store). Keychain items scoped by bundle ID (`com.portu.app`).
 
 ## Architecture
+
+### Concurrency Model
+
+All SPM package targets and the app target set default Main Actor isolation:
+
+```swift
+// In each Package.swift target:
+swiftSettings: [
+    .swiftLanguageMode(.v6),
+    .defaultIsolation(MainActor.self)
+]
+```
+
+This means all types are `@MainActor` by default. Use `nonisolated` to opt out where needed (e.g., pure data transforms, network parsing). This eliminates boilerplate `@MainActor` annotations and makes concurrency violations a compile error.
 
 ### Project Structure
 
@@ -79,6 +94,10 @@ PortuApp (app target)
 - `PortuNetwork` and `PortuUI` never depend on each other
 - The app target is the only place all three packages are imported together
 
+### Domain View Models
+
+Domain-specific view models live in `Sources/Portu/Features/`, not in `PortuUI`. Each feature folder (Portfolio, Accounts, etc.) contains its own view model that bridges `PortuCore` models to `PortuUI` components. `PortuUI` never imports domain types — the app target is the bridge layer.
+
 ## Data Layer
 
 ### SwiftData Models (PortuCore)
@@ -98,14 +117,14 @@ Account
 ├── chain: Chain?                  (set when kind == .wallet)
 ├── holdings: [Holding]            (1-to-many, deleteRule: .cascade)
 ├── lastSyncedAt: Date?
-├── portfolio: Portfolio           (back-reference, deleteRule: .nullify)
+├── portfolio: Portfolio?          (back-reference, deleteRule: .nullify)
 
 Holding
 ├── id: UUID
-├── asset: Asset                   (many-to-one, deleteRule: .nullify)
+├── asset: Asset?                  (many-to-one, deleteRule: .nullify)
 ├── amount: Decimal
 ├── costBasis: Decimal?            (per-unit cost, optional)
-├── account: Account               (back-reference, deleteRule: .nullify)
+├── account: Account?              (back-reference, deleteRule: .nullify)
 
 Asset
 ├── id: UUID
@@ -119,19 +138,21 @@ Note: Assets are never cascade-deleted. They are shared reference data.
 Orphaned assets (no holdings) can be cleaned up periodically.
 ```
 
+**Important:** All relationships with `.nullify` delete rules are optional. When a parent is deleted, SwiftData sets the inverse to `nil` — a non-optional property would crash at runtime.
+
 ### Supporting Types
 
 ```swift
 // Flat enum — no associated values, safe for SwiftData predicates
-enum AccountKind: String, Codable, CaseIterable {
+enum AccountKind: String, Codable, CaseIterable, Sendable {
     case manual, exchange, wallet
 }
 
-enum ExchangeType: String, Codable, CaseIterable {
+enum ExchangeType: String, Codable, CaseIterable, Sendable {
     case binance, coinbase, kraken
 }
 
-enum Chain: String, Codable, CaseIterable {
+enum Chain: String, Codable, CaseIterable, Sendable {
     case ethereum, solana, bitcoin
 }
 ```
@@ -149,13 +170,20 @@ properties on `Account` are optional and contextually required based on `kind`.
 `SecretStore` protocol defined in `PortuCore`:
 ```swift
 protocol SecretStore: Sendable {
-    func get(key: String) throws -> String?
-    func set(key: String, value: String) throws
-    func delete(key: String) throws
+    func get(key: String) throws(KeychainError) -> String?
+    func set(key: String, value: String) throws(KeychainError)
+    func delete(key: String) throws(KeychainError)
+}
+
+enum KeychainError: Error, Sendable {
+    case itemNotFound
+    case duplicateItem
+    case unexpectedStatus(OSStatus)
+    case encodingFailed
 }
 ```
 
-`KeychainService` conforms to `SecretStore`. `PortuNetwork` depends on the protocol only — testable with a mock.
+`KeychainService` conforms to `SecretStore`. `PortuNetwork` depends on the protocol only — testable with a mock. Keychain operations are synchronous; no async needed.
 
 **Key naming convention**: `"portu.<accountId>.<credentialType>"` where credentialType is `apiKey`, `apiSecret`, or `passphrase`. Example: `"portu.abc123.apiKey"`, `"portu.abc123.apiSecret"`.
 
@@ -165,9 +193,18 @@ protocol SecretStore: Sendable {
 - Fetches current prices from CoinGecko public API (no key required)
 - Rate limiter: max 10 requests/minute (free tier safe)
 - In-memory cache with configurable TTL (default 30s)
-- Historical price data cached to `~/Library/Caches/Portu/` as JSON
-- Publishes price updates via `AsyncThrowingStream<[String: Decimal], Error>` keyed by coinGeckoId
+- Historical price data cached to `~/Library/Caches/Portu/` as JSON (use `URL.cachesDirectory.appending(path: "Portu")`)
+- Publishes price updates via `AsyncThrowingStream<[String: Decimal], PriceServiceError>` keyed by coinGeckoId
 - Errors (rate limit, network failure) propagate through the stream; the app target catches them and updates `AppState.connectionStatus`
+
+```swift
+enum PriceServiceError: Error, Sendable {
+    case rateLimited
+    case networkUnavailable
+    case decodingFailed
+    case invalidResponse(statusCode: Int)
+}
+```
 
 ## UI Design
 
@@ -209,6 +246,16 @@ accessible via Cmd+comma or the app menu. This follows macOS conventions.
 | Portfolio | Total value, 24h change, allocation donut chart, all holdings list |
 | Account (specific) | Account holdings, sync status, last synced timestamp |
 
+### Empty States
+
+Use `ContentUnavailableView` for all empty/error states:
+
+| State | Presentation |
+|---|---|
+| No portfolios yet | `ContentUnavailableView("No Portfolio", systemImage: "chart.pie", description: ...)` with action button to create one |
+| Account has no holdings | `ContentUnavailableView` with sync or manual-add action |
+| Price fetch failed | `ContentUnavailableView` with retry action |
+
 ### Settings Scene (Cmd+comma)
 
 Separate window with tabs: Accounts (API keys, wallet addresses), Appearance, General (refresh interval).
@@ -220,8 +267,17 @@ Separate window with tabs: Accounts (API keys, wallet addresses), Appearance, Ge
 - Typography: system font (SF Pro), semantic styles (`.headline`, `.body`, `.caption`)
 - Colors: semantic only (`Color.primary`, `.secondary`, `.accentColor`) — automatic dark mode
 - Icons: SF Symbols exclusively
-- Number formatting: `Decimal` with locale-aware currency formatting
-- Animations: `withAnimation(.spring)` for state transitions
+- Number formatting: use `Text(value, format: .currency(code: "USD"))` and `Text(value, format: .percent)` — never manual `NumberFormatter` or `String(format:)`
+- Animations: `withAnimation(.spring) { ... }` for state transitions; any `.animation()` modifier must include a `value:` parameter
+
+### Accessibility
+
+- **Toolbar buttons** must always include text labels: `Button("Refresh", systemImage: "arrow.clockwise", action: refresh)`, not icon-only buttons
+- **Dynamic Type**: use semantic font styles exclusively (`.headline`, `.body`, etc.) — never hardcode font sizes
+- **Reduce Motion**: check `accessibilityReduceMotion` environment value; replace spring animations with `.opacity` transitions when enabled
+- **P&L indicators**: do not rely solely on green/red color for gain/loss — include directional icons (SF Symbols `arrow.up`/`arrow.down`) or text labels for `accessibilityDifferentiateWithoutColor` support
+- **Financial data VoiceOver**: price values and percentage changes should have clear `accessibilityLabel` values (e.g., "Bitcoin, up 3.2 percent, valued at $42,000")
+- **Menus**: always include text with icons: `Menu("Options", systemImage: "ellipsis.circle") { ... }`
 
 ### State Management
 
@@ -234,12 +290,12 @@ class AppState {
     var connectionStatus: ConnectionStatus = .idle
 }
 
-enum SidebarSection: Hashable {
+enum SidebarSection: Hashable, Sendable {
     case portfolio
     case account(PersistentIdentifier)  // SwiftData stable ID, not Account reference
 }
 
-enum ConnectionStatus {
+enum ConnectionStatus: Hashable, Sendable {
     case idle, fetching, error(String)
 }
 ```
@@ -249,6 +305,8 @@ enum ConnectionStatus {
 - `AppState` only holds transient UI state (selection, prices, connection status).
 - `SidebarSection.account` uses `PersistentIdentifier` (SwiftData's stable ID type), not a direct `Account` reference, to avoid reference-equality issues with `Hashable`.
 - Settings uses the standard macOS `Settings { }` scene (Cmd+comma), not a sidebar section.
+- `AppState` is `@MainActor` by default (via `defaultIsolation`), so no explicit annotation needed.
+- `ConnectionStatus` conforms to `Hashable` to support `.animation(.default, value: connectionStatus)`.
 
 `ModelContainer` is configured in `PortuApp.swift` with the schema `[Portfolio.self, Account.self, Holding.self, Asset.self]` using the default store location. Migration strategy deferred to future work.
 
@@ -274,7 +332,7 @@ Injected via `.environment()` at the app root (both `AppState` and `ModelContain
 - App target (`Portu`) with sources, resources, entitlements
 - Local package dependencies (PortuCore, PortuNetwork, PortuUI)
 - Debug and Release configurations
-- macOS deployment target 14.0
+- macOS deployment target 15.0
 
 ### Scripts
 
@@ -299,12 +357,14 @@ The initial scaffolding delivers:
 1. Complete project structure with all three SPM packages
 2. XcodeGen `project.yml` that builds and runs
 3. SwiftData models (Portfolio, Account, Holding, Asset)
-4. `KeychainService` with `SecretStore` protocol
-5. Stub `PriceService` with CoinGecko client skeleton
+4. `KeychainService` with `SecretStore` protocol and typed `KeychainError`
+5. Stub `PriceService` with CoinGecko client skeleton and typed `PriceServiceError`
 6. Full UI shell: sidebar navigation, portfolio summary placeholder, settings placeholder
-7. `AppState` with `@Observable`
-8. Build scripts, `.gitignore`
-9. The app compiles, launches, and shows the sidebar + detail layout with placeholder data
+7. `ContentUnavailableView` for empty states
+8. `AppState` with `@Observable`
+9. Default Main Actor isolation configured in all targets
+10. Build scripts, `.gitignore`
+11. The app compiles, launches, and shows the sidebar + detail layout with placeholder data
 
 What the scaffolding does NOT include (future work):
 - Actual exchange API integrations (Binance, Coinbase, Kraken clients)
