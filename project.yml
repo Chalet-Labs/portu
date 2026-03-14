@@ -1,0 +1,75 @@
+name: Portu
+options:
+  bundleIdPrefix: com.portu
+  deploymentTarget:
+    macOS: "15.0"
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.2"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+
+packages:
+  PortuCore:
+    path: Packages/PortuCore
+  PortuNetwork:
+    path: Packages/PortuNetwork
+  PortuUI:
+    path: Packages/PortuUI
+
+targets:
+  Portu:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Portu
+        excludes:
+          - Resources
+    resources:
+      - path: Sources/Portu/Resources/Assets.xcassets
+    dependencies:
+      - package: PortuCore
+      - package: PortuNetwork
+      - package: PortuUI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.portu.app
+        INFOPLIST_FILE: Sources/Portu/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Sources/Portu/Resources/Portu.entitlements
+        CODE_SIGN_STYLE: Automatic
+        OTHER_SWIFT_FLAGS: "-default-isolation MainActor"
+    entitlements:
+      path: Sources/Portu/Resources/Portu.entitlements
+
+  PortuTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/PortuTests
+    dependencies:
+      - target: Portu
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.portu.app.tests
+        OTHER_SWIFT_FLAGS: "-default-isolation MainActor"
+
+schemes:
+  Portu:
+    build:
+      targets:
+        Portu: all
+        PortuTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - PortuTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
