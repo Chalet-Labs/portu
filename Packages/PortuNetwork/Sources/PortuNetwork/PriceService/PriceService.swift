@@ -43,6 +43,10 @@ public final class PriceService {
             throw .rateLimited
         }
 
+        // Record timestamp before the await suspension point to prevent
+        // interleaved calls from bypassing the rate limit
+        requestTimestamps.append(.now)
+
         let ids = coinIds.joined(separator: ",")
         let url = baseURL.appending(path: "simple/price")
             .appending(queryItems: [
@@ -58,8 +62,6 @@ public final class PriceService {
             throw .networkUnavailable
         }
 
-        requestTimestamps.append(.now)
-
         if let http = response as? HTTPURLResponse {
             switch http.statusCode {
             case 200: break
@@ -69,9 +71,10 @@ public final class PriceService {
         }
 
         let parsed = try CoinGeckoSimplePriceResponse(from: data)
-        cache = parsed.prices
+        // Merge into cache so prices from prior requests for different coins are retained
+        cache.merge(parsed.prices) { _, new in new }
         lastFetchDate = .now
-        return parsed.prices
+        return cache
     }
 
     /// Returns an async stream that polls prices at the given interval.
@@ -87,11 +90,20 @@ public final class PriceService {
                     do {
                         let prices = try await fetchPrices(for: coinIds)
                         continuation.yield(prices)
+                    } catch is PriceServiceError {
+                        // Transient errors (network, rate limit) — skip this tick, retry next
                     } catch {
+                        // Unexpected error — terminate the stream
                         continuation.finish(throwing: error)
                         return
                     }
-                    try await Task.sleep(for: .seconds(interval))
+                    do {
+                        try await Task.sleep(for: .seconds(interval))
+                    } catch {
+                        // Cancellation — clean finish
+                        continuation.finish()
+                        return
+                    }
                 }
                 continuation.finish()
             }

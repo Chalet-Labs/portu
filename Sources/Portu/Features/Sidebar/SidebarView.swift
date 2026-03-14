@@ -68,7 +68,6 @@ struct StatusBarView: View {
 
 struct SidebarView: View {
     @Binding var selection: SidebarSection
-    @Query private var portfolios: [Portfolio]
     @Query(sort: \Account.name) private var accounts: [Account]
 
     var body: some View {
