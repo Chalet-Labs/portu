@@ -9,7 +9,7 @@ struct AccountDetailView: View {
     @Environment(AppState.self) private var appState
 
     private var account: Account? {
-        modelContext.registeredModel(for: accountID)
+        try? modelContext.model(for: accountID) as? Account
     }
 
     var body: some View {

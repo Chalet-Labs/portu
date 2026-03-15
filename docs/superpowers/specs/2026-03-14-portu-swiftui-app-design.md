@@ -12,7 +12,7 @@ Portu is a native macOS SwiftUI app for monitoring crypto portfolios. It aggrega
 - **Concurrency**: Default Main Actor isolation via `SwiftSetting.defaultIsolation(.MainActor)` in all targets
 - **Build System**: XcodeGen (`project.yml`) + xcodebuild
 - **Privacy**: All data local. Keychain for secrets, SwiftData for everything else. No cloud dependency.
-- **Sandbox**: Not sandboxed (direct distribution, no Mac App Store). Keychain items scoped by bundle ID (`com.portu.app`).
+- **Sandbox**: Not sandboxed — the `com.apple.security.app-sandbox` entitlement is absent from `Portu.entitlements`. Direct distribution only (no Mac App Store). Keychain items are scoped by the bundle ID (`com.portu.app`) via `kSecAttrService`. The `Portu.entitlements` file exists for future entitlement needs (e.g., network access, file access) but currently contains no sandbox-related keys.
 
 ## Architecture
 
@@ -356,7 +356,7 @@ The initial scaffolding delivers:
 2. XcodeGen `project.yml` that builds and runs
 3. SwiftData models (Portfolio, Account, Holding, Asset)
 4. `KeychainService` with `SecretStore` protocol and typed `KeychainError`
-5. Stub `PriceService` with CoinGecko client skeleton and typed `PriceServiceError`
+5. `PriceService` actor with CoinGecko client, sliding-window rate limiter, cache with TTL, `AsyncThrowingStream`-based price polling, and typed `PriceServiceError`
 6. Full UI shell: sidebar navigation, portfolio summary placeholder, settings placeholder
 7. `ContentUnavailableView` for empty states
 8. `AppState` with `@Observable`

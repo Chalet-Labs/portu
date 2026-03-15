@@ -4,6 +4,8 @@ import PortuCore
 
 struct SidebarView: View {
     @Binding var selection: SidebarSection
+    // Single-portfolio MVP: loads all accounts unfiltered. When multi-portfolio
+    // support is added, scope this query via a portfolio predicate.
     @Query(sort: \Account.name) private var accounts: [Account]
 
     var body: some View {

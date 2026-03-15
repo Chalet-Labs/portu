@@ -11,9 +11,13 @@ public actor PriceService {
     private let cacheTTL: TimeInterval
 
     // Sliding-window rate limiter
+    private struct RequestStamp: Sendable {
+        let id: UUID
+        let date: Date
+    }
     private let maxRequestsPerWindow: Int
     private let windowDuration: TimeInterval
-    private var requestTimestamps: [Date] = []
+    private var requestTimestamps: [RequestStamp] = []
 
     public init(
         session: URLSession = .shared,
@@ -40,14 +44,15 @@ public actor PriceService {
 
         // Proactive rate limiting — reject before sending the request
         let now = Date.now
-        requestTimestamps.removeAll { now.timeIntervalSince($0) > windowDuration }
+        requestTimestamps.removeAll { now.timeIntervalSince($0.date) > windowDuration }
         guard requestTimestamps.count < maxRequestsPerWindow else {
             throw .rateLimited
         }
 
         // Record timestamp before the await suspension point to prevent
         // interleaved calls from bypassing the rate limit
-        requestTimestamps.append(.now)
+        let stamp = RequestStamp(id: UUID(), date: .now)
+        requestTimestamps.append(stamp)
 
         let ids = coinIds.joined(separator: ",")
         let url = baseURL.appending(path: "simple/price")
@@ -61,7 +66,7 @@ public actor PriceService {
         do {
             (data, response) = try await session.data(from: url)
         } catch {
-            requestTimestamps.removeLast()
+            requestTimestamps.removeAll { $0.id == stamp.id }
             throw .networkUnavailable
         }
 
