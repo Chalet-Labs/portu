@@ -176,8 +176,6 @@ protocol SecretStore: Sendable {
 }
 
 enum KeychainError: Error, Sendable {
-    case itemNotFound
-    case duplicateItem
     case unexpectedStatus(OSStatus)
     case encodingFailed
 }
@@ -194,8 +192,8 @@ enum KeychainError: Error, Sendable {
 - Rate limiter: max 10 requests/minute (free tier safe)
 - In-memory cache with configurable TTL (default 30s)
 - Historical price data cached to `~/Library/Caches/Portu/` as JSON (use `URL.cachesDirectory.appending(path: "Portu")`)
-- Publishes price updates via `AsyncThrowingStream<[String: Decimal], PriceServiceError>` keyed by coinGeckoId
-- Errors (rate limit, network failure) propagate through the stream; the app target catches them and updates `AppState.connectionStatus`
+- Publishes price updates via `AsyncThrowingStream<[String: Decimal], any Error>` keyed by coinGeckoId
+- Transient errors (rate limit, network unavailable) are silently retried on the next poll tick; non-transient errors (decoding, invalid response) terminate the stream
 
 ```swift
 enum PriceServiceError: Error, Sendable {
@@ -336,7 +334,7 @@ Injected via `.environment()` at the app root (both `AppState` and `ModelContain
 
 ### Scripts
 
-- `scripts/generate.sh` — runs `xcodegen generate`, opens project
+- `scripts/generate.sh` — runs `xcodegen generate`
 - `scripts/build.sh` — `xcodebuild -scheme Portu -configuration Release build`
 
 ### .gitignore

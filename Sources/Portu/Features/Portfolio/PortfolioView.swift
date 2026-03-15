@@ -9,7 +9,7 @@ struct PortfolioView: View {
 
     private var totalValue: Decimal {
         holdings.reduce(Decimal.zero) { sum, holding in
-            let coinId = holding.asset?.coinGeckoId ?? ""
+            guard let coinId = holding.asset?.coinGeckoId else { return sum }
             let price = appState.prices[coinId] ?? 0
             return sum + holding.amount * price
         }
@@ -42,7 +42,6 @@ struct PortfolioView: View {
 
     /// Helper to create a P&L label with directional icon.
     /// Satisfies spec: "do not rely solely on green/red color for gain/loss"
-    /// Helper to create a P&L label with directional icon.
     /// Expects a percentage-point value (e.g. 5.3 for +5.3%), matching CoinGecko's format.
     @ViewBuilder
     static func changeLabel(value: Decimal) -> some View {
@@ -63,7 +62,7 @@ struct PortfolioView: View {
                 .font(.headline)
 
             ForEach(holdings) { holding in
-                HoldingRow(holding: holding, price: appState.prices[holding.asset?.coinGeckoId ?? ""])
+                HoldingRow(holding: holding, price: holding.asset?.coinGeckoId.flatMap { appState.prices[$0] })
             }
         }
     }

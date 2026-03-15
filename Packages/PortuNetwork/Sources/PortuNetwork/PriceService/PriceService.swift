@@ -91,33 +91,37 @@ public actor PriceService {
         for coinIds: [String],
         interval: TimeInterval = 30
     ) -> AsyncThrowingStream<[String: Decimal], any Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task {
-                while !Task.isCancelled {
-                    do {
-                        let prices = try await fetchPrices(for: coinIds)
-                        continuation.yield(prices)
-                    } catch PriceServiceError.rateLimited {
-                        // Transient — skip this tick, retry next
-                    } catch PriceServiceError.networkUnavailable {
-                        // Transient — skip this tick, retry next
-                    } catch {
-                        // Non-transient (decoding, invalid response) — terminate
-                        continuation.finish(throwing: error)
-                        return
-                    }
-                    do {
-                        try await Task.sleep(for: .seconds(interval))
-                    } catch {
-                        // Cancellation — clean finish
-                        continuation.finish()
-                        return
-                    }
+        let (stream, continuation) = AsyncThrowingStream.makeStream(
+            of: [String: Decimal].self,
+            throwing: (any Error).self,
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        let task = Task {
+            while !Task.isCancelled {
+                do {
+                    let prices = try await fetchPrices(for: coinIds)
+                    continuation.yield(prices)
+                } catch PriceServiceError.rateLimited {
+                    // Transient — skip this tick, retry next
+                } catch PriceServiceError.networkUnavailable {
+                    // Transient — skip this tick, retry next
+                } catch {
+                    // Non-transient (decoding, invalid response) — terminate
+                    continuation.finish(throwing: error)
+                    return
                 }
-                continuation.finish()
+                do {
+                    try await Task.sleep(for: .seconds(interval))
+                } catch {
+                    // Cancellation — clean finish
+                    continuation.finish()
+                    return
+                }
             }
-            continuation.onTermination = { _ in task.cancel() }
+            continuation.finish()
         }
+        continuation.onTermination = { _ in task.cancel() }
+        return stream
     }
 
     /// Clear the price cache, forcing a fresh fetch on next call.
