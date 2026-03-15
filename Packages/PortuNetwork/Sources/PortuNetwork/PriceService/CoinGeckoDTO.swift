@@ -1,7 +1,7 @@
 import Foundation
 
-/// Decodable type for CoinGecko /simple/price response.
-/// Keys are coin IDs, values contain price in requested vs_currency.
+/// Parses CoinGecko /simple/price JSON response via JSONSerialization.
+/// Keys are coin IDs, values contain price in USD.
 nonisolated
 struct CoinGeckoSimplePriceResponse: Sendable {
     let prices: [String: Decimal]

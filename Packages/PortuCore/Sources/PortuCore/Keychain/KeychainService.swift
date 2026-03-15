@@ -1,7 +1,8 @@
 import Foundation
 import Security
 
-/// Wraps Security.framework Keychain APIs. Scoped by bundle ID (not sandboxed).
+/// Wraps Security.framework keychain APIs. Items are scoped to the kSecAttrService value
+/// (defaults to bundle identifier).
 public struct KeychainService: SecretStore {
     private let service: String
 
@@ -41,19 +42,31 @@ public struct KeychainService: SecretStore {
             throw .encodingFailed
         }
 
-        // Delete existing item first (upsert pattern)
-        try delete(key: key)
-
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
-            kSecValueData as String: data,
         ]
 
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw .unexpectedStatus(status)
+        // Add-first upsert: attempt add, then update on duplicate
+        let addStatus = SecItemAdd(
+            query.merging([kSecValueData as String: data]) { _, new in new } as CFDictionary,
+            nil
+        )
+
+        switch addStatus {
+        case errSecSuccess:
+            return
+        case errSecDuplicateItem:
+            let updateStatus = SecItemUpdate(
+                query as CFDictionary,
+                [kSecValueData as String: data] as CFDictionary
+            )
+            guard updateStatus == errSecSuccess else {
+                throw .unexpectedStatus(updateStatus)
+            }
+        default:
+            throw .unexpectedStatus(addStatus)
         }
     }
 

@@ -107,7 +107,7 @@ struct PriceServiceTests {
             """.data(using: .utf8), 200)
         }
 
-        service.invalidateCache()
+        await service.invalidateCache()
 
         // Should fetch fresh data, not cached
         let second = try await service.fetchPrices(for: ["bitcoin"])
@@ -132,7 +132,7 @@ struct PriceServiceTests {
         // First 3 requests succeed
         for _ in 0..<3 {
             _ = try await service.fetchPrices(for: ["bitcoin"])
-            service.invalidateCache() // force re-fetch each time
+            await service.invalidateCache() // force re-fetch each time
         }
 
         // 4th request should be rate-limited

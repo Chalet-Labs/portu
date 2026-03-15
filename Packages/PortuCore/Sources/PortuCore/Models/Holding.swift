@@ -7,8 +7,8 @@ public final class Holding {
     public var amount: Decimal
     public var costBasis: Decimal?
 
-    // Back-reference — nullify (set to nil when Account is deleted via cascade).
-    // @Relationship is on the Account side.
+    // Inverse of Account.holdings — cascade delete rule means this Holding
+    // is deleted when its Account is deleted.
     public var account: Account?
 
     // Many-to-one with Asset. @Relationship on this side because Asset.holdings

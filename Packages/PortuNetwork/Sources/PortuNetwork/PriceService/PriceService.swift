@@ -2,15 +2,15 @@ import Foundation
 import PortuCore
 
 /// Fetches and caches cryptocurrency prices from CoinGecko's free API.
-/// Rate-limited to 10 requests/minute (sliding window). Cache TTL: 30 seconds.
-public final class PriceService {
+/// Rate limit and cache TTL are configurable (see init).
+public actor PriceService {
     private let session: URLSession
     private let baseURL = URL(string: "https://api.coingecko.com/api/v3")!
     private var cache: [String: Decimal] = [:]
     private var lastFetchDate: Date?
     private let cacheTTL: TimeInterval
 
-    // Sliding-window rate limiter: max 10 requests per 60 seconds
+    // Sliding-window rate limiter
     private let maxRequestsPerWindow: Int
     private let windowDuration: TimeInterval
     private var requestTimestamps: [Date] = []
@@ -33,7 +33,7 @@ public final class PriceService {
         if let lastFetch = lastFetchDate,
            Date.now.timeIntervalSince(lastFetch) < cacheTTL,
            coinIds.allSatisfy({ cache.keys.contains($0) }) {
-            return cache
+            return cache.filter { coinIds.contains($0.key) }
         }
 
         // Proactive rate limiting — reject before sending the request
@@ -62,25 +62,26 @@ public final class PriceService {
             throw .networkUnavailable
         }
 
-        if let http = response as? HTTPURLResponse {
-            switch http.statusCode {
-            case 200: break
-            case 429: throw .rateLimited
-            default: throw .invalidResponse(statusCode: http.statusCode)
-            }
+        guard let http = response as? HTTPURLResponse else {
+            throw .invalidResponse(statusCode: 0)
+        }
+        switch http.statusCode {
+        case 200: break
+        case 429: throw .rateLimited
+        default: throw .invalidResponse(statusCode: http.statusCode)
         }
 
         let parsed = try CoinGeckoSimplePriceResponse(from: data)
         // Merge into cache so prices from prior requests for different coins are retained
         cache.merge(parsed.prices) { _, new in new }
         lastFetchDate = .now
-        return cache
+        return cache.filter { coinIds.contains($0.key) }
     }
 
     /// Returns an async stream that polls prices at the given interval.
     /// The stream yields price dictionaries keyed by coinGeckoId.
     /// Transient errors (network, rate limit) are silently retried on the next tick.
-    /// Unexpected errors terminate the stream.
+    /// Non-transient errors (decoding, invalid response) terminate the stream.
     public func priceStream(
         for coinIds: [String],
         interval: TimeInterval = 30
@@ -91,10 +92,12 @@ public final class PriceService {
                     do {
                         let prices = try await fetchPrices(for: coinIds)
                         continuation.yield(prices)
-                    } catch is PriceServiceError {
-                        // Transient errors (network, rate limit) — skip this tick, retry next
+                    } catch PriceServiceError.rateLimited {
+                        // Transient — skip this tick, retry next
+                    } catch PriceServiceError.networkUnavailable {
+                        // Transient — skip this tick, retry next
                     } catch {
-                        // Unexpected error — terminate the stream
+                        // Non-transient (decoding, invalid response) — terminate
                         continuation.finish(throwing: error)
                         return
                     }

@@ -12,8 +12,8 @@ public final class Account {
     public var holdings: [Holding]
     public var lastSyncedAt: Date?
 
-    // Back-reference — nullify delete rule (set to nil when Portfolio is deleted).
-    // @Relationship is on the Portfolio side; this is the inverse target.
+    // Inverse of Portfolio.accounts — cascade delete rule means this Account
+    // is deleted when its Portfolio is deleted.
     public var portfolio: Portfolio?
 
     public init(name: String, kind: AccountKind) {
