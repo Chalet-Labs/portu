@@ -2,24 +2,26 @@ import Testing
 import Foundation
 @testable import PortuNetwork
 
-/// URLProtocol mock that returns a pre-configured response.
+/// URLProtocol mock that returns responses via a per-test request handler.
+/// Each test configures `requestHandler` before exercising PriceService,
+/// keeping mock state explicit and co-located with each test case.
 nonisolated
 final class MockURLProtocol: URLProtocol, @unchecked Sendable {
-    nonisolated(unsafe) static var mockData: Data?
-    nonisolated(unsafe) static var mockStatusCode: Int = 200
+    nonisolated(unsafe) static var requestHandler: ((URLRequest) -> (Data?, Int))?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
+        let (data, statusCode) = Self.requestHandler?(request) ?? (nil, 500)
         let response = HTTPURLResponse(
             url: request.url!,
-            statusCode: Self.mockStatusCode,
+            statusCode: statusCode,
             httpVersion: nil,
             headerFields: nil
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        if let data = Self.mockData {
+        if let data {
             client?.urlProtocol(self, didLoad: data)
         }
         client?.urlProtocolDidFinishLoading(self)
@@ -39,11 +41,11 @@ struct PriceServiceTests {
     }
 
     @Test func fetchPricesSuccess() async throws {
-        let json = """
-        {"bitcoin":{"usd":62400},"ethereum":{"usd":3200}}
-        """
-        MockURLProtocol.mockData = json.data(using: .utf8)
-        MockURLProtocol.mockStatusCode = 200
+        MockURLProtocol.requestHandler = { _ in
+            ("""
+            {"bitcoin":{"usd":62400},"ethereum":{"usd":3200}}
+            """.data(using: .utf8), 200)
+        }
 
         let service = PriceService(session: session)
         let prices = try await service.fetchPrices(for: ["bitcoin", "ethereum"])
@@ -53,8 +55,7 @@ struct PriceServiceTests {
     }
 
     @Test func fetchPricesRateLimited() async {
-        MockURLProtocol.mockData = nil
-        MockURLProtocol.mockStatusCode = 429
+        MockURLProtocol.requestHandler = { _ in (nil, 429) }
 
         let service = PriceService(session: session)
         await #expect(throws: PriceServiceError.rateLimited) {
@@ -63,11 +64,11 @@ struct PriceServiceTests {
     }
 
     @Test func cacheReturnsCachedData() async throws {
-        let json = """
-        {"bitcoin":{"usd":62400}}
-        """
-        MockURLProtocol.mockData = json.data(using: .utf8)
-        MockURLProtocol.mockStatusCode = 200
+        MockURLProtocol.requestHandler = { _ in
+            ("""
+            {"bitcoin":{"usd":62400}}
+            """.data(using: .utf8), 200)
+        }
 
         let service = PriceService(session: session, cacheTTL: 60)
 
@@ -76,20 +77,22 @@ struct PriceServiceTests {
         #expect(first["bitcoin"] == 62400)
 
         // Change mock — but cache should still return old data
-        MockURLProtocol.mockData = """
-        {"bitcoin":{"usd":99999}}
-        """.data(using: .utf8)
+        MockURLProtocol.requestHandler = { _ in
+            ("""
+            {"bitcoin":{"usd":99999}}
+            """.data(using: .utf8), 200)
+        }
 
         let second = try await service.fetchPrices(for: ["bitcoin"])
         #expect(second["bitcoin"] == 62400) // cached
     }
 
     @Test func invalidateCacheForcesRefetch() async throws {
-        let json = """
-        {"bitcoin":{"usd":62400}}
-        """
-        MockURLProtocol.mockData = json.data(using: .utf8)
-        MockURLProtocol.mockStatusCode = 200
+        MockURLProtocol.requestHandler = { _ in
+            ("""
+            {"bitcoin":{"usd":62400}}
+            """.data(using: .utf8), 200)
+        }
 
         let service = PriceService(session: session, cacheTTL: 60)
 
@@ -98,9 +101,11 @@ struct PriceServiceTests {
         #expect(first["bitcoin"] == 62400)
 
         // Update mock and invalidate cache
-        MockURLProtocol.mockData = """
-        {"bitcoin":{"usd":99999}}
-        """.data(using: .utf8)
+        MockURLProtocol.requestHandler = { _ in
+            ("""
+            {"bitcoin":{"usd":99999}}
+            """.data(using: .utf8), 200)
+        }
 
         service.invalidateCache()
 
@@ -110,11 +115,11 @@ struct PriceServiceTests {
     }
 
     @Test func rateLimiterRejectsExcessiveRequests() async throws {
-        let json = """
-        {"bitcoin":{"usd":62400}}
-        """
-        MockURLProtocol.mockData = json.data(using: .utf8)
-        MockURLProtocol.mockStatusCode = 200
+        MockURLProtocol.requestHandler = { _ in
+            ("""
+            {"bitcoin":{"usd":62400}}
+            """.data(using: .utf8), 200)
+        }
 
         // Create service with strict limit (3 requests per 60s) and no cache
         let service = PriceService(

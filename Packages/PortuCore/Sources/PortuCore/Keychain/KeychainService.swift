@@ -42,7 +42,7 @@ public struct KeychainService: SecretStore {
         }
 
         // Delete existing item first (upsert pattern)
-        try? delete(key: key)
+        try delete(key: key)
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,

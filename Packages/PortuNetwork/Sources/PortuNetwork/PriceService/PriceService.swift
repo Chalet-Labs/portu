@@ -32,7 +32,7 @@ public final class PriceService {
     public func fetchPrices(for coinIds: [String]) async throws(PriceServiceError) -> [String: Decimal] {
         if let lastFetch = lastFetchDate,
            Date.now.timeIntervalSince(lastFetch) < cacheTTL,
-           !cache.isEmpty {
+           coinIds.allSatisfy({ cache.keys.contains($0) }) {
             return cache
         }
 
@@ -79,7 +79,8 @@ public final class PriceService {
 
     /// Returns an async stream that polls prices at the given interval.
     /// The stream yields price dictionaries keyed by coinGeckoId.
-    /// Errors propagate through the stream; the caller decides how to handle them.
+    /// Transient errors (network, rate limit) are silently retried on the next tick.
+    /// Unexpected errors terminate the stream.
     public func priceStream(
         for coinIds: [String],
         interval: TimeInterval = 30

@@ -10,9 +10,13 @@ struct PortuApp: App {
     let container: ModelContainer
 
     init() {
-        container = try! ModelContainer(
-            for: Portfolio.self, Account.self, Holding.self, Asset.self
-        )
+        do {
+            container = try ModelContainer(
+                for: Portfolio.self, Account.self, Holding.self, Asset.self
+            )
+        } catch {
+            fatalError("Failed to initialize ModelContainer: \(error)")
+        }
     }
 
     var body: some Scene {
