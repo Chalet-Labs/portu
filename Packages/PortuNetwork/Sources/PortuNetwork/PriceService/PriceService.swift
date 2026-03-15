@@ -74,7 +74,10 @@ public actor PriceService {
         }
 
         let parsed = try CoinGeckoSimplePriceResponse(from: data)
-        // Merge into cache so prices from prior requests for different coins are retained
+        // Cap cache to prevent unbounded growth in long-running sessions
+        if cache.count > 500 {
+            cache = [:]
+        }
         cache.merge(parsed.prices) { _, new in new }
         lastFetchDate = .now
         return cache.filter { coinIds.contains($0.key) }
