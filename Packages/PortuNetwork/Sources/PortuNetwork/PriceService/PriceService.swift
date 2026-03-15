@@ -61,6 +61,7 @@ public actor PriceService {
         do {
             (data, response) = try await session.data(from: url)
         } catch {
+            requestTimestamps.removeLast()
             throw .networkUnavailable
         }
 
@@ -105,8 +106,10 @@ public actor PriceService {
                     // Transient — skip this tick, retry next
                 } catch PriceServiceError.networkUnavailable {
                     // Transient — skip this tick, retry next
+                } catch PriceServiceError.invalidResponse(let code) where code >= 500 {
+                    // Transient server error — skip this tick, retry next
                 } catch {
-                    // Non-transient (decoding, invalid response) — terminate
+                    // Non-transient (decoding, 4xx auth errors) — terminate
                     continuation.finish(throwing: error)
                     return
                 }

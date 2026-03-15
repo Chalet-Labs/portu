@@ -5,6 +5,8 @@ import PortuUI
 
 struct PortfolioView: View {
     @Environment(AppState.self) private var appState
+    // Single-portfolio MVP: loads all holdings unfiltered. When multi-portfolio
+    // support is added, scope this query via a portfolio predicate.
     @Query private var holdings: [Holding]
 
     private var totalValue: Decimal {

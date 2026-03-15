@@ -32,7 +32,7 @@ This means all types are `@MainActor` by default. Use `nonisolated` to opt out w
 
 ### Project Structure
 
-```
+```text
 Portu/
 ├── project.yml                     # XcodeGen configuration
 ├── Packages/
@@ -81,7 +81,7 @@ Portu/
 
 ### Module Dependency Graph
 
-```
+```text
 PortuApp (app target)
 ├── PortuCore
 ├── PortuNetwork → PortuCore
@@ -102,7 +102,7 @@ Domain-specific view models live in `Sources/Portu/Features/`, not in `PortuUI`.
 
 ### SwiftData Models (PortuCore)
 
-```
+```text
 Portfolio
 ├── id: UUID
 ├── name: String
@@ -210,7 +210,7 @@ enum PriceServiceError: Error, Sendable {
 
 `NavigationSplitView` with sidebar + detail:
 
-```
+```text
 ┌──────────────────────────────────────────────────────────┐
 │  Toolbar: [Refresh] [+ Add Account]                      │
 ├───────────────┬──────────────────────────────────────────┤
