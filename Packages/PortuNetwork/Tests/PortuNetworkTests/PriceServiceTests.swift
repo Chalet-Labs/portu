@@ -14,8 +14,12 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
 
     override func startLoading() {
         let (data, statusCode) = Self.requestHandler?(request) ?? (nil, 500)
+        guard let url = request.url else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badURL))
+            return
+        }
         let response = HTTPURLResponse(
-            url: request.url!,
+            url: url,
             statusCode: statusCode,
             httpVersion: nil,
             headerFields: nil

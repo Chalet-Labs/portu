@@ -30,6 +30,8 @@ public actor PriceService {
     /// Fetch current USD prices for the given CoinGecko coin IDs.
     /// Returns cached data if within TTL. Enforces client-side rate limit.
     public func fetchPrices(for coinIds: [String]) async throws(PriceServiceError) -> [String: Decimal] {
+        guard !coinIds.isEmpty else { return [:] }
+
         if let lastFetch = lastFetchDate,
            Date.now.timeIntervalSince(lastFetch) < cacheTTL,
            coinIds.allSatisfy({ cache.keys.contains($0) }) {
