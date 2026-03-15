@@ -18,6 +18,7 @@ public actor PriceService {
     private let maxRequestsPerWindow: Int
     private let windowDuration: TimeInterval
     private var requestTimestamps: [RequestStamp] = []
+    private var activeStreamCount = 0
 
     public init(
         session: URLSession = .shared,
@@ -80,29 +81,43 @@ public actor PriceService {
         }
 
         let parsed = try CoinGeckoSimplePriceResponse(from: data)
+        let requested = Set(coinIds)
+
         // Cap cache to prevent unbounded growth in long-running sessions
         if cache.count > 500 {
             cache = [:]
         }
+        // Remove requested IDs not present in fresh payload to avoid serving stale values
+        for id in requested where parsed.prices[id] == nil {
+            cache.removeValue(forKey: id)
+        }
         cache.merge(parsed.prices) { _, new in new }
         lastFetchDate = .now
-        return cache.filter { coinIds.contains($0.key) }
+        return cache.filter { requested.contains($0.key) }
     }
 
     /// Returns an async stream that polls prices at the given interval.
     /// The stream yields price dictionaries keyed by coinGeckoId.
     /// Transient errors (network, rate limit) are silently retried on the next tick.
     /// Non-transient errors (decoding, invalid response) terminate the stream.
+    ///
+    /// - Important: Only one active stream per `PriceService` instance is supported.
+    ///   Multiple concurrent streams share the same rate-limit budget and can silently
+    ///   exhaust it, causing all streams to stop yielding values. Cancel the previous
+    ///   stream before creating a new one.
     public func priceStream(
         for coinIds: [String],
         interval: TimeInterval = 30
     ) -> AsyncThrowingStream<[String: Decimal], any Error> {
+        assert(activeStreamCount == 0, "PriceService: multiple concurrent streams share the same rate-limit budget — cancel the previous stream first")
+        activeStreamCount += 1
         let (stream, continuation) = AsyncThrowingStream.makeStream(
             of: [String: Decimal].self,
             throwing: (any Error).self,
             bufferingPolicy: .bufferingNewest(1)
         )
         let task = Task {
+            defer { activeStreamCount -= 1 }
             while !Task.isCancelled {
                 do {
                     let prices = try await fetchPrices(for: coinIds)

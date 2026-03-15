@@ -42,16 +42,19 @@ public struct KeychainService: SecretStore {
             throw .encodingFailed
         }
 
-        let query: [String: Any] = [
+        let baseQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
+        let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
         // Add-first upsert: attempt add, then update on duplicate
         let addStatus = SecItemAdd(
-            query.merging([kSecValueData as String: data]) { _, new in new } as CFDictionary,
+            baseQuery.merging([
+                kSecAttrAccessible as String: accessibility,
+                kSecValueData as String: data,
+            ]) { _, new in new } as CFDictionary,
             nil
         )
 
@@ -60,8 +63,11 @@ public struct KeychainService: SecretStore {
             return
         case errSecDuplicateItem:
             let updateStatus = SecItemUpdate(
-                query as CFDictionary,
-                [kSecValueData as String: data] as CFDictionary
+                baseQuery as CFDictionary,
+                [
+                    kSecValueData as String: data,
+                    kSecAttrAccessible as String: accessibility,
+                ] as CFDictionary
             )
             guard updateStatus == errSecSuccess else {
                 throw .unexpectedStatus(updateStatus)

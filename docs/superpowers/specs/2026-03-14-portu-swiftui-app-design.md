@@ -9,7 +9,7 @@ Portu is a native macOS SwiftUI app for monitoring crypto portfolios. It aggrega
 - **Platform**: macOS 15.0+ (Sequoia)
 - **Language**: Swift 6.2+
 - **UI Framework**: SwiftUI with AppKit bridges where needed
-- **Concurrency**: Default Main Actor isolation via `SwiftSetting.defaultIsolation(.MainActor)` in all targets
+- **Concurrency**: Default Main Actor isolation via `.defaultIsolation(MainActor.self)` in all targets
 - **Build System**: XcodeGen (`project.yml`) + xcodebuild
 - **Privacy**: All data local. Keychain for secrets, SwiftData for everything else. No cloud dependency.
 - **Sandbox**: Not sandboxed — the `com.apple.security.app-sandbox` entitlement is absent from `Portu.entitlements`. Direct distribution only (no Mac App Store). Keychain items are scoped by the bundle ID (`com.portu.app`) via `kSecAttrService`. The `Portu.entitlements` file exists for future entitlement needs (e.g., network access, file access) but currently contains no sandbox-related keys.
@@ -356,7 +356,7 @@ The initial scaffolding delivers:
 2. XcodeGen `project.yml` that builds and runs
 3. SwiftData models (Portfolio, Account, Holding, Asset)
 4. `KeychainService` with `SecretStore` protocol and typed `KeychainError`
-5. `PriceService` actor with CoinGecko client, sliding-window rate limiter, cache with TTL, `AsyncThrowingStream`-based price polling, and typed `PriceServiceError`
+5. `PriceService` actor with CoinGecko client, sliding-window rate limiter, cache with TTL, `AsyncThrowingStream`-based price polling (internal polling loop within `PriceService`), and typed `PriceServiceError`
 6. Full UI shell: sidebar navigation, portfolio summary placeholder, settings placeholder
 7. `ContentUnavailableView` for empty states
 8. `AppState` with `@Observable`
@@ -368,6 +368,6 @@ What the scaffolding does NOT include (future work):
 - Actual exchange API integrations (Binance, Coinbase, Kraken clients)
 - On-chain wallet tracking (RPC calls)
 - Real chart rendering (will need Swift Charts or a charting library)
-- Auto-refresh timer
+- Auto-refresh timer (user-configurable periodic refresh orchestration that coordinates UI updates across views — distinct from `PriceService`'s internal polling loop)
 - Sparkle auto-updates
 - Notarization / distribution pipeline
