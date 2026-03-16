@@ -44,7 +44,7 @@ struct AccountDetailView: View {
                 List(account.holdings) { holding in
                     HoldingRow(
                         holding: holding,
-                        price: appState.prices[holding.asset?.coinGeckoId ?? ""]
+                        price: holding.asset?.coinGeckoId.flatMap { appState.prices[$0] }
                     )
                 }
             }

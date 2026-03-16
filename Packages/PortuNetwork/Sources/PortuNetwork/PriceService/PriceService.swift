@@ -109,7 +109,16 @@ public actor PriceService {
         for coinIds: [String],
         interval: TimeInterval = 30
     ) -> AsyncThrowingStream<[String: Decimal], any Error> {
-        assert(activeStreamCount == 0, "PriceService: multiple concurrent streams share the same rate-limit budget — cancel the previous stream first")
+        let pollingInterval = max(interval, 1)
+        guard activeStreamCount == 0 else {
+            let (stream, continuation) = AsyncThrowingStream.makeStream(
+                of: [String: Decimal].self,
+                throwing: (any Error).self,
+                bufferingPolicy: .bufferingNewest(1)
+            )
+            continuation.finish(throwing: PriceServiceError.concurrentStreamNotSupported)
+            return stream
+        }
         activeStreamCount += 1
         let (stream, continuation) = AsyncThrowingStream.makeStream(
             of: [String: Decimal].self,
@@ -134,7 +143,7 @@ public actor PriceService {
                     return
                 }
                 do {
-                    try await Task.sleep(for: .seconds(interval))
+                    try await Task.sleep(for: .seconds(pollingInterval))
                 } catch {
                     // Cancellation — clean finish
                     continuation.finish()
