@@ -7,10 +7,7 @@ struct AccountDetailView: View {
     let accountID: PersistentIdentifier
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
-
-    private var account: Account? {
-        try? modelContext.model(for: accountID) as? Account
-    }
+    @State private var account: Account?
 
     var body: some View {
         Group {
@@ -22,6 +19,9 @@ struct AccountDetailView: View {
                     systemImage: "exclamationmark.triangle"
                 )
             }
+        }
+        .task(id: accountID) {
+            account = try? modelContext.model(for: accountID) as? Account
         }
     }
 
