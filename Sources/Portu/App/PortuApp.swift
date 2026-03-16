@@ -19,10 +19,14 @@ struct PortuApp: App {
             // app can still launch. A future release should surface a user-facing
             // alert prompting to reset the database.
             let config = ModelConfiguration(isStoredInMemoryOnly: true)
-            container = try! ModelContainer(
-                for: Portfolio.self, Account.self, Holding.self, Asset.self,
-                configurations: config
-            )
+            do {
+                container = try ModelContainer(
+                    for: Portfolio.self, Account.self, Holding.self, Asset.self,
+                    configurations: config
+                )
+            } catch {
+                fatalError("Failed to create even an in-memory ModelContainer: \(error)")
+            }
         }
     }
 
