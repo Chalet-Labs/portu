@@ -4,6 +4,7 @@ import SwiftData
 /// Root transient UI state. Does NOT hold SwiftData model arrays.
 /// Views use @Query directly for SwiftData collections.
 @Observable
+@MainActor
 final class AppState {
     var selectedSection: SidebarSection = .portfolio
     var lastPriceUpdate: Date?
