@@ -21,6 +21,7 @@ struct AccountDetailView: View {
             }
         }
         .task(id: accountID) {
+            account = nil
             account = try? modelContext.model(for: accountID) as? Account
         }
     }
