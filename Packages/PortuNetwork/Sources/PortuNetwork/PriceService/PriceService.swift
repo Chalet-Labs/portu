@@ -123,7 +123,6 @@ public actor PriceService {
             bufferingPolicy: .bufferingNewest(1)
         )
         let task = Task {
-            defer { self.activePollingTask = nil }
             while !Task.isCancelled {
                 do {
                     let prices = try await fetchPrices(for: coinIds)
