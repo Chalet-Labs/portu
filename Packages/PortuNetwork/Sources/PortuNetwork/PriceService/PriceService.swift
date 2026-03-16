@@ -22,7 +22,7 @@ public actor PriceService {
 
     public init(
         session: URLSession = .shared,
-        cacheTTL: TimeInterval = 30,
+        cacheTTL: TimeInterval = 10, // must be < polling interval to serve cached data between ticks
         maxRequestsPerWindow: Int = 10,
         windowDuration: TimeInterval = 60
     ) {
