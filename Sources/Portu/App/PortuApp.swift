@@ -24,6 +24,7 @@ struct PortuApp: App {
                     for: Portfolio.self, Account.self, Holding.self, Asset.self,
                     configurations: config
                 )
+                appState.storeIsEphemeral = true
             } catch {
                 fatalError("Failed to create even an in-memory ModelContainer: \(error)")
             }

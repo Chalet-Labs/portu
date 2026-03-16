@@ -10,6 +10,7 @@ final class AppState {
     var lastPriceUpdate: Date?
     var prices: [String: Decimal] = [:]
     var connectionStatus: ConnectionStatus = .idle
+    var storeIsEphemeral = false
 }
 
 enum SidebarSection: Hashable, Sendable {

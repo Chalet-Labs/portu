@@ -109,6 +109,9 @@ public actor PriceService {
         for coinIds: [String],
         interval: TimeInterval = 30
     ) -> AsyncThrowingStream<[String: Decimal], any Error> {
+        guard !coinIds.isEmpty else {
+            return AsyncThrowingStream { $0.finish() }
+        }
         let pollingInterval = max(interval, 1)
 
         // Cancel any lingering polling task synchronously on the actor
