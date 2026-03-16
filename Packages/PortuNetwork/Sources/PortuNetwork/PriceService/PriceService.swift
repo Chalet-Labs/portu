@@ -18,7 +18,7 @@ public actor PriceService {
     private let maxRequestsPerWindow: Int
     private let windowDuration: TimeInterval
     private var requestTimestamps: [RequestStamp] = []
-    private var activeStreamCount = 0
+    private var activePollingTask: Task<Void, Never>?
 
     public init(
         session: URLSession = .shared,
@@ -110,23 +110,20 @@ public actor PriceService {
         interval: TimeInterval = 30
     ) -> AsyncThrowingStream<[String: Decimal], any Error> {
         let pollingInterval = max(interval, 1)
-        guard activeStreamCount == 0 else {
-            let (stream, continuation) = AsyncThrowingStream.makeStream(
-                of: [String: Decimal].self,
-                throwing: (any Error).self,
-                bufferingPolicy: .bufferingNewest(1)
-            )
-            continuation.finish(throwing: PriceServiceError.concurrentStreamNotSupported)
-            return stream
-        }
-        activeStreamCount += 1
+
+        // Cancel any lingering polling task synchronously on the actor
+        // before starting a new stream. This eliminates the race where
+        // the old task's deferred cleanup hasn't executed yet.
+        activePollingTask?.cancel()
+        activePollingTask = nil
+
         let (stream, continuation) = AsyncThrowingStream.makeStream(
             of: [String: Decimal].self,
             throwing: (any Error).self,
             bufferingPolicy: .bufferingNewest(1)
         )
         let task = Task {
-            defer { activeStreamCount -= 1 }
+            defer { self.activePollingTask = nil }
             while !Task.isCancelled {
                 do {
                     let prices = try await fetchPrices(for: coinIds)
@@ -152,6 +149,7 @@ public actor PriceService {
             }
             continuation.finish()
         }
+        activePollingTask = task
         continuation.onTermination = { _ in task.cancel() }
         return stream
     }

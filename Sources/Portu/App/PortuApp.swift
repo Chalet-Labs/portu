@@ -15,7 +15,14 @@ struct PortuApp: App {
                 for: Portfolio.self, Account.self, Holding.self, Asset.self
             )
         } catch {
-            fatalError("Failed to initialize ModelContainer: \(error)")
+            // Schema migration failed — fall back to an in-memory store so the
+            // app can still launch. A future release should surface a user-facing
+            // alert prompting to reset the database.
+            let config = ModelConfiguration(isStoredInMemoryOnly: true)
+            container = try! ModelContainer(
+                for: Portfolio.self, Account.self, Holding.self, Asset.self,
+                configurations: config
+            )
         }
     }
 
