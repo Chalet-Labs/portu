@@ -55,7 +55,7 @@ public actor PriceService {
         let stamp = RequestStamp(id: UUID(), date: .now)
         requestTimestamps.append(stamp)
 
-        let ids = coinIds.joined(separator: ",")
+        let ids = Set(coinIds).joined(separator: ",")
         let url = baseURL.appending(path: "simple/price")
             .appending(queryItems: [
                 URLQueryItem(name: "ids", value: ids),

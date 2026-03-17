@@ -5,6 +5,11 @@ struct StatusBarView: View {
 
     var body: some View {
         HStack {
+            if appState.storeIsEphemeral {
+                Label("Data not saved — database error", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
+
             switch appState.connectionStatus {
             case .idle:
                 Label("Idle", systemImage: "circle")
