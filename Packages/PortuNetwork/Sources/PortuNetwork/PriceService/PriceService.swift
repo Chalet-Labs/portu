@@ -39,7 +39,7 @@ public actor PriceService {
 
         if let lastFetch = lastFetchDate,
            Date.now.timeIntervalSince(lastFetch) < cacheTTL,
-           coinIds.allSatisfy({ cache.keys.contains($0) }) {
+           coinIds.allSatisfy({ cache[$0] != nil }) {
             return cache.filter { coinIds.contains($0.key) }
         }
 
@@ -105,6 +105,10 @@ public actor PriceService {
     ///   Multiple concurrent streams share the same rate-limit budget and can silently
     ///   exhaust it, causing all streams to stop yielding values. Cancel the previous
     ///   stream before creating a new one.
+    /// - Important: `coinIds` is captured at the point `priceStream` is called.
+    ///   The stream will **not** automatically pick up coins added after creation.
+    ///   Recreate the stream (e.g., via `.task(id: coinIdSet)`) whenever the active
+    ///   set of tracked coins changes.
     public func priceStream(
         for coinIds: [String],
         interval: TimeInterval = 30
