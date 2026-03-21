@@ -103,13 +103,13 @@ during the per-account loop. This guarantees:
 — all snapshots use `batchTimestamp` —
 12. Prune old snapshots (all three tiers)
 13. `context.save()`
-14. Update `AppState.syncStatus` to `.idle`
+14. Update `AppState.syncStatus`: if any accounts failed → `.completedWithErrors(failedAccounts: [String])`, if all succeeded → `.idle`
 
 **Error handling**: SyncEngine syncs accounts independently. If one account's provider fails:
 - The error is recorded on that account (`Account.lastSyncError: String?`)
 - Existing positions for that account are preserved (not deleted)
 - Sync continues with remaining accounts
-- `SyncStatus.error` shows a summary of failed accounts
+- `SyncStatus.completedWithErrors` persists until next sync or user dismisses — shows which accounts failed
 - User can retry individual accounts or all failed accounts
 
 **Partial-failure snapshots**: Phase B still creates snapshots when some accounts fail,
@@ -662,7 +662,10 @@ enum ConnectionStatus: Hashable, Sendable {
 }
 
 enum SyncStatus: Hashable, Sendable {
-    case idle, syncing(progress: Double), error(String)
+    case idle
+    case syncing(progress: Double)
+    case completedWithErrors(failedAccounts: [String])  // partial failure — persists until next sync or dismissed
+    case error(String)                                   // total failure (all accounts failed or infra error)
 }
 ```
 
