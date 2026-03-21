@@ -336,7 +336,9 @@ enum AccountKind: String, Codable, CaseIterable, Sendable {
 }
 
 enum DataSource: String, Codable, CaseIterable, Sendable {
-    case debank, zapper, rpc, exchange, manual
+    case zapper, exchange, manual
+    // case debank  — deferred (paid API)
+    // case rpc     — deferred
 }
 
 enum ExchangeType: String, Codable, CaseIterable, Sendable {
@@ -443,10 +445,10 @@ the correct `ModelContext`:
 
 Each provider uses `SyncContext` differently:
 
-- **ZapperProvider** — iterates `context.addresses`, calls Zapper API for each address across all chains (or specific chain if `address.chain` is set). Merges results. User provides API key (stored as `"portu.provider.zapper.apiKey"`).
-- **DeBankProvider** — same pattern as Zapper. Uses DeBank Cloud API. User provides API key.
-- **RPCProvider** — iterates `context.addresses`, queries ERC-20 balances via `eth_call` per chain. Uses `address.chain` to select the right RPC endpoint. User provides RPC endpoint URLs per chain (stored in SwiftData, not Keychain).
+- **ZapperProvider** — iterates `context.addresses`, calls Zapper API for each address across all chains (or specific chain if `address.chain` is set). Merges results. User provides API key (stored as `"portu.provider.zapper.apiKey"`). **← first implementation (free API credits)**
 - **ExchangeProvider** — ignores `context.addresses`. Uses `context.accountId` to look up Keychain secrets (`"portu.exchange.<accountId>.apiKey"`) and `context.exchangeType` to route to the correct exchange client (Kraken, Binance, Coinbase).
+- ~~**DeBankProvider**~~ — deferred. Same pattern as Zapper but uses DeBank Cloud API (requires paid account).
+- ~~**RPCProvider**~~ — deferred. Iterates `context.addresses`, queries ERC-20 balances via `eth_call` per chain. Balances only.
 
 ### PriceService
 
