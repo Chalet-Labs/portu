@@ -78,10 +78,10 @@ SyncEngine flow (runs in app target, has access to `ModelContext`):
 2. Call `fetchBalances(context:)` → returns `[PositionDTO]` (plain structs, no SwiftData)
 3. Call `fetchDeFiPositions(context:)` → returns `[PositionDTO]` (empty if unsupported)
 4. **Map DTOs → SwiftData** on the `ModelContext`:
-   a. Upsert `Asset` @Model records from `TokenDTO` fields
+   a. Upsert `Asset` @Model records from `TokenDTO` fields using **Asset Identity upsert key hierarchy** (see Asset Identity section)
    b. Delete stale `Position` records from previous sync for that account
    c. Create new `Position` and `PositionToken` @Model instances from DTOs
-   d. Link PositionTokens to upserted Assets
+   d. Link PositionTokens to resolved Asset records (by Asset.id)
    e. `context.save()`
 5. Create AssetSnapshot records (one per asset per account from the synced positions)
 6. After all accounts are synced: create PortfolioSnapshot (aggregated totals) and AccountSnapshot (per-account totals)
@@ -226,9 +226,50 @@ For "Value" columns: `amount * livePrice` when live price is available, otherwis
 
 For "24h change" in the Overview top bar: computed as `sum(amount * price * priceChange24hPercent)` for each asset with a `coinGeckoId`. Assets without `coinGeckoId` contribute $0 to the 24h change (shown as approximate with a tooltip).
 
+### Asset Identity and Upsert Rules
+
+Assets are shared reference data. Multiple PositionTokens across accounts and providers
+can reference the same Asset. The upsert rules define how SyncEngine deduplicates tokens
+into canonical Asset records.
+
+**Upsert key hierarchy** (checked in order, first match wins):
+
+1. **`coinGeckoId`** — primary key when present. One Asset per coinGeckoId. This naturally
+   handles cross-chain grouping: ETH on Ethereum, ETH on Arbitrum, and staked ETH variants
+   all map to coinGeckoId `"ethereum"` (or their own IDs like `"lido-staked-ether"`).
+   Most assets with real value have a coinGeckoId.
+
+2. **`chain + contractAddress`** — for on-chain tokens without a coinGeckoId. Unique per
+   deployment. Two tokens on different chains with the same contract address are different
+   Assets.
+
+3. **`symbol` (exact match, same provider)** — last resort for tokens with no coinGeckoId
+   and no contract address (e.g., exchange-only tokens). Only matches within the same
+   `DataSource` to avoid false merges across providers. Assets matched this way are flagged
+   as `isVerified: false`.
+
+**Merge precedence** — when multiple providers return data for the same Asset:
+- Prefer records with `coinGeckoId` set over those without
+- Prefer `isVerified: true` over `false`
+- For conflicting metadata (name, category, logoURL): last-synced-wins, since newer data
+  from providers is generally more accurate
+- `coinGeckoId` and `contractAddress` are never overwritten once set (append-only on these fields)
+
+**WBTC vs BTC**: These are separate Assets (different coinGeckoIds: `"wrapped-bitcoin"` vs
+`"bitcoin"`). The `AssetCategory` grouping (both are `.major`) handles the logical "BTC
+exposure" concept in Exposure and Overview views.
+
+**Edge case — unknown tokens**: If a provider returns a token that matches no existing Asset
+by any key, a new Asset is created with whatever data the provider supplied. If `coinGeckoId`
+is absent, PriceService cannot provide live prices — the view falls back to sync-time
+`PositionToken.usdValue`.
+
 ### Net Amount Aggregation
 
-"Net Amount" in the All Assets table = sum of all PositionToken amounts for that Asset across all accounts and positions. Tokens with role `.borrow` subtract from the total. Tokens with role `.reward` are excluded (unclaimed rewards). This gives net exposure per asset.
+"Net Amount" in the All Assets table = sum of all PositionToken amounts for that Asset
+(matched by Asset.id after upsert) across all accounts and positions. Tokens with role
+`.borrow` subtract from the total. Tokens with role `.reward` are excluded (unclaimed
+rewards). This gives net exposure per asset.
 
 ### Manual Entry
 
@@ -343,7 +384,7 @@ struct ProviderCapabilities: Sendable {
 
 **SyncEngine mapping** (app target): receives `[PositionDTO]` from providers, then on
 the correct `ModelContext`:
-1. Upserts `Asset` records from `TokenDTO` fields (deduplicated by symbol + chain + contractAddress)
+1. Upserts `Asset` records from `TokenDTO` fields using the Asset Identity upsert key hierarchy (coinGeckoId → chain+contract → symbol+provider)
 2. Creates `Position` @Model instances from `PositionDTO`
 3. Creates `PositionToken` @Model instances from `TokenDTO`, linking to upserted Assets
 4. All writes happen in a single `ModelContext.save()` call per account
