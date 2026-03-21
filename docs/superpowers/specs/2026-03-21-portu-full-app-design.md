@@ -94,7 +94,7 @@ during the per-account loop. This guarantees:
 - Failed accounts' preserved positions are included in all tiers (Value and Assets modes agree)
 - No timestamp drift between accounts
 
-7. If ALL accounts failed, skip Phase B entirely (no snapshot — nothing changed)
+7. If ALL accounts failed, skip Phase B entirely (no snapshot — nothing changed). Set `AppState.syncStatus = .error("All accounts failed to sync")` and return.
 8. Pick a single `batchTimestamp = Date.now`
 9. Query all current positions from the `ModelContext`
 10. Create one `PortfolioSnapshot` (aggregate totals, `isPartial: true` if any account failed)
