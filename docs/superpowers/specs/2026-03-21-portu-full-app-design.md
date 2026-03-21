@@ -65,9 +65,11 @@ PortuApp (app target)
 **Sync-on-demand** (MVP): User clicks "Sync" → SyncEngine fetches all sources → writes to SwiftData → views reactively update via `@Query`. Auto-sync with configurable intervals is deferred to future work.
 
 SyncEngine flow:
-1. For each active Account where `dataSource != .manual`, resolve its `PortfolioDataProvider`
-2. Call `fetchBalances()` → creates idle Position records
-3. Call `fetchDeFiPositions()` → creates lending/staking/LP Position records (returns `[]` if provider doesn't support it)
+1. For each active Account where `dataSource != .manual`:
+   a. Construct `SyncContext` from Account (accountId, kind, addresses from WalletAddress records, exchangeType)
+   b. Resolve `PortfolioDataProvider` based on `dataSource`
+2. Call `fetchBalances(context:)` → creates idle Position records
+3. Call `fetchDeFiPositions(context:)` → creates lending/staking/LP Position records (returns `[]` if provider doesn't support it)
 4. Upsert Asset reference data from returned tokens
 5. Delete stale positions from previous sync for that account (manual positions are never deleted by sync)
 6. Create PortfolioSnapshot + AccountSnapshot records
@@ -245,16 +247,29 @@ does not natively support `URL` storage in predicates. Convert to `URL` at the v
 
 ### PortfolioDataProvider Protocol
 
+The protocol is **account-scoped** via `SyncContext`. This allows providers to handle
+multi-address wallets (iterate all addresses), exchange accounts (look up credentials
+by accountId), and chain-specific routing in a single call.
+
 ```swift
+/// Lightweight DTO constructed by SyncEngine from an Account model.
+/// Avoids passing @Model objects across actor boundaries.
+struct SyncContext: Sendable {
+    let accountId: UUID
+    let kind: AccountKind
+    let addresses: [(address: String, chain: Chain?)]  // from WalletAddress records
+    let exchangeType: ExchangeType?                     // set when kind == .exchange
+}
+
 protocol PortfolioDataProvider: Sendable {
     var capabilities: ProviderCapabilities { get }
-    func fetchBalances(address: String, chains: [Chain]) async throws -> [Position]
-    func fetchDeFiPositions(address: String, chains: [Chain]) async throws -> [Position]
+    func fetchBalances(context: SyncContext) async throws -> [Position]
+    func fetchDeFiPositions(context: SyncContext) async throws -> [Position]
 }
 
 // Default implementation for optional capability
 extension PortfolioDataProvider {
-    func fetchDeFiPositions(address: String, chains: [Chain]) async throws -> [Position] { [] }
+    func fetchDeFiPositions(context: SyncContext) async throws -> [Position] { [] }
 }
 
 struct ProviderCapabilities: Sendable {
@@ -266,10 +281,12 @@ struct ProviderCapabilities: Sendable {
 
 ### Provider Implementations
 
-- **DeBankProvider** — full capabilities. Uses DeBank Cloud API. User provides API key.
-- **ZapperProvider** — most capabilities (health factors partial). Uses Zapper API. User provides API key.
-- **RPCProvider** — balances only. User provides RPC endpoint URLs per chain. Queries ERC-20 balances via `eth_call`.
-- **ExchangeProvider** — balances only. Wraps per-exchange clients (Kraken, Binance, Coinbase). User provides API key + secret (read-only).
+Each provider uses `SyncContext` differently:
+
+- **ZapperProvider** — iterates `context.addresses`, calls Zapper API for each address across all chains (or specific chain if `address.chain` is set). Merges results. User provides API key (stored as `"portu.provider.zapper.apiKey"`).
+- **DeBankProvider** — same pattern as Zapper. Uses DeBank Cloud API. User provides API key.
+- **RPCProvider** — iterates `context.addresses`, queries ERC-20 balances via `eth_call` per chain. Uses `address.chain` to select the right RPC endpoint. User provides RPC endpoint URLs per chain (stored in SwiftData, not Keychain).
+- **ExchangeProvider** — ignores `context.addresses`. Uses `context.accountId` to look up Keychain secrets (`"portu.exchange.<accountId>.apiKey"`) and `context.exchangeType` to route to the correct exchange client (Kraken, Binance, Coinbase).
 
 ### PriceService
 
