@@ -141,7 +141,7 @@ WalletAddress per 0x address, not one per chain.
 Position                            — the core entity
 ├── id: UUID
 ├── positionType: PositionType     (.idle, .lending, .liquidityPool, .staking, .farming, .vesting, .other)
-├── chain: Chain
+├── chain: Chain?                  (nil = off-chain: exchange custody, manual entry, etc.)
 ├── protocolId: String?            (DeBank/Zapper protocol identifier)
 ├── protocolName: String?
 ├── protocolLogoURL: String?
@@ -299,7 +299,7 @@ struct SyncContext: Sendable {
 /// Plain structs returned by providers. SyncEngine maps these to @Model objects.
 struct PositionDTO: Sendable {
     let positionType: PositionType
-    let chain: Chain
+    let chain: Chain?              // nil for exchange/manual (off-chain)
     let protocolId: String?
     let protocolName: String?
     let protocolLogoURL: String?
@@ -450,7 +450,7 @@ Tabbed view with 4 sub-tabs.
 
 **Platforms tab**: Table grouped by protocol. Columns: Platform, Share %, # Networks, # Positions, USD Balance. Derived from Position.protocolId grouping.
 
-**Networks tab**: Table grouped by chain. Columns: Network, Share %, # Positions, USD Balance. Derived from Position.chain grouping.
+**Networks tab**: Table grouped by chain. Columns: Network, Share %, # Positions, USD Balance. Derived from Position.chain grouping. Positions with `chain == nil` (exchange/manual) are grouped under an "Off-chain / Custodial" row.
 
 ### 3. All Positions View
 
