@@ -83,8 +83,10 @@ SyncEngine flow (runs in app target, has access to `ModelContext`):
    c. Create new `Position` and `PositionToken` @Model instances from DTOs
    d. Link PositionTokens to upserted Assets
    e. `context.save()`
-5. Create PortfolioSnapshot + AccountSnapshot records
-6. Update `Account.lastSyncedAt`
+5. Create AssetSnapshot records (one per asset per account from the synced positions)
+6. After all accounts are synced: create PortfolioSnapshot (aggregated totals) and AccountSnapshot (per-account totals)
+7. Prune old snapshots (all three tiers: Portfolio, Account, Asset)
+8. Update `Account.lastSyncedAt`
 
 **Error handling**: SyncEngine syncs accounts independently. If one account's provider fails:
 - The error is recorded on that account (`Account.lastSyncError: String?`)
@@ -182,14 +184,35 @@ AccountSnapshot                     — per-account time series for account-filt
 ├── timestamp: Date
 ├── accountId: UUID                (not a relationship — survives account deletion for historical data)
 ├── totalValue: Decimal
+
+AssetSnapshot                       — per-asset per-account time series
+├── id: UUID
+├── timestamp: Date
+├── accountId: UUID                (not a relationship — survives deletion)
+├── assetId: UUID                  (not a relationship — survives deletion)
+├── symbol: String                 (denormalized for display — survives Asset changes)
+├── category: AssetCategory        (denormalized — enables category grouping without joins)
+├── amount: Decimal                (token quantity at sync time)
+├── usdValue: Decimal              (USD value at sync time)
 ```
+
+AssetSnapshot enables:
+- **Performance "Assets" mode** — group by `category`, sum `usdValue`, chart over time as stacked AreaMark
+- **Performance account filter + category breakdown** — filter by `accountId`, then group by `category`
+- **Asset Detail "$ Value" mode** — filter by `assetId`, chart `usdValue` over time
+- **Asset Detail "Amount" mode** — filter by `assetId`, chart `amount` over time
+- **Asset categories bottom panel** — compare start/end `usdValue` for period % change
+
+Storage estimate: ~2.5 MB/year for 50 assets × 15 accounts × 2 syncs/day with pruning.
+Same pruning rules as PortfolioSnapshot apply to AssetSnapshot.
 
 **Key design decisions:**
 - **No Portfolio model** — single-portfolio MVP. Account is the top-level entity. Multi-portfolio support can be added later by introducing a Portfolio parent.
 - **Position is the core entity** — each DeFi position, staking position, LP position, or idle wallet balance is a Position.
 - **Protocol is denormalized** — protocolId/Name/LogoURL live directly on Position. Avoids relationship complexity.
 - **Prices live in AppState, not on Asset** — current prices are transient (from PriceService cache). No stale price problem.
-- **Snapshots use accountId UUID, not a relationship** — historical data survives account deletion.
+- **Snapshots use UUID keys, not relationships** — historical data survives account/asset deletion. `symbol` and `category` are denormalized on AssetSnapshot so charts display correctly even if the Asset record changes.
+- **Three snapshot tiers** — PortfolioSnapshot (fast total-value queries), AccountSnapshot (account-filtered totals), AssetSnapshot (category/asset drill-downs). All created on each sync.
 - **SwiftData migration** — the existing Portfolio model and old schema are replaced entirely. Use destructive migration (wipe and recreate) since the app has no real user data yet — only scaffolding test data.
 
 ### Price Display Rules
@@ -446,15 +469,18 @@ Time-series portfolio performance analysis.
 **Controls**: Account filter dropdown, time range selector (1w/1m/3m/1y/YTD/Custom), chart mode toggle (Value/Assets/PnL).
 
 **Chart modes**:
-- **Value** — `AreaMark` showing total portfolio value over time. Data from PortfolioSnapshot (or AccountSnapshot when filtered).
-- **Assets** — Stacked `AreaMark` broken down by asset category (Majors, Stablecoins, etc.). Category filter chips.
+- **Value** — `AreaMark` showing total portfolio value over time. Data from PortfolioSnapshot (or AccountSnapshot when account-filtered).
+- **Assets** — Stacked `AreaMark` broken down by asset category. Data from AssetSnapshot grouped by `category`, summing `usdValue` per timestamp. When account-filtered, AssetSnapshots are filtered by `accountId` first. Category filter chips toggle categories on/off.
 - **PnL** — `BarMark` showing daily profit/loss. Cumulative toggle adds a `LineMark` overlay.
 
 **Bottom panels**:
-- **Asset categories** — category breakdown with period % change and sparkline bars.
+- **Asset categories** — category breakdown with period % change. Computed from AssetSnapshot: compare sum of `usdValue` per category at period start vs end.
 - **Asset Prices** — table of top assets with start price, end price, and % change for selected period.
 
-**Data**: PortfolioSnapshot and AccountSnapshot time series. Each sync creates snapshots.
+**Data**: Three snapshot tiers power this view:
+- PortfolioSnapshot → Value mode (all accounts)
+- AccountSnapshot → Value mode (account-filtered)
+- AssetSnapshot → Assets mode (category breakdown, works with or without account filter)
 
 **PnL computation**: Daily PnL = `snapshot[day N].totalValue - snapshot[day N-1].totalValue`. This is a simple mark-to-market PnL — deposits and withdrawals show as gains/losses. True cost-basis PnL is deferred to future work. If no snapshot exists for a given day (user didn't sync), that day is interpolated or skipped in the chart.
 
@@ -495,7 +521,10 @@ Drill-down view for a single asset. Pushed via `navigationDestination` from anyw
 
 **Breadcrumb**: ← Assets > ETH (back navigation).
 
-**Price chart**: Swift Charts `LineMark`. Modes: Price, $ Value (holdings value), Amount (token quantity). Time range selector. Comparison toggles for BTC/SOL (normalized overlay lines). Historical price data from CoinGecko.
+**Price chart**: Swift Charts `LineMark`. Time range selector. Comparison toggles for BTC/SOL (normalized overlay lines). Three modes:
+- **Price** — market price from CoinGecko historical API
+- **$ Value** — total holdings value over time from AssetSnapshot (`usdValue` summed across all accounts for this `assetId`)
+- **Amount** — token quantity over time from AssetSnapshot (`amount` summed across all accounts for this `assetId`)
 
 **Holdings summary**: All Accounts count, total amount, total USD value. "On networks" section: table grouped by chain with amount, share %, USD value.
 
