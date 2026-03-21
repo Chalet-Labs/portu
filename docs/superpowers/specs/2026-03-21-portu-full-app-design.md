@@ -222,8 +222,8 @@ AssetSnapshot                       — per-asset per-account time series
 ├── assetId: UUID                  (not a relationship — survives deletion)
 ├── symbol: String                 (denormalized for display — survives Asset changes)
 ├── category: AssetCategory        (denormalized — enables category grouping without joins)
-├── amount: Decimal                (NET-SIGNED: borrow subtracted, rewards excluded — see below)
-├── usdValue: Decimal              (NET-SIGNED: borrow subtracted, rewards excluded — see below)
+├── amount: Decimal                (GROSS POSITIVE: borrow and reward excluded — see below)
+├── usdValue: Decimal              (GROSS POSITIVE: borrow and reward excluded — see below)
 **Partial-batch detection**: AccountSnapshot and AssetSnapshot do not carry their own
 `isPartial` flag. Instead, all three tiers share `batchTimestamp` (set in Phase B).
 Views query `PortfolioSnapshot.isPartial` for the matching timestamp to determine
@@ -231,14 +231,17 @@ partiality. One lookup, no flag duplication. If the PortfolioSnapshot for a give
 timestamp has `isPartial: true`, all AccountSnapshots and AssetSnapshots with that
 timestamp are also considered partial.
 
-AssetSnapshot sign convention: values are pre-computed net totals at write time.
-SyncEngine applies the same role-sign mapping as Net Amount aggregation:
-  supply/balance/stake/lpToken → add to amount and usdValue
-  borrow → subtract from amount and usdValue
-  reward → excluded
-A borrowed-only asset will have negative amount/usdValue. This ensures
-Performance "Assets" mode and Asset Detail history correctly reflect
-exposure including debt, consistent with the live Net Amount view.
+AssetSnapshot sign convention: values are GROSS HOLDINGS, always positive.
+SyncEngine includes only positive roles when creating snapshots:
+  supply/balance/stake/lpToken → included (summed into amount and usdValue)
+  borrow → EXCLUDED (debt is not a "holding")
+  reward → EXCLUDED (unclaimed, not realized)
+Assets that appear only in borrow positions do NOT get an AssetSnapshot row.
+
+This intentionally differs from Net Amount (which subtracts borrow):
+  Performance "Assets" mode → gross holdings (stacked AreaMark, requires positive values)
+  Asset Detail history → gross holdings (what you hold, not net exposure)
+  Exposure view → net exposure (computed LIVE from current PositionTokens with role signs, no persistence)
 ```
 
 AssetSnapshot enables:
