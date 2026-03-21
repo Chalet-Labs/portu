@@ -163,7 +163,7 @@ Position                            — the core entity
 ├── protocolName: String?
 ├── protocolLogoURL: String?
 ├── healthFactor: Double?          (lending positions only)
-├── netUSDValue: Decimal           (supply positive, borrow negative; for lending = supply - borrow)
+├── netUSDValue: Decimal           (pre-computed signed total: sum of token values with borrow subtracted)
 ├── tokens: [PositionToken]        (1:N, cascade delete)
 ├── account: Account?              (back-reference, nullify)
 ├── syncedAt: Date
@@ -171,8 +171,8 @@ Position                            — the core entity
 PositionToken                       — bridges Position ↔ Asset
 ├── id: UUID
 ├── role: TokenRole                (.supply, .borrow, .reward, .stake, .lpToken, .balance)
-├── amount: Decimal
-├── usdValue: Decimal
+├── amount: Decimal                (ALWAYS POSITIVE — role provides the sign, see Sign Convention below)
+├── usdValue: Decimal              (ALWAYS POSITIVE — role provides the sign, see Sign Convention below)
 ├── asset: Asset?                  (N:1, nullify — assets are shared reference data)
 ├── position: Position?            (back-reference, nullify)
 
@@ -232,6 +232,33 @@ Same pruning rules as PortfolioSnapshot apply to AssetSnapshot.
 - **Snapshots use UUID keys, not relationships** — historical data survives account/asset deletion. `symbol` and `category` are denormalized on AssetSnapshot so charts display correctly even if the Asset record changes.
 - **Three snapshot tiers** — PortfolioSnapshot (fast total-value queries), AccountSnapshot (account-filtered totals), AssetSnapshot (category/asset drill-downs). All created on each sync.
 - **SwiftData migration** — the existing Portfolio model and old schema are replaced entirely. Use destructive migration (wipe and recreate) since the app has no real user data yet — only scaffolding test data.
+
+### Sign Convention
+
+**Invariant: `PositionToken.amount` and `PositionToken.usdValue` are always positive (absolute values).
+`TokenRole` provides the sign semantics. `Position.netUSDValue` is the pre-computed signed aggregate.**
+
+This matches how providers return data (always positive) and keeps display simple.
+
+**Role sign mapping:**
+
+| Role | Sign in aggregations | Example |
+|---|---|---|
+| `.balance` | + | 10 ETH idle in wallet → amount: 10, usdValue: 21,880 |
+| `.supply` | + | 3.68 WBTC supplied to Aave → amount: 3.68, usdValue: 262,429 |
+| `.borrow` | − | 0.03 csBTC borrowed → amount: 0.03, usdValue: 2,193 |
+| `.reward` | excluded | 0.5 AAVE unclaimed → amount: 0.5, usdValue: 50 |
+| `.stake` | + | 15.16 stETH staked → amount: 15.16, usdValue: 35,762 |
+| `.lpToken` | + | LP token position → amount: 100, usdValue: 5,000 |
+
+**How each formula applies signs:**
+
+- **Position.netUSDValue** = `sum(token.usdValue where role is +) − sum(token.usdValue where role is .borrow)`. Pre-computed by SyncEngine when creating Position from DTOs.
+- **Net Amount** (All Assets) = `sum(token.amount where role is +) − sum(token.amount where role is .borrow)`, for tokens referencing the same Asset. `.reward` excluded.
+- **Exposure** = same as Net Amount but grouped by category. Borrow subtracts from exposure.
+- **Value column** (in tables) = `token.usdValue` displayed as-is (always positive). Borrow tokens show a "Borrow" label/icon, not a minus sign on the value.
+- **24h change** = `sum(token.amount × livePrice × priceChange24hPct)` for `+` roles, minus the same for `.borrow` roles. Rewards excluded.
+- **Portfolio total** = `sum(Position.netUSDValue)` across all positions. Already signed correctly.
 
 ### Price Display Rules
 
