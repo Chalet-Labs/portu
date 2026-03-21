@@ -72,21 +72,27 @@ returns DTOs. SyncEngine (app target) is the only place that touches both DTOs a
 **Sync-on-demand** (MVP): User clicks "Sync" → SyncEngine fetches all sources → writes to SwiftData → views reactively update via `@Query`. Auto-sync with configurable intervals is deferred to future work.
 
 SyncEngine flow (runs in app target, has access to `ModelContext`):
-1. For each active Account where `dataSource != .manual`:
-   a. Construct `SyncContext` from Account @Model (reading properties on the current actor)
-   b. Resolve `PortfolioDataProvider` based on `dataSource`
-2. Call `fetchBalances(context:)` → returns `[PositionDTO]` (plain structs, no SwiftData)
-3. Call `fetchDeFiPositions(context:)` → returns `[PositionDTO]` (empty if unsupported)
-4. **Map DTOs → SwiftData** on the `ModelContext`:
-   a. Upsert `Asset` @Model records from `TokenDTO` fields using **Asset Identity upsert key hierarchy** (see Asset Identity section)
-   b. Delete stale `Position` records from previous sync for that account
-   c. Create new `Position` and `PositionToken` @Model instances from DTOs
-   d. Link PositionTokens to resolved Asset records (by Asset.id)
+
+**Phase A — Per-account fetch and persist** (loop over each active Account where `dataSource != .manual`):
+1. Construct `SyncContext` from Account @Model
+2. Resolve `PortfolioDataProvider` based on `dataSource`
+3. Call `fetchBalances(context:)` → `[PositionDTO]`
+4. Call `fetchDeFiPositions(context:)` → `[PositionDTO]` (empty if unsupported)
+5. **Map DTOs → SwiftData** on the `ModelContext`:
+   a. Upsert `Asset` @Model records using **Asset Identity upsert key hierarchy**
+   b. Delete stale `Position` records from previous sync for this account
+   c. Create new `Position` and `PositionToken` @Model instances
+   d. Link PositionTokens to resolved Asset records
    e. `context.save()`
-5. Create AssetSnapshot records (one per asset per account from the synced positions)
-6. After all accounts are synced: create PortfolioSnapshot (aggregated totals) and AccountSnapshot (per-account totals)
-7. Prune old snapshots (all three tiers: Portfolio, Account, Asset)
-8. Update `Account.lastSyncedAt`
+6. Create `AccountSnapshot` for this account (totalValue from its positions)
+7. Create `AssetSnapshot` records for this account (one per asset held)
+8. Update `Account.lastSyncedAt`, clear `Account.lastSyncError`
+— end of per-account loop —
+
+**Phase B — Portfolio-wide finalization** (runs once, after all accounts complete):
+9. Create one `PortfolioSnapshot` (totals aggregated from all current positions)
+10. Prune old snapshots (all three tiers: Portfolio, Account, Asset)
+11. Update `AppState.syncStatus` to `.idle`
 
 **Error handling**: SyncEngine syncs accounts independently. If one account's provider fails:
 - The error is recorded on that account (`Account.lastSyncError: String?`)
