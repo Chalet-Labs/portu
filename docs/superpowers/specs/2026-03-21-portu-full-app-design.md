@@ -94,9 +94,10 @@ during the per-account loop. This guarantees:
 - Failed accounts' preserved positions are included in all tiers (Value and Assets modes agree)
 - No timestamp drift between accounts
 
-7. Pick a single `batchTimestamp = Date.now`
-8. Query all current positions from the `ModelContext`
-9. Create one `PortfolioSnapshot` (aggregate totals from all positions)
+7. If ALL accounts failed, skip Phase B entirely (no snapshot — nothing changed)
+8. Pick a single `batchTimestamp = Date.now`
+9. Query all current positions from the `ModelContext`
+10. Create one `PortfolioSnapshot` (aggregate totals, `isPartial: true` if any account failed)
 10. Create one `AccountSnapshot` per account (totals from each account's positions)
 11. Create `AssetSnapshot` records (one per asset per account, from current PositionTokens grouped by Asset and Account)
 — all snapshots use `batchTimestamp` —
@@ -108,9 +109,15 @@ during the per-account loop. This guarantees:
 - The error is recorded on that account (`Account.lastSyncError: String?`)
 - Existing positions for that account are preserved (not deleted)
 - Sync continues with remaining accounts
-- Snapshots reflect whatever data was successfully fetched
 - `SyncStatus.error` shows a summary of failed accounts
 - User can retry individual accounts or all failed accounts
+
+**Partial-failure snapshots**: Phase B still creates snapshots when some accounts fail,
+but marks them with `isPartial: true`. This is transparent about data quality:
+- Failed accounts contribute stale positions (from their last successful sync) to the snapshot
+- Value chart shows partial snapshots with a visual indicator (e.g., dashed line segment or muted dot)
+- PnL computation treats partial→partial transitions normally, but partial→clean or clean→partial transitions show a warning tooltip ("some account data was stale, PnL may be inaccurate")
+- If ALL accounts fail, no snapshot is written (nothing changed)
 
 ## Data Model
 
@@ -200,6 +207,7 @@ PortfolioSnapshot                   — append-only time series for Performance 
 ├── idleValue: Decimal
 ├── deployedValue: Decimal
 ├── debtValue: Decimal
+├── isPartial: Bool                (true if any account failed during this sync batch)
 
 AccountSnapshot                     — per-account time series for account-filtered Performance
 ├── id: UUID
