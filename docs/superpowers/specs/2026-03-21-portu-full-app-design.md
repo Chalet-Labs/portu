@@ -487,7 +487,7 @@ enum SyncStatus: Hashable, Sendable {
 ## Implementation Phases
 
 ### Phase 1: Data Layer & API Foundation
-Rework SwiftData models, implement `PortfolioDataProvider` protocol, build DeBankProvider (first concrete implementation), PriceService updates, SyncEngine, KeychainService updates.
+Rework SwiftData models, implement `PortfolioDataProvider` protocol, build ZapperProvider (first concrete implementation — Zapper offers free API credits, DeBank requires a paid account), PriceService updates, SyncEngine, KeychainService updates.
 
 ### Phase 2: Sidebar & Overview View
 Updated sidebar with all sections, Overview view as the reference implementation that validates the data model end-to-end.
@@ -507,7 +507,7 @@ Each phase gets its own implementation plan document.
 - Auto-sync with configurable intervals
 - Strategies view
 - Light mode appearance
-- ZapperProvider, RPCProvider implementations (after DeBankProvider proves the abstraction)
+- DeBankProvider, RPCProvider implementations (after ZapperProvider proves the abstraction)
 - Additional exchange integrations beyond Binance/Coinbase/Kraken
 - NFT data model, provider integration, and display
 - Transaction history
