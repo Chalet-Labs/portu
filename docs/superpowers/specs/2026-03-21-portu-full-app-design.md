@@ -84,15 +84,26 @@ SyncEngine flow (runs in app target, has access to `ModelContext`):
    c. Create new `Position` and `PositionToken` @Model instances
    d. Link PositionTokens to resolved Asset records
    e. `context.save()`
-6. Create `AccountSnapshot` for this account (totalValue from its positions)
-7. Create `AssetSnapshot` records for this account (one per asset held)
-8. Update `Account.lastSyncedAt`, clear `Account.lastSyncError`
+6. Update `Account.lastSyncedAt`, clear `Account.lastSyncError`
 — end of per-account loop —
 
-**Phase B — Portfolio-wide finalization** (runs once, after all accounts complete):
-9. Create one `PortfolioSnapshot` (totals aggregated from all current positions)
-10. Prune old snapshots (all three tiers: Portfolio, Account, Asset)
-11. Update `AppState.syncStatus` to `.idle`
+**Phase B — Snapshot all tiers from finalized state** (runs once, after all accounts complete):
+
+All snapshots are created from the finalized position state in the database, not
+during the per-account loop. This guarantees:
+- All snapshot tiers share one timestamp and reflect the same point-in-time state
+- Failed accounts' preserved positions are included in all tiers (Value and Assets modes agree)
+- No timestamp drift between accounts
+
+7. Pick a single `batchTimestamp = Date.now`
+8. Query all current positions from the `ModelContext`
+9. Create one `PortfolioSnapshot` (aggregate totals from all positions)
+10. Create one `AccountSnapshot` per account (totals from each account's positions)
+11. Create `AssetSnapshot` records (one per asset per account, from current PositionTokens grouped by Asset and Account)
+— all snapshots use `batchTimestamp` —
+12. Prune old snapshots (all three tiers)
+13. `context.save()`
+14. Update `AppState.syncStatus` to `.idle`
 
 **Error handling**: SyncEngine syncs accounts independently. If one account's provider fails:
 - The error is recorded on that account (`Account.lastSyncError: String?`)
