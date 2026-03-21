@@ -184,8 +184,9 @@ Asset                               — shared reference data, never cascade-del
 ├── contractAddress: String?
 ├── debankId: String?
 ├── coinGeckoId: String?
+├── sourceKey: String?             (provider-specific opaque ID, used as tier 3 upsert key)
 ├── logoURL: String?
-├── category: AssetCategory        (.major, .stablecoin, .defi, .meme, .privacy, .governance, .other)
+├── category: AssetCategory        (.major, .stablecoin, .defi, .meme, .privacy, .fiat, .governance, .other)
 ├── isVerified: Bool
 
 PortfolioSnapshot                   — append-only time series for Performance view
@@ -260,10 +261,14 @@ into canonical Asset records.
    deployment. Two tokens on different chains with the same contract address are different
    Assets.
 
-3. **`symbol` (exact match, same provider)** — last resort for tokens with no coinGeckoId
-   and no contract address (e.g., exchange-only tokens). Only matches within the same
-   `DataSource` to avoid false merges across providers. Assets matched this way are flagged
-   as `isVerified: false`.
+3. **`sourceKey`** — provider-specific opaque identifier. Each provider generates a stable,
+   unique key for tokens that lack both coinGeckoId and chain+contract. Examples:
+   - ZapperProvider: `"zapper:<zapper_token_id>"`
+   - ExchangeProvider: `"kraken:KFEE"`, `"binance:BNB"` (exchange + symbol)
+   - RPCProvider: never hits tier 3 (always has chain+contract)
+   Both `TokenDTO.sourceKey` and `Asset.sourceKey` carry this value. If no existing Asset
+   matches any tier, a new Asset is created. This avoids false merges across providers
+   while still deduplicating within a provider.
 
 **Merge precedence** — when multiple providers return data for the same Asset:
 - Prefer records with `coinGeckoId` set over those without
@@ -376,6 +381,7 @@ struct TokenDTO: Sendable {
     let contractAddress: String?
     let debankId: String?
     let coinGeckoId: String?
+    let sourceKey: String?         // provider-specific opaque ID (e.g., "kraken:KFEE")
     let logoURL: String?
     let category: AssetCategory
     let isVerified: Bool
