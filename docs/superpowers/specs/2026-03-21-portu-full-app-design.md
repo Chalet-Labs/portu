@@ -319,10 +319,10 @@ into canonical Asset records.
    set on Assets matched via this tier; cross-chain assets (tier 1) leave them nil.
 
 3. **`sourceKey`** — provider-specific opaque identifier. Each provider generates a stable,
-   unique key for tokens that lack both coinGeckoId and chain+contract. Examples:
+   unique key for tokens that lack both coinGeckoId and upsertChain+upsertContract. Examples:
    - ZapperProvider: `"zapper:<zapper_token_id>"`
    - ExchangeProvider: `"kraken:KFEE"`, `"binance:BNB"` (exchange + symbol)
-   - RPCProvider: never hits tier 3 (always has chain+contract)
+   - RPCProvider: never hits tier 3 (always has upsertChain+upsertContract)
    Both `TokenDTO.sourceKey` and `Asset.sourceKey` carry this value. If no existing Asset
    matches any tier, a new Asset is created. This avoids false merges across providers
    while still deduplicating within a provider.
@@ -332,7 +332,7 @@ into canonical Asset records.
 - Prefer `isVerified: true` over `false`
 - For conflicting metadata (name, category, logoURL): last-synced-wins, since newer data
   from providers is generally more accurate
-- `coinGeckoId` and `contractAddress` are never overwritten once set (append-only on these fields)
+- `coinGeckoId`, `upsertChain`, `upsertContract`, and `sourceKey` are never overwritten once set (append-only on these fields)
 
 **WBTC vs BTC**: These are separate Assets (different coinGeckoIds: `"wrapped-bitcoin"` vs
 `"bitcoin"`). The `AssetCategory` grouping (both are `.major`) handles the logical "BTC
@@ -466,7 +466,7 @@ struct ProviderCapabilities: Sendable {
 
 **SyncEngine mapping** (app target): receives `[PositionDTO]` from providers, then on
 the correct `ModelContext`:
-1. Upserts `Asset` records from `TokenDTO` fields using the Asset Identity upsert key hierarchy (coinGeckoId → chain+contract → symbol+provider)
+1. Upserts `Asset` records from `TokenDTO` fields using the Asset Identity upsert key hierarchy (coinGeckoId → upsertChain+upsertContract → sourceKey). `TokenDTO.chain` maps to `Asset.upsertChain`, `TokenDTO.contractAddress` maps to `Asset.upsertContract` — these are set only for tier 2 matches (nil for cross-chain tier 1 assets).
 2. Creates `Position` @Model instances from `PositionDTO`
 3. Creates `PositionToken` @Model instances from `TokenDTO`, linking to upserted Assets
 4. All writes happen in a single `ModelContext.save()` call per account
