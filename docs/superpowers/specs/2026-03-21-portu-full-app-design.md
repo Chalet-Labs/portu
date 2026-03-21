@@ -214,8 +214,16 @@ AssetSnapshot                       — per-asset per-account time series
 ├── assetId: UUID                  (not a relationship — survives deletion)
 ├── symbol: String                 (denormalized for display — survives Asset changes)
 ├── category: AssetCategory        (denormalized — enables category grouping without joins)
-├── amount: Decimal                (token quantity at sync time)
-├── usdValue: Decimal              (USD value at sync time)
+├── amount: Decimal                (NET-SIGNED: borrow subtracted, rewards excluded — see below)
+├── usdValue: Decimal              (NET-SIGNED: borrow subtracted, rewards excluded — see below)
+AssetSnapshot sign convention: values are pre-computed net totals at write time.
+SyncEngine applies the same role-sign mapping as Net Amount aggregation:
+  supply/balance/stake/lpToken → add to amount and usdValue
+  borrow → subtract from amount and usdValue
+  reward → excluded
+A borrowed-only asset will have negative amount/usdValue. This ensures
+Performance "Assets" mode and Asset Detail history correctly reflect
+exposure including debt, consistent with the live Net Amount view.
 ```
 
 AssetSnapshot enables:
