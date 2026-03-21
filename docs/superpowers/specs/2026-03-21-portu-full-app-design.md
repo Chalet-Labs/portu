@@ -2,7 +2,7 @@
 
 ## Overview
 
-Portu is a native macOS SwiftUI crypto portfolio dashboard. It aggregates holdings from multiple data sources — DeBank, Zapper, exchange APIs, direct RPC, and manual entry — into a unified local-first interface. No backend server, no telemetry, no accounts.
+Portu is a native macOS SwiftUI crypto portfolio dashboard. It aggregates holdings from multiple data sources — Zapper API, exchange APIs, and manual entry — into a unified local-first interface. No backend server, no telemetry, no accounts. The provider abstraction supports future data sources (DeBank, direct RPC) without model changes.
 
 This spec defines the complete application: data model, API layer, sync engine, navigation, and all 7 views. It supersedes the original scaffolding spec (`2026-03-14-portu-swiftui-app-design.md`).
 
@@ -26,15 +26,14 @@ External Sources → PortuNetwork → PortuCore → App Views
 ```
 
 **External Sources** (network boundary):
-- DeBank API — DeFi positions, token balances
-- Zapper API — DeFi positions, token balances
-- Exchange APIs — Kraken, Binance, Coinbase balances
-- RPC Nodes — direct on-chain balance queries
-- CoinGecko — price feeds, market data, historical prices
+- Zapper API — DeFi positions, token balances (v1)
+- Exchange APIs — Kraken, Binance, Coinbase balances (v1)
+- CoinGecko — price feeds, market data, historical prices (v1)
+- _DeBank API, RPC Nodes — deferred to future work_
 
 **PortuNetwork** package:
 - `PortfolioDataProvider` protocol — source-agnostic abstraction, returns **plain Sendable DTOs** (not SwiftData models)
-- `DeBankProvider`, `ZapperProvider`, `RPCProvider`, `ExchangeProvider` — concrete implementations
+- `ZapperProvider`, `ExchangeProvider` — v1 concrete implementations (_DeBankProvider, RPCProvider deferred_)
 - `PriceService` — CoinGecko price cache + polling
 - No SwiftData dependency — this package knows nothing about persistence
 
@@ -117,14 +116,14 @@ during the per-account loop. This guarantees:
 
 ### Source-Agnostic Design
 
-The data model is not coupled to any specific provider. All protocol-specific fields are optional. The `PortfolioDataProvider` protocol abstracts data sources — DeBank, Zapper, RPC, and exchange clients all conform to it. Features degrade gracefully when a less-rich provider is used:
+The data model is not coupled to any specific provider. All protocol-specific fields are optional. The `PortfolioDataProvider` protocol abstracts data sources — v1 ships with Zapper and Exchange clients, with the abstraction designed to support future providers (DeBank, RPC) without model changes. Features degrade gracefully when a less-rich provider is used:
 
-| Feature | DeBank | Zapper | RPC | Exchange |
+| Feature | Zapper (v1) | Exchange (v1) | _DeBank (future)_ | _RPC (future)_ |
 |---|---|---|---|---|
-| Token balances | ✓ | ✓ | ✓ | ✓ |
-| DeFi positions | ✓ | ✓ | — | — |
-| Health factors | ✓ | partial | — | — |
-| Protocol grouping | ✓ | ✓ | — | — |
+| Token balances | ✓ | ✓ | _✓_ | _✓_ |
+| DeFi positions | ✓ | — | _✓_ | _—_ |
+| Health factors | partial | — | _✓_ | _—_ |
+| Protocol grouping | ✓ | — | _✓_ | _—_ |
 
 UI hides unsupported features rather than showing broken/empty data. Each provider declares its capabilities via `ProviderCapabilities`.
 
@@ -136,7 +135,7 @@ Account
 ├── name: String
 ├── kind: AccountKind              (.wallet, .exchange, .manual)
 ├── exchangeType: ExchangeType?    (set when kind == .exchange)
-├── dataSource: DataSource         (.debank, .zapper, .rpc, .exchange, .manual)
+├── dataSource: DataSource         (.zapper, .exchange, .manual)
 ├── addresses: [WalletAddress]     (1:N, cascade delete)
 ├── positions: [Position]          (1:N, cascade delete)
 ├── group: String?
@@ -151,7 +150,7 @@ WalletAddress
 ├── address: String
 ├── account: Account?              (back-reference, nullify)
 Note: One 0x address is valid on all EVM chains simultaneously. When chain is nil,
-the provider (DeBank/Zapper) fetches across all supported EVM chains automatically.
+the provider (Zapper) fetches across all supported EVM chains automatically.
 When chain is set (e.g., .solana), it restricts to that chain. Users create ONE
 WalletAddress per 0x address, not one per chain.
 
@@ -159,7 +158,7 @@ Position                            — the core entity
 ├── id: UUID
 ├── positionType: PositionType     (.idle, .lending, .liquidityPool, .staking, .farming, .vesting, .other)
 ├── chain: Chain?                  (nil = off-chain: exchange custody, manual entry, etc.)
-├── protocolId: String?            (DeBank/Zapper protocol identifier)
+├── protocolId: String?            (Zapper protocol identifier; future: DeBank)
 ├── protocolName: String?
 ├── protocolLogoURL: String?
 ├── healthFactor: Double?          (lending positions only)
@@ -182,7 +181,7 @@ Asset                               — shared reference data, never cascade-del
 ├── name: String                   (e.g., "Ethereum")
 ├── chain: Chain?                  (nil = multi-chain asset)
 ├── contractAddress: String?
-├── debankId: String?
+├── debankId: String?              (reserved for future DeBankProvider — unused in v1)
 ├── coinGeckoId: String?
 ├── sourceKey: String?             (provider-specific opaque ID, used as tier 3 upsert key)
 ├── logoURL: String?
@@ -462,9 +461,8 @@ Existing `PriceService` actor is retained with updates:
 ### Secrets
 
 `KeychainService` stores all API credentials:
-- Provider API keys: `"portu.provider.<dataSourceRawValue>.apiKey"` (e.g., `"portu.provider.debank.apiKey"`)
+- Provider API keys: `"portu.provider.<dataSourceRawValue>.apiKey"` (e.g., `"portu.provider.zapper.apiKey"`)
 - Exchange credentials: `"portu.exchange.<accountId>.apiKey"`, `.apiSecret`, `.passphrase`
-- RPC endpoints: stored in SwiftData (not secret), not Keychain
 
 ## Navigation
 
@@ -602,7 +600,7 @@ Account management with CRUD operations.
 **Account list**: SwiftUI `Table` with columns: Name, Group, Address (shows first address or exchange name), Type, USD Balance. Search, group filter (free-form String — groups are implicitly created by setting `Account.group`), status filter (Active/Inactive — toggled via context menu on rows). Sortable columns.
 
 **Add Account sheet** (`.sheet` modal with `TabView`):
-- **Chain account tab** — select chain ecosystem (Ethereum & L2s, Solana, Bitcoin — matching `Chain` enum families), paste address, set name/description/group. Select data source (DeBank/Zapper/RPC). For EVM addresses, a single WalletAddress with `chain: nil` is created, and the provider queries all EVM chains. For non-EVM (Solana, Bitcoin), `chain` is set explicitly. Toggle active/inactive status via context menu on account rows.
+- **Chain account tab** — select chain ecosystem (Ethereum & L2s, Solana, Bitcoin — matching `Chain` enum families), paste address, set name/description/group. Data source is Zapper (v1 only provider for on-chain accounts). For EVM addresses, a single WalletAddress with `chain: nil` is created, and the provider queries all EVM chains. For non-EVM (Solana, Bitcoin), `chain` is set explicitly. Toggle active/inactive status via context menu on account rows.
 - **Manual account tab** — name + description only, for tracking non-supported assets.
 - **Exchange account tab** — select exchange (Binance, Kraken, Coinbase, etc.), enter API key + secret (read-only permissions). Keys stored in Keychain.
 
@@ -672,7 +670,7 @@ enum SyncStatus: Hashable, Sendable {
 ## Implementation Phases
 
 ### Phase 1: Data Layer & API Foundation
-Rework SwiftData models, implement `PortfolioDataProvider` protocol, build ZapperProvider (first concrete implementation — Zapper offers free API credits, DeBank requires a paid account), PriceService updates, SyncEngine, KeychainService updates.
+Rework SwiftData models, implement `PortfolioDataProvider` protocol, build ZapperProvider and ExchangeProvider, PriceService updates, SyncEngine, KeychainService updates.
 
 ### Phase 2: Sidebar & Overview View
 Updated sidebar with all sections, Overview view as the reference implementation that validates the data model end-to-end.
