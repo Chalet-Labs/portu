@@ -224,6 +224,13 @@ AssetSnapshot                       — per-asset per-account time series
 ├── category: AssetCategory        (denormalized — enables category grouping without joins)
 ├── amount: Decimal                (NET-SIGNED: borrow subtracted, rewards excluded — see below)
 ├── usdValue: Decimal              (NET-SIGNED: borrow subtracted, rewards excluded — see below)
+**Partial-batch detection**: AccountSnapshot and AssetSnapshot do not carry their own
+`isPartial` flag. Instead, all three tiers share `batchTimestamp` (set in Phase B).
+Views query `PortfolioSnapshot.isPartial` for the matching timestamp to determine
+partiality. One lookup, no flag duplication. If the PortfolioSnapshot for a given
+timestamp has `isPartial: true`, all AccountSnapshots and AssetSnapshots with that
+timestamp are also considered partial.
+
 AssetSnapshot sign convention: values are pre-computed net totals at write time.
 SyncEngine applies the same role-sign mapping as Net Amount aggregation:
   supply/balance/stake/lpToken → add to amount and usdValue
