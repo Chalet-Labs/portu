@@ -33,19 +33,22 @@ External Sources → PortuNetwork → PortuCore → App Views
 - CoinGecko — price feeds, market data, historical prices
 
 **PortuNetwork** package:
-- `PortfolioDataProvider` protocol — source-agnostic abstraction
+- `PortfolioDataProvider` protocol — source-agnostic abstraction, returns **plain Sendable DTOs** (not SwiftData models)
 - `DeBankProvider`, `ZapperProvider`, `RPCProvider`, `ExchangeProvider` — concrete implementations
 - `PriceService` — CoinGecko price cache + polling
-- `SyncEngine` — orchestrates on-demand full refresh
+- No SwiftData dependency — this package knows nothing about persistence
 
 **PortuCore** package:
-- SwiftData models (Account, Position, PositionToken, Asset, etc.)
+- SwiftData `@Model` types (Account, Position, PositionToken, Asset, etc.)
+- Sync DTOs (`PositionDTO`, `TokenDTO`, `AssetDTO`) — plain `Sendable` structs used as the transport format between PortuNetwork and the persistence layer
+- `SyncContext` — account-scoped request DTO
 - `KeychainService` — API keys, secrets
 - `SnapshotStore` — historical portfolio value time series
 
 **App target** (Sources/Portu):
 - SwiftUI views organized by feature
 - `AppState` — transient UI state (prices, selection, connection status)
+- `SyncEngine` — orchestrates sync: calls providers (gets DTOs), maps DTOs → SwiftData models on the correct `ModelContext`, creates snapshots. Lives here because it bridges PortuNetwork and SwiftData persistence.
 - Feature view models bridging PortuCore models to PortuUI components
 
 **PortuUI** package:
@@ -56,24 +59,32 @@ External Sources → PortuNetwork → PortuCore → App Views
 ```
 PortuApp (app target)
 ├── PortuCore         (Foundation, Security, SwiftData)
-├── PortuNetwork      → PortuCore
+├── PortuNetwork      → PortuCore (for DTOs and SyncContext only — no SwiftData types)
 └── PortuUI           (no domain dependencies)
 ```
+
+**Key boundary rule:** `@Model` objects never cross async/module boundaries. PortuNetwork
+returns DTOs. SyncEngine (app target) is the only place that touches both DTOs and
+`ModelContext`. All SwiftData writes happen on a single context/actor.
 
 ### Sync Model
 
 **Sync-on-demand** (MVP): User clicks "Sync" → SyncEngine fetches all sources → writes to SwiftData → views reactively update via `@Query`. Auto-sync with configurable intervals is deferred to future work.
 
-SyncEngine flow:
+SyncEngine flow (runs in app target, has access to `ModelContext`):
 1. For each active Account where `dataSource != .manual`:
-   a. Construct `SyncContext` from Account (accountId, kind, addresses from WalletAddress records, exchangeType)
+   a. Construct `SyncContext` from Account @Model (reading properties on the current actor)
    b. Resolve `PortfolioDataProvider` based on `dataSource`
-2. Call `fetchBalances(context:)` → creates idle Position records
-3. Call `fetchDeFiPositions(context:)` → creates lending/staking/LP Position records (returns `[]` if provider doesn't support it)
-4. Upsert Asset reference data from returned tokens
-5. Delete stale positions from previous sync for that account (manual positions are never deleted by sync)
-6. Create PortfolioSnapshot + AccountSnapshot records
-7. Update `Account.lastSyncedAt`
+2. Call `fetchBalances(context:)` → returns `[PositionDTO]` (plain structs, no SwiftData)
+3. Call `fetchDeFiPositions(context:)` → returns `[PositionDTO]` (empty if unsupported)
+4. **Map DTOs → SwiftData** on the `ModelContext`:
+   a. Upsert `Asset` @Model records from `TokenDTO` fields
+   b. Delete stale `Position` records from previous sync for that account
+   c. Create new `Position` and `PositionToken` @Model instances from DTOs
+   d. Link PositionTokens to upserted Assets
+   e. `context.save()`
+5. Create PortfolioSnapshot + AccountSnapshot records
+6. Update `Account.lastSyncedAt`
 
 **Error handling**: SyncEngine syncs accounts independently. If one account's provider fails:
 - The error is recorded on that account (`Account.lastSyncError: String?`)
@@ -247,13 +258,13 @@ does not natively support `URL` storage in predicates. Convert to `URL` at the v
 
 ### PortfolioDataProvider Protocol
 
-The protocol is **account-scoped** via `SyncContext`. This allows providers to handle
-multi-address wallets (iterate all addresses), exchange accounts (look up credentials
-by accountId), and chain-specific routing in a single call.
+The protocol is **account-scoped** via `SyncContext` and returns **plain Sendable DTOs**,
+not SwiftData `@Model` objects. This keeps the network layer free of persistence concerns
+and ensures safe transfer across async/actor boundaries.
 
 ```swift
-/// Lightweight DTO constructed by SyncEngine from an Account model.
-/// Avoids passing @Model objects across actor boundaries.
+// ── SyncContext (lives in PortuCore) ──────────────────────────────
+/// Lightweight DTO constructed by SyncEngine from an Account @Model.
 struct SyncContext: Sendable {
     let accountId: UUID
     let kind: AccountKind
@@ -261,15 +272,43 @@ struct SyncContext: Sendable {
     let exchangeType: ExchangeType?                     // set when kind == .exchange
 }
 
-protocol PortfolioDataProvider: Sendable {
-    var capabilities: ProviderCapabilities { get }
-    func fetchBalances(context: SyncContext) async throws -> [Position]
-    func fetchDeFiPositions(context: SyncContext) async throws -> [Position]
+// ── Transport DTOs (live in PortuCore) ───────────────────────────
+/// Plain structs returned by providers. SyncEngine maps these to @Model objects.
+struct PositionDTO: Sendable {
+    let positionType: PositionType
+    let chain: Chain
+    let protocolId: String?
+    let protocolName: String?
+    let protocolLogoURL: String?
+    let healthFactor: Double?
+    let netUSDValue: Decimal
+    let tokens: [TokenDTO]
 }
 
-// Default implementation for optional capability
+struct TokenDTO: Sendable {
+    let role: TokenRole
+    let symbol: String
+    let name: String
+    let amount: Decimal
+    let usdValue: Decimal
+    let chain: Chain?
+    let contractAddress: String?
+    let debankId: String?
+    let coinGeckoId: String?
+    let logoURL: String?
+    let category: AssetCategory
+    let isVerified: Bool
+}
+
+// ── Protocol (lives in PortuNetwork) ─────────────────────────────
+protocol PortfolioDataProvider: Sendable {
+    var capabilities: ProviderCapabilities { get }
+    func fetchBalances(context: SyncContext) async throws -> [PositionDTO]
+    func fetchDeFiPositions(context: SyncContext) async throws -> [PositionDTO]
+}
+
 extension PortfolioDataProvider {
-    func fetchDeFiPositions(context: SyncContext) async throws -> [Position] { [] }
+    func fetchDeFiPositions(context: SyncContext) async throws -> [PositionDTO] { [] }
 }
 
 struct ProviderCapabilities: Sendable {
@@ -278,6 +317,13 @@ struct ProviderCapabilities: Sendable {
     var supportsHealthFactors: Bool
 }
 ```
+
+**SyncEngine mapping** (app target): receives `[PositionDTO]` from providers, then on
+the correct `ModelContext`:
+1. Upserts `Asset` records from `TokenDTO` fields (deduplicated by symbol + chain + contractAddress)
+2. Creates `Position` @Model instances from `PositionDTO`
+3. Creates `PositionToken` @Model instances from `TokenDTO`, linking to upserted Assets
+4. All writes happen in a single `ModelContext.save()` call per account
 
 ### Provider Implementations
 
