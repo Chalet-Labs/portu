@@ -12,7 +12,7 @@ This spec defines the complete application: data model, API layer, sync engine, 
 - **Language**: Swift 6.2+
 - **UI Framework**: SwiftUI with Swift Charts for all charting
 - **Persistence**: SwiftData (local), Keychain (secrets)
-- **Concurrency**: Default Main Actor isolation via `defaultIsolation(MainActor.self)`
+- **Concurrency**: Default Main Actor isolation via `defaultIsolation(MainActor.self)` for app target, PortuCore, and PortuUI. **PortuNetwork has no default isolation** — its providers are `actor` types that perform network I/O off the main thread
 - **Build System**: XcodeGen (`project.yml`) + xcodebuild
 - **Privacy**: All data local. No cloud. No telemetry.
 - **Appearance**: Dark theme default, light mode support deferred to future work
