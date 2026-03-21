@@ -289,7 +289,7 @@ Prices come from two sources. The rules for which to use:
 
 For "Value" columns: `amount * livePrice` when live price is available, otherwise `PositionToken.usdValue` from sync.
 
-For "24h change" in the Overview top bar: computed as `sum(amount * price * priceChange24hPercent)` for each asset with a `coinGeckoId`. Assets without `coinGeckoId` contribute $0 to the 24h change (shown as approximate with a tooltip).
+For "24h change" in the Overview top bar: see **Sign Convention** section for the canonical formula (role-sign-adjusted). Assets without `coinGeckoId` contribute $0 (shown as approximate with a tooltip).
 
 ### Asset Identity and Upsert Rules
 
@@ -473,11 +473,18 @@ Each provider uses `SyncContext` differently:
 ### PriceService
 
 Existing `PriceService` actor is retained with updates:
-- CoinGecko public API for current prices (no key required)
+- CoinGecko public API for current prices AND 24h change percentages (both returned by `/simple/price?include_24hr_change=true`)
 - Historical price data for Asset Detail charts
 - Rate limiter: max 10 requests/minute
 - In-memory cache with 30s TTL
-- Publishes via `AsyncThrowingStream<[String: Decimal], any Error>`
+- Publishes via `AsyncThrowingStream<PriceUpdate, any Error>` where:
+  ```swift
+  struct PriceUpdate: Sendable {
+      let prices: [String: Decimal]          // coinGeckoId → USD price
+      let changes24h: [String: Decimal]      // coinGeckoId → 24h % change
+  }
+  ```
+- AppState subscribes to this stream and updates both `prices` and `priceChanges24h` atomically from each `PriceUpdate`
 
 ### Secrets
 
