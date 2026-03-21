@@ -179,14 +179,19 @@ Asset                               — shared reference data, never cascade-del
 ├── id: UUID
 ├── symbol: String                 (e.g., "ETH", "WBTC")
 ├── name: String                   (e.g., "Ethereum")
-├── chain: Chain?                  (nil = multi-chain asset)
-├── contractAddress: String?
+├── coinGeckoId: String?           (tier 1 upsert key — cross-chain canonical identity)
+├── upsertChain: Chain?            (tier 2 upsert key only — NOT the "home chain" of the asset)
+├── upsertContract: String?        (tier 2 upsert key only — NOT a canonical contract address)
+├── sourceKey: String?             (tier 3 upsert key — provider-specific opaque ID)
 ├── debankId: String?              (reserved for future DeBankProvider — unused in v1)
-├── coinGeckoId: String?
-├── sourceKey: String?             (provider-specific opaque ID, used as tier 3 upsert key)
 ├── logoURL: String?
 ├── category: AssetCategory        (.major, .stablecoin, .defi, .meme, .privacy, .fiat, .governance, .other)
 ├── isVerified: Bool
+Note: Asset is a LOGICAL entity, not a deployment. For cross-chain assets
+(tier 1 match by coinGeckoId), upsertChain and upsertContract are nil.
+Chain-specific provenance (which chain a token lives on, explorer links)
+comes from Position.chain, not from Asset. The upsert fields exist solely
+for deduplication of single-chain tokens that lack a coinGeckoId.
 
 PortfolioSnapshot                   — append-only time series for Performance view
 ├── id: UUID
@@ -283,9 +288,9 @@ into canonical Asset records.
    all map to coinGeckoId `"ethereum"` (or their own IDs like `"lido-staked-ether"`).
    Most assets with real value have a coinGeckoId.
 
-2. **`chain + contractAddress`** — for on-chain tokens without a coinGeckoId. Unique per
-   deployment. Two tokens on different chains with the same contract address are different
-   Assets.
+2. **`upsertChain + upsertContract`** — for on-chain tokens without a coinGeckoId. Unique per
+   deployment. Two tokens on different chains are different Assets. These fields are only
+   set on Assets matched via this tier; cross-chain assets (tier 1) leave them nil.
 
 3. **`sourceKey`** — provider-specific opaque identifier. Each provider generates a stable,
    unique key for tokens that lack both coinGeckoId and chain+contract. Examples:
@@ -617,11 +622,11 @@ Drill-down view for a single asset. Pushed via `navigationDestination` from anyw
 - **$ Value** — total holdings value over time from AssetSnapshot (`usdValue` summed across all accounts for this `assetId`)
 - **Amount** — token quantity over time from AssetSnapshot (`amount` summed across all accounts for this `assetId`)
 
-**Holdings summary**: All Accounts count, total amount, total USD value. "On networks" section: table grouped by chain with amount, share %, USD value.
+**Holdings summary**: All Accounts count, total amount, total USD value. "On networks" section: table grouped by `Position.chain` (not Asset.upsertChain) with amount, share %, USD value. This correctly shows all chains where the asset is held.
 
 **Positions table**: All positions containing this asset. Columns: Account, Platform, Context (Staked/Idle/Lending), Network, Amount, USD Balance. Filterable by Context and Network.
 
-**Right sidebar**: Asset metadata — Name, Symbol, Category. Link to external report/explorer.
+**Right sidebar**: Asset metadata — Name, Symbol, Category. Explorer links are per-position (using Position.chain), not per-asset, since a cross-chain asset has no single canonical chain.
 
 ## State Management
 
