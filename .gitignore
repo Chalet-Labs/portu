@@ -17,3 +17,5 @@ Package.resolved
 
 # Build artifacts
 build/
+
+.screens/
