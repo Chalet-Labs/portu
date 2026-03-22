@@ -225,6 +225,7 @@ AccountSnapshot                     — per-account time series for account-filt
 ├── timestamp: Date
 ├── accountId: UUID                (not a relationship — survives account deletion for historical data)
 ├── totalValue: Decimal
+├── isFresh: Bool                  (true = account synced successfully this batch; false = stale/carried over)
 
 AssetSnapshot                       — per-asset per-account time series
 ├── id: UUID
@@ -235,12 +236,15 @@ AssetSnapshot                       — per-asset per-account time series
 ├── category: AssetCategory        (denormalized — enables category grouping without joins)
 ├── amount: Decimal                (GROSS POSITIVE: borrow and reward excluded — see below)
 ├── usdValue: Decimal              (GROSS POSITIVE: borrow and reward excluded — see below)
-**Partial-batch detection**: AccountSnapshot and AssetSnapshot do not carry their own
-`isPartial` flag. Instead, all three tiers share `batchTimestamp` (set in Phase B).
-Views query `PortfolioSnapshot.isPartial` for the matching timestamp to determine
-partiality. One lookup, no flag duplication. If the PortfolioSnapshot for a given
-timestamp has `isPartial: true`, all AccountSnapshots and AssetSnapshots with that
-timestamp are also considered partial.
+**Partial-batch detection** — three levels of granularity:
+- **Portfolio-wide**: `PortfolioSnapshot.isPartial` — was any account stale in this batch?
+- **Per-account**: `AccountSnapshot.isFresh` — was this specific account successfully synced?
+- **Per-asset**: AssetSnapshot inherits freshness from AccountSnapshot with matching `accountId + batchTimestamp`
+
+Views use the appropriate level:
+- All-accounts Performance chart → check `PortfolioSnapshot.isPartial`
+- Account-filtered Performance → check `AccountSnapshot.isFresh` for the selected account (no false alarms from other accounts' failures)
+- Asset Detail → if viewing across all accounts, check `PortfolioSnapshot.isPartial`; if account context is known, check `AccountSnapshot.isFresh`
 
 AssetSnapshot sign convention: values are GROSS HOLDINGS, always positive.
 SyncEngine includes only positive roles when creating snapshots:
