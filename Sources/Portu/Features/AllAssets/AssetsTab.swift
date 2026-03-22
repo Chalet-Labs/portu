@@ -3,6 +3,20 @@ import SwiftUI
 import SwiftData
 import PortuCore
 import PortuUI
+import UniformTypeIdentifiers
+
+// MARK: - Row data (nonisolated for Sendable KeyPaths)
+
+nonisolated struct AssetRowData: Identifiable, Sendable {
+    let id: UUID
+    let symbol: String
+    let name: String
+    let category: AssetCategory
+    let netAmount: Decimal
+    let price: Decimal
+    let value: Decimal
+    let hasLivePrice: Bool
+}
 
 struct AssetsTab: View {
     @Environment(AppState.self) private var appState
@@ -10,7 +24,9 @@ struct AssetsTab: View {
     private var allTokens: [PositionToken]
 
     @State private var searchText = ""
-    @State private var sortOrder = [KeyPathComparator(\AssetRowData.value, order: .reverse)]
+    @State private var sortOrder: [KeyPathComparator<AssetRowData>] = [
+        KeyPathComparator(\.value, order: .reverse)
+    ]
     @State private var grouping: Grouping = .none
 
     // MARK: - Grouping
@@ -19,19 +35,6 @@ struct AssetsTab: View {
         case none = "None"
         case category = "Category"
         case priceSource = "Price Source"
-    }
-
-    // MARK: - Row data
-
-    struct AssetRowData: Identifiable {
-        let id: UUID
-        let symbol: String
-        let name: String
-        let category: AssetCategory
-        let netAmount: Decimal
-        let price: Decimal
-        let value: Decimal
-        let hasLivePrice: Bool
     }
 
     /// Aggregate tokens by Asset.id, compute net amount
