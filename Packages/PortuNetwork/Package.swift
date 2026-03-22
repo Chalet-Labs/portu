@@ -20,7 +20,7 @@ let package = Package(
         ),
         .testTarget(
             name: "PortuNetworkTests",
-            dependencies: ["PortuNetwork"],
+            dependencies: ["PortuNetwork", "PortuCore"],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
             ]
