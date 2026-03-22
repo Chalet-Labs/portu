@@ -626,9 +626,10 @@ Pure computed view — no extra persistence needed.
 **Exposure by asset**: Table of individual assets with same columns. Toggle between Category view and flat asset list.
 
 **Computation**:
-- Spot = sum of all PositionToken values grouped by asset category
-- Liabilities = PositionTokens with role `.borrow` (negative exposure)
-- Net Exposure = Spot - Liabilities - Stablecoins
+- Spot Assets = sum of PositionToken.usdValue where role is positive (`.supply`, `.balance`, `.stake`, `.lpToken`), grouped by asset category. Borrow and reward tokens are NOT included in Spot.
+- Liabilities = sum of PositionToken.usdValue where role is `.borrow`, grouped by asset category
+- Spot Net = Spot Assets − Liabilities (per category)
+- Net Exposure = Spot Net − Stablecoins (excludes stablecoin category from exposure total)
 - Derivatives = future work (exchange futures positions)
 
 ### 6. Accounts View
