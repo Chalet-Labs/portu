@@ -30,7 +30,7 @@ struct ContentView: View {
         case .performance:
             placeholderView("Performance", icon: "chart.line.uptrend.xyaxis")
         case .allAssets:
-            placeholderView("All Assets", icon: "bitcoinsign.circle")
+            AllAssetsView()
         case .allPositions:
             placeholderView("All Positions", icon: "list.bullet.rectangle")
         case .accounts:
