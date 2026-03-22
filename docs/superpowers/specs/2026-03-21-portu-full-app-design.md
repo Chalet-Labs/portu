@@ -106,7 +106,7 @@ during the per-account loop. This guarantees:
 - No timestamp drift between accounts
 
 7. If ALL accounts failed, skip Phase B entirely (no snapshot — nothing changed). Set `AppState.syncStatus = .error("All accounts failed to sync")` and return.
-8. Pick a single `batchTimestamp = Date.now`
+8. Generate `syncBatchId = UUID()` and `batchTimestamp = Date.now`
 9. Query all current positions from the `ModelContext` **where `account.isActive == true`**
 10. Create one `PortfolioSnapshot` (aggregate totals, `isPartial: true` if any account failed)
 10. Create one `AccountSnapshot` per account (totals from each account's positions)
@@ -213,6 +213,7 @@ for deduplication of single-chain tokens that lack a coinGeckoId.
 
 PortfolioSnapshot                   — append-only time series for Performance view
 ├── id: UUID
+├── syncBatchId: UUID              (shared key across all snapshot tiers in one batch)
 ├── timestamp: Date
 ├── totalValue: Decimal
 ├── idleValue: Decimal
@@ -222,6 +223,7 @@ PortfolioSnapshot                   — append-only time series for Performance 
 
 AccountSnapshot                     — per-account time series for account-filtered Performance
 ├── id: UUID
+├── syncBatchId: UUID              (joins to PortfolioSnapshot.syncBatchId)
 ├── timestamp: Date
 ├── accountId: UUID                (not a relationship — survives account deletion for historical data)
 ├── totalValue: Decimal
@@ -229,6 +231,7 @@ AccountSnapshot                     — per-account time series for account-filt
 
 AssetSnapshot                       — per-asset per-account time series
 ├── id: UUID
+├── syncBatchId: UUID              (joins to PortfolioSnapshot.syncBatchId)
 ├── timestamp: Date
 ├── accountId: UUID                (not a relationship — survives deletion)
 ├── assetId: UUID                  (not a relationship — survives deletion)
@@ -238,10 +241,14 @@ AssetSnapshot                       — per-asset per-account time series
 ├── usdValue: Decimal              (GROSS POSITIVE: supply + balance + stake + lpToken)
 ├── borrowAmount: Decimal          (ABSOLUTE POSITIVE: borrow role tokens only, 0 if none)
 ├── borrowUsdValue: Decimal        (ABSOLUTE POSITIVE: borrow role tokens only, 0 if none)
-**Partial-batch detection** — three levels of granularity:
+**Partial-batch detection** — all snapshot tiers share `syncBatchId` (UUID) as the
+relational key. This is more robust than timestamp equality and survives precision
+changes, imports, or pruning behavior changes.
+
+Three levels of granularity:
 - **Portfolio-wide**: `PortfolioSnapshot.isPartial` — was any account stale in this batch?
-- **Per-account**: `AccountSnapshot.isFresh` — was this specific account successfully synced?
-- **Per-asset**: AssetSnapshot inherits freshness from AccountSnapshot with matching `accountId + batchTimestamp`
+- **Per-account**: `AccountSnapshot.isFresh` — was this specific account successfully synced? Joined to PortfolioSnapshot via `syncBatchId`.
+- **Per-asset**: AssetSnapshot inherits freshness from AccountSnapshot with matching `accountId + syncBatchId`
 
 Views use the appropriate level:
 - All-accounts Performance chart → check `PortfolioSnapshot.isPartial`
