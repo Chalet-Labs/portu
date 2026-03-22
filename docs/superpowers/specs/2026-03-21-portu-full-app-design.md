@@ -227,7 +227,7 @@ AccountSnapshot                     — per-account time series for account-filt
 ├── timestamp: Date
 ├── accountId: UUID                (not a relationship — survives account deletion for historical data)
 ├── totalValue: Decimal
-├── isFresh: Bool                  (true = account synced successfully this batch; false = stale/carried over)
+├── isFresh: Bool                  (true = synced successfully or manual account; false = remote sync failed, data is stale)
 
 AssetSnapshot                       — per-asset per-account time series
 ├── id: UUID
