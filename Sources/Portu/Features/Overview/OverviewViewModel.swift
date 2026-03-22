@@ -15,6 +15,8 @@ struct OverviewTokenRow: Identifiable, Sendable {
     let symbol: String
     let assetName: String
     let assetCategory: AssetCategory
+    let chainLabel: String
+    let accountName: String
     let networkAccountLabel: String
     let amount: Decimal
     let displayPrice: Decimal
@@ -158,6 +160,9 @@ final class OverviewViewModel {
                     return nil
                 }
 
+                let chainLabel = makeChainLabel(for: position)
+                let accountName = makeAccountName(for: position)
+
                 return OverviewTokenRow(
                     id: token.id,
                     positionID: position.id,
@@ -165,7 +170,12 @@ final class OverviewViewModel {
                     symbol: token.asset?.symbol ?? "Unknown",
                     assetName: token.asset?.name ?? token.asset?.symbol ?? "Unknown Asset",
                     assetCategory: token.asset?.category ?? .other,
-                    networkAccountLabel: makeNetworkAccountLabel(for: position),
+                    chainLabel: chainLabel,
+                    accountName: accountName,
+                    networkAccountLabel: makeNetworkAccountLabel(
+                        chainLabel: chainLabel,
+                        accountLabel: accountName
+                    ),
                     amount: token.amount,
                     displayPrice: AssetValueFormatter.displayPrice(
                         for: token,
@@ -190,7 +200,7 @@ final class OverviewViewModel {
                     )
                 )
             }
-            }
+        }
     }
 
     private static func makeBorrowingRows(
@@ -267,9 +277,18 @@ final class OverviewViewModel {
             .sorted { $0.value > $1.value }
     }
 
-    private static func makeNetworkAccountLabel(for position: Position) -> String {
-        let chainLabel = position.chain?.rawValue.capitalized ?? "Off-chain"
-        let accountLabel = position.account?.name ?? "Unknown Account"
+    private static func makeChainLabel(for position: Position) -> String {
+        position.chain?.rawValue.capitalized ?? "Off-chain"
+    }
+
+    private static func makeAccountName(for position: Position) -> String {
+        position.account?.name ?? "Unknown Account"
+    }
+
+    private static func makeNetworkAccountLabel(
+        chainLabel: String,
+        accountLabel: String
+    ) -> String {
         return "\(chainLabel) / \(accountLabel)"
     }
 
@@ -295,8 +314,12 @@ final class OverviewViewModel {
             return lhs.protocolName < rhs.protocolName
         }
 
-        if lhs.networkAccountLabel != rhs.networkAccountLabel {
-            return lhs.networkAccountLabel < rhs.networkAccountLabel
+        if lhs.chainLabel != rhs.chainLabel {
+            return lhs.chainLabel < rhs.chainLabel
+        }
+
+        if lhs.accountName != rhs.accountName {
+            return lhs.accountName < rhs.accountName
         }
 
         let lhsPriority = borrowingPriority(for: lhs.role)

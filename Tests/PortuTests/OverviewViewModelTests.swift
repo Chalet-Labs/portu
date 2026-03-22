@@ -64,6 +64,42 @@ struct OverviewViewModelTests {
 
         #expect(slice.shareOfPortfolio == 100)
     }
+
+    @Test func overviewViewRendersSyncActionAndTimeRanges() {
+        let body = OverviewView.previewBody
+
+        #expect(body.contains("Sync"))
+        #expect(body.contains("1m"))
+    }
+
+    @Test func overviewSummaryCardsExposeGroupedBreakdowns() {
+        let positions = OverviewViewModel.fixture().positions
+
+        #expect(
+            OverviewSummaryCards.idleBreakdown(for: positions).map(\.title)
+                == ["Stablecoins & Fiat", "Majors", "Tokens & Memecoins"]
+        )
+        #expect(
+            OverviewSummaryCards.deployedBreakdown(for: positions).map(\.title)
+                == ["Lending", "Staked", "Yield"]
+        )
+    }
+
+    @Test func borrowingGroupsSplitSameProtocolAcrossChains() {
+        let rows = OverviewViewModel.duplicateProtocolBorrowingFixture().rows(for: .borrowing)
+        let groups = OverviewTabbedTokens.makeBorrowingGroups(from: rows)
+
+        #expect(groups.count == 2)
+        #expect(groups.map(\.chainLabel).contains("Ethereum"))
+        #expect(groups.map(\.chainLabel).contains("Solana"))
+    }
+
+    @Test func overviewHeaderUsesNeutralPresentationForZeroChange() {
+        let presentation = OverviewHeader.changePresentation(for: .zero)
+
+        #expect(presentation.iconName == "minus")
+        #expect(presentation.prefix == "")
+    }
 }
 
 @MainActor
@@ -323,6 +359,103 @@ private extension OverviewViewModel {
             prices: [
                 "major-usd": 1,
                 "stable-usd": 1
+            ],
+            changes24h: [:]
+        )
+    }
+
+    static func duplicateProtocolBorrowingFixture() -> OverviewViewModel {
+        let ethereumAccount = Account(
+            name: "ETH Wallet",
+            kind: .wallet,
+            dataSource: .manual
+        )
+        let solanaAccount = Account(
+            name: "SOL Wallet",
+            kind: .wallet,
+            dataSource: .manual
+        )
+        let usdAsset = Asset(
+            symbol: "USDC",
+            name: "USD Coin",
+            coinGeckoId: "usd-coin",
+            category: .stablecoin,
+            isVerified: true
+        )
+        let ethAsset = Asset(
+            symbol: "ETH",
+            name: "Ethereum",
+            coinGeckoId: "ethereum",
+            category: .major,
+            isVerified: true
+        )
+        let solAsset = Asset(
+            symbol: "SOL",
+            name: "Solana",
+            coinGeckoId: "solana",
+            category: .major,
+            isVerified: true
+        )
+
+        let ethereumPosition = Position(
+            positionType: .lending,
+            netUSDValue: 1_800,
+            chain: .ethereum,
+            protocolName: "Aave",
+            healthFactor: 1.9,
+            account: ethereumAccount
+        )
+        ethereumPosition.tokens = [
+            PositionToken(
+                role: .supply,
+                amount: 5_000,
+                usdValue: 5_000,
+                asset: usdAsset,
+                position: ethereumPosition
+            ),
+            PositionToken(
+                role: .borrow,
+                amount: 1,
+                usdValue: 3_200,
+                asset: ethAsset,
+                position: ethereumPosition
+            )
+        ]
+
+        let solanaPosition = Position(
+            positionType: .lending,
+            netUSDValue: 80,
+            chain: .solana,
+            protocolName: "Aave",
+            healthFactor: 2.3,
+            account: solanaAccount
+        )
+        solanaPosition.tokens = [
+            PositionToken(
+                role: .supply,
+                amount: 200,
+                usdValue: 200,
+                asset: usdAsset,
+                position: solanaPosition
+            ),
+            PositionToken(
+                role: .borrow,
+                amount: 1,
+                usdValue: 120,
+                asset: solAsset,
+                position: solanaPosition
+            )
+        ]
+
+        ethereumAccount.positions = [ethereumPosition]
+        solanaAccount.positions = [solanaPosition]
+
+        return OverviewViewModel(
+            positions: [ethereumPosition, solanaPosition],
+            prices: [
+                "usd-coin": 1,
+                "ethereum": 3_200,
+                "solana": 120
             ],
             changes24h: [:]
         )
