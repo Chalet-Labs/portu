@@ -3,6 +3,7 @@ import SwiftData
 import PortuCore
 import PortuUI
 
+/// Placeholder — AccountDetailView will be rebuilt in Plan 02 with Position-based views.
 struct AccountDetailView: View {
     let accountID: PersistentIdentifier
     @Environment(\.modelContext) private var modelContext
@@ -29,11 +30,11 @@ struct AccountDetailView: View {
     @ViewBuilder
     private func accountContent(_ account: Account) -> some View {
         Group {
-            if account.holdings.isEmpty {
+            if account.positions.isEmpty {
                 ContentUnavailableView {
-                    Label("No Holdings", systemImage: "tray")
+                    Label("No Positions", systemImage: "tray")
                 } description: {
-                    Text("This account has no holdings yet.")
+                    Text("This account has no positions yet.")
                 } actions: {
                     if account.kind == .exchange {
                         Button("Sync Account") {
@@ -42,11 +43,8 @@ struct AccountDetailView: View {
                     }
                 }
             } else {
-                List(account.holdings) { holding in
-                    HoldingRow(
-                        holding: holding,
-                        price: holding.asset?.coinGeckoId.flatMap { appState.prices[$0] }
-                    )
+                List(account.positions) { position in
+                    Text(position.positionType.rawValue)
                 }
             }
         }

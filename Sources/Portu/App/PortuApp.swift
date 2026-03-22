@@ -12,7 +12,8 @@ struct PortuApp: App {
     init() {
         do {
             container = try ModelContainer(
-                for: Portfolio.self, Account.self, Holding.self, Asset.self
+                for: Account.self, WalletAddress.self, Position.self, PositionToken.self,
+                Asset.self, PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
             )
         } catch {
             // Schema migration failed — fall back to an in-memory store so the
@@ -21,7 +22,8 @@ struct PortuApp: App {
             let config = ModelConfiguration(isStoredInMemoryOnly: true)
             do {
                 container = try ModelContainer(
-                    for: Portfolio.self, Account.self, Holding.self, Asset.self,
+                    for: Account.self, WalletAddress.self, Position.self, PositionToken.self,
+                    Asset.self, PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
                     configurations: config
                 )
                 appState.storeIsEphemeral = true
