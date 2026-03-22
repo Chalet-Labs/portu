@@ -11,7 +11,7 @@ struct ContentView: View {
             SidebarView(selection: $appState.selectedSection)
         } detail: {
             switch appState.selectedSection {
-            case .portfolio:
+            case .overview:
                 PortfolioView()
             case .account(let id):
                 AccountDetailView(accountID: id)
@@ -23,8 +23,8 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Refresh", systemImage: "arrow.clockwise") {
-                    // TODO: Trigger price refresh
+                Button("Sync", systemImage: "arrow.clockwise") {
+                    // TODO: Trigger SyncEngine when overview navigation is in place.
                 }
             }
         }

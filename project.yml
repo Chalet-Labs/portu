@@ -50,9 +50,12 @@ targets:
       - Tests/PortuTests
     dependencies:
       - target: Portu
+      - package: PortuCore
+      - package: PortuNetwork
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.portu.app.tests
+        GENERATE_INFOPLIST_FILE: YES
         OTHER_SWIFT_FLAGS: "-default-isolation MainActor"
 
 schemes:

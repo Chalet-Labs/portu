@@ -3,7 +3,7 @@ import PortuUI
 
 struct SummaryCards: View {
     let totalValue: Decimal
-    let holdingsCount: Int
+    let positionsCount: Int
 
     var body: some View {
         HStack(spacing: 12) {
@@ -18,8 +18,8 @@ struct SummaryCards: View {
             )
             .accessibilityLabel("24 hour change, no data available")
             StatCard(
-                title: "Holdings",
-                value: "\(holdingsCount)"
+                title: "Positions",
+                value: "\(positionsCount)"
             )
         }
     }

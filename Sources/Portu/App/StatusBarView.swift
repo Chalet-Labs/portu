@@ -5,11 +5,6 @@ struct StatusBarView: View {
 
     var body: some View {
         HStack {
-            if appState.storeIsEphemeral {
-                Label("Data not saved — database error", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-            }
-
             switch appState.connectionStatus {
             case .idle:
                 Label("Idle", systemImage: "circle")
@@ -19,6 +14,23 @@ struct StatusBarView: View {
                     .foregroundStyle(.secondary)
             case .error(let message):
                 Label(message, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.red)
+            }
+
+            switch appState.syncStatus {
+            case .idle:
+                EmptyView()
+            case .syncing:
+                Label("Syncing", systemImage: "arrow.trianglehead.2.counterclockwise")
+                    .foregroundStyle(.secondary)
+            case .completedWithErrors(let failedAccounts):
+                Label(
+                    "\(failedAccounts.count) account\(failedAccounts.count == 1 ? "" : "s") failed",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .foregroundStyle(.orange)
+            case .error(let message):
+                Label(message, systemImage: "xmark.octagon")
                     .foregroundStyle(.red)
             }
 

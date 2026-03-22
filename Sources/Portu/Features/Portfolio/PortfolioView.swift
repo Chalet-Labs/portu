@@ -5,25 +5,23 @@ import PortuUI
 
 struct PortfolioView: View {
     @Environment(AppState.self) private var appState
-    // Single-portfolio MVP: loads all holdings unfiltered. When multi-portfolio
-    // support is added, scope this query via a portfolio predicate.
-    @Query private var holdings: [Holding]
+    @Query private var positions: [Position]
+
+    private var activePositions: [Position] {
+        positions.filter { $0.account?.isActive ?? false }
+    }
 
     private var totalValue: Decimal {
-        holdings.reduce(Decimal.zero) { sum, holding in
-            guard let coinId = holding.asset?.coinGeckoId else { return sum }
-            let price = appState.prices[coinId] ?? 0
-            return sum + holding.amount * price
-        }
+        activePositions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
     }
 
     var body: some View {
         Group {
-            if holdings.isEmpty {
+            if activePositions.isEmpty {
                 ContentUnavailableView {
-                    Label("No Portfolio", systemImage: "chart.pie")
+                    Label("No Overview Data", systemImage: "chart.pie")
                 } description: {
-                    Text("Add an account or enter holdings manually to get started.")
+                    Text("Add an account or run a sync to populate positions.")
                 } actions: {
                     Button("Add Account") {
                         // TODO: Add account flow
@@ -32,14 +30,14 @@ struct PortfolioView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        SummaryCards(totalValue: totalValue, holdingsCount: holdings.count)
-                        holdingsList
+                        SummaryCards(totalValue: totalValue, positionsCount: activePositions.count)
+                        positionsList
                     }
                     .padding()
                 }
             }
         }
-        .navigationTitle("Portfolio")
+        .navigationTitle("Overview")
     }
 
     /// Helper to create a P&L label with directional icon.
@@ -58,13 +56,13 @@ struct PortfolioView: View {
     }
 
     @ViewBuilder
-    private var holdingsList: some View {
+    private var positionsList: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Holdings")
+            Text("Positions")
                 .font(.headline)
 
-            ForEach(holdings) { holding in
-                HoldingRow(holding: holding, price: holding.asset?.coinGeckoId.flatMap { appState.prices[$0] })
+            ForEach(activePositions) { position in
+                HoldingRow(position: position, livePrices: appState.prices)
             }
         }
     }

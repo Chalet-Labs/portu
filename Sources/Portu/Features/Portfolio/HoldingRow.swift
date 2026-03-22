@@ -5,19 +5,58 @@ import PortuUI
 /// Shared holding row — used in both PortfolioView and AccountDetailView.
 /// Includes full VoiceOver accessibility label per spec requirements.
 struct HoldingRow: View {
-    let holding: Holding
-    let price: Decimal?
+    let position: Position
+    let livePrices: [String: Decimal]
+
+    private var primaryToken: PositionToken? {
+        position.tokens.first
+    }
+
+    private var primaryAsset: Asset? {
+        primaryToken?.asset
+    }
+
+    private var title: String {
+        position.protocolName ?? primaryAsset?.symbol ?? position.positionType.rawValue.capitalized
+    }
+
+    private var subtitle: String {
+        primaryAsset?.name ?? position.chain?.rawValue.capitalized ?? "Position"
+    }
+
+    private var amountDescription: String {
+        guard let primaryToken, let symbol = primaryAsset?.symbol else {
+            return "\(position.tokens.count) token\(position.tokens.count == 1 ? "" : "s")"
+        }
+        return "\(primaryToken.amount.formatted()) \(symbol)"
+    }
 
     private var value: Decimal {
-        holding.amount * (price ?? 0)
+        guard let primaryToken,
+              position.tokens.count == 1,
+              let coinGeckoId = primaryAsset?.coinGeckoId,
+              let livePrice = livePrices[coinGeckoId]
+        else {
+            return position.netUSDValue
+        }
+
+        let absoluteValue = primaryToken.amount * livePrice
+        switch primaryToken.role {
+        case .borrow:
+            return -absoluteValue
+        case .reward:
+            return 0
+        case .balance, .supply, .stake, .lpToken:
+            return absoluteValue
+        }
     }
 
     var body: some View {
         HStack {
             VStack(alignment: .leading) {
-                Text(holding.asset?.symbol ?? "???")
+                Text(title)
                     .font(.headline)
-                Text(holding.asset?.name ?? "Unknown")
+                Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -26,7 +65,7 @@ struct HoldingRow: View {
 
             VStack(alignment: .trailing) {
                 CurrencyText(value)
-                Text("\(holding.amount.formatted()) \(holding.asset?.symbol ?? "")")
+                Text(amountDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -34,7 +73,7 @@ struct HoldingRow: View {
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(holding.asset?.name ?? "Unknown"), valued at \(value.formatted(.currency(code: "USD"))), amount \(holding.amount.formatted())"
+            "\(subtitle), valued at \(value.formatted(.currency(code: "USD"))), amount \(amountDescription)"
         )
     }
 }

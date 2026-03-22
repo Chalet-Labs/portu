@@ -11,8 +11,8 @@ struct SidebarView: View {
     var body: some View {
         List(selection: $selection) {
             Section {
-                Label("Portfolio", systemImage: "chart.pie")
-                    .tag(SidebarSection.portfolio)
+                Label("Overview", systemImage: "chart.pie")
+                    .tag(SidebarSection.overview)
             }
 
             Section("Accounts") {
