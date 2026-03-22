@@ -28,7 +28,7 @@ struct ContentView: View {
         case .exposure:
             placeholderView("Exposure", icon: "chart.bar.xaxis")
         case .performance:
-            placeholderView("Performance", icon: "chart.line.uptrend.xyaxis")
+            PerformanceView()
         case .allAssets:
             AllAssetsView()
         case .allPositions:
