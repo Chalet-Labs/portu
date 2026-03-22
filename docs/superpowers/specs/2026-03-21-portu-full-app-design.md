@@ -39,7 +39,7 @@ External Sources → PortuNetwork → PortuCore → App Views
 
 **PortuCore** package:
 - SwiftData `@Model` types (Account, Position, PositionToken, Asset, etc.)
-- Sync DTOs (`PositionDTO`, `TokenDTO`, `AssetDTO`) — plain `Sendable` structs used as the transport format between PortuNetwork and the persistence layer
+- Sync DTOs (`PositionDTO`, `TokenDTO`) — plain `Sendable` structs used as the transport format between PortuNetwork and the persistence layer. Asset metadata is carried inline on `TokenDTO` — there is no separate `AssetDTO`
 - `SyncContext` — account-scoped request DTO
 - `KeychainService` — API keys, secrets
 - `SnapshotStore` — historical portfolio value time series
