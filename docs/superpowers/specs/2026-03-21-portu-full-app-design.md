@@ -317,9 +317,9 @@ This matches how providers return data (always positive) and keeps display simpl
 
 | Row type | Amount shown | Value shown | Sign |
 |---|---|---|---|
-| **PositionToken row** (All Positions, borrowing tab) | `token.amount` (always positive) | `token.amount × livePrice` or `token.usdValue` fallback | Always positive. Borrow rows show "Borrow" label, not minus sign. |
+| **PositionToken row** (Overview tabs, All Positions sub-rows) | `token.amount` (always positive) | `token.amount × livePrice` or `token.usdValue` fallback | Always positive. Borrow rows show "Borrow" label, not minus sign. |
 | **Aggregated asset row** (All Assets table) | Net Amount (borrow subtracted) | `netAmount × livePrice` — can be negative if borrow > supply | Signed. Negative values displayed as "−$X" |
-| **Position row** (Overview positions list) | `position.netUSDValue` | Pre-computed signed total | Signed. |
+| **Position group header** (All Positions protocol sections) | — | `position.netUSDValue` | Signed. Shows net total for the position. |
 
 ### Price Display Rules
 
@@ -593,7 +593,9 @@ The main dashboard. Default selection on app launch.
 **Main content**:
 - **Portfolio value chart** — Swift Charts `AreaMark`, time range selector (1w/1m/3m/1y/YTD). Data from PortfolioSnapshot.
 - **Idle / Deployed / Futures cards** — three summary cards. Idle = positions with type `.idle` grouped by category (Stablecoins & Fiat, Majors, Tokens & Memecoins). Deployed = `.lending` + `.staking` + `.farming` + `.liquidityPool` grouped by sub-type (Lending, Staked, Yield). Futures = future work.
-- **Tabbed positions list** — tabs: Key Changes, Idle Stables, Idle Majors, Borrowing. SwiftUI `Table` with sortable columns (Asset, Network/Account, Amount, Price, Value). Borrowing tab shows lending protocol positions with health factors.
+- **Tabbed positions list** — tabs: Key Changes, Idle Stables, Idle Majors, Borrowing. All tabs display **PositionToken-level rows** (one row per token, not per position). Row contract per tab:
+  - **Key Changes / Idle Stables / Idle Majors**: flat token rows. Columns: Asset (token symbol), Network/Account (Position.chain + Account.name), Amount (token.amount), Price (live or fallback), Value (amount × price). Uses PositionToken row display rules (always positive).
+  - **Borrowing**: grouped by protocol. Section header shows protocol name, chain, health factor. Sub-rows are PositionToken rows with role prefix (→ Supply, ← Borrow). Borrow rows show positive values with "Borrow" label per the sign convention.
 
 **Inspector panel (right)**:
 - **Top Assets** — donut chart via Swift Charts `SectorMark`. Toggle: By Category / By Asset. "See all →" navigates to All Assets.
