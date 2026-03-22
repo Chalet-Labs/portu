@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import PortuCore
+import PortuUI
 @testable import Portu
 
 @MainActor
@@ -99,6 +100,12 @@ struct OverviewViewModelTests {
 
         #expect(presentation.iconName == "minus")
         #expect(presentation.prefix == "")
+    }
+
+    @Test func syncStatusBadgeHighlightsCompletedWithErrors() {
+        let badge = SyncStatusBadge(status: .completedWithErrors(failedAccounts: ["Kraken"]))
+
+        #expect(badge.tint == PortuTheme.warning)
     }
 }
 

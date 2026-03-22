@@ -12,7 +12,13 @@ struct ContentView: View {
         } detail: {
             switch appState.selectedSection {
             case .overview:
-                PortfolioView()
+                HSplitView {
+                    PortfolioView()
+                        .frame(minWidth: 700, maxWidth: .infinity)
+                        .layoutPriority(1)
+
+                    OverviewInspector()
+                }
             case .exposure:
                 placeholderView(
                     title: "Exposure",

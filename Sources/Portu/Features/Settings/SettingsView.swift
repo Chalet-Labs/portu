@@ -16,6 +16,7 @@ struct SettingsView: View {
 
 private struct GeneralSettingsTab: View {
     @AppStorage("refreshInterval") private var refreshInterval = 30.0
+    @AppStorage("watchlistAssetCount") private var watchlistAssetCount = 5
 
     var body: some View {
         Form {
@@ -26,6 +27,18 @@ private struct GeneralSettingsTab: View {
                     Text("1 minute").tag(60.0)
                     Text("5 minutes").tag(300.0)
                 }
+            }
+
+            Section("Overview Watchlist") {
+                Picker("Tracked assets", selection: $watchlistAssetCount) {
+                    Text("3 assets").tag(3)
+                    Text("5 assets").tag(5)
+                    Text("8 assets").tag(8)
+                    Text("10 assets").tag(10)
+                }
+
+                Text("Controls how many top portfolio assets appear in the Overview inspector watchlist.")
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

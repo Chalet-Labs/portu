@@ -2,6 +2,8 @@ import SwiftUI
 import PortuUI
 
 struct OverviewHeader: View {
+    @Environment(AppState.self) private var appState
+
     struct ChangePresentation: Equatable {
         let iconName: String
         let prefix: String
@@ -29,6 +31,10 @@ struct OverviewHeader: View {
                         Text(lastSyncedLabel)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+
+                        if let syncBadgeStatus = syncBadgeStatus {
+                            SyncStatusBadge(status: syncBadgeStatus)
+                        }
                     }
                 }
 
@@ -52,6 +58,19 @@ struct OverviewHeader: View {
             return ChangePresentation(iconName: "arrow.down.right", prefix: "-")
         }
         return ChangePresentation(iconName: "minus", prefix: "")
+    }
+
+    private var syncBadgeStatus: SyncStatusBadge.Status? {
+        switch appState.syncStatus {
+        case .idle:
+            return nil
+        case .syncing(let progress):
+            return .syncing(progress: progress)
+        case .completedWithErrors(let failedAccounts):
+            return .completedWithErrors(failedAccounts: failedAccounts)
+        case .error(let message):
+            return .error(message)
+        }
     }
 
     private var lastSyncedLabel: String {
