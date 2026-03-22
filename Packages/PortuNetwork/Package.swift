@@ -16,7 +16,6 @@ let package = Package(
             dependencies: ["PortuCore"],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
-                .defaultIsolation(MainActor.self),
             ]
         ),
         .testTarget(
@@ -24,7 +23,6 @@ let package = Package(
             dependencies: ["PortuNetwork"],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
-                .defaultIsolation(MainActor.self),
             ]
         ),
     ]
