@@ -308,7 +308,7 @@ This matches how providers return data (always positive) and keeps display simpl
 
 **How each formula applies signs:**
 
-- **Position.netUSDValue** = `sum(token.usdValue where role is +) − sum(token.usdValue where role is .borrow)`. Pre-computed by SyncEngine when creating Position from DTOs.
+- **Position.netUSDValue** = `sum(token.usdValue where role is +) − sum(token.usdValue where role is .borrow)`. **Computed exclusively by SyncEngine** when creating Position @Model from PositionDTO — not provided by the DTO. SyncEngine is the single owner of this derived value.
 - **Net Amount** (All Assets) = `sum(token.amount where role is +) − sum(token.amount where role is .borrow)`, for tokens referencing the same Asset. `.reward` excluded.
 - **Exposure** = same as Net Amount but grouped by category. Borrow subtracts from exposure.
 - **Value column** (in tables) = `token.usdValue` displayed as-is (always positive). Borrow tokens show a "Borrow" label/icon, not a minus sign on the value.
@@ -451,7 +451,8 @@ struct PositionDTO: Sendable {
     let protocolName: String?
     let protocolLogoURL: String?
     let healthFactor: Double?
-    let netUSDValue: Decimal
+    // netUSDValue is NOT here — SyncEngine computes Position.netUSDValue
+    // from token roles using the sign convention (see Sign Convention section)
     let tokens: [TokenDTO]
 }
 
