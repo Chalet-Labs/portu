@@ -11,7 +11,7 @@ struct ContentView: View {
         } detail: {
             detailView
                 .navigationDestination(for: UUID.self) { assetId in
-                    Text("Asset Detail: \(assetId)")
+                    AssetDetailView(assetId: assetId)
                 }
         }
         .frame(minWidth: 900, minHeight: 600)
