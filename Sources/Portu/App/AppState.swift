@@ -33,4 +33,7 @@ final class AppState {
     var connectionStatus: ConnectionStatus = .idle
     var syncStatus: SyncStatus = .idle
     var storeIsEphemeral: Bool = false
+
+    /// Set after ModelContainer is initialised in PortuApp.init()
+    var syncEngine: SyncEngine?
 }

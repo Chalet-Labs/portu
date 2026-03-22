@@ -31,6 +31,12 @@ struct PortuApp: App {
                 fatalError("Failed to create even an in-memory ModelContainer: \(error)")
             }
         }
+
+        appState.syncEngine = SyncEngine(
+            modelContext: container.mainContext,
+            appState: appState,
+            secretStore: KeychainService()
+        )
     }
 
     var body: some Scene {
