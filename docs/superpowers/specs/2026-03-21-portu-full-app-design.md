@@ -108,13 +108,12 @@ during the per-account loop. This guarantees:
 7. If ALL sync-attempted accounts failed AND no active manual accounts exist, skip Phase B entirely (no snapshot — nothing changed). Set `AppState.syncStatus = .error("All accounts failed to sync")` and return. If manual accounts exist, Phase B still runs — manual positions deserve historical tracking even when all remote syncs fail.
 8. Generate `syncBatchId = UUID()` and `batchTimestamp = Date.now`
 9. Query all current positions from the `ModelContext` **where `account.isActive == true`**
-10. Create one `PortfolioSnapshot` (aggregate totals, `isPartial: true` if any account failed)
-10. Create one `AccountSnapshot` per account (totals from each account's positions)
-11. Create `AssetSnapshot` records (one per asset per account, from current PositionTokens grouped by Asset and Account)
-— all snapshots use `batchTimestamp` —
-12. Prune old snapshots (all three tiers)
-13. `context.save()`
-14. Update `AppState.syncStatus`: if any accounts failed → `.completedWithErrors(failedAccounts: [String])`, if all succeeded → `.idle`
+10. Create one `PortfolioSnapshot` (aggregate totals, `isPartial: true` if any sync-attempted account failed) — set `syncBatchId` and `timestamp = batchTimestamp`
+11. Create one `AccountSnapshot` per active account (totals from each account's positions) — set `syncBatchId` and `timestamp = batchTimestamp`
+12. Create `AssetSnapshot` records (one per asset per account, from current PositionTokens grouped by Asset and Account) — set `syncBatchId` and `timestamp = batchTimestamp`
+13. Prune old snapshots (all three tiers)
+14. `context.save()`
+15. Update `AppState.syncStatus`: if any sync-attempted accounts failed → `.completedWithErrors(failedAccounts: [String])`, if all succeeded → `.idle`
 
 **Error handling**: SyncEngine syncs accounts independently. If one account's provider fails:
 - The error is recorded on that account (`Account.lastSyncError: String?`)
