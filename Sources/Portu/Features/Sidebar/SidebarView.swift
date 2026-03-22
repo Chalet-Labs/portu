@@ -1,30 +1,32 @@
 import SwiftUI
-import SwiftData
-import PortuCore
 
 struct SidebarView: View {
     @Binding var selection: SidebarSection
-    // Single-portfolio MVP: loads all accounts unfiltered. When multi-portfolio
-    // support is added, scope this query via a portfolio predicate.
-    @Query(sort: \Account.name) private var accounts: [Account]
 
     var body: some View {
         List(selection: $selection) {
             Section {
                 Label("Overview", systemImage: "chart.pie")
                     .tag(SidebarSection.overview)
+
+                Label("Exposure", systemImage: "square.grid.3x3.middle.filled")
+                    .tag(SidebarSection.exposure)
+
+                Label("Performance", systemImage: "chart.xyaxis.line")
+                    .tag(SidebarSection.performance)
             }
 
-            Section("Accounts") {
-                if accounts.isEmpty {
-                    Text("No accounts yet")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(accounts) { account in
-                        Label(account.name, systemImage: iconForAccount(account))
-                            .tag(SidebarSection.account(account.persistentModelID))
-                    }
-                }
+            Section("Portfolio") {
+                Label("All Assets", systemImage: "bitcoinsign.circle")
+                    .tag(SidebarSection.allAssets)
+
+                Label("All Positions", systemImage: "tray.full")
+                    .tag(SidebarSection.allPositions)
+            }
+
+            Section("Management") {
+                Label("Accounts", systemImage: "building.columns")
+                    .tag(SidebarSection.accounts)
             }
         }
         .listStyle(.sidebar)
@@ -35,14 +37,6 @@ struct SidebarView: View {
                     // TODO: Add account flow
                 }
             }
-        }
-    }
-
-    private func iconForAccount(_ account: Account) -> String {
-        switch account.kind {
-        case .manual: "tray"
-        case .exchange: "building.columns"
-        case .wallet: "wallet.bifold"
         }
     }
 }

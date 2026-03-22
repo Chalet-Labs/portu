@@ -13,8 +13,31 @@ struct ContentView: View {
             switch appState.selectedSection {
             case .overview:
                 PortfolioView()
-            case .account(let id):
-                AccountDetailView(accountID: id)
+            case .exposure:
+                placeholderView(
+                    title: "Exposure",
+                    message: "Exposure will land in a follow-on plan."
+                )
+            case .performance:
+                placeholderView(
+                    title: "Performance",
+                    message: "Performance charts will land in a follow-on plan."
+                )
+            case .allAssets:
+                placeholderView(
+                    title: "All Assets",
+                    message: "Asset drill-downs will land in a follow-on plan."
+                )
+            case .allPositions:
+                placeholderView(
+                    title: "All Positions",
+                    message: "Position management will land in a follow-on plan."
+                )
+            case .accounts:
+                placeholderView(
+                    title: "Accounts",
+                    message: "Account management will land in a follow-on plan."
+                )
             }
         }
         .frame(minWidth: 700, minHeight: 500)
@@ -28,5 +51,15 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func placeholderView(title: String, message: String) -> some View {
+        ContentUnavailableView {
+            Label(title, systemImage: "hammer")
+        } description: {
+            Text(message)
+        }
+        .navigationTitle(title)
     }
 }

@@ -14,11 +14,6 @@ final class AppState {
     var syncStatus: SyncStatus = .idle
 }
 
-enum SidebarSection: Hashable, Sendable {
-    case overview
-    case account(PersistentIdentifier)
-}
-
 enum ConnectionStatus: Hashable, Sendable {
     case idle
     case fetching
