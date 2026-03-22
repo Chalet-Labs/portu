@@ -310,9 +310,16 @@ This matches how providers return data (always positive) and keeps display simpl
 - **Position.netUSDValue** = `sum(token.usdValue where role is +) − sum(token.usdValue where role is .borrow)`. **Computed exclusively by SyncEngine** when creating Position @Model from PositionDTO — not provided by the DTO. SyncEngine is the single owner of this derived value.
 - **Net Amount** (All Assets) = `sum(token.amount where role is +) − sum(token.amount where role is .borrow)`, for tokens referencing the same Asset. `.reward` excluded.
 - **Exposure** = same as Net Amount but grouped by category. Borrow subtracts from exposure.
-- **Value column** (in tables) = `token.usdValue` displayed as-is (always positive). Borrow tokens show a "Borrow" label/icon, not a minus sign on the value.
 - **24h change** = `sum(token.amount × livePrice × priceChange24hPct)` for `+` roles, minus the same for `.borrow` roles. Rewards excluded.
 - **Portfolio total** = `sum(Position.netUSDValue)` across all positions. Already signed correctly.
+
+**Value display by row type:**
+
+| Row type | Amount shown | Value shown | Sign |
+|---|---|---|---|
+| **PositionToken row** (All Positions, borrowing tab) | `token.amount` (always positive) | `token.amount × livePrice` or `token.usdValue` fallback | Always positive. Borrow rows show "Borrow" label, not minus sign. |
+| **Aggregated asset row** (All Assets table) | Net Amount (borrow subtracted) | `netAmount × livePrice` — can be negative if borrow > supply | Signed. Negative values displayed as "−$X" |
+| **Position row** (Overview positions list) | `position.netUSDValue` | Pre-computed signed total | Signed. |
 
 ### Price Display Rules
 
@@ -320,8 +327,6 @@ Prices come from two sources. The rules for which to use:
 
 1. **Live price** (`AppState.prices[asset.coinGeckoId]`) — used when `coinGeckoId` is present and PriceService has a cached value. This is the authoritative price for display.
 2. **Sync-time price** (`PositionToken.usdValue / PositionToken.amount`) — used as fallback when the asset has no `coinGeckoId` (obscure DeFi tokens). Displayed with a "stale" indicator showing sync time.
-
-For "Value" columns: `amount * livePrice` when live price is available, otherwise `PositionToken.usdValue` from sync.
 
 For "24h change" in the Overview top bar: see **Sign Convention** section for the canonical formula (role-sign-adjusted). Assets without `coinGeckoId` contribute $0 (shown as approximate with a tooltip).
 
