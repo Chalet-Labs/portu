@@ -272,8 +272,8 @@ How each view uses these fields:
 AssetSnapshot enables:
 - **Performance "Assets" mode** — group by `category`, sum `usdValue`, chart over time as stacked AreaMark
 - **Performance account filter + category breakdown** — filter by `accountId`, then group by `category`
-- **Asset Detail "$ Value" mode** — filter by `assetId`, chart `usdValue` over time
-- **Asset Detail "Amount" mode** — filter by `assetId`, chart `amount` over time
+- **Asset Detail "$ Value" mode** — filter by `assetId`, chart `usdValue - borrowUsdValue` (net) over time
+- **Asset Detail "Amount" mode** — filter by `assetId`, chart `amount - borrowAmount` (net) over time
 - **Asset categories bottom panel** — compare start/end `usdValue` for period % change
 
 Storage estimate: ~2.5 MB/year for 50 assets × 15 accounts × 2 syncs/day with pruning.
@@ -678,8 +678,8 @@ Drill-down view for a single asset. Pushed via `navigationDestination` from anyw
 
 **Price chart**: Swift Charts `LineMark`. Time range selector. Comparison toggles for BTC/SOL (normalized overlay lines). Three modes:
 - **Price** — market price from CoinGecko historical API
-- **$ Value** — total holdings value over time from AssetSnapshot (`usdValue` summed across all accounts for this `assetId`)
-- **Amount** — token quantity over time from AssetSnapshot (`amount` summed across all accounts for this `assetId`)
+- **$ Value** — net holdings value over time from AssetSnapshot: `sum(usdValue) - sum(borrowUsdValue)` across all accounts for this `assetId`. For borrow-only assets this is negative, displayed as "Debt: $X".
+- **Amount** — net token quantity over time from AssetSnapshot: `sum(amount) - sum(borrowAmount)` across all accounts for this `assetId`. For borrow-only assets this is negative, displayed as "Borrowed: X".
 
 **Holdings summary**: All Accounts count, total amount, total USD value. "On networks" section: table grouped by `Position.chain` (not Asset.upsertChain) with amount, share %, USD value. This correctly shows all chains where the asset is held.
 
