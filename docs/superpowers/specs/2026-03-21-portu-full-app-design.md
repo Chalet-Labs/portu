@@ -326,7 +326,9 @@ This matches how providers return data (always positive) and keeps display simpl
 Prices come from two sources. The rules for which to use:
 
 1. **Live price** (`AppState.prices[asset.coinGeckoId]`) — used when `coinGeckoId` is present and PriceService has a cached value. This is the authoritative price for display.
-2. **Sync-time price** (`PositionToken.usdValue / PositionToken.amount`) — used as fallback when the asset has no `coinGeckoId` (obscure DeFi tokens). Displayed with a "stale" indicator showing sync time.
+2. **Sync-time fallback** — used when the asset has no `coinGeckoId`. Displayed with a "stale" indicator showing sync time. Rules differ by row type:
+   - **PositionToken row**: Price = `token.usdValue / token.amount`. Value = `token.usdValue`.
+   - **Aggregated asset row** (All Assets): Price = weighted average `sum(token.usdValue for + roles) / sum(token.amount for + roles)`. Value = `sum(token.usdValue for + roles) − sum(token.usdValue for .borrow roles)` (direct sum of sync-time values, not price × netAmount).
 
 For "24h change" in the Overview top bar: see **Sign Convention** section for the canonical formula (role-sign-adjusted). Assets without `coinGeckoId` contribute $0 (shown as approximate with a tooltip).
 
