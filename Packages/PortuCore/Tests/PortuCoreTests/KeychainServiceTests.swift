@@ -2,8 +2,7 @@ import Testing
 @testable import PortuCore
 
 /// In-memory mock for testing code that depends on SecretStore.
-/// MainActor-isolated by default (via package setting), so Sendable is satisfied.
-final class MockSecretStore: SecretStore {
+final class MockSecretStore: SecretStore, @unchecked Sendable {
     private var storage: [String: String] = [:]
 
     func get(key: String) throws(KeychainError) -> String? {
