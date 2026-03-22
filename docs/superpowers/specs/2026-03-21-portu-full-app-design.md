@@ -234,8 +234,10 @@ AssetSnapshot                       — per-asset per-account time series
 ├── assetId: UUID                  (not a relationship — survives deletion)
 ├── symbol: String                 (denormalized for display — survives Asset changes)
 ├── category: AssetCategory        (denormalized — enables category grouping without joins)
-├── amount: Decimal                (GROSS POSITIVE: borrow and reward excluded — see below)
-├── usdValue: Decimal              (GROSS POSITIVE: borrow and reward excluded — see below)
+├── amount: Decimal                (GROSS POSITIVE: supply + balance + stake + lpToken)
+├── usdValue: Decimal              (GROSS POSITIVE: supply + balance + stake + lpToken)
+├── borrowAmount: Decimal          (ABSOLUTE POSITIVE: borrow role tokens only, 0 if none)
+├── borrowUsdValue: Decimal        (ABSOLUTE POSITIVE: borrow role tokens only, 0 if none)
 **Partial-batch detection** — three levels of granularity:
 - **Portfolio-wide**: `PortfolioSnapshot.isPartial` — was any account stale in this batch?
 - **Per-account**: `AccountSnapshot.isFresh` — was this specific account successfully synced?
@@ -246,17 +248,18 @@ Views use the appropriate level:
 - Account-filtered Performance → check `AccountSnapshot.isFresh` for the selected account (no false alarms from other accounts' failures)
 - Asset Detail → if viewing across all accounts, check `PortfolioSnapshot.isPartial`; if account context is known, check `AccountSnapshot.isFresh`
 
-AssetSnapshot sign convention: values are GROSS HOLDINGS, always positive.
-SyncEngine includes only positive roles when creating snapshots:
-  supply/balance/stake/lpToken → included (summed into amount and usdValue)
-  borrow → EXCLUDED (debt is not a "holding")
-  reward → EXCLUDED (unclaimed, not realized)
-Assets that appear only in borrow positions do NOT get an AssetSnapshot row.
+AssetSnapshot stores gross and borrow values separately (both always positive):
+  supply/balance/stake/lpToken → summed into `amount` and `usdValue`
+  borrow → summed into `borrowAmount` and `borrowUsdValue`
+  reward → excluded from both
+All assets get an AssetSnapshot row, including borrow-only assets (where amount=0, borrowAmount>0).
 
-This intentionally differs from Net Amount (which subtracts borrow):
-  Performance "Assets" mode → gross holdings (stacked AreaMark, requires positive values)
-  Asset Detail history → gross holdings (what you hold, not net exposure)
-  Exposure view → net exposure (computed LIVE from current PositionTokens with role signs, no persistence)
+How each view uses these fields:
+  Performance "Assets" mode → `usdValue` only (gross, positive → stacked AreaMark works)
+  Asset Detail "$ Value" → `usdValue - borrowUsdValue` (net value over time)
+  Asset Detail "Amount" → `amount - borrowAmount` (net amount over time)
+  Asset Detail for borrow-only assets → shows debt history from borrowUsdValue
+  Exposure view → computed LIVE from current PositionTokens (no snapshot dependency)
 ```
 
 AssetSnapshot enables:
