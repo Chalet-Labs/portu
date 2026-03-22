@@ -2,58 +2,64 @@ import Foundation
 import Testing
 @testable import PortuCore
 
-/// Thread-safe in-memory mock for testing code that depends on SecretStore.
-final class MockSecretStore: @unchecked Sendable, SecretStore {
-    private let lock = NSLock()
-    private var storage: [String: String] = [:]
+actor MockSecretStore: SecretStore {
+    private var storage: [KeychainKey: String] = [:]
 
-    func get(key: String) throws(KeychainError) -> String? {
-        lock.lock()
-        defer { lock.unlock() }
+    func value(for key: KeychainKey) async throws(KeychainError) -> String? {
         return storage[key]
     }
 
-    func set(key: String, value: String) throws(KeychainError) {
-        lock.lock()
-        defer { lock.unlock() }
+    func setValue(_ value: String, for key: KeychainKey) async throws(KeychainError) {
         storage[key] = value
     }
 
-    func delete(key: String) throws(KeychainError) {
-        lock.lock()
-        defer { lock.unlock() }
-        storage.removeValue(forKey: key)
+    func removeValue(for key: KeychainKey) async throws(KeychainError) {
+        storage[key] = nil
     }
 }
 
 @Suite("SecretStore Tests")
 struct SecretStoreTests {
-    @Test func storeAndRetrieve() throws {
+    @Test func storeAndRetrieve() async throws {
         let store = MockSecretStore()
-        try store.set(key: "portu.abc123.apiKey", value: "my-secret-key")
-        let retrieved = try store.get(key: "portu.abc123.apiKey")
+        let key = KeychainKey.exchangeAPIKey(UUID())
+
+        try await store.setValue("my-secret-key", for: key)
+        let retrieved = try await store.value(for: key)
+
         #expect(retrieved == "my-secret-key")
     }
 
-    @Test func retrieveNonExistent() throws {
+    @Test func retrieveNonExistent() async throws {
         let store = MockSecretStore()
-        let result = try store.get(key: "portu.missing.apiKey")
+        let result = try await store.value(for: .exchangeAPISecret(UUID()))
+
         #expect(result == nil)
     }
 
-    @Test func deleteKey() throws {
+    @Test func deleteKey() async throws {
         let store = MockSecretStore()
-        try store.set(key: "portu.abc123.apiKey", value: "secret")
-        try store.delete(key: "portu.abc123.apiKey")
-        let result = try store.get(key: "portu.abc123.apiKey")
+        let key = KeychainKey.exchangePassphrase(UUID())
+
+        try await store.setValue("secret", for: key)
+        try await store.removeValue(for: key)
+        let result = try await store.value(for: key)
+
         #expect(result == nil)
     }
 
-    @Test func overwriteExistingKey() throws {
+    @Test func overwriteExistingKey() async throws {
         let store = MockSecretStore()
-        try store.set(key: "portu.abc123.apiKey", value: "old")
-        try store.set(key: "portu.abc123.apiKey", value: "new")
-        let result = try store.get(key: "portu.abc123.apiKey")
+        let key = KeychainKey.exchangeAPIKey(UUID())
+
+        try await store.setValue("old", for: key)
+        try await store.setValue("new", for: key)
+        let result = try await store.value(for: key)
+
         #expect(result == "new")
+    }
+
+    @Test func keychainKeysUseStableServicePrefixes() {
+        #expect(KeychainKey.providerAPIKey(.zapper).service == "portu.provider.zapper.apiKey")
     }
 }

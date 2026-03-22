@@ -1,20 +1,19 @@
 import Foundation
 import Security
 
-/// Wraps Security.framework keychain APIs. Items are scoped to the kSecAttrService value
-/// (defaults to bundle identifier).
-public struct KeychainService: SecretStore {
-    private let service: String
+/// Wraps Security.framework keychain APIs behind an actor-isolated secret store.
+public actor KeychainService: SecretStore {
+    private let accountName: String
 
-    public init(service: String = Bundle.main.bundleIdentifier ?? "com.portu.app") {
-        self.service = service
+    public init(accountName: String = "credential") {
+        self.accountName = accountName
     }
 
-    public func get(key: String) throws(KeychainError) -> String? {
+    public func value(for key: KeychainKey) async throws(KeychainError) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
+            kSecAttrService as String: key.service,
+            kSecAttrAccount as String: accountName,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
             kSecUseDataProtectionKeychain as String: true,
@@ -28,25 +27,27 @@ public struct KeychainService: SecretStore {
             guard let data = result as? Data,
                   let string = String(data: data, encoding: .utf8)
             else {
-                throw .encodingFailed
+                throw .decodingFailed
             }
             return string
         case errSecItemNotFound:
             return nil
+        case errSecInteractionNotAllowed:
+            throw .interactionNotAllowed
         default:
             throw .unexpectedStatus(status)
         }
     }
 
-    public func set(key: String, value: String) throws(KeychainError) {
+    public func setValue(_ value: String, for key: KeychainKey) async throws(KeychainError) {
         guard let data = value.data(using: .utf8) else {
             throw .encodingFailed
         }
 
         let baseQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
+            kSecAttrService as String: key.service,
+            kSecAttrAccount as String: accountName,
             kSecUseDataProtectionKeychain as String: true,
         ]
         let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
@@ -71,24 +72,36 @@ public struct KeychainService: SecretStore {
                     kSecAttrAccessible as String: accessibility,
                 ] as CFDictionary
             )
-            guard updateStatus == errSecSuccess else {
+            switch updateStatus {
+            case errSecSuccess:
+                return
+            case errSecInteractionNotAllowed:
+                throw .interactionNotAllowed
+            default:
                 throw .unexpectedStatus(updateStatus)
             }
+        case errSecInteractionNotAllowed:
+            throw .interactionNotAllowed
         default:
             throw .unexpectedStatus(addStatus)
         }
     }
 
-    public func delete(key: String) throws(KeychainError) {
+    public func removeValue(for key: KeychainKey) async throws(KeychainError) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
+            kSecAttrService as String: key.service,
+            kSecAttrAccount as String: accountName,
             kSecUseDataProtectionKeychain as String: true,
         ]
 
         let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
+        switch status {
+        case errSecSuccess, errSecItemNotFound:
+            return
+        case errSecInteractionNotAllowed:
+            throw .interactionNotAllowed
+        default:
             throw .unexpectedStatus(status)
         }
     }

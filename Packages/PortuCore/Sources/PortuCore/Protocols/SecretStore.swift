@@ -1,8 +1,6 @@
-/// Protocol for secret storage, enabling mock injection in tests.
-/// Key naming convention: "portu.<accountId>.<credentialType>"
-/// Example: "portu.abc123.apiKey", "portu.abc123.apiSecret"
+/// Protocol for typed secret storage, enabling mock injection in tests.
 public protocol SecretStore: Sendable {
-    func get(key: String) throws(KeychainError) -> String?
-    func set(key: String, value: String) throws(KeychainError)
-    func delete(key: String) throws(KeychainError)
+    func value(for key: KeychainKey) async throws(KeychainError) -> String?
+    func setValue(_ value: String, for key: KeychainKey) async throws(KeychainError)
+    func removeValue(for key: KeychainKey) async throws(KeychainError)
 }
