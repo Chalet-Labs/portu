@@ -32,7 +32,7 @@ struct ContentView: View {
         case .allAssets:
             AllAssetsView()
         case .allPositions:
-            placeholderView("All Positions", icon: "list.bullet.rectangle")
+            AllPositionsView()
         case .accounts:
             placeholderView("Accounts", icon: "person.2")
         }
