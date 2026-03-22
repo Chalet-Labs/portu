@@ -1,9 +1,8 @@
 import Foundation
 
-/// Flat enum for account classification. No associated values — safe for SwiftData predicates.
-/// Use `Account.exchangeType` and `Account.chain` for type-specific metadata.
+/// Classifies the high-level shape of an account.
 public enum AccountKind: String, Codable, CaseIterable, Sendable {
-    case manual
-    case exchange
     case wallet
+    case exchange
+    case manual
 }

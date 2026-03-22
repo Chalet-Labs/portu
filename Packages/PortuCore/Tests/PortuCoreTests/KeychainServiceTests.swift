@@ -1,20 +1,27 @@
+import Foundation
 import Testing
 @testable import PortuCore
 
-/// In-memory mock for testing code that depends on SecretStore.
-/// MainActor-isolated by default (via package setting), so Sendable is satisfied.
-final class MockSecretStore: SecretStore {
+/// Thread-safe in-memory mock for testing code that depends on SecretStore.
+final class MockSecretStore: @unchecked Sendable, SecretStore {
+    private let lock = NSLock()
     private var storage: [String: String] = [:]
 
     func get(key: String) throws(KeychainError) -> String? {
-        storage[key]
+        lock.lock()
+        defer { lock.unlock() }
+        return storage[key]
     }
 
     func set(key: String, value: String) throws(KeychainError) {
+        lock.lock()
+        defer { lock.unlock() }
         storage[key] = value
     }
 
     func delete(key: String) throws(KeychainError) {
+        lock.lock()
+        defer { lock.unlock() }
         storage.removeValue(forKey: key)
     }
 }

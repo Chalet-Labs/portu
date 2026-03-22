@@ -3,6 +3,7 @@ import Testing
 import SwiftData
 @testable import PortuCore
 
+@MainActor
 @Suite("SwiftData Model Tests")
 struct ModelTests {
     let container: ModelContainer
@@ -11,91 +12,146 @@ struct ModelTests {
     init() throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         container = try ModelContainer(
-            for: Portfolio.self, Account.self, Holding.self, Asset.self,
+            for: Account.self,
+            WalletAddress.self,
+            Position.self,
+            PositionToken.self,
+            Asset.self,
+            PortfolioSnapshot.self,
+            AccountSnapshot.self,
+            AssetSnapshot.self,
             configurations: config
         )
         context = container.mainContext
     }
 
-    @Test func portfolioCreation() throws {
-        let portfolio = Portfolio(name: "Main")
-        context.insert(portfolio)
+    @Test func accountStoresAddressesAndSyncMetadata() throws {
+        let account = Account(
+            name: "Main wallet",
+            kind: .wallet,
+            dataSource: .zapper
+        )
+        account.addresses = [WalletAddress(address: "0xabc", chain: nil)]
+
+        context.insert(account)
         try context.save()
 
-        let fetched = try context.fetch(FetchDescriptor<Portfolio>())
+        let fetched = try context.fetch(FetchDescriptor<Account>())
         #expect(fetched.count == 1)
-        #expect(fetched.first?.name == "Main")
+        #expect(fetched.first?.name == "Main wallet")
+        #expect(fetched.first?.isActive == true)
+        #expect(fetched.first?.addresses.count == 1)
+        #expect(fetched.first?.addresses.first?.address == "0xabc")
+        #expect(fetched.first?.lastSyncError == nil)
     }
 
-    @Test func accountRelationship() throws {
-        let portfolio = Portfolio(name: "Main")
-        let account = Account(name: "Binance", kind: .exchange)
-        account.exchangeType = .binance
-        account.portfolio = portfolio
-        portfolio.accounts.append(account)
-
-        context.insert(portfolio)
-        try context.save()
-
-        let fetched = try context.fetch(FetchDescriptor<Portfolio>())
-        #expect(fetched.first?.accounts.count == 1)
-        #expect(fetched.first?.accounts.first?.kind == .exchange)
-        #expect(fetched.first?.accounts.first?.exchangeType == .binance)
-    }
-
-    @Test func holdingAssetRelationship() throws {
-        let asset = Asset(symbol: "BTC", name: "Bitcoin", coinGeckoId: "bitcoin")
-        let holding = Holding(amount: 1.5, costBasis: 60000)
-        holding.asset = asset
+    @Test func positionNetValueUsesSignedTokenRoles() throws {
+        let asset = Asset(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")
+        let position = Position(positionType: .lending, netUSDValue: 1000)
+        position.tokens = [
+            PositionToken(role: .supply, amount: 2, usdValue: 4000, asset: asset),
+            PositionToken(role: .borrow, amount: 1, usdValue: 3000, asset: asset),
+        ]
 
         context.insert(asset)
-        context.insert(holding)
+        context.insert(position)
         try context.save()
 
-        let fetched = try context.fetch(FetchDescriptor<Holding>())
-        #expect(fetched.first?.asset?.symbol == "BTC")
-        #expect(fetched.first?.amount == 1.5)
+        let fetched = try context.fetch(FetchDescriptor<Position>())
+        let fetchedPosition = try #require(fetched.first)
+
+        #expect(fetched.count == 1)
+        #expect(fetchedPosition.netUSDValue == 1000)
+        #expect(fetchedPosition.tokens.count == 2)
+        #expect(Set(fetchedPosition.tokens.map(\.role)) == Set([.supply, .borrow]))
     }
 
-    @Test func cascadeDeletePortfolioRemovesAccounts() throws {
-        let portfolio = Portfolio(name: "Main")
-        let account = Account(name: "Manual", kind: .manual)
-        account.portfolio = portfolio
-        portfolio.accounts.append(account)
+    @Test func cascadeDeleteAccountRemovesAddressesAndPositions() throws {
+        let account = Account(
+            name: "Tracked wallet",
+            kind: .wallet,
+            dataSource: .manual
+        )
+        account.addresses = [WalletAddress(address: "0xdef", chain: .ethereum)]
 
-        context.insert(portfolio)
+        let asset = Asset(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")
+        let position = Position(positionType: .idle, netUSDValue: 1500)
+        position.tokens = [
+            PositionToken(role: .supply, amount: 1, usdValue: 1500, asset: asset)
+        ]
+        account.positions = [position]
+
+        context.insert(asset)
+        context.insert(account)
         try context.save()
 
-        context.delete(portfolio)
+        context.delete(account)
         try context.save()
 
+        let addresses = try context.fetch(FetchDescriptor<WalletAddress>())
+        let positions = try context.fetch(FetchDescriptor<Position>())
+        let tokens = try context.fetch(FetchDescriptor<PositionToken>())
         let accounts = try context.fetch(FetchDescriptor<Account>())
+        let assets = try context.fetch(FetchDescriptor<Asset>())
+
         #expect(accounts.isEmpty)
+        #expect(addresses.isEmpty)
+        #expect(positions.isEmpty)
+        #expect(tokens.isEmpty)
+        #expect(assets.count == 1)
     }
 
-    @Test func accountKindFilterAndFetch() throws {
-        let portfolio = Portfolio(name: "Main")
-        let manual = Account(name: "Manual", kind: .manual)
-        let exchange = Account(name: "Binance", kind: .exchange)
-        manual.portfolio = portfolio
-        exchange.portfolio = portfolio
-        portfolio.accounts.append(contentsOf: [manual, exchange])
+    @Test func snapshotModelsPersistBatchValues() throws {
+        let batchID = UUID()
+        let accountID = UUID()
+        let assetID = UUID()
 
-        context.insert(portfolio)
+        context.insert(
+            PortfolioSnapshot(
+                syncBatchId: batchID,
+                timestamp: .now,
+                totalValue: 10_000,
+                idleValue: 2_000,
+                deployedValue: 7_000,
+                debtValue: 1_000,
+                isPartial: false
+            )
+        )
+        context.insert(
+            AccountSnapshot(
+                syncBatchId: batchID,
+                timestamp: .now,
+                accountId: accountID,
+                totalValue: 6_000,
+                isFresh: true
+            )
+        )
+        context.insert(
+            AssetSnapshot(
+                syncBatchId: batchID,
+                timestamp: .now,
+                accountId: accountID,
+                assetId: assetID,
+                symbol: "ETH",
+                category: .major,
+                amount: 2,
+                usdValue: 4_000,
+                borrowAmount: 0,
+                borrowUsdValue: 0
+            )
+        )
+
         try context.save()
 
-        // Fetch all accounts and verify enum-based filtering works correctly.
-        // SwiftData stores RawRepresentable enums by raw value; predicates on
-        // custom enums require in-memory filtering or raw-value workarounds.
-        let all = try context.fetch(FetchDescriptor<Account>())
-        #expect(all.count == 2)
+        let portfolioSnapshots = try context.fetch(FetchDescriptor<PortfolioSnapshot>())
+        let accountSnapshots = try context.fetch(FetchDescriptor<AccountSnapshot>())
+        let assetSnapshots = try context.fetch(FetchDescriptor<AssetSnapshot>())
 
-        let exchanges = all.filter { $0.kind == .exchange }
-        #expect(exchanges.count == 1)
-        #expect(exchanges.first?.name == "Binance")
-
-        let manuals = all.filter { $0.kind == .manual }
-        #expect(manuals.count == 1)
-        #expect(manuals.first?.name == "Manual")
+        #expect(portfolioSnapshots.count == 1)
+        #expect(accountSnapshots.count == 1)
+        #expect(assetSnapshots.count == 1)
+        #expect(portfolioSnapshots.first?.debtValue == 1_000)
+        #expect(accountSnapshots.first?.isFresh == true)
+        #expect(assetSnapshots.first?.category == .major)
     }
 }
