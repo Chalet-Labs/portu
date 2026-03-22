@@ -34,11 +34,7 @@ struct ContentView: View {
         case .allPositions:
             AllPositionsView()
         case .accounts:
-            placeholderView("Accounts", icon: "person.2")
+            AccountsView()
         }
-    }
-
-    private func placeholderView(_ title: String, icon: String) -> some View {
-        ContentUnavailableView(title, systemImage: icon, description: Text("Coming in a future plan"))
     }
 }
