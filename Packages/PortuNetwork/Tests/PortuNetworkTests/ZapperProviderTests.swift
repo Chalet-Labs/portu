@@ -3,6 +3,36 @@ import Testing
 import PortuCore
 @testable import PortuNetwork
 
+nonisolated
+final class ZapperMockURLProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var requestHandler: ((URLRequest) -> (Data?, Int))?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        let (data, statusCode) = Self.requestHandler?(request) ?? (nil, 500)
+        guard let url = request.url else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badURL))
+            return
+        }
+
+        let response = HTTPURLResponse(
+            url: url,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        if let data {
+            client?.urlProtocol(self, didLoad: data)
+        }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
 @Suite("Zapper Provider Tests", .serialized)
 struct ZapperProviderTests {
     @Test func zapperProviderMapsBalancesIntoPositionDTOs() async throws {
@@ -52,12 +82,12 @@ struct ZapperProviderTests {
     }
 
     private func mockedSession(json: String, statusCode: Int = 200) -> URLSession {
-        MockURLProtocol.requestHandler = { _ in
+        ZapperMockURLProtocol.requestHandler = { _ in
             (json.data(using: .utf8), statusCode)
         }
 
         let config = URLSessionConfiguration.ephemeral
-        config.protocolClasses = [MockURLProtocol.self]
+        config.protocolClasses = [ZapperMockURLProtocol.self]
         return URLSession(configuration: config)
     }
 }

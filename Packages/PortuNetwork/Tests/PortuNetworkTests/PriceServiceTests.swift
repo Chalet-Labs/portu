@@ -47,7 +47,10 @@ struct PriceServiceTests {
     @Test func fetchPricesSuccess() async throws {
         MockURLProtocol.requestHandler = { _ in
             ("""
-            {"bitcoin":{"usd":62400},"ethereum":{"usd":3200}}
+            {
+              "bitcoin":{"usd":62400,"usd_24h_change":4.5},
+              "ethereum":{"usd":3200,"usd_24h_change":2.1}
+            }
             """.data(using: .utf8), 200)
         }
 
@@ -121,7 +124,7 @@ struct PriceServiceTests {
     @Test func rateLimiterRejectsExcessiveRequests() async throws {
         MockURLProtocol.requestHandler = { _ in
             ("""
-            {"bitcoin":{"usd":62400}}
+            {"bitcoin":{"usd":62400,"usd_24h_change":4.5}}
             """.data(using: .utf8), 200)
         }
 
@@ -143,5 +146,53 @@ struct PriceServiceTests {
         await #expect(throws: PriceServiceError.rateLimited) {
             try await service.fetchPrices(for: ["bitcoin"])
         }
+    }
+
+    @Test func priceStreamYieldsPriceUpdatePayloads() async throws {
+        MockURLProtocol.requestHandler = { request in
+            switch request.url?.path() {
+            case "/api/v3/simple/price":
+                return ("""
+                {"bitcoin":{"usd":62400,"usd_24h_change":4.5}}
+                """.data(using: .utf8), 200)
+            default:
+                return (nil, 404)
+            }
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let stream = await service.priceStream(for: ["bitcoin"], interval: 1)
+        var iterator = stream.makeAsyncIterator()
+        let update = try #require(try await iterator.next())
+
+        #expect(update.prices["bitcoin"] == 62400)
+        #expect(update.changes24h["bitcoin"] == 4.5)
+    }
+
+    @Test func historicalPricesDecodeChronologicalSeries() async throws {
+        let entries = (0..<30).map { dayOffset in
+            let timestamp = 1_700_000_000_000 + (dayOffset * 86_400_000)
+            let price = 62_400 + dayOffset
+            return "[\(timestamp),\(price)]"
+        }
+        let historyJSON = """
+        {"prices":[\(entries.joined(separator: ","))]}
+        """
+
+        MockURLProtocol.requestHandler = { request in
+            switch request.url?.path() {
+            case "/api/v3/coins/bitcoin/market_chart":
+                return (historyJSON.data(using: .utf8), 200)
+            default:
+                return (nil, 404)
+            }
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let series = try await service.fetchHistoricalPrices(for: "bitcoin", days: 30)
+
+        #expect(series.count == 30)
+        #expect(series.first?.price == 62400)
+        #expect(series.last?.price == 62429)
     }
 }
