@@ -3,10 +3,12 @@ import SwiftData
 import PortuCore
 
 struct SidebarView: View {
-    @Binding var selection: SidebarSection
+    @Environment(AppState.self) private var appState
 
     var body: some View {
-        List(selection: $selection) {
+        @Bindable var appState = appState
+
+        List(selection: $appState.selectedSection) {
             Section("PORTU") {
                 Label("Overview", systemImage: "chart.pie")
                     .tag(SidebarSection.overview)
@@ -27,6 +29,14 @@ struct SidebarView: View {
                 Label("Accounts", systemImage: "person.2")
                     .tag(SidebarSection.accounts)
             }
+
+            Section {
+                Label("Strategies", systemImage: "lightbulb")
+                    .foregroundStyle(.tertiary)
+            } header: {
+                Text("")
+            }
+            .disabled(true)
         }
         .listStyle(.sidebar)
         .navigationTitle("Portu")
