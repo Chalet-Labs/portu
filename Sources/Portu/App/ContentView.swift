@@ -6,46 +6,39 @@ struct ContentView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        @Bindable var appState = appState
         NavigationSplitView {
-            SidebarView(selection: $appState.selectedSection)
+            SidebarView()
         } detail: {
-            switch appState.selectedSection {
-            case .overview:
-                PortfolioView()
-            case .accounts:
-                AccountDetailView(accountID: nil)
-            default:
-                ContentUnavailableView(
-                    appState.selectedSection.displayName,
-                    systemImage: "hammer",
-                    description: Text("Coming in a future plan")
-                )
-            }
+            detailView
+                .navigationDestination(for: UUID.self) { assetId in
+                    Text("Asset Detail: \(assetId)")
+                }
         }
-        .frame(minWidth: 700, minHeight: 500)
+        .frame(minWidth: 900, minHeight: 600)
         .safeAreaInset(edge: .bottom) {
             StatusBarView()
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Refresh", systemImage: "arrow.clockwise") {
-                    // TODO: Trigger sync
-                }
-            }
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch appState.selectedSection {
+        case .overview:
+            OverviewView()
+        case .exposure:
+            placeholderView("Exposure", icon: "chart.bar.xaxis")
+        case .performance:
+            placeholderView("Performance", icon: "chart.line.uptrend.xyaxis")
+        case .allAssets:
+            placeholderView("All Assets", icon: "bitcoinsign.circle")
+        case .allPositions:
+            placeholderView("All Positions", icon: "list.bullet.rectangle")
+        case .accounts:
+            placeholderView("Accounts", icon: "person.2")
         }
     }
-}
 
-extension SidebarSection {
-    var displayName: String {
-        switch self {
-        case .overview: "Overview"
-        case .exposure: "Exposure"
-        case .performance: "Performance"
-        case .allAssets: "All Assets"
-        case .allPositions: "All Positions"
-        case .accounts: "Accounts"
-        }
+    private func placeholderView(_ title: String, icon: String) -> some View {
+        ContentUnavailableView(title, systemImage: icon, description: Text("Coming in a future plan"))
     }
 }
