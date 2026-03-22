@@ -76,6 +76,13 @@ SyncEngine flow (runs in app target, has access to `ModelContext`):
 has zero accounts to process. Phase B still runs and creates snapshots from current manual
 positions — manual entries deserve historical tracking just like synced data.
 
+**Account.isActive semantics**: Inactive accounts are soft-hidden, not deleted. Their
+positions persist in the database (user can reactivate), but are excluded from:
+- Phase A sync loop (no fetch attempted)
+- Phase B snapshots (positions from inactive accounts are not included in any snapshot tier)
+- All view queries (views filter by `account.isActive == true` in `@Query` predicates or computed aggregations)
+- Portfolio total, 24h change, Exposure, Net Amount — all exclude inactive account positions
+
 **Phase A — Per-account fetch and persist** (loop over each active Account where `dataSource != .manual`):
 1. Construct `SyncContext` from Account @Model
 2. Resolve `PortfolioDataProvider` based on `dataSource`
@@ -100,7 +107,7 @@ during the per-account loop. This guarantees:
 
 7. If ALL accounts failed, skip Phase B entirely (no snapshot — nothing changed). Set `AppState.syncStatus = .error("All accounts failed to sync")` and return.
 8. Pick a single `batchTimestamp = Date.now`
-9. Query all current positions from the `ModelContext`
+9. Query all current positions from the `ModelContext` **where `account.isActive == true`**
 10. Create one `PortfolioSnapshot` (aggregate totals, `isPartial: true` if any account failed)
 10. Create one `AccountSnapshot` per account (totals from each account's positions)
 11. Create `AssetSnapshot` records (one per asset per account, from current PositionTokens grouped by Asset and Account)
