@@ -8,6 +8,8 @@ public actor PriceService {
     private let baseURL = URL(string: "https://api.coingecko.com/api/v3")!
     private var cache: [String: Decimal] = [:]
     private var lastFetchDate: Date?
+    private var updateCache: PriceUpdate?
+    private var lastUpdateFetchDate: Date?
     private let cacheTTL: TimeInterval
 
     // Sliding-window rate limiter
@@ -96,6 +98,68 @@ public actor PriceService {
         return cache.filter { requested.contains($0.key) }
     }
 
+    /// Fetch current USD prices and 24h change percentages for the given CoinGecko coin IDs.
+    /// Returns cached data if within TTL. Enforces client-side rate limit.
+    public func fetchPriceUpdate(for coinIds: [String]) async throws(PriceServiceError) -> PriceUpdate {
+        guard !coinIds.isEmpty else { return PriceUpdate(prices: [:], changes24h: [:]) }
+
+        if let lastFetch = lastUpdateFetchDate,
+           Date.now.timeIntervalSince(lastFetch) < cacheTTL,
+           let cached = updateCache,
+           coinIds.allSatisfy({ cached.prices[$0] != nil }) {
+            let requested = Set(coinIds)
+            return PriceUpdate(
+                prices: cached.prices.filter { requested.contains($0.key) },
+                changes24h: cached.changes24h.filter { requested.contains($0.key) }
+            )
+        }
+
+        // Proactive rate limiting
+        let now = Date.now
+        requestTimestamps.removeAll { now.timeIntervalSince($0.date) > windowDuration }
+        guard requestTimestamps.count < maxRequestsPerWindow else {
+            throw .rateLimited
+        }
+
+        let stamp = RequestStamp(id: UUID(), date: .now)
+        requestTimestamps.append(stamp)
+
+        let ids = Set(coinIds).joined(separator: ",")
+        let url = baseURL.appending(path: "simple/price")
+            .appending(queryItems: [
+                URLQueryItem(name: "ids", value: ids),
+                URLQueryItem(name: "vs_currencies", value: "usd"),
+                URLQueryItem(name: "include_24hr_change", value: "true"),
+            ])
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(from: url)
+        } catch {
+            requestTimestamps.removeAll { $0.id == stamp.id }
+            throw .networkUnavailable
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw .invalidResponse(statusCode: 0)
+        }
+        switch http.statusCode {
+        case 200: break
+        case 429: throw .rateLimited
+        default: throw .invalidResponse(statusCode: http.statusCode)
+        }
+
+        let parsed = try CoinGeckoSimplePriceResponse.parsePriceUpdate(from: data)
+        updateCache = parsed
+        lastUpdateFetchDate = .now
+        let requested = Set(coinIds)
+        return PriceUpdate(
+            prices: parsed.prices.filter { requested.contains($0.key) },
+            changes24h: parsed.changes24h.filter { requested.contains($0.key) }
+        )
+    }
+
     /// Returns an async stream that polls prices at the given interval.
     /// The stream yields price dictionaries keyed by coinGeckoId.
     /// Transient errors (network, rate limit) are silently retried on the next tick.
@@ -164,5 +228,7 @@ public actor PriceService {
     public func invalidateCache() {
         cache = [:]
         lastFetchDate = nil
+        updateCache = nil
+        lastUpdateFetchDate = nil
     }
 }

@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import PortuCore
 @testable import PortuNetwork
 
 /// URLProtocol mock that returns responses via a per-test request handler.
@@ -116,6 +117,22 @@ struct PriceServiceTests {
         // Should fetch fresh data, not cached
         let second = try await service.fetchPrices(for: ["bitcoin"])
         #expect(second["bitcoin"] == 99999)
+    }
+
+    @Test func fetchPriceUpdateIncludes24hChange() async throws {
+        MockURLProtocol.requestHandler = { _ in
+            ("""
+            {"bitcoin":{"usd":67500.0,"usd_24h_change":-1.5},"ethereum":{"usd":2188.0,"usd_24h_change":3.2}}
+            """.data(using: .utf8), 200)
+        }
+
+        let service = PriceService(session: session)
+        let update = try await service.fetchPriceUpdate(for: ["bitcoin", "ethereum"])
+
+        #expect(update.prices["bitcoin"] == Decimal(67500))
+        #expect(update.prices["ethereum"] == Decimal(2188))
+        #expect(update.changes24h["bitcoin"]! < 0)
+        #expect(update.changes24h["ethereum"]! > 0)
     }
 
     @Test func rateLimiterRejectsExcessiveRequests() async throws {
