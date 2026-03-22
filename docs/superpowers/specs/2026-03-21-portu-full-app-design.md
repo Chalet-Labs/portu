@@ -72,6 +72,10 @@ returns DTOs. SyncEngine (app target) is the only place that touches both DTOs a
 
 SyncEngine flow (runs in app target, has access to `ModelContext`):
 
+**Manual-only portfolios**: If all accounts are manual (`dataSource == .manual`), Phase A
+has zero accounts to process. Phase B still runs and creates snapshots from current manual
+positions — manual entries deserve historical tracking just like synced data.
+
 **Phase A — Per-account fetch and persist** (loop over each active Account where `dataSource != .manual`):
 1. Construct `SyncContext` from Account @Model
 2. Resolve `PortfolioDataProvider` based on `dataSource`
@@ -558,7 +562,7 @@ The main dashboard. Default selection on app launch.
 
 **Layout**: Two-column — main content (left, flex: 3) + inspector panel (right, flex: 1, collapsible).
 
-**Top bar**: Total portfolio value, 24h absolute and percentage change, last synced timestamp, Sync button.
+**Top bar**: Total portfolio value, 24h absolute and percentage change, last synced timestamp (= `batchTimestamp` of most recent sync run, regardless of partial status; partial failures shown separately via `completedWithErrors` badge), Sync button.
 
 **Main content**:
 - **Portfolio value chart** — Swift Charts `AreaMark`, time range selector (1w/1m/3m/1y/YTD). Data from PortfolioSnapshot.
