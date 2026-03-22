@@ -4,45 +4,31 @@ import PortuCore
 
 struct SidebarView: View {
     @Binding var selection: SidebarSection
-    // Single-portfolio MVP: loads all accounts unfiltered. When multi-portfolio
-    // support is added, scope this query via a portfolio predicate.
-    @Query(sort: \Account.name) private var accounts: [Account]
 
     var body: some View {
         List(selection: $selection) {
-            Section {
-                Label("Portfolio", systemImage: "chart.pie")
-                    .tag(SidebarSection.portfolio)
+            Section("PORTU") {
+                Label("Overview", systemImage: "chart.pie")
+                    .tag(SidebarSection.overview)
+                Label("Exposure", systemImage: "chart.bar.xaxis")
+                    .tag(SidebarSection.exposure)
+                Label("Performance", systemImage: "chart.line.uptrend.xyaxis")
+                    .tag(SidebarSection.performance)
             }
 
-            Section("Accounts") {
-                if accounts.isEmpty {
-                    Text("No accounts yet")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(accounts) { account in
-                        Label(account.name, systemImage: iconForAccount(account))
-                            .tag(SidebarSection.account(account.persistentModelID))
-                    }
-                }
+            Section("PORTFOLIO") {
+                Label("All Assets", systemImage: "bitcoinsign.circle")
+                    .tag(SidebarSection.allAssets)
+                Label("All Positions", systemImage: "list.bullet.rectangle")
+                    .tag(SidebarSection.allPositions)
+            }
+
+            Section("MANAGEMENT") {
+                Label("Accounts", systemImage: "person.2")
+                    .tag(SidebarSection.accounts)
             }
         }
         .listStyle(.sidebar)
         .navigationTitle("Portu")
-        .toolbar {
-            ToolbarItem {
-                Button("Add Account", systemImage: "plus") {
-                    // TODO: Add account flow
-                }
-            }
-        }
-    }
-
-    private func iconForAccount(_ account: Account) -> String {
-        switch account.kind {
-        case .manual: "tray"
-        case .exchange: "building.columns"
-        case .wallet: "wallet.bifold"
-        }
     }
 }

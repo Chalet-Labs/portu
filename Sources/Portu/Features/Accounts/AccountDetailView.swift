@@ -5,24 +5,33 @@ import PortuUI
 
 /// Placeholder — AccountDetailView will be rebuilt in Plan 02 with Position-based views.
 struct AccountDetailView: View {
-    let accountID: PersistentIdentifier
+    let accountID: PersistentIdentifier?
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @State private var account: Account?
 
     var body: some View {
         Group {
-            if let account {
-                accountContent(account)
+            if let accountID {
+                if let account {
+                    accountContent(account)
+                } else {
+                    ContentUnavailableView(
+                        "Account Not Found",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                }
             } else {
                 ContentUnavailableView(
-                    "Account Not Found",
-                    systemImage: "exclamationmark.triangle"
+                    "Accounts",
+                    systemImage: "person.2",
+                    description: Text("Select an account or add a new one")
                 )
             }
         }
         .task(id: accountID) {
             account = nil
+            guard let accountID else { return }
             account = try? modelContext.model(for: accountID) as? Account
         }
     }

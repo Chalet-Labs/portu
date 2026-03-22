@@ -11,10 +11,16 @@ struct ContentView: View {
             SidebarView(selection: $appState.selectedSection)
         } detail: {
             switch appState.selectedSection {
-            case .portfolio:
+            case .overview:
                 PortfolioView()
-            case .account(let id):
-                AccountDetailView(accountID: id)
+            case .accounts:
+                AccountDetailView(accountID: nil)
+            default:
+                ContentUnavailableView(
+                    appState.selectedSection.displayName,
+                    systemImage: "hammer",
+                    description: Text("Coming in a future plan")
+                )
             }
         }
         .frame(minWidth: 700, minHeight: 500)
@@ -24,9 +30,22 @@ struct ContentView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Refresh", systemImage: "arrow.clockwise") {
-                    // TODO: Trigger price refresh
+                    // TODO: Trigger sync
                 }
             }
+        }
+    }
+}
+
+extension SidebarSection {
+    var displayName: String {
+        switch self {
+        case .overview: "Overview"
+        case .exposure: "Exposure"
+        case .performance: "Performance"
+        case .allAssets: "All Assets"
+        case .allPositions: "All Positions"
+        case .accounts: "Accounts"
         }
     }
 }

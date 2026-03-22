@@ -10,13 +10,16 @@ struct StatusBarView: View {
                     .foregroundStyle(.orange)
             }
 
-            switch appState.connectionStatus {
+            switch appState.syncStatus {
             case .idle:
-                Label("Idle", systemImage: "circle")
+                Label("Ready", systemImage: "circle")
                     .foregroundStyle(.secondary)
-            case .fetching:
-                Label("Updating...", systemImage: "arrow.trianglehead.2.counterclockwise")
+            case .syncing(let progress):
+                Label("Syncing \(Int(progress * 100))%", systemImage: "arrow.trianglehead.2.counterclockwise")
                     .foregroundStyle(.secondary)
+            case .completedWithErrors(let failed):
+                Label("\(failed.count) account(s) failed", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
             case .error(let message):
                 Label(message, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.red)
