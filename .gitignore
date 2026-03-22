@@ -19,3 +19,6 @@ Package.resolved
 build/
 
 .screens/
+pnevma.toml
+.pnevma/
+.superpowers/
