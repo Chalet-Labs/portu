@@ -5,12 +5,47 @@ import PortuCore
 struct ContentView: View {
     @Environment(AppState.self) private var appState
 
+    enum Destination: Equatable {
+        case overview
+        case placeholder(title: String, message: String)
+        case accounts
+    }
+
+    static func destination(for section: SidebarSection) -> Destination {
+        switch section {
+        case .overview:
+            .overview
+        case .exposure:
+            .placeholder(
+                title: "Exposure",
+                message: "Exposure will land in a follow-on plan."
+            )
+        case .performance:
+            .placeholder(
+                title: "Performance",
+                message: "Performance charts will land in a follow-on plan."
+            )
+        case .allAssets:
+            .placeholder(
+                title: "All Assets",
+                message: "Asset drill-downs will land in a follow-on plan."
+            )
+        case .allPositions:
+            .placeholder(
+                title: "All Positions",
+                message: "Position management will land in a follow-on plan."
+            )
+        case .accounts:
+            .accounts
+        }
+    }
+
     var body: some View {
         @Bindable var appState = appState
         NavigationSplitView {
             SidebarView(selection: $appState.selectedSection)
         } detail: {
-            switch appState.selectedSection {
+            switch Self.destination(for: appState.selectedSection) {
             case .overview:
                 HSplitView {
                     PortfolioView()
@@ -19,31 +54,10 @@ struct ContentView: View {
 
                     OverviewInspector()
                 }
-            case .exposure:
-                placeholderView(
-                    title: "Exposure",
-                    message: "Exposure will land in a follow-on plan."
-                )
-            case .performance:
-                placeholderView(
-                    title: "Performance",
-                    message: "Performance charts will land in a follow-on plan."
-                )
-            case .allAssets:
-                placeholderView(
-                    title: "All Assets",
-                    message: "Asset drill-downs will land in a follow-on plan."
-                )
-            case .allPositions:
-                placeholderView(
-                    title: "All Positions",
-                    message: "Position management will land in a follow-on plan."
-                )
+            case let .placeholder(title, message):
+                placeholderView(title: title, message: message)
             case .accounts:
-                placeholderView(
-                    title: "Accounts",
-                    message: "Account management will land in a follow-on plan."
-                )
+                AccountsView()
             }
         }
         .frame(minWidth: 700, minHeight: 500)

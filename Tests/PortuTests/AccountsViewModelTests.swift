@@ -45,6 +45,10 @@ struct AccountsViewModelTests {
 
         #expect(row.usdBalance == 3_200)
     }
+
+    @Test func accountsViewExposesExpectedTableColumns() {
+        #expect(AccountsView.tableColumnTitles == ["Name", "Group", "Address", "Type", "USD Balance"])
+    }
 }
 
 @MainActor

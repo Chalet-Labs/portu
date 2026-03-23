@@ -13,4 +13,8 @@ struct NavigationTests {
         #expect(SidebarSection.allCases.contains(.performance))
         #expect(SidebarSection.allCases.contains(.allAssets))
     }
+
+    @Test func contentViewRoutesAccountsSectionToAccountsWorkspace() {
+        #expect(ContentView.destination(for: .accounts) == .accounts)
+    }
 }
