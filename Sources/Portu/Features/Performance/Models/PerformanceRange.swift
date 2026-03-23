@@ -26,6 +26,23 @@ enum PerformanceRange: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    init(
+        pickerRange: TimeRangePicker.Range
+    ) {
+        switch pickerRange {
+        case .oneWeek:
+            self = .oneWeek
+        case .oneMonth:
+            self = .oneMonth
+        case .threeMonths:
+            self = .threeMonths
+        case .oneYear:
+            self = .oneYear
+        case .yearToDate:
+            self = .yearToDate
+        }
+    }
+
     func contains(
         _ date: Date,
         relativeTo referenceDate: Date,

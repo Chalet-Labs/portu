@@ -6,6 +6,44 @@ import PortuCore
 @MainActor
 @Suite("Performance ViewModel Tests")
 struct PerformanceViewModelTests {
+    @Test func performanceChartModeDefaultsToValue() {
+        #expect(PerformanceViewModel().selectedMode == .value)
+    }
+
+    @Test func performanceControlsOnlyExposeImplementedChartModes() {
+        #expect(PerformanceView.supportedModes == [.value, .assets])
+    }
+
+    @Test func performanceViewKeepsActiveAccountSelection() {
+        let accountID = UUID(uuidString: "00000000-0000-0000-0000-000000000010")!
+        let account = Account(name: "Primary", kind: .wallet, dataSource: .zapper)
+        account.id = accountID
+
+        #expect(
+            PerformanceView.normalizedSelectedAccountID(
+                accountID,
+                activeAccounts: [account]
+            ) == accountID
+        )
+    }
+
+    @Test func performanceViewClearsStaleAccountSelection() {
+        let activeAccount = Account(name: "Primary", kind: .wallet, dataSource: .zapper)
+        activeAccount.id = UUID(uuidString: "00000000-0000-0000-0000-000000000010")!
+        let staleSelection = UUID(uuidString: "00000000-0000-0000-0000-000000000011")!
+
+        #expect(
+            PerformanceView.normalizedSelectedAccountID(
+                staleSelection,
+                activeAccounts: [activeAccount]
+            ) == nil
+        )
+    }
+
+    @Test func contentViewRoutesPerformanceSectionToPerformanceWorkspace() {
+        #expect(ContentView.destination(for: .performance) == .performance)
+    }
+
     @Test func valueModeUsesAccountSnapshotsWhenAccountIsSelected() {
         let accountID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
         let viewModel = PerformanceViewModel.fixture(selectedAccountID: accountID)
