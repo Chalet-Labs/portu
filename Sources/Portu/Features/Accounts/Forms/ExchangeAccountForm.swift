@@ -3,7 +3,25 @@ import SwiftUI
 import PortuCore
 
 struct ExchangeAccountForm: View {
+    enum SubmissionError: LocalizedError {
+        case cleanupFailed(secretPersistenceError: Error, cleanupError: Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .cleanupFailed(_, let cleanupError):
+                "Account cleanup failed after a secret persistence error: \(cleanupError.localizedDescription)"
+            }
+        }
+    }
+
     struct Submission {
+        typealias CleanupAccount = @MainActor (_ account: Account, _ modelContext: ModelContext) throws -> Void
+
+        private static let persistCleanup: CleanupAccount = { account, modelContext in
+            modelContext.delete(account)
+            try modelContext.save()
+        }
+
         var name: String
         var exchangeType: ExchangeType
         var apiKey: String
@@ -15,7 +33,8 @@ struct ExchangeAccountForm: View {
         @MainActor
         func save(
             in modelContext: ModelContext,
-            secretsCoordinator: AccountSecretsCoordinator
+            secretsCoordinator: AccountSecretsCoordinator,
+            cleanupAccount: CleanupAccount = Self.persistCleanup
         ) async throws -> Account {
             let account = Account(
                 name: name.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -43,9 +62,18 @@ struct ExchangeAccountForm: View {
                 )
                 return account
             } catch {
-                modelContext.delete(account)
-                try? modelContext.save()
-                throw error
+                let secretPersistenceError = error
+
+                do {
+                    try cleanupAccount(account, modelContext)
+                } catch {
+                    throw SubmissionError.cleanupFailed(
+                        secretPersistenceError: secretPersistenceError,
+                        cleanupError: error
+                    )
+                }
+
+                throw secretPersistenceError
             }
         }
 

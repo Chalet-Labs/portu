@@ -46,6 +46,20 @@ struct AccountsViewModelTests {
         #expect(row.usdBalance == 3_200)
     }
 
+    @Test func togglingAccountActiveStatePreservesRowButMovesFilterBucket() throws {
+        let viewModel = AccountsViewModel.fixture()
+
+        try viewModel.toggleActiveState(for: "Kraken")
+
+        #expect(viewModel.rows.first(where: { $0.name == "Kraken" })?.isActive == false)
+
+        viewModel.filter = .active
+        #expect(viewModel.visibleRows.contains(where: { $0.name == "Kraken" }) == false)
+
+        viewModel.filter = .inactive
+        #expect(viewModel.visibleRows.contains(where: { $0.name == "Kraken" }))
+    }
+
     @Test func accountsViewExposesExpectedTableColumns() {
         #expect(AccountsView.tableColumnTitles == ["Name", "Group", "Address", "Type", "USD Balance"])
     }

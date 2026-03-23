@@ -67,6 +67,10 @@ actor CleanupFailingSecretStore: SecretStore {
     }
 }
 
+fileprivate enum CleanupFailure: Error, Equatable {
+    case deleteSaveFailed
+}
+
 fileprivate struct StoredExchangeSecrets: Equatable {
     let apiKey: String?
     let apiSecret: String?
@@ -78,6 +82,11 @@ fileprivate struct StoredExchangeSecrets: Equatable {
 struct AddAccountSheetTests {
     @Test func addAccountSheetExposesAllEntryTabs() {
         #expect(AddAccountSheet.tabTitles == ["Chain Account", "Manual Account", "Exchange Account"])
+    }
+
+    @Test func addAccountSheetExposesBulkImportPlaceholder() {
+        #expect(AddAccountSheet.bulkImportTitle == "Bulk Import")
+        #expect(AddAccountSheet.bulkImportHelp == "Coming soon")
     }
 
     @Test func chainAccountFormCreatesNilChainForEVMAddress() throws {
@@ -170,7 +179,7 @@ struct AddAccountSheetTests {
                 passphrase: ""
             )
             Issue.record("Expected cleanup failure")
-        } catch let error as KeychainError {
+        } catch let error {
             switch error {
             case .unexpectedStatus(let status):
                 #expect(status == -2)
@@ -181,6 +190,39 @@ struct AddAccountSheetTests {
 
         let persistedKey = try await secretStore.value(for: .exchangeAPIKey(accountID))
         #expect(persistedKey == "key")
+    }
+
+    @Test func exchangeAccountFormSurfacesCleanupFailureWhenDeleteSaveFails() async throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let submission = ExchangeAccountForm.Submission(
+            name: "Kraken",
+            exchangeType: .kraken,
+            apiKey: "key",
+            apiSecret: "secret",
+            passphrase: "passphrase"
+        )
+
+        do {
+            _ = try await submission.save(
+                in: container.mainContext,
+                secretsCoordinator: AccountSecretsCoordinator(secretStore: FailingSecretStore()),
+                cleanupAccount: { account, modelContext in
+                    modelContext.delete(account)
+                    throw CleanupFailure.deleteSaveFailed
+                }
+            )
+            Issue.record("Expected cleanup failure")
+        } catch let error as ExchangeAccountForm.SubmissionError {
+            switch error {
+            case .cleanupFailed(let secretPersistenceError, let cleanupError):
+                #expect(secretPersistenceError is KeychainError)
+                #expect((cleanupError as? CleanupFailure) == .deleteSaveFailed)
+            }
+        }
+
+        let verificationContext = ModelContext(container)
+        let accounts = try verificationContext.fetch(FetchDescriptor<Account>())
+        #expect(accounts.count == 1)
     }
 }
 

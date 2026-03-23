@@ -7,10 +7,12 @@ struct AccountsView: View {
     static let navigationTitle = "Accounts"
     static let tableColumnTitles = ["Name", "Group", "Address", "Type", "USD Balance"]
 
+    @Environment(\.modelContext) private var modelContext
     @Query private var accounts: [Account]
     @State private var searchText = ""
     @State private var filter: AccountFilter = .all
     @State private var selectedGroup = ""
+    @State private var isPresentingAddAccount = false
 
     private var viewModel: AccountsViewModel {
         let viewModel = AccountsViewModel(accounts: accounts)
@@ -45,7 +47,14 @@ struct AccountsView: View {
             }
 
             Table(viewModel.visibleRows) {
-                TableColumn(Self.tableColumnTitles[0], value: \.name)
+                TableColumn(Self.tableColumnTitles[0]) { row in
+                    Text(row.name)
+                        .contextMenu {
+                            Button(viewModel.toggleActionTitle(for: row)) {
+                                toggleActiveState(for: row, using: viewModel)
+                            }
+                        }
+                }
                 TableColumn(Self.tableColumnTitles[1], value: \.groupName)
                 TableColumn(Self.tableColumnTitles[2], value: \.secondaryLabel)
                 TableColumn(Self.tableColumnTitles[3], value: \.typeLabel)
@@ -57,5 +66,31 @@ struct AccountsView: View {
         .padding()
         .searchable(text: $searchText, prompt: "Search accounts")
         .navigationTitle(Self.navigationTitle)
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button(AddAccountSheet.bulkImportTitle, systemImage: "square.and.arrow.down") {
+                }
+                .disabled(true)
+                .help(AddAccountSheet.bulkImportHelp)
+
+                Button("Add Account", systemImage: "plus") {
+                    isPresentingAddAccount = true
+                }
+            }
+        }
+        .sheet(isPresented: $isPresentingAddAccount) {
+            AddAccountSheet {
+                isPresentingAddAccount = false
+            }
+        }
+    }
+
+    private func toggleActiveState(for row: AccountRowModel, using viewModel: AccountsViewModel) {
+        do {
+            try viewModel.toggleActiveState(for: row.id)
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+        }
     }
 }

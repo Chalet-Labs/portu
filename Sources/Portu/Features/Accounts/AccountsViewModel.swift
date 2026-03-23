@@ -1,6 +1,10 @@
 import Foundation
 import PortuCore
 
+enum AccountsViewModelError: Error {
+    case accountNotFound(String)
+}
+
 @MainActor
 @Observable
 final class AccountsViewModel {
@@ -8,8 +12,10 @@ final class AccountsViewModel {
     var filter: AccountFilter = .all
     var selectedGroup: String?
     var rows: [AccountRowModel]
+    private let accountLookup: [UUID: Account]
 
     init(accounts: [Account] = []) {
+        accountLookup = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0) })
         rows = Self.makeRows(from: accounts)
     }
 
@@ -30,6 +36,27 @@ final class AccountsViewModel {
             )
         )
         .sorted()
+    }
+
+    func toggleActiveState(for name: String) throws {
+        guard let rowID = rows.first(where: { $0.name == name })?.id else {
+            throw AccountsViewModelError.accountNotFound(name)
+        }
+
+        try toggleActiveState(for: rowID)
+    }
+
+    func toggleActiveState(for id: UUID) throws {
+        guard let account = accountLookup[id] else {
+            throw AccountsViewModelError.accountNotFound(id.uuidString)
+        }
+
+        account.isActive.toggle()
+        refreshRows()
+    }
+
+    func toggleActionTitle(for row: AccountRowModel) -> String {
+        row.isActive ? "Mark Inactive" : "Mark Active"
     }
 
     private func matchesSearch(_ row: AccountRowModel) -> Bool {
@@ -108,5 +135,9 @@ final class AccountsViewModel {
         }
 
         return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+    }
+
+    private func refreshRows() {
+        rows = Self.makeRows(from: Array(accountLookup.values))
     }
 }

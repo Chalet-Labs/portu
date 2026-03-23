@@ -2,6 +2,8 @@ import SwiftUI
 
 struct AddAccountSheet: View {
     static let tabTitles = ["Chain Account", "Manual Account", "Exchange Account"]
+    static let bulkImportTitle = "Bulk Import"
+    static let bulkImportHelp = "Coming soon"
 
     private let secretsCoordinator: AccountSecretsCoordinator
     private let onComplete: @MainActor () -> Void
