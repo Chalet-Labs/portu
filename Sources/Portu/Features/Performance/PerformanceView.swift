@@ -4,7 +4,7 @@ import PortuCore
 
 struct PerformanceView: View {
     static let navigationTitle = "Performance"
-    static let supportedModes: [PerformanceChartMode] = [.value, .assets]
+    static let supportedModes: [PerformanceChartMode] = PerformanceChartMode.allCases
 
     @Query(sort: \PortfolioSnapshot.timestamp) private var portfolioSnapshots: [PortfolioSnapshot]
     @Query(sort: \AccountSnapshot.timestamp) private var accountSnapshots: [AccountSnapshot]
@@ -43,6 +43,10 @@ struct PerformanceView: View {
     }
 
     var body: some View {
+        let currentViewModel = viewModel
+        let categorySummaryRows = currentViewModel.categorySummaryRows
+        let assetPriceRows = currentViewModel.assetPriceRows
+
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 PerformanceControls(
@@ -55,8 +59,20 @@ struct PerformanceView: View {
 
                 PerformanceChartSection(
                     supportedModes: Self.supportedModes,
-                    viewModel: viewModel
+                    viewModel: currentViewModel
                 )
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 20) {
+                        AssetCategoriesPanel(rows: categorySummaryRows)
+                        AssetPricesPanel(rows: assetPriceRows)
+                    }
+
+                    VStack(alignment: .leading, spacing: 20) {
+                        AssetCategoriesPanel(rows: categorySummaryRows)
+                        AssetPricesPanel(rows: assetPriceRows)
+                    }
+                }
             }
             .padding()
         }

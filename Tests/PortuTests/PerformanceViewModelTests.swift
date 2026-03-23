@@ -10,8 +10,8 @@ struct PerformanceViewModelTests {
         #expect(PerformanceViewModel().selectedMode == .value)
     }
 
-    @Test func performanceControlsOnlyExposeImplementedChartModes() {
-        #expect(PerformanceView.supportedModes == [.value, .assets])
+    @Test func performanceControlsExposeAllChartModes() {
+        #expect(PerformanceView.supportedModes == PerformanceChartMode.allCases)
     }
 
     @Test func performanceViewKeepsActiveAccountSelection() {

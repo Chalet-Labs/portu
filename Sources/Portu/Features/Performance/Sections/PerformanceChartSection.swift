@@ -14,7 +14,8 @@ struct PerformanceChartSection: View {
                 subtitle: subtitle
             )
 
-            if displayedMode == .value {
+            switch displayedMode {
+            case .value:
                 if viewModel.valuePoints.isEmpty {
                     emptyState("Sync to start building performance history.")
                 } else {
@@ -39,7 +40,7 @@ struct PerformanceChartSection: View {
                     }
                     .frame(height: 260)
                 }
-            } else {
+            case .assets:
                 if viewModel.assetStacks.isEmpty {
                     emptyState("Sync more asset snapshots to build category charts.")
                 } else {
@@ -58,6 +59,19 @@ struct PerformanceChartSection: View {
                     .frame(height: 260)
                     .chartLegend(position: .bottom)
                 }
+            case .pnl:
+                if viewModel.pnlBars.isEmpty {
+                    emptyState("Sync multiple snapshots to build daily profit and loss.")
+                } else {
+                    Chart(viewModel.pnlBars) { bar in
+                        BarMark(
+                            x: .value("Timestamp", bar.date),
+                            y: .value("PnL", doubleValue(bar.value))
+                        )
+                        .foregroundStyle(bar.value < .zero ? Color.red : Color.green)
+                    }
+                    .frame(height: 260)
+                }
             }
         }
         .padding(20)
@@ -66,18 +80,24 @@ struct PerformanceChartSection: View {
     }
 
     private var title: String {
-        if displayedMode == .value {
+        switch displayedMode {
+        case .value:
             "Portfolio Value"
-        } else {
+        case .assets:
             "Asset Categories"
+        case .pnl:
+            "Profit and Loss"
         }
     }
 
     private var subtitle: String {
-        if displayedMode == .value {
+        switch displayedMode {
+        case .value:
             "Portfolio and account snapshots over the selected range"
-        } else {
+        case .assets:
             "Gross asset balances stacked by category"
+        case .pnl:
+            "Daily mark-to-market deltas from the selected snapshot series"
         }
     }
 

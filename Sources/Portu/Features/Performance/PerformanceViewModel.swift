@@ -1,6 +1,33 @@
 import Foundation
 import PortuCore
 
+struct CategorySummaryRow: Identifiable, Equatable, Sendable {
+    let category: AssetCategory
+    let startValue: Decimal
+    let endValue: Decimal
+
+    var id: AssetCategory { category }
+    var hasDefinedChangePercent: Bool { startValue != .zero }
+    var changeValue: Decimal { endValue - startValue }
+    var changePercent: Decimal {
+        percentChange(from: startValue, to: endValue)
+    }
+}
+
+struct AssetPriceRow: Identifiable, Equatable, Sendable {
+    let assetID: UUID
+    let symbol: String
+    let startPrice: Decimal
+    let endPrice: Decimal
+    let latestValue: Decimal
+
+    var id: UUID { assetID }
+    var hasDefinedChangePercent: Bool { startPrice != .zero }
+    var changePercent: Decimal {
+        percentChange(from: startPrice, to: endPrice)
+    }
+}
+
 @MainActor
 @Observable
 final class PerformanceViewModel {
@@ -63,6 +90,107 @@ final class PerformanceViewModel {
             }
     }
 
+    var pnlBars: [PnLBarPoint] {
+        let points = dailyClosingValuePoints
+        guard points.count > 1 else {
+            return []
+        }
+
+        var bars: [PnLBarPoint] = []
+        var cumulativeValue = Decimal.zero
+
+        for index in 1..<points.count {
+            let previousDate = calendar.startOfDay(for: points[index - 1].date)
+            let currentDate = calendar.startOfDay(for: points[index].date)
+            let dayGap = calendar.dateComponents([.day], from: previousDate, to: currentDate).day
+
+            guard dayGap == 1 else {
+                continue
+            }
+
+            let delta = points[index].value - points[index - 1].value
+            cumulativeValue += delta
+
+            bars.append(
+                PnLBarPoint(
+                    date: points[index].date,
+                    value: delta,
+                    cumulativeValue: cumulativeValue
+                )
+            )
+        }
+
+        return bars
+    }
+
+    var categorySummaryRows: [CategorySummaryRow] {
+        let snapshots = filteredAssetSnapshots
+        guard let startTimestamp = snapshots.map(\.timestamp).min(),
+              let endTimestamp = snapshots.map(\.timestamp).max()
+        else {
+            return []
+        }
+
+        let startTotals = categoryTotals(at: startTimestamp, snapshots: snapshots)
+        let endTotals = categoryTotals(at: endTimestamp, snapshots: snapshots)
+        let categories = Set(startTotals.keys).union(endTotals.keys)
+
+        return categories
+            .map { category in
+                CategorySummaryRow(
+                    category: category,
+                    startValue: startTotals[category, default: .zero],
+                    endValue: endTotals[category, default: .zero]
+                )
+            }
+            .filter { $0.startValue != .zero || $0.endValue != .zero }
+            .sorted { lhs, rhs in
+                if lhs.endValue == rhs.endValue {
+                    return lhs.category.rawValue < rhs.category.rawValue
+                }
+
+                return lhs.endValue > rhs.endValue
+            }
+    }
+
+    var assetPriceRows: [AssetPriceRow] {
+        let snapshots = filteredAssetSnapshots
+        guard let startTimestamp = snapshots.map(\.timestamp).min(),
+              let endTimestamp = snapshots.map(\.timestamp).max()
+        else {
+            return []
+        }
+
+        return Dictionary(grouping: snapshots, by: \.assetId)
+            .compactMap { assetID, assetSnapshots in
+                let startSnapshots = assetSnapshots.filter { $0.timestamp == startTimestamp }
+                let endSnapshots = assetSnapshots.filter { $0.timestamp == endTimestamp }
+                let symbol = (endSnapshots.first ?? assetSnapshots.first)?.symbol ?? "Asset"
+                let latestValue = endSnapshots.reduce(.zero) { partial, snapshot in
+                    partial + snapshot.usdValue
+                }
+
+                guard let endPrice = weightedPrice(for: endSnapshots) else {
+                    return nil
+                }
+
+                return AssetPriceRow(
+                    assetID: assetID,
+                    symbol: symbol,
+                    startPrice: weightedPrice(for: startSnapshots) ?? .zero,
+                    endPrice: endPrice,
+                    latestValue: latestValue
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.latestValue == rhs.latestValue {
+                    return lhs.symbol < rhs.symbol
+                }
+
+                return lhs.latestValue > rhs.latestValue
+            }
+    }
+
     init(
         portfolioSnapshots: [PortfolioSnapshot] = [],
         accountSnapshots: [AccountSnapshot] = [],
@@ -114,6 +242,48 @@ final class PerformanceViewModel {
             )
         }
     }
+
+    private var dailyClosingValuePoints: [PerformancePoint] {
+        Dictionary(grouping: valuePoints) { point in
+            calendar.startOfDay(for: point.date)
+        }
+        .values
+        .compactMap { dailyPoints in
+            dailyPoints.max { lhs, rhs in
+                lhs.date < rhs.date
+            }
+        }
+        .sorted { lhs, rhs in
+            lhs.date < rhs.date
+        }
+    }
+
+    private func categoryTotals(
+        at timestamp: Date,
+        snapshots: [AssetSnapshot]
+    ) -> [AssetCategory: Decimal] {
+        snapshots
+            .filter { $0.timestamp == timestamp }
+            .reduce(into: [AssetCategory: Decimal]()) { partialResult, snapshot in
+                partialResult[snapshot.category, default: .zero] += snapshot.usdValue
+            }
+    }
+
+    private func weightedPrice(
+        for snapshots: [AssetSnapshot]
+    ) -> Decimal? {
+        let totalAmount = snapshots.reduce(.zero) { partial, snapshot in
+            partial + snapshot.amount
+        }
+        guard totalAmount != .zero else {
+            return nil
+        }
+
+        let totalValue = snapshots.reduce(.zero) { partial, snapshot in
+            partial + snapshot.usdValue
+        }
+        return totalValue / totalAmount
+    }
 }
 
 private func compareSnapshotDates<Snapshot>(
@@ -143,4 +313,15 @@ private func compareSnapshotDates(
     _ rhs: AssetSnapshot
 ) -> Bool {
     compareSnapshotDates(lhs, rhs, timestamp: \.timestamp)
+}
+
+private func percentChange(
+    from startValue: Decimal,
+    to endValue: Decimal
+) -> Decimal {
+    guard startValue != .zero else {
+        return .zero
+    }
+
+    return ((endValue - startValue) / startValue) * 100
 }
