@@ -6,6 +6,10 @@ import PortuCore
 @MainActor
 @Suite("All Assets Export Tests")
 struct AllAssetsExportTests {
+    @Test func nftTabShowsComingSoonPlaceholder() {
+        #expect(NFTPlaceholderTabView.placeholderText == "NFT tracking coming soon")
+    }
+
     @Test func csvExporterWritesHeaderAndRows() throws {
         let csv = AssetsCSVExporter().makeCSV(rows: [.fixture(symbol: "ETH")])
 
@@ -106,11 +110,19 @@ struct AllAssetsExportTests {
 
         #expect(sorted.map(\.name) == ["Alpha Dollar", "Zeta Dollar"])
     }
+
+    @Test func assetsTabUsesAssetIdentifierForDrillInRows() {
+        let assetID = UUID()
+        let row = AssetTableRow.fixture(symbol: "ETH", assetID: assetID)
+
+        #expect(AssetsTabView.drillInAssetID(for: row) == assetID)
+    }
 }
 
 private extension AssetTableRow {
     nonisolated static func fixture(
         symbol: String = "ETH",
+        assetID: UUID? = nil,
         name: String? = nil,
         category: AssetCategory = .major,
         netAmount: Decimal = 1.25,
@@ -121,7 +133,7 @@ private extension AssetTableRow {
 
         return AssetTableRow(
             id: "asset:\(symbol)",
-            assetID: nil,
+            assetID: assetID,
             symbol: symbol,
             name: resolvedName,
             category: category,

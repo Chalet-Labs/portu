@@ -38,15 +38,11 @@ struct AllAssetsView: View {
                 }
                 .tag(AllAssetsTab.assets)
 
-            placeholderTab(
-                title: "NFT tracking coming soon",
-                message: "NFT tracking will land in a follow-on task.",
-                systemImage: AllAssetsTab.nfts.systemImage
-            )
-            .tabItem {
-                Label(AllAssetsTab.nfts.title, systemImage: AllAssetsTab.nfts.systemImage)
-            }
-            .tag(AllAssetsTab.nfts)
+            NFTPlaceholderTabView()
+                .tabItem {
+                    Label(AllAssetsTab.nfts.title, systemImage: AllAssetsTab.nfts.systemImage)
+                }
+                .tag(AllAssetsTab.nfts)
 
             PlatformsTabView(rows: viewModel.platformRows)
                 .tabItem {
@@ -61,18 +57,5 @@ struct AllAssetsView: View {
                 .tag(AllAssetsTab.networks)
         }
         .navigationTitle(Self.navigationTitle)
-    }
-
-    @ViewBuilder
-    private func placeholderTab(
-        title: String,
-        message: String,
-        systemImage: String
-    ) -> some View {
-        ContentUnavailableView {
-            Label(title, systemImage: systemImage)
-        } description: {
-            Text(message)
-        }
     }
 }

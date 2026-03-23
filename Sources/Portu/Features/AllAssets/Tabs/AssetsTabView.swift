@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import PortuCore
 import PortuUI
 
 struct AssetsTabView: View {
@@ -27,6 +28,12 @@ struct AssetsTabView: View {
         AssetRowComparator(column: .value, order: .reverse),
         AssetRowComparator(column: .symbol)
     ]
+
+    static func drillInAssetID(
+        for row: AssetTableRow
+    ) -> Asset.ID? {
+        row.assetID
+    }
 
     let rows: [AssetTableRow]
     let groups: [AssetRowGroup]
@@ -99,10 +106,10 @@ struct AssetsTabView: View {
     ) -> some View {
         Table(sortedRows(rows), sortOrder: $sortOrder) {
             TableColumn(SortColumn.symbol.title, sortUsing: SortColumn.symbol.comparator) { row in
-                Text(row.symbol)
+                assetDrillInLabel(row.symbol, row: row)
             }
             TableColumn(SortColumn.name.title, sortUsing: SortColumn.name.comparator) { row in
-                Text(row.name)
+                assetDrillInLabel(row.name, row: row)
             }
             TableColumn(SortColumn.category.title, sortUsing: SortColumn.category.comparator) { row in
                 Text(row.categoryTitle)
@@ -116,6 +123,20 @@ struct AssetsTabView: View {
             TableColumn(SortColumn.value.title, sortUsing: SortColumn.value.comparator) { row in
                 CurrencyText(row.value)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func assetDrillInLabel(
+        _ title: String,
+        row: AssetTableRow
+    ) -> some View {
+        if let assetID = Self.drillInAssetID(for: row) {
+            NavigationLink(value: assetID) {
+                Text(title)
+            }
+        } else {
+            Text(title)
         }
     }
 
