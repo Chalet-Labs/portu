@@ -9,6 +9,7 @@ struct ContentView: View {
         case overview
         case placeholder(title: String, message: String)
         case accounts
+        case allAssets
     }
 
     static func destination(for section: SidebarSection) -> Destination {
@@ -26,10 +27,7 @@ struct ContentView: View {
                 message: "Performance charts will land in a follow-on plan."
             )
         case .allAssets:
-            .placeholder(
-                title: "All Assets",
-                message: "Asset drill-downs will land in a follow-on plan."
-            )
+            .allAssets
         case .allPositions:
             .placeholder(
                 title: "All Positions",
@@ -58,6 +56,8 @@ struct ContentView: View {
                 placeholderView(title: title, message: message)
             case .accounts:
                 AccountsView()
+            case .allAssets:
+                AllAssetsView()
             }
         }
         .frame(minWidth: 700, minHeight: 500)

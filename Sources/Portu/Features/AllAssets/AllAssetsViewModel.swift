@@ -1,6 +1,12 @@
 import Foundation
 import PortuCore
 
+struct AssetRowGroup: Identifiable, Equatable, Sendable {
+    let id: String
+    let title: String
+    let rows: [AssetTableRow]
+}
+
 @MainActor
 @Observable
 final class AllAssetsViewModel {
@@ -27,6 +33,10 @@ final class AllAssetsViewModel {
         return projectedAssetRows.filter { row in
             row.searchIndex.contains(query)
         }
+    }
+
+    var groupedAssetRows: [AssetRowGroup] {
+        Self.makeAssetGroups(rows: assetRows, grouping: grouping)
     }
 
     var platformRows: [PlatformTableRow] {
@@ -332,5 +342,49 @@ final class AllAssetsViewModel {
         }
 
         return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+    }
+
+    private static func makeAssetGroups(
+        rows: [AssetTableRow],
+        grouping: AllAssetsGrouping
+    ) -> [AssetRowGroup] {
+        let groupedRows = rows.reduce(into: [String: [AssetTableRow]]()) { partialResult, row in
+            for title in groupTitles(for: row, grouping: grouping) {
+                partialResult[title, default: []].append(row)
+            }
+        }
+
+        return groupedRows
+            .map { title, rows in
+                AssetRowGroup(
+                    id: title,
+                    title: title,
+                    rows: rows
+                )
+            }
+            .sorted {
+                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
+            }
+    }
+
+    private static func groupTitles(
+        for row: AssetTableRow,
+        grouping: AllAssetsGrouping
+    ) -> [String] {
+        switch grouping {
+        case .category:
+            return [row.category.rawValue.capitalized]
+        case .priceSource:
+            switch row.priceSource {
+            case .live:
+                return ["Live"]
+            case .syncFallback:
+                return ["Sync Fallback"]
+            case nil:
+                return ["Unavailable"]
+            }
+        case .accountGroup:
+            return row.accountGroups.isEmpty ? ["Ungrouped"] : row.accountGroups
+        }
     }
 }

@@ -69,6 +69,84 @@ struct AllAssetsViewModelTests {
         #expect(viewModel.assetRows.isEmpty)
         #expect(viewModel.networkRows.isEmpty)
     }
+
+    @Test func groupedAssetRowsFollowSelectedGrouping() throws {
+        let viewModel = AllAssetsViewModel.fixture()
+        viewModel.grouping = .accountGroup
+
+        #expect(viewModel.groupedAssetRows.map(\.title) == ["Core", "Custody"])
+
+        let core = try #require(viewModel.groupedAssetRows.first(where: { $0.title == "Core" }))
+        #expect(core.rows.map(\.symbol) == ["stETH", "ETH"])
+    }
+
+    @Test func accountGroupGroupingDuplicatesAssetsHeldAcrossGroups() throws {
+        let core = Account(
+            name: "Core Wallet",
+            kind: .wallet,
+            dataSource: .zapper,
+            group: "Core"
+        )
+        let custody = Account(
+            name: "Custody Exchange",
+            kind: .exchange,
+            dataSource: .exchange,
+            exchangeType: .kraken,
+            group: "Custody"
+        )
+        let eth = Asset(
+            symbol: "ETH",
+            name: "Ethereum",
+            coinGeckoId: "ethereum",
+            category: .major,
+            isVerified: true
+        )
+
+        let corePosition = Position(
+            positionType: .idle,
+            netUSDValue: 3_200,
+            chain: .ethereum,
+            protocolName: "Wallet",
+            account: core
+        )
+        corePosition.tokens = [
+            PositionToken(
+                role: .balance,
+                amount: 1,
+                usdValue: 3_200,
+                asset: eth,
+                position: corePosition
+            )
+        ]
+
+        let custodyPosition = Position(
+            positionType: .idle,
+            netUSDValue: 1_600,
+            protocolName: "Kraken",
+            account: custody
+        )
+        custodyPosition.tokens = [
+            PositionToken(
+                role: .balance,
+                amount: 0.5,
+                usdValue: 1_600,
+                asset: eth,
+                position: custodyPosition
+            )
+        ]
+
+        let viewModel = AllAssetsViewModel(
+            positions: [corePosition, custodyPosition],
+            livePrices: ["ethereum": 3_200]
+        )
+        viewModel.grouping = .accountGroup
+
+        let coreGroup = try #require(viewModel.groupedAssetRows.first(where: { $0.title == "Core" }))
+        let custodyGroup = try #require(viewModel.groupedAssetRows.first(where: { $0.title == "Custody" }))
+
+        #expect(coreGroup.rows.map(\.symbol) == ["ETH"])
+        #expect(custodyGroup.rows.map(\.symbol) == ["ETH"])
+    }
 }
 
 @MainActor
@@ -77,13 +155,15 @@ private extension AllAssetsViewModel {
         let wallet = Account(
             name: "Main Wallet",
             kind: .wallet,
-            dataSource: .zapper
+            dataSource: .zapper,
+            group: "Core"
         )
         let exchange = Account(
             name: "Kraken",
             kind: .exchange,
             dataSource: .exchange,
-            exchangeType: .kraken
+            exchangeType: .kraken,
+            group: "Custody"
         )
         let inactive = Account(
             name: "Dormant",
