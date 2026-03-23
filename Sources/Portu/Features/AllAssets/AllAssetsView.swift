@@ -48,25 +48,17 @@ struct AllAssetsView: View {
             }
             .tag(AllAssetsTab.nfts)
 
-            placeholderTab(
-                title: "Platforms",
-                message: "Platform summaries will land in the next task.",
-                systemImage: AllAssetsTab.platforms.systemImage
-            )
-            .tabItem {
-                Label(AllAssetsTab.platforms.title, systemImage: AllAssetsTab.platforms.systemImage)
-            }
-            .tag(AllAssetsTab.platforms)
+            PlatformsTabView(rows: viewModel.platformRows)
+                .tabItem {
+                    Label(AllAssetsTab.platforms.title, systemImage: AllAssetsTab.platforms.systemImage)
+                }
+                .tag(AllAssetsTab.platforms)
 
-            placeholderTab(
-                title: "Networks",
-                message: "Network summaries will land in the next task.",
-                systemImage: AllAssetsTab.networks.systemImage
-            )
-            .tabItem {
-                Label(AllAssetsTab.networks.title, systemImage: AllAssetsTab.networks.systemImage)
-            }
-            .tag(AllAssetsTab.networks)
+            NetworksTabView(rows: viewModel.networkRows)
+                .tabItem {
+                    Label(AllAssetsTab.networks.title, systemImage: AllAssetsTab.networks.systemImage)
+                }
+                .tag(AllAssetsTab.networks)
         }
         .navigationTitle(Self.navigationTitle)
     }

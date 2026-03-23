@@ -147,6 +147,23 @@ struct AllAssetsViewModelTests {
         #expect(coreGroup.rows.map(\.symbol) == ["ETH"])
         #expect(custodyGroup.rows.map(\.symbol) == ["ETH"])
     }
+
+    @Test func platformRowsSortByUsdBalanceDescending() {
+        let rows = AllAssetsViewModel.fixture().platformRows
+
+        #expect(rows.map(\.name) == ["Lido", "Aave V3"])
+    }
+
+    @Test func networkRowsSortByUsdBalanceDescending() {
+        let rows = AllAssetsViewModel.fixture().networkRows
+
+        #expect(rows.map(\.title) == ["Ethereum", "Off-chain / Custodial"])
+    }
+
+    @Test func derivedTabsExposeExpectedTableColumns() {
+        #expect(PlatformsTabView.tableColumnTitles == ["Platform", "Share %", "# Networks", "# Positions", "USD Balance"])
+        #expect(NetworksTabView.tableColumnTitles == ["Network", "Share %", "# Positions", "USD Balance"])
+    }
 }
 
 @MainActor
