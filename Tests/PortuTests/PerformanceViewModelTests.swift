@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import PortuCore
+import PortuUI
 @testable import Portu
 
 @MainActor
@@ -57,6 +58,79 @@ struct PerformanceViewModelTests {
 
         #expect(category.value == 1_500)
         #expect(category.usesAccountSnapshot == false)
+    }
+
+    @Test func disablingCategoryRemovesItsAreaSeries() {
+        let viewModel = PerformanceViewModel.fixture()
+        viewModel.enabledCategories.remove(.stablecoin)
+
+        #expect(viewModel.assetStacks[.stablecoin] == nil)
+    }
+
+    @Test func partialSeriesCollectsFailedAccountIDsForWarnings() {
+        let staleAccountID = UUID(uuidString: "00000000-0000-0000-0000-000000000021")!
+        let viewModel = PerformanceViewModel.partialWarningFixture()
+
+        #expect(viewModel.partialAccountIDs == [staleAccountID])
+    }
+
+    @Test func performanceViewBuildsWarningBadgeFromPartialAccountIDs() {
+        let accountID = UUID(uuidString: "00000000-0000-0000-0000-000000000021")!
+        let account = Account(name: "Secondary", kind: .wallet, dataSource: .zapper)
+        account.id = accountID
+
+        #expect(
+            PerformanceView.partialWarningStatus(
+                partialAccountIDs: [accountID],
+                accounts: [account]
+            ) == .completedWithErrors(failedAccounts: ["Secondary"])
+        )
+    }
+
+    @Test func performanceViewPreservesUnknownFailedAccountCount() {
+        let firstAccountID = UUID(uuidString: "00000000-0000-0000-0000-000000000031")!
+        let secondAccountID = UUID(uuidString: "00000000-0000-0000-0000-000000000032")!
+
+        #expect(
+            PerformanceView.partialWarningStatus(
+                partialAccountIDs: [firstAccountID, secondAccountID],
+                accounts: []
+            ) == .completedWithErrors(
+                failedAccounts: ["Unknown account", "Unknown account"]
+            )
+        )
+    }
+
+    @Test func performanceViewUsesInactiveAccountNamesInWarningBadge() {
+        let accountID = UUID(uuidString: "00000000-0000-0000-0000-000000000033")!
+        let account = Account(name: "Archived", kind: .wallet, dataSource: .zapper)
+        account.id = accountID
+        account.isActive = false
+
+        #expect(
+            PerformanceView.partialWarningStatus(
+                partialAccountIDs: [accountID],
+                accounts: [account]
+            ) == .completedWithErrors(failedAccounts: ["Archived"])
+        )
+    }
+
+    @Test func performanceControlsKeepLastCategoryEnabled() {
+        #expect(
+            PerformanceControls.toggledCategories(
+                Set([.major]),
+                toggling: .major
+            ) == Set([.major])
+        )
+    }
+
+    @Test func performanceControlsExposeChipSelectionState() {
+        #expect(PerformanceControls.chipSymbolName(isEnabled: true) == "checkmark")
+        #expect(PerformanceControls.chipSymbolName(isEnabled: false) == nil)
+        #expect(PerformanceControls.chipAccessibilityValue(isEnabled: true) == "Selected")
+        #expect(
+            PerformanceControls.chipAccessibilityValue(isEnabled: false) == "Not selected"
+        )
     }
 
     @Test func selectedRangeExcludesSnapshotsOutsideTheWindow() {
@@ -282,6 +356,47 @@ private extension PerformanceViewModel {
         )
         viewModel.selectedAccountID = selectedAccountID
         viewModel.selectedRange = selectedRange
+        return viewModel
+    }
+
+    static func partialWarningFixture(
+        selectedAccountID: UUID? = nil
+    ) -> PerformanceViewModel {
+        let batchID = UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")!
+        let freshAccountID = UUID(uuidString: "00000000-0000-0000-0000-000000000020")!
+        let staleAccountID = UUID(uuidString: "00000000-0000-0000-0000-000000000021")!
+        let latest = Date(timeIntervalSince1970: 1_774_137_600) // 2026-03-22T12:00:00Z
+        let viewModel = PerformanceViewModel(
+            portfolioSnapshots: [
+                PortfolioSnapshot(
+                    syncBatchId: batchID,
+                    timestamp: latest,
+                    totalValue: 3_500,
+                    idleValue: 1_100,
+                    deployedValue: 2_400,
+                    debtValue: 0,
+                    isPartial: true
+                )
+            ],
+            accountSnapshots: [
+                AccountSnapshot(
+                    syncBatchId: batchID,
+                    timestamp: latest,
+                    accountId: freshAccountID,
+                    totalValue: 1_500,
+                    isFresh: true
+                ),
+                AccountSnapshot(
+                    syncBatchId: batchID,
+                    timestamp: latest,
+                    accountId: staleAccountID,
+                    totalValue: 2_000,
+                    isFresh: false
+                )
+            ]
+        )
+        viewModel.selectedAccountID = selectedAccountID
+        viewModel.selectedRange = .oneMonth
         return viewModel
     }
 }

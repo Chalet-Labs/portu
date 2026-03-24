@@ -90,6 +90,37 @@ final class PerformanceViewModel {
             }
     }
 
+    var partialAccountIDs: Set<UUID> {
+        if let selectedAccountID {
+            let hasStaleSnapshots = filteredAccountSnapshots(for: selectedAccountID)
+                .contains { snapshot in
+                    snapshot.isFresh == false
+                }
+            return hasStaleSnapshots ? [selectedAccountID] : []
+        }
+
+        let partialBatchIDs = Set(
+            filteredPortfolioSnapshots
+                .filter(\.isPartial)
+                .map(\.syncBatchId)
+        )
+        guard !partialBatchIDs.isEmpty else {
+            return []
+        }
+
+        return Set(
+            accountSnapshots
+                .filter { snapshot in
+                    partialBatchIDs.contains(snapshot.syncBatchId) && snapshot.isFresh == false
+                }
+                .map(\.accountId)
+        )
+    }
+
+    var currentSeriesContainsPartialSnapshots: Bool {
+        !partialAccountIDs.isEmpty
+    }
+
     var pnlBars: [PnLBarPoint] {
         let points = dailyClosingValuePoints
         guard points.count > 1 else {

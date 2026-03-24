@@ -1,6 +1,7 @@
 import SwiftData
 import SwiftUI
 import PortuCore
+import PortuUI
 
 struct PerformanceView: View {
     static let navigationTitle = "Performance"
@@ -14,6 +15,7 @@ struct PerformanceView: View {
     @State private var selectedMode: PerformanceChartMode = .value
     @State private var selectedRange: PerformanceRange = .oneMonth
     @State private var selectedAccountID: UUID?
+    @State private var enabledCategories: Set<AssetCategory> = Set(AssetCategory.allCases)
 
     private var viewModel: PerformanceViewModel {
         let viewModel = PerformanceViewModel(
@@ -24,6 +26,7 @@ struct PerformanceView: View {
         viewModel.selectedMode = selectedMode
         viewModel.selectedRange = selectedRange
         viewModel.selectedAccountID = normalizedSelectedAccountID
+        viewModel.enabledCategories = enabledCategories
         return viewModel
     }
 
@@ -46,6 +49,10 @@ struct PerformanceView: View {
         let currentViewModel = viewModel
         let categorySummaryRows = currentViewModel.categorySummaryRows
         let assetPriceRows = currentViewModel.assetPriceRows
+        let partialWarningStatus = Self.partialWarningStatus(
+            partialAccountIDs: currentViewModel.partialAccountIDs,
+            accounts: accounts
+        )
 
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -54,8 +61,16 @@ struct PerformanceView: View {
                     selectedMode: $selectedMode,
                     selectedRange: $selectedRange,
                     selectedAccountID: $selectedAccountID,
+                    enabledCategories: $enabledCategories,
                     accounts: activeAccounts
                 )
+
+                if let partialWarningStatus {
+                    HStack {
+                        SyncStatusBadge(status: partialWarningStatus)
+                        Spacer()
+                    }
+                }
 
                 PerformanceChartSection(
                     supportedModes: Self.supportedModes,
@@ -98,5 +113,23 @@ struct PerformanceView: View {
         }
 
         return nil
+    }
+
+    static func partialWarningStatus(
+        partialAccountIDs: Set<UUID>,
+        accounts: [Account]
+    ) -> SyncStatusBadge.Status? {
+        guard !partialAccountIDs.isEmpty else {
+            return nil
+        }
+
+        let accountNamesByID = Dictionary(uniqueKeysWithValues: accounts.map { ($0.id, $0.name) })
+        let partialAccountNames = partialAccountIDs
+            .compactMap { accountNamesByID[$0] }
+            .sorted()
+        let unresolvedCount = partialAccountIDs.count - partialAccountNames.count
+        let unresolvedNames = Array(repeating: "Unknown account", count: unresolvedCount)
+
+        return .completedWithErrors(failedAccounts: partialAccountNames + unresolvedNames)
     }
 }
