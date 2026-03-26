@@ -6,6 +6,12 @@ import PortuCore
 @MainActor
 @Suite("Asset Detail ViewModel Tests")
 struct AssetDetailViewModelTests {
+    @Test func assetDetailViewCanBeConstructedFromAssetID() {
+        let view = AssetDetailView(assetID: UUID())
+
+        #expect(String(describing: type(of: view)) == "AssetDetailView")
+    }
+
     @Test func assetDetailUsesNetUsdValueForValueMode() throws {
         let point = try #require(AssetDetailViewModel.fixture().valueSeries.first)
 
