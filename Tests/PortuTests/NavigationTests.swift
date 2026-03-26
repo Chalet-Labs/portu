@@ -17,4 +17,10 @@ struct NavigationTests {
     @Test func contentViewRoutesAccountsSectionToAccountsWorkspace() {
         #expect(ContentView.destination(for: .accounts) == .accounts)
     }
+
+    @Test func contentViewRoutesExposureSectionToDedicatedWorkspace() {
+        if case .placeholder = ContentView.destination(for: .exposure) {
+            Issue.record("Exposure still routes to a placeholder destination.")
+        }
+    }
 }

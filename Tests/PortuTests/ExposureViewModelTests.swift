@@ -6,6 +6,10 @@ import PortuCore
 @MainActor
 @Suite("Exposure ViewModel Tests")
 struct ExposureViewModelTests {
+    @Test func exposureDisplayModeDefaultsToCategory() {
+        #expect(ExposureViewModel().displayMode == .category)
+    }
+
     @Test func exposureSeparatesAssetsAndLiabilities() throws {
         let row = try #require(
             ExposureViewModel.fixture().categoryRows.first(where: { $0.name == "Major" })

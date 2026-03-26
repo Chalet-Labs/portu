@@ -8,6 +8,7 @@ struct ContentView: View {
     enum Destination: Equatable {
         case overview
         case placeholder(title: String, message: String)
+        case exposure
         case performance
         case accounts
         case allAssets
@@ -18,10 +19,7 @@ struct ContentView: View {
         case .overview:
             .overview
         case .exposure:
-            .placeholder(
-                title: "Exposure",
-                message: "Exposure will land in a follow-on plan."
-            )
+            .exposure
         case .performance:
             .performance
         case .allAssets:
@@ -52,6 +50,8 @@ struct ContentView: View {
                 }
             case let .placeholder(title, message):
                 placeholderView(title: title, message: message)
+            case .exposure:
+                ExposureView()
             case .performance:
                 PerformanceView()
             case .accounts:
