@@ -1,5 +1,6 @@
 import Foundation
 import PortuCore
+import PortuNetwork
 
 @MainActor
 @Observable
@@ -12,6 +13,7 @@ final class AssetDetailViewModel {
     let assetSnapshots: [AssetSnapshot]
     let partialSyncBatchIDs: Set<UUID>
 
+    let priceSeries: [PerformancePoint]
     let valueSeries: [PerformancePoint]
     let amountSeries: [PerformancePoint]
     let networkRows: [AssetHoldingSummaryRow]
@@ -24,10 +26,57 @@ final class AssetDetailViewModel {
         !partialSyncBatchIDs.isEmpty
     }
 
+    var selectedSeries: [PerformancePoint] {
+        switch selectedMode {
+        case .price:
+            priceSeries
+        case .value:
+            valueSeries
+        case .amount:
+            amountSeries
+        }
+    }
+
+    var priceSummaryLabel: String {
+        guard let latestPrice = priceSeries.last?.value else {
+            return "Price unavailable"
+        }
+
+        return "Price: \(Self.usdCurrencyString(for: latestPrice))"
+    }
+
+    var valueSummaryLabel: String {
+        labeledCurrencyValue(
+            latestSeriesValue(in: valueSeries, fallback: totalUSDValue),
+            positiveLabel: "Value",
+            negativeLabel: "Debt"
+        )
+    }
+
+    var amountSummaryLabel: String {
+        labeledQuantityValue(
+            latestSeriesValue(in: amountSeries, fallback: totalAmount),
+            positiveLabel: "Held",
+            negativeLabel: "Borrowed"
+        )
+    }
+
+    var selectedSummaryLabel: String {
+        switch selectedMode {
+        case .price:
+            priceSummaryLabel
+        case .value:
+            valueSummaryLabel
+        case .amount:
+            amountSummaryLabel
+        }
+    }
+
     init(
         assetID: Asset.ID,
         positions: [Position] = [],
         assetSnapshots: [AssetSnapshot] = [],
+        historicalPrices: [HistoricalPricePoint] = [],
         portfolioSnapshots: [PortfolioSnapshot] = []
     ) {
         let visiblePositions = positions
@@ -63,6 +112,7 @@ final class AssetDetailViewModel {
         self.positions = visiblePositions
         self.assetSnapshots = matchingSnapshots
         self.partialSyncBatchIDs = partialSyncBatchIDs
+        priceSeries = Self.makePriceSeries(historicalPrices)
         valueSeries = Self.makeSeries(
             snapshots: matchingSnapshots,
             portfolioSnapshots: portfolioSnapshots,
@@ -87,6 +137,37 @@ final class AssetDetailViewModel {
         }
     }
 
+    private func latestSeriesValue(
+        in series: [PerformancePoint],
+        fallback: Decimal
+    ) -> Decimal {
+        series.last?.value ?? fallback
+    }
+
+    private func labeledCurrencyValue(
+        _ value: Decimal,
+        positiveLabel: String,
+        negativeLabel: String
+    ) -> String {
+        let isNegative = value < .zero
+        let label = isNegative ? negativeLabel : positiveLabel
+        let displayValue = isNegative ? Self.absoluteValue(of: value) : value
+
+        return "\(label): \(Self.usdCurrencyString(for: displayValue))"
+    }
+
+    private func labeledQuantityValue(
+        _ value: Decimal,
+        positiveLabel: String,
+        negativeLabel: String
+    ) -> String {
+        let isNegative = value < .zero
+        let label = isNegative ? negativeLabel : positiveLabel
+        let displayValue = isNegative ? Self.absoluteValue(of: value) : value
+
+        return "\(label): \(displayValue.formatted())"
+    }
+
     private struct PositionAssetTotals {
         var amount: Decimal = .zero
         var usdValue: Decimal = .zero
@@ -98,6 +179,15 @@ final class AssetDetailViewModel {
         var amount: Decimal = .zero
         var usdValue: Decimal = .zero
     }
+
+    private static let usdFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter
+    }()
 
     private static func makeSeries(
         snapshots: [AssetSnapshot],
@@ -118,6 +208,27 @@ final class AssetDetailViewModel {
                 return PerformancePoint(
                     date: timestamp,
                     value: total,
+                    usesAccountSnapshot: false
+                )
+            }
+            .sorted { $0.date < $1.date }
+    }
+
+    private static func usdCurrencyString(
+        for value: Decimal
+    ) -> String {
+        let amount = usdFormatter.string(from: NSDecimalNumber(decimal: value)) ?? "0.00"
+        return "$\(amount)"
+    }
+
+    private static func makePriceSeries(
+        _ historicalPrices: [HistoricalPricePoint]
+    ) -> [PerformancePoint] {
+        historicalPrices
+            .map { point in
+                PerformancePoint(
+                    date: point.date,
+                    value: point.price,
                     usesAccountSnapshot: false
                 )
             }
