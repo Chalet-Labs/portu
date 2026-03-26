@@ -5,6 +5,8 @@ import PortuCore
 struct ContentView: View {
     @Environment(AppState.self) private var appState
 
+    static let assetDestinationTypeName = "Asset.ID"
+
     enum Destination: Equatable {
         case overview
         case placeholder(title: String, message: String)
@@ -39,25 +41,30 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView(selection: $appState.selectedSection)
         } detail: {
-            switch Self.destination(for: appState.selectedSection) {
-            case .overview:
-                HSplitView {
-                    PortfolioView()
-                        .frame(minWidth: 700, maxWidth: .infinity)
-                        .layoutPriority(1)
+            Group {
+                switch Self.destination(for: appState.selectedSection) {
+                case .overview:
+                    HSplitView {
+                        PortfolioView()
+                            .frame(minWidth: 700, maxWidth: .infinity)
+                            .layoutPriority(1)
 
-                    OverviewInspector()
+                        OverviewInspector()
+                    }
+                case let .placeholder(title, message):
+                    placeholderView(title: title, message: message)
+                case .exposure:
+                    ExposureView()
+                case .performance:
+                    PerformanceView()
+                case .accounts:
+                    AccountsView()
+                case .allAssets:
+                    AllAssetsView()
                 }
-            case let .placeholder(title, message):
-                placeholderView(title: title, message: message)
-            case .exposure:
-                ExposureView()
-            case .performance:
-                PerformanceView()
-            case .accounts:
-                AccountsView()
-            case .allAssets:
-                AllAssetsView()
+            }
+            .navigationDestination(for: Asset.ID.self) { assetID in
+                AssetDetailView(assetID: assetID)
             }
         }
         .frame(minWidth: 700, minHeight: 500)

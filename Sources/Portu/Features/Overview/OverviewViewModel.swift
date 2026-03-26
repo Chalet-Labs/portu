@@ -3,6 +3,7 @@ import PortuCore
 
 struct TopAssetSlice: Identifiable, Sendable {
     let id: String
+    let assetID: Asset.ID?
     let label: String
     let value: Decimal
     let shareOfPortfolio: Decimal
@@ -11,6 +12,7 @@ struct TopAssetSlice: Identifiable, Sendable {
 struct OverviewTokenRow: Identifiable, Sendable {
     let id: UUID
     let positionID: UUID
+    let assetID: Asset.ID?
     let assetKey: String
     let symbol: String
     let assetName: String
@@ -166,6 +168,7 @@ final class OverviewViewModel {
                 return OverviewTokenRow(
                     id: token.id,
                     positionID: position.id,
+                    assetID: token.asset?.id,
                     assetKey: makeAssetKey(for: token),
                     symbol: token.asset?.symbol ?? "Unknown",
                     assetName: token.asset?.name ?? token.asset?.symbol ?? "Unknown Asset",
@@ -254,12 +257,16 @@ final class OverviewViewModel {
     private static func makeTopAssets(
         from rows: [OverviewTokenRow]
     ) -> [TopAssetSlice] {
-        let valuesByAsset = rows.reduce(into: [String: (label: String, value: Decimal)]()) { partialResult, row in
+        let valuesByAsset = rows.reduce(into: [String: (label: String, assetID: Asset.ID?, value: Decimal)]()) { partialResult, row in
             guard row.role != .borrow else {
                 return
             }
-            let current = partialResult[row.assetKey] ?? (row.symbol, .zero)
-            partialResult[row.assetKey] = (current.label, current.value + row.displayValue)
+            let current = partialResult[row.assetKey] ?? (row.symbol, row.assetID, .zero)
+            partialResult[row.assetKey] = (
+                current.label,
+                current.assetID ?? row.assetID,
+                current.value + row.displayValue
+            )
         }
         let totalVisibleValue = valuesByAsset.values.reduce(.zero) { $0 + $1.value }
 
@@ -267,6 +274,7 @@ final class OverviewViewModel {
             .map { assetKey, entry in
                 TopAssetSlice(
                     id: assetKey,
+                    assetID: entry.assetID,
                     label: entry.label,
                     value: entry.value,
                     shareOfPortfolio: totalVisibleValue == .zero

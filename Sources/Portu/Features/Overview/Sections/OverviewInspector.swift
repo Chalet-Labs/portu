@@ -8,6 +8,7 @@ import PortuUI
 struct OverviewInspector: View {
     private struct InspectorSlice: Identifiable {
         let id: String
+        let assetID: Asset.ID?
         let label: String
         let value: Decimal
         let share: Decimal
@@ -15,6 +16,7 @@ struct OverviewInspector: View {
 
     private struct WatchlistRow: Identifiable {
         let id: String
+        let assetID: Asset.ID?
         let symbol: String
         let name: String
         let price: Decimal
@@ -41,6 +43,7 @@ struct OverviewInspector: View {
             return viewModel.topAssets.map { slice in
                 InspectorSlice(
                     id: slice.id,
+                    assetID: slice.assetID,
                     label: slice.label,
                     value: slice.value,
                     share: slice.shareOfPortfolio
@@ -108,19 +111,21 @@ struct OverviewInspector: View {
 
                 LazyVStack(alignment: .leading, spacing: 10) {
                     ForEach(slices) { slice in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(slice.label)
-                                    .font(.subheadline.weight(.medium))
-                                Text("\(slice.share.formatted(.number.precision(.fractionLength(1))))%")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        assetDrillInRow(assetID: slice.assetID) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(slice.label)
+                                        .font(.subheadline.weight(.medium))
+                                    Text("\(slice.share.formatted(.number.precision(.fractionLength(1))))%")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+
+                                CurrencyText(slice.value)
+                                    .font(.subheadline.weight(.semibold))
                             }
-
-                            Spacer()
-
-                            CurrencyText(slice.value)
-                                .font(.subheadline.weight(.semibold))
                         }
 
                         if slice.id != slices.last?.id {
@@ -147,26 +152,28 @@ struct OverviewInspector: View {
             } else {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     ForEach(watchlistRows) { row in
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(row.symbol)
-                                    .font(.headline)
-                                Text(row.name)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                        assetDrillInRow(assetID: row.assetID) {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(row.symbol)
+                                        .font(.headline)
+                                    Text(row.name)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
 
-                            Spacer()
+                                Spacer()
 
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text(row.price.formatted(.currency(code: "USD")))
-                                    .font(.subheadline.weight(.semibold))
-                                Text(changeLabel(for: row.change24h))
-                                    .font(.caption)
-                                    .foregroundStyle(changeColor(for: row.change24h))
-                                CurrencyText(row.totalValue)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Text(row.price.formatted(.currency(code: "USD")))
+                                        .font(.subheadline.weight(.semibold))
+                                    Text(changeLabel(for: row.change24h))
+                                        .font(.caption)
+                                        .foregroundStyle(changeColor(for: row.change24h))
+                                    CurrencyText(row.totalValue)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
 
@@ -201,6 +208,7 @@ struct OverviewInspector: View {
             .map { category, value in
                 InspectorSlice(
                     id: category.rawValue,
+                    assetID: nil,
                     label: label(for: category),
                     value: value,
                     share: totalValue == .zero ? .zero : value / totalValue * 100
@@ -212,6 +220,7 @@ struct OverviewInspector: View {
     private func makeWatchlistRows(from positions: [Position]) -> [WatchlistRow] {
         struct Accumulator {
             let id: String
+            let assetID: Asset.ID?
             let symbol: String
             let name: String
             let coinGeckoId: String?
@@ -240,6 +249,7 @@ struct OverviewInspector: View {
                 } else {
                     rowsByAsset[assetKey] = Accumulator(
                         id: assetKey,
+                        assetID: token.asset?.id,
                         symbol: token.asset?.symbol ?? "Unknown",
                         name: token.asset?.name ?? token.asset?.symbol ?? "Unknown Asset",
                         coinGeckoId: token.asset?.coinGeckoId,
@@ -254,6 +264,7 @@ struct OverviewInspector: View {
             .map { row in
                 WatchlistRow(
                     id: row.id,
+                    assetID: row.assetID,
                     symbol: row.symbol,
                     name: row.name,
                     price: row.latestPrice,
@@ -313,6 +324,21 @@ struct OverviewInspector: View {
 
     private func decimalValue(_ value: Decimal) -> Double {
         NSDecimalNumber(decimal: value).doubleValue
+    }
+
+    @ViewBuilder
+    private func assetDrillInRow<Content: View>(
+        assetID: Asset.ID?,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if let assetID {
+            NavigationLink(value: assetID) {
+                content()
+            }
+            .buttonStyle(.plain)
+        } else {
+            content()
+        }
     }
 
     private func makeAssetKey(for token: PositionToken) -> String {
