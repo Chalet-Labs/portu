@@ -67,6 +67,21 @@ struct ExposureViewModelTests {
         #expect(row.liabilities == .zero)
         #expect(row.spotNet == 600)
     }
+
+    @Test func assetModeShowsFlatAssetRows() {
+        let viewModel = ExposureViewModel.fixture()
+
+        #expect(viewModel.visibleRows.map(\.id) == viewModel.categoryRows.map(\.id))
+
+        viewModel.displayMode = .asset
+
+        #expect(viewModel.visibleRows.map(\.id) == viewModel.assetRows.map(\.id))
+        #expect(viewModel.visibleRows.allSatisfy { $0.assetSymbol != nil })
+
+        viewModel.displayMode = .category
+
+        #expect(viewModel.visibleRows.map(\.id) == viewModel.categoryRows.map(\.id))
+    }
 }
 
 @MainActor

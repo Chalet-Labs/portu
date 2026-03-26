@@ -12,30 +12,46 @@ struct ExposureTable: View {
                 subtitle: "Spot assets, liabilities, and net exposure in one canonical view"
             )
 
-            Table(rows) {
-                TableColumn(displayMode == .category ? "Category" : "Asset") { row in
-                    leadingCell(for: row)
+            if rows.isEmpty {
+                ContentUnavailableView {
+                    Label(
+                        displayMode == .category ? "No Exposure Categories" : "No Exposure Assets",
+                        systemImage: "square.grid.3x3.middle.filled"
+                    )
+                } description: {
+                    Text(
+                        displayMode == .category
+                        ? "Sync positions with balances or borrows to populate exposure categories."
+                        : "Sync positions with balances or borrows to populate asset exposure."
+                    )
                 }
-                TableColumn("Spot Assets") { row in
-                    CurrencyText(row.spotAssets)
+                .frame(minHeight: 280)
+            } else {
+                Table(rows) {
+                    TableColumn(displayMode == .category ? "Category" : "Asset") { row in
+                        leadingCell(for: row)
+                    }
+                    TableColumn("Spot Assets") { row in
+                        CurrencyText(row.spotAssets)
+                    }
+                    TableColumn("Liabilities") { row in
+                        CurrencyText(row.liabilities)
+                    }
+                    TableColumn("Spot Net") { row in
+                        CurrencyText(row.spotNet)
+                    }
+                    TableColumn("Long") { row in
+                        CurrencyText(row.derivativesLong)
+                    }
+                    TableColumn("Short") { row in
+                        CurrencyText(row.derivativesShort)
+                    }
+                    TableColumn("Net Exposure") { row in
+                        CurrencyText(row.netExposure)
+                    }
                 }
-                TableColumn("Liabilities") { row in
-                    CurrencyText(row.liabilities)
-                }
-                TableColumn("Spot Net") { row in
-                    CurrencyText(row.spotNet)
-                }
-                TableColumn("Long") { row in
-                    CurrencyText(row.derivativesLong)
-                }
-                TableColumn("Short") { row in
-                    CurrencyText(row.derivativesShort)
-                }
-                TableColumn("Net Exposure") { row in
-                    CurrencyText(row.netExposure)
-                }
+                .frame(minHeight: 280)
             }
-            .frame(minHeight: 280)
         }
         .padding(20)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

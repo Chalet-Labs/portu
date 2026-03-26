@@ -6,10 +6,10 @@ import PortuCore
 final class ExposureViewModel {
     var displayMode: ExposureDisplayMode = .category
 
-    let positions: [Position]
+    private(set) var positions: [Position] = []
 
-    private let projectedCategoryRows: [ExposureRow]
-    private let projectedAssetRows: [ExposureRow]
+    private var projectedCategoryRows: [ExposureRow] = []
+    private var projectedAssetRows: [ExposureRow] = []
 
     var categoryRows: [ExposureRow] {
         projectedCategoryRows
@@ -17,6 +17,15 @@ final class ExposureViewModel {
 
     var assetRows: [ExposureRow] {
         projectedAssetRows
+    }
+
+    var visibleRows: [ExposureRow] {
+        switch displayMode {
+        case .category:
+            categoryRows
+        case .asset:
+            assetRows
+        }
     }
 
     var netExposureExcludingStablecoins: Decimal {
@@ -27,6 +36,12 @@ final class ExposureViewModel {
 
     init(
         positions: [Position] = []
+    ) {
+        refresh(positions: positions)
+    }
+
+    func refresh(
+        positions: [Position]
     ) {
         let activePositions = positions.filter { $0.account?.isActive == true }
 
