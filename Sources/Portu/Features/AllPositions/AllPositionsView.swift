@@ -4,65 +4,76 @@ import PortuCore
 import PortuUI
 
 struct AllPositionsView: View {
-    static let navigationTitle = "All Positions"
+    private struct TokenSyncToken: Equatable {
+        let id: UUID
+        let role: TokenRole
+        let amount: Decimal
+        let usdValue: Decimal
+        let assetID: UUID?
 
-    @Query private var positions: [Position]
-    @State private var selectedPositionFilter: PositionFilter = .all
-    @State private var selectedProtocol: String?
-
-    private var activePositions: [Position] {
-        positions.filter { $0.account?.isActive == true }
-    }
-
-    private var positionsMatchingTypeFilter: [Position] {
-        activePositions.filter { selectedPositionFilter.matches($0) }
-    }
-
-    private var positionsMatchingAllFilters: [Position] {
-        positionsMatchingTypeFilter.filter { position in
-            guard let selectedProtocol else {
-                return true
-            }
-
-            return protocolDisplayName(for: position) == selectedProtocol
+        init(token: PositionToken) {
+            self.id = token.id
+            self.role = token.role
+            self.amount = token.amount
+            self.usdValue = token.usdValue
+            self.assetID = token.asset?.id
         }
     }
 
-    private var contentViewModel: AllPositionsViewModel {
-        AllPositionsViewModel(positions: positionsMatchingAllFilters)
+    private struct PositionSyncToken: Equatable {
+        let id: UUID
+        let positionType: PositionType
+        let netUSDValue: Decimal
+        let chain: Chain?
+        let protocolID: String?
+        let protocolName: String?
+        let healthFactor: Double?
+        let accountID: UUID?
+        let accountIsActive: Bool
+        let tokens: [TokenSyncToken]
+
+        init(position: Position) {
+            self.id = position.id
+            self.positionType = position.positionType
+            self.netUSDValue = position.netUSDValue
+            self.chain = position.chain
+            self.protocolID = position.protocolId
+            self.protocolName = position.protocolName
+            self.healthFactor = position.healthFactor
+            self.accountID = position.account?.id
+            self.accountIsActive = position.account?.isActive == true
+            self.tokens = position.tokens
+                .map(TokenSyncToken.init)
+                .sorted { $0.id.uuidString < $1.id.uuidString }
+        }
     }
 
-    private var sidebarProtocolOptions: [String] {
-        AllPositionsViewModel(positions: positionsMatchingTypeFilter).protocolOptions
-    }
+    static let navigationTitle = "All Positions"
 
-    private var positionFilterTotals: [PositionFilter: Decimal] {
-        Dictionary(
-            uniqueKeysWithValues: PositionFilter.allCases.map { filter in
-                (
-                    filter,
-                    activePositions.filter { filter.matches($0) }.reduce(.zero) { $0 + $1.netUSDValue }
-                )
-            }
-        )
+    @Query private var positions: [Position]
+    @State private var viewModel = AllPositionsViewModel()
+
+    private var positionsSyncToken: [PositionSyncToken] {
+        positions
+            .map(PositionSyncToken.init)
+            .sorted { $0.id.uuidString < $1.id.uuidString }
     }
 
     var body: some View {
-        let workspaceViewModel = contentViewModel
-        let availableProtocolOptions = sidebarProtocolOptions
+        @Bindable var bindableViewModel = viewModel
 
         HSplitView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    if workspaceViewModel.sections.isEmpty {
+                    if viewModel.sections.isEmpty {
                         ContentUnavailableView {
-                            Label(emptyStateTitle, systemImage: "tray.full")
+                            Label(viewModel.emptyStateTitle, systemImage: "tray.full")
                         } description: {
-                            Text(emptyStateMessage)
+                            Text(viewModel.emptyStateMessage)
                         }
                     } else {
                         LazyVStack(alignment: .leading, spacing: 20) {
-                            ForEach(workspaceViewModel.sections) { section in
+                            ForEach(viewModel.sections) { section in
                                 PositionSectionView(section: section)
                             }
                         }
@@ -74,78 +85,15 @@ struct AllPositionsView: View {
             .frame(minWidth: 700, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             PositionFilterSidebar(
-                selectedPositionFilter: $selectedPositionFilter,
-                selectedProtocol: $selectedProtocol,
-                positionFilterTotals: positionFilterTotals,
-                protocolOptions: availableProtocolOptions
+                selectedPositionFilter: $bindableViewModel.selectedFilter,
+                selectedProtocol: $bindableViewModel.selectedProtocol,
+                positionFilterTotals: viewModel.positionFilterTotals,
+                protocolOptions: viewModel.protocolOptions
             )
         }
         .navigationTitle(Self.navigationTitle)
-        .onChange(of: selectedPositionFilter) { _, _ in
-            reconcileSelectedProtocol(availableProtocols: availableProtocolOptions)
+        .task(id: positionsSyncToken) {
+            viewModel.updatePositions(positions)
         }
-        .onChange(of: availableProtocolOptions) { _, newOptions in
-            reconcileSelectedProtocol(availableProtocols: newOptions)
-        }
-    }
-
-    private var emptyStateTitle: String {
-        activePositions.isEmpty ? "No Positions" : "No Matching Positions"
-    }
-
-    private var emptyStateMessage: String {
-        if activePositions.isEmpty {
-            return "Add a position to start building the workspace."
-        }
-
-        if selectedProtocol == nil {
-            return "Adjust the sidebar filters to narrow the position workspace."
-        }
-
-        return "Clear the protocol filter or choose a protocol that still exists for the selected position type."
-    }
-
-    private func reconcileSelectedProtocol(availableProtocols: [String]) {
-        guard let selectedProtocol else {
-            return
-        }
-
-        guard availableProtocols.contains(selectedProtocol) else {
-            self.selectedProtocol = nil
-            return
-        }
-    }
-
-    private func protocolDisplayName(for position: Position) -> String {
-        let protocolID = trimmedNonEmpty(position.protocolId)
-        let protocolName = trimmedNonEmpty(position.protocolName)
-        let accountName = trimmedNonEmpty(position.account?.name)
-
-        if protocolID != nil, let protocolName {
-            return protocolName
-        }
-
-        if let protocolID {
-            return protocolID
-        }
-
-        if let protocolName {
-            return protocolName
-        }
-
-        if let accountName {
-            return accountName
-        }
-
-        return "Unknown Protocol"
-    }
-
-    private func trimmedNonEmpty(_ value: String?) -> String? {
-        guard let value else {
-            return nil
-        }
-
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
     }
 }

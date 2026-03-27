@@ -135,16 +135,6 @@ struct PositionFilterSidebar: View {
             .padding()
         }
         .frame(minWidth: 280, idealWidth: 320, maxWidth: 340, maxHeight: .infinity, alignment: .topLeading)
-        .onChange(of: protocolOptions) { _, newOptions in
-            guard let selectedProtocol else {
-                return
-            }
-
-            guard newOptions.contains(selectedProtocol) else {
-                self.selectedProtocol = nil
-                return
-            }
-        }
     }
 
     private var header: some View {

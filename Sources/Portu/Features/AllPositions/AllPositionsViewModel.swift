@@ -9,9 +9,19 @@ final class AllPositionsViewModel {
         let displayName: String
     }
 
-    var selectedFilter: PositionFilter = .all
+    var selectedFilter: PositionFilter = .all {
+        didSet {
+            reconcileSelectedProtocol()
+        }
+    }
 
-    let positions: [Position]
+    var selectedProtocol: String? {
+        didSet {
+            reconcileSelectedProtocol()
+        }
+    }
+
+    private var positions: [Position] = []
 
     var sections: [PositionSectionModel] {
         Self.makeSections(
@@ -20,14 +30,58 @@ final class AllPositionsViewModel {
     }
 
     var protocolOptions: [String] {
-        Self.makeProtocolOptions(from: visiblePositions)
+        Self.makeProtocolOptions(from: positionsMatchingSelectedFilter)
+    }
+
+    var positionFilterTotals: [PositionFilter: Decimal] {
+        Dictionary(
+            uniqueKeysWithValues: PositionFilter.allCases.map { filter in
+                (
+                    filter,
+                    positions.filter { filter.matches($0) }.reduce(.zero) { $0 + $1.netUSDValue }
+                )
+            }
+        )
+    }
+
+    var visibleUSDTotal: Decimal {
+        visiblePositions.reduce(.zero) { $0 + $1.netUSDValue }
+    }
+
+    var emptyStateTitle: String {
+        positions.isEmpty ? "No Positions" : "No Matching Positions"
+    }
+
+    var emptyStateMessage: String {
+        if positions.isEmpty {
+            return "Add a position to start building the workspace."
+        }
+
+        return "Adjust the sidebar filters to narrow the position workspace."
     }
 
     init(positions: [Position] = []) {
+        updatePositions(positions)
+    }
+
+    func updatePositions(
+        _ positions: [Position]
+    ) {
         self.positions = positions.filter { $0.account?.isActive == true }
+        reconcileSelectedProtocol()
     }
 
     private var visiblePositions: [Position] {
+        positionsMatchingSelectedFilter.filter { position in
+            guard let selectedProtocol else {
+                return true
+            }
+
+            return Self.protocolDisplayName(for: position) == selectedProtocol
+        }
+    }
+
+    private var positionsMatchingSelectedFilter: [Position] {
         positions.filter { selectedFilter.matches($0) }
     }
 
@@ -200,6 +254,12 @@ final class AllPositionsViewModel {
         )
     }
 
+    private static func protocolDisplayName(
+        for position: Position
+    ) -> String {
+        protocolIdentity(for: position).displayName
+    }
+
     private static func chainLabel(
         for position: Position
     ) -> String {
@@ -325,5 +385,16 @@ final class AllPositionsViewModel {
 
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func reconcileSelectedProtocol() {
+        guard let selectedProtocol else {
+            return
+        }
+
+        guard protocolOptions.contains(selectedProtocol) else {
+            self.selectedProtocol = nil
+            return
+        }
     }
 }

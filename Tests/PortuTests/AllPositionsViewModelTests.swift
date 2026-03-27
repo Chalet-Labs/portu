@@ -255,6 +255,44 @@ struct AllPositionsViewModelTests {
         #expect(row.displayValue == 2_400)
     }
 
+    @Test func selectedProtocolFilterUpdatesTotals() {
+        let viewModel = AllPositionsViewModel.fixture()
+
+        viewModel.selectedProtocol = "Aave V3"
+
+        #expect(viewModel.visibleUSDTotal == 3_200)
+        #expect(viewModel.sections.map(\.title) == ["Idle Onchain"])
+    }
+
+    @Test func updatingPositionsClearsInvalidProtocolSelection() {
+        let viewModel = AllPositionsViewModel.fixture()
+
+        viewModel.selectedProtocol = "Euler"
+        viewModel.updatePositions(
+            AllPositionsViewModel.fixturePositions().filter { $0.positionType == .idle }
+        )
+
+        #expect(viewModel.selectedProtocol == nil)
+        #expect(viewModel.visibleUSDTotal == 3_700)
+    }
+
+    @Test func emptyStateUsesNoPositionsCopyWhenWorkspaceIsEmpty() {
+        let viewModel = AllPositionsViewModel()
+
+        #expect(viewModel.emptyStateTitle == "No Positions")
+        #expect(viewModel.emptyStateMessage == "Add a position to start building the workspace.")
+    }
+
+    @Test func emptyStateUsesNoMatchingCopyWhenFiltersHideAllPositions() {
+        let viewModel = AllPositionsViewModel.fixture()
+
+        viewModel.selectedFilter = .staking
+
+        #expect(viewModel.sections.isEmpty)
+        #expect(viewModel.emptyStateTitle == "No Matching Positions")
+        #expect(viewModel.emptyStateMessage == "Adjust the sidebar filters to narrow the position workspace.")
+    }
+
     @Test func inactiveAccountPositionsAreExcludedFromSections() {
         let viewModel = AllPositionsViewModel.fixture()
 
@@ -270,6 +308,10 @@ struct AllPositionsViewModelTests {
 @MainActor
 private extension AllPositionsViewModel {
     static func fixture() -> AllPositionsViewModel {
+        AllPositionsViewModel(positions: fixturePositions())
+    }
+
+    static func fixturePositions() -> [Position] {
         let activeWallet = Account(
             name: "Main Wallet",
             kind: .wallet,
@@ -389,8 +431,6 @@ private extension AllPositionsViewModel {
         activeExchange.positions = [idleExchange]
         inactiveWallet.positions = [dormant]
 
-        return AllPositionsViewModel(
-            positions: [idleOnchain, lending, idleExchange, dormant]
-        )
+        return [idleOnchain, lending, idleExchange, dormant]
     }
 }
