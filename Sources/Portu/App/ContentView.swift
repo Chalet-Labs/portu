@@ -14,6 +14,7 @@ struct ContentView: View {
         case performance
         case accounts
         case allAssets
+        case allPositions
     }
 
     static func destination(for section: SidebarSection) -> Destination {
@@ -27,10 +28,7 @@ struct ContentView: View {
         case .allAssets:
             .allAssets
         case .allPositions:
-            .placeholder(
-                title: "All Positions",
-                message: "Position management will land in a follow-on plan."
-            )
+            .allPositions
         case .accounts:
             .accounts
         }
@@ -61,6 +59,8 @@ struct ContentView: View {
                     AccountsView()
                 case .allAssets:
                     AllAssetsView()
+                case .allPositions:
+                    AllPositionsView()
                 }
             }
             .navigationDestination(for: Asset.ID.self) { assetID in
