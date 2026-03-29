@@ -24,9 +24,6 @@ packages:
   SnapshotTesting:
     url: https://github.com/pointfreeco/swift-snapshot-testing
     from: "1.17.0"
-  Prefire:
-    url: https://github.com/BarredEwe/Prefire
-    from: "5.4.0"
 
 targets:
   Portu:
@@ -50,7 +47,6 @@ targets:
         INFOPLIST_FILE: Sources/Portu/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/Portu/Resources/Portu.entitlements
         CODE_SIGN_STYLE: Automatic
-        OTHER_SWIFT_FLAGS: "-default-isolation MainActor"
     entitlements:
       path: Sources/Portu/Resources/Portu.entitlements
       properties:
@@ -65,13 +61,10 @@ targets:
       - target: Portu
       - package: SnapshotTesting
         product: SnapshotTesting
-      - package: Prefire
-        product: Prefire
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.portu.app.tests
         GENERATE_INFOPLIST_FILE: YES
-        OTHER_SWIFT_FLAGS: "-default-isolation MainActor"
 
 schemes:
   Portu:

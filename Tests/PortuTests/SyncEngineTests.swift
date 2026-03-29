@@ -4,6 +4,7 @@ import PortuCore
 import SwiftData
 import Testing
 
+@MainActor
 struct SyncEngineTests {
     private func makeTestContext() throws -> (ModelContext, AppState, SyncEngine) {
         let schema = Schema([
