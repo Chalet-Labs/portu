@@ -26,6 +26,18 @@ test-packages:
 test:
     xcodebuild -scheme Portu -configuration Debug test
 
+# Lint all Swift files
+lint:
+    swiftlint lint --quiet
+
+# Auto-fix lintable violations
+lint-fix:
+    swiftlint --fix --quiet
+
+# Format all Swift files
+format:
+    swiftformat .
+
 # Clean build artifacts
 clean:
     xcodebuild -scheme Portu clean
