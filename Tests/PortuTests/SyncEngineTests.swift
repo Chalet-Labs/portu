@@ -14,7 +14,9 @@ struct SyncEngineTests {
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])
-        let context = container.mainContext
+        // Use a fresh ModelContext per test — container.mainContext shares thread-local
+        // state across tests which causes SIGTRAP when multiple containers exist.
+        let context = ModelContext(container)
         let mockStore = MockSecretStore()
         let engine = SyncEngine(modelContext: context, secretStore: mockStore)
         return (context, engine)
