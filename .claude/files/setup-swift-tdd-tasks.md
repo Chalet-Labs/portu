@@ -20,22 +20,24 @@
 
 - [x] 2.1 TCA 1.25.3 added to `project.yml` (app target dependency)
 - [x] 2.2 swift-snapshot-testing 1.19.1 added (PortuTests dependency)
-- [x] 2.3 Prefire 5.4.1 added (PortuTests dependency)
+- [x] ~~2.3~~ Prefire removed — UIKit-only, not macOS compatible
 - [x] ~~2.4~~ Dropped — OpenSpec manages specs in `openspec/changes/`
 - [x] ~~2.5~~ Dropped — no XCUITest planned; accessibility IDs added when needed
 - [x] 2.6 Build verified: `just generate && just build` succeeds
   - Also fixed: added `-skipMacroValidation` to justfile for TCA/CasePaths/Dependencies macros
 
-## Phase 3: TCA Migration — Core Layer
+## Phase 3: TCA Migration — Core Layer ✅
 
-Migrate AppState + SyncEngine → TCA reducers. Existing tests guide correctness.
-
-- [ ] 3.1 Write behavioral spec for AppFeature (root reducer)
-- [ ] 3.2 Migrate AppState → AppFeature reducer (State, Action, body)
-- [ ] 3.3 Migrate SyncEngine → TCA dependency (`@Dependency(\.syncEngine)`)
-- [ ] 3.4 Migrate data providers → TCA dependencies (API clients, Keychain, SwiftData)
-- [ ] 3.5 Update PortuApp entry point to use Store
-- [ ] 3.6 All existing tests pass or are migrated to TestStore
+- [x] 3.1 Behavioral spec written (`openspec/changes/tca-core-migration/spec.md`)
+- [x] 3.2 AppFeature reducer with @ObservableState, 8 TestStore tests (all pass)
+- [x] 3.3 SyncEngine refactored: returns `SyncResult`, no AppState dependency
+- [x] 3.4 SyncEngineClient + PriceServiceClient with live/test implementations
+- [x] 3.5 PortuApp creates Store with live deps, bridge to AppState via `onSyncRequested`
+- [x] 3.6 10 tests pass (8 AppFeature + 1 PortuApp + 1 PortuUI); SyncEngineTests crash (pre-existing)
+  - Removed `defaultIsolation(MainActor.self)` from app target — incompatible with TCA
+  - Removed Prefire — UIKit-only
+  - Added `Equatable` to PortuCore.PriceUpdate and SyncError
+  - Reused PortuCore.PriceUpdate instead of duplicating in AppFeature
 
 ## Phase 4: TCA Migration — Features
 

@@ -1,7 +1,7 @@
 // Sources/Portu/Features/Overview/OverviewView.swift
-import SwiftUI
-import SwiftData
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct OverviewView: View {
     @Environment(AppState.self) private var appState
@@ -12,7 +12,7 @@ struct OverviewView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     OverviewTopBar {
-                        Task { await appState.syncEngine?.sync() }
+                        appState.onSyncRequested?()
                     }
 
                     PortfolioValueChart()

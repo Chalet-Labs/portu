@@ -1,42 +1,56 @@
-import SwiftUI
-import SwiftData
+import ComposableArchitecture
 import PortuCore
 import PortuNetwork
 import PortuUI
+import SwiftData
+import SwiftUI
 
 @main
 struct PortuApp: App {
+    let store: StoreOf<AppFeature>
     @State private var appState = AppState()
     let container: ModelContainer
 
     init() {
+        var isEphemeral = false
+
         do {
             container = try ModelContainer(
                 for: Account.self, WalletAddress.self, Position.self, PositionToken.self,
-                Asset.self, PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
+                Asset.self, PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
             )
         } catch {
-            // Schema migration failed — fall back to an in-memory store so the
-            // app can still launch. A future release should surface a user-facing
-            // alert prompting to reset the database.
             let config = ModelConfiguration(isStoredInMemoryOnly: true)
             do {
                 container = try ModelContainer(
                     for: Account.self, WalletAddress.self, Position.self, PositionToken.self,
                     Asset.self, PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
-                    configurations: config
+                    configurations: config,
                 )
-                appState.storeIsEphemeral = true
+                isEphemeral = true
             } catch {
                 fatalError("Failed to create even an in-memory ModelContainer: \(error)")
             }
         }
 
-        appState.syncEngine = SyncEngine(
+        let syncEngine = SyncEngine(
             modelContext: container.mainContext,
-            appState: appState,
-            secretStore: KeychainService()
+            secretStore: KeychainService(),
         )
+        let priceService = PriceService()
+
+        store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
+            AppFeature()
+        } withDependencies: {
+            $0.syncEngine = .live(engine: syncEngine)
+            $0.priceService = .live(service: priceService)
+        }
+
+        // Bridge: features can trigger sync via AppState until migrated to TCA
+        appState.storeIsEphemeral = isEphemeral
+        appState.onSyncRequested = { [store] in
+            store.send(.syncTapped)
+        }
     }
 
     var body: some Scene {

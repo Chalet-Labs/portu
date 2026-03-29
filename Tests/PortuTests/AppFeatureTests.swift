@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import Foundation
 @testable import Portu
+import PortuCore
 import Testing
 
 @MainActor

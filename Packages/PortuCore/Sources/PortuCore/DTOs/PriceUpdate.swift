@@ -1,7 +1,7 @@
 import Foundation
 
 /// Published by PriceService. AppState subscribes and updates both maps atomically.
-public struct PriceUpdate: Sendable {
+public struct PriceUpdate: Sendable, Equatable {
     /// coinGeckoId → USD price
     public let prices: [String: Decimal]
     /// coinGeckoId → 24h percentage change

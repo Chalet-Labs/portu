@@ -34,6 +34,6 @@ final class AppState {
     var syncStatus: SyncStatus = .idle
     var storeIsEphemeral: Bool = false
 
-    /// Set after ModelContainer is initialised in PortuApp.init()
-    var syncEngine: SyncEngine?
+    /// Bridge: called by features to trigger sync until they're migrated to TCA (Phase 4)
+    var onSyncRequested: (@MainActor () -> Void)?
 }

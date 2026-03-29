@@ -1,40 +1,32 @@
 import Foundation
-import SwiftData
 import PortuCore
 import PortuNetwork
+import SwiftData
 
 @MainActor
-final class SyncEngine {
+final class SyncEngine: @unchecked Sendable {
     private let modelContext: ModelContext
-    private let appState: AppState
     private let secretStore: any SecretStore
 
-    init(modelContext: ModelContext, appState: AppState, secretStore: any SecretStore) {
+    init(modelContext: ModelContext, secretStore: any SecretStore) {
         self.modelContext = modelContext
-        self.appState = appState
         self.secretStore = secretStore
     }
 
     // MARK: - Public API
 
-    func sync() async {
-        appState.syncStatus = .syncing(progress: 0)
-
+    func sync() async throws -> SyncResult {
         let activeSyncable = fetchActiveSyncableAccounts()
         let activeManual = fetchActiveManualAccounts()
 
         guard !activeSyncable.isEmpty || !activeManual.isEmpty else {
-            appState.syncStatus = .error("No active accounts")
-            return
+            throw SyncError.noActiveAccounts
         }
 
         // ── Phase A: Per-account fetch + persist ──
         var failedAccounts: [String] = []
 
-        for (index, account) in activeSyncable.enumerated() {
-            let progress = Double(index) / Double(max(activeSyncable.count, 1))
-            appState.syncStatus = .syncing(progress: progress)
-
+        for account in activeSyncable {
             do {
                 try await syncAccount(account)
             } catch {
@@ -45,23 +37,13 @@ final class SyncEngine {
 
         // ── Phase B: Snapshot all tiers ──
         let allSyncAttemptedFailed = failedAccounts.count == activeSyncable.count
-        if allSyncAttemptedFailed && activeManual.isEmpty && !activeSyncable.isEmpty {
-            appState.syncStatus = .error("All accounts failed to sync")
-            return
+        if allSyncAttemptedFailed, activeManual.isEmpty, !activeSyncable.isEmpty {
+            throw SyncError.allAccountsFailed
         }
 
-        do {
-            try createSnapshots(isPartial: !failedAccounts.isEmpty)
-        } catch {
-            appState.syncStatus = .error("Failed to create snapshots: \(error.localizedDescription)")
-            return
-        }
+        try createSnapshots(isPartial: !failedAccounts.isEmpty)
 
-        if failedAccounts.isEmpty {
-            appState.syncStatus = .idle
-        } else {
-            appState.syncStatus = .completedWithErrors(failedAccounts: failedAccounts)
-        }
+        return SyncResult(failedAccounts: failedAccounts)
     }
 
     // MARK: - Phase A: Per-account sync
@@ -71,7 +53,7 @@ final class SyncEngine {
             accountId: account.id,
             kind: account.kind,
             addresses: account.addresses.map { ($0.address, $0.chain) },
-            exchangeType: account.exchangeType
+            exchangeType: account.exchangeType,
         )
 
         let provider = try resolveProvider(for: account)
@@ -95,7 +77,7 @@ final class SyncEngine {
                 protocolLogoURL: dto.protocolLogoURL,
                 healthFactor: dto.healthFactor,
                 account: account,
-                syncedAt: .now
+                syncedAt: .now,
             )
 
             var net: Decimal = 0
@@ -106,7 +88,7 @@ final class SyncEngine {
                     amount: tokenDTO.amount,
                     usdValue: tokenDTO.usdValue,
                     asset: asset,
-                    position: position
+                    position: position,
                 )
                 modelContext.insert(token)
 
@@ -165,7 +147,7 @@ final class SyncEngine {
             sourceKey: dto.sourceKey,
             logoURL: dto.logoURL,
             category: dto.category,
-            isVerified: dto.isVerified
+            isVerified: dto.isVerified,
         )
         modelContext.insert(asset)
         return asset
@@ -212,13 +194,13 @@ final class SyncEngine {
             case .idle:
                 // Idle value = sum of positive tokens
                 let posIdle = pos.tokens
-                    .filter { $0.role.isPositive }
+                    .filter(\.role.isPositive)
                     .reduce(Decimal.zero) { $0 + $1.usdValue }
                 idleValue += posIdle
             case .lending, .staking, .farming, .liquidityPool:
                 // Deployed = positive roles
                 let posDep = pos.tokens
-                    .filter { $0.role.isPositive }
+                    .filter(\.role.isPositive)
                     .reduce(Decimal.zero) { $0 + $1.usdValue }
                 deployedValue += posDep
             default:
@@ -227,7 +209,7 @@ final class SyncEngine {
 
             // Debt from all borrow tokens
             let posBorrow = pos.tokens
-                .filter { $0.role.isBorrow }
+                .filter(\.role.isBorrow)
                 .reduce(Decimal.zero) { $0 + $1.usdValue }
             debtValue += posBorrow
         }
@@ -236,7 +218,7 @@ final class SyncEngine {
             syncBatchId: batchId, timestamp: batchTimestamp,
             totalValue: totalValue, idleValue: idleValue,
             deployedValue: deployedValue, debtValue: debtValue,
-            isPartial: isPartial
+            isPartial: isPartial,
         )
         modelContext.insert(portfolioSnap)
 
@@ -249,7 +231,7 @@ final class SyncEngine {
 
             let snap = AccountSnapshot(
                 syncBatchId: batchId, timestamp: batchTimestamp,
-                accountId: account.id, totalValue: accountTotal, isFresh: isFresh
+                accountId: account.id, totalValue: accountTotal, isFresh: isFresh,
             )
             modelContext.insert(snap)
         }
@@ -285,7 +267,7 @@ final class SyncEngine {
                         accountId: accountId,
                         assetId: asset.id,
                         symbol: asset.symbol,
-                        category: asset.category
+                        category: asset.category,
                     )
                 }
 
@@ -305,7 +287,7 @@ final class SyncEngine {
                 accountId: acc.accountId, assetId: acc.assetId,
                 symbol: acc.symbol, category: acc.category,
                 amount: acc.grossAmount, usdValue: acc.grossUsdValue,
-                borrowAmount: acc.borrowAmount, borrowUsdValue: acc.borrowUsdValue
+                borrowAmount: acc.borrowAmount, borrowUsdValue: acc.borrowUsdValue,
             )
             modelContext.insert(snap)
         }
@@ -333,7 +315,7 @@ final class SyncEngine {
         pruneSnapshotType(AssetSnapshot.self, olderThan: ninetyDaysAgo, keepPer: .weekOfYear)
     }
 
-    private func pruneSnapshotType<T: PersistentModel>(_ type: T.Type, olderThan: Date, keepPer: Calendar.Component) {
+    private func pruneSnapshotType(_: (some PersistentModel).Type, olderThan _: Date, keepPer _: Calendar.Component) {
         // Implementation: fetch snapshots older than cutoff, group by calendar component,
         // keep only the last snapshot per group, delete the rest.
         // This is a best-effort operation — errors are logged but don't fail the sync.
@@ -380,7 +362,7 @@ final class SyncEngine {
     private func fetchAllActiveAccounts() -> [Account] {
         let descriptor = FetchDescriptor<Account>()
         let all = (try? modelContext.fetch(descriptor)) ?? []
-        return all.filter { $0.isActive }
+        return all.filter(\.isActive)
     }
 
     private func fetchAsset(coinGeckoId: String) -> Asset? {
@@ -402,12 +384,16 @@ final class SyncEngine {
     }
 }
 
-enum SyncError: Error, LocalizedError {
+enum SyncError: Error, LocalizedError, Equatable {
     case missingAPIKey(String)
+    case noActiveAccounts
+    case allAccountsFailed
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey(let msg): msg
+        case let .missingAPIKey(msg): msg
+        case .noActiveAccounts: "No active accounts"
+        case .allAccountsFailed: "All accounts failed to sync"
         }
     }
 }

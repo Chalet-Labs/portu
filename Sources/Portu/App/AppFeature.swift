@@ -18,11 +18,15 @@ struct SyncEngineClient {
 
 extension SyncEngineClient: DependencyKey {
     static let liveValue = Self(
-        sync: { fatalError("Live SyncEngineClient not configured") },
+        sync: { fatalError("SyncEngineClient.liveValue must be overridden at Store creation") },
     )
     static let testValue = Self(
         sync: { SyncResult(failedAccounts: []) },
     )
+
+    static func live(engine: SyncEngine) -> Self {
+        Self(sync: { try await engine.sync() })
+    }
 }
 
 extension DependencyValues {
@@ -34,22 +38,23 @@ extension DependencyValues {
 
 // MARK: - PriceServiceClient
 
-struct PriceUpdate: Equatable {
-    var prices: [String: Decimal]
-    var changes24h: [String: Decimal]
-}
-
 struct PriceServiceClient {
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
 }
 
 extension PriceServiceClient: DependencyKey {
     static let liveValue = Self(
-        fetchPrices: { _ in fatalError("Live PriceServiceClient not configured") },
+        fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
     )
     static let testValue = Self(
         fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
     )
+
+    static func live(service: PriceService) -> Self {
+        Self(fetchPrices: { coinIds in
+            try await service.fetchPriceUpdate(for: coinIds)
+        })
+    }
 }
 
 extension DependencyValues {

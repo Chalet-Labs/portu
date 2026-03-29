@@ -32,7 +32,7 @@ The app target (`Sources/Portu/`) imports all three and contains features, app s
 ## Swift & Concurrency
 
 - **Swift 6.2** with strict concurrency (`SWIFT_STRICT_CONCURRENCY: complete`)
-- PortuUI and app target use `defaultIsolation(MainActor.self)`
+- PortuUI uses `defaultIsolation(MainActor.self)` — app target does NOT (incompatible with TCA)
 - PortuNetwork providers are `actor` types (off-main-thread)
 - DTOs and enums must be plain `Sendable` for cross-isolation safety
 - SwiftData `@Model` types are implicitly `@MainActor`
