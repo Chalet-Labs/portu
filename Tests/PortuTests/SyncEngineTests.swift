@@ -1,12 +1,10 @@
-import Testing
 import Foundation
-import SwiftData
 @testable import Portu
 import PortuCore
+import SwiftData
+import Testing
 
-@Suite("SyncEngine Tests")
 struct SyncEngineTests {
-
     private func makeTestContext() throws -> (ModelContext, AppState, SyncEngine) {
         let schema = Schema([
             Account.self, WalletAddress.self, Position.self,
@@ -22,17 +20,17 @@ struct SyncEngineTests {
         return (context, appState, engine)
     }
 
-    @Test func syncWithNoAccountsSetsError() async throws {
+    @Test func `sync with no accounts sets error`() async throws {
         let (_, appState, engine) = try makeTestContext()
         await engine.sync()
-        if case .error(let msg) = appState.syncStatus {
+        if case let .error(msg) = appState.syncStatus {
             #expect(msg.contains("No active accounts"))
         } else {
             Issue.record("Expected .error status, got \(appState.syncStatus)")
         }
     }
 
-    @Test func syncManualOnlyAccountsCreatesSnapshots() async throws {
+    @Test func `sync manual only accounts creates snapshots`() async throws {
         let (context, appState, engine) = try makeTestContext()
         let asset = Asset(symbol: "GOLD", name: "Gold Token", category: .other)
         context.insert(asset)
@@ -51,9 +49,9 @@ struct SyncEngineTests {
         #expect(appState.syncStatus == .idle)
     }
 
-    @Test func snapshotBatchIdsLinkCorrectly() async throws {
+    @Test func `snapshot batch ids link correctly`() async throws {
         let (context, appState, engine) = try makeTestContext()
-        let asset = Asset(symbol: "ETH", name: "Ethereum", category: .crypto)
+        let asset = Asset(symbol: "ETH", name: "Ethereum", category: .major)
         context.insert(asset)
         let token = PositionToken(role: .balance, amount: 10, usdValue: 25000, asset: asset)
         let position = Position(positionType: .idle, netUSDValue: 25000, tokens: [token])
@@ -91,7 +89,15 @@ struct SyncEngineTests {
 
 private final class MockSecretStore: SecretStore, @unchecked Sendable {
     private var store: [String: String] = [:]
-    func get(key: String) throws(KeychainError) -> String? { store[key] }
-    func set(key: String, value: String) throws(KeychainError) { store[key] = value }
-    func delete(key: String) throws(KeychainError) { store.removeValue(forKey: key) }
+    func get(key: String) throws(KeychainError) -> String? {
+        store[key]
+    }
+
+    func set(key: String, value: String) throws(KeychainError) {
+        store[key] = value
+    }
+
+    func delete(key: String) throws(KeychainError) {
+        store.removeValue(forKey: key)
+    }
 }

@@ -10,11 +10,11 @@ generate:
 
 # Build the app (Debug)
 build:
-    xcodebuild -scheme Portu -configuration Debug build
+    xcodebuild -scheme Portu -configuration Debug -skipMacroValidation build
 
 # Build the app (Release)
 release:
-    xcodebuild -scheme Portu -configuration Release build
+    xcodebuild -scheme Portu -configuration Release -skipMacroValidation build
 
 # Run all tests (SPM packages)
 test-packages:
@@ -24,7 +24,7 @@ test-packages:
 
 # Run all tests (Xcode scheme)
 test:
-    xcodebuild -scheme Portu -configuration Debug test
+    xcodebuild -scheme Portu -configuration Debug -skipMacroValidation test
 
 # Lint all Swift files
 lint:
@@ -40,5 +40,5 @@ format:
 
 # Clean build artifacts
 clean:
-    xcodebuild -scheme Portu clean
+    xcodebuild -scheme Portu -skipMacroValidation clean
     rm -rf DerivedData .build
