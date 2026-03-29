@@ -28,7 +28,7 @@ struct ContentView: View {
         case .overview:
             OverviewView()
         case .exposure:
-            ExposureView()
+            ExposureView(store: store)
         case .performance:
             PerformanceView()
         case .allAssets:

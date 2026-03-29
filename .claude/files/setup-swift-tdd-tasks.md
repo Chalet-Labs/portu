@@ -65,7 +65,13 @@ Migrate each feature module to TCA reducers.
   - 21 tests: 4 reducer (TestStore) + 5 row mapping + 6 filtering + 2 group extraction + 4 form validation
   - Views updated: store bindings instead of @State, pure functions instead of inline logic
   - AddAccountSheet uses canSave from feature; form @State stays local (resets on dismiss)
-- [ ] 4.4 ExposureFeature (exposure breakdown)
+- [x] 4.4 ExposureFeature (exposure breakdown)
+  - ExposureFeature @Reducer with State (showByAsset), child of AppFeature
+  - Extracted pure functions: computeCategoryExposure, computeAssetExposure, computeSummary, resolveTokenUSDValue
+  - Reuses TokenEntry from AllAssetsFeature (same input shape)
+  - Output structs: CategoryExposure, AssetExposure, ExposureSummary
+  - 15 tests: 1 reducer + 5 category + 3 asset + 3 summary + 3 token value
+  - Views updated: store bindings, pure functions, tokenEntries mapping from @Query
 - [ ] 4.5 PerformanceFeature (analytics)
 - [ ] 4.6 StatusBarFeature (menu bar)
 - [ ] 4.7 Each feature has TestStore tests before migration is "done"

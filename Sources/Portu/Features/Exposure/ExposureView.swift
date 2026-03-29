@@ -1,114 +1,63 @@
-import SwiftUI
-import SwiftData
+import ComposableArchitecture
 import PortuCore
 import PortuUI
+import SwiftData
+import SwiftUI
 
 struct ExposureView: View {
-    @Environment(AppState.self) private var appState
+    let store: StoreOf<AppFeature>
+
     @Query(filter: #Predicate<PositionToken> { $0.position?.account?.isActive == true })
     private var allTokens: [PositionToken]
 
-    @State private var showByAsset = false
-
-    // MARK: - Computed Exposure
-
-    private struct CategoryExposure: Identifiable {
-        let id: String
-        let name: String
-        let spotAssets: Decimal
-        let liabilities: Decimal
-        var spotNet: Decimal { spotAssets - liabilities }
-        // Derivatives deferred
-        var netExposure: Decimal { spotNet }
-    }
-
-    private struct AssetExposure: Identifiable {
-        let id: UUID
-        let symbol: String
-        let category: AssetCategory
-        let spotAssets: Decimal
-        let liabilities: Decimal
-        var spotNet: Decimal { spotAssets - liabilities }
-        var netExposure: Decimal { spotNet }
-    }
-
-    private var byCategory: [CategoryExposure] {
-        var assets: [AssetCategory: Decimal] = [:]
-        var borrows: [AssetCategory: Decimal] = [:]
-
-        for token in allTokens {
-            let cat = token.asset?.category ?? .other
-            let value = tokenUSDValue(token)
-
-            if token.role.isPositive {
-                assets[cat, default: 0] += value
-            } else if token.role.isBorrow {
-                borrows[cat, default: 0] += value
-            }
-            // reward: excluded
-        }
-
-        return AssetCategory.allCases.compactMap { cat in
-            let a = assets[cat, default: 0]
-            let b = borrows[cat, default: 0]
-            guard a > 0 || b > 0 else { return nil }
-            return CategoryExposure(
-                id: cat.rawValue,
-                name: cat.rawValue.capitalized,
-                spotAssets: a,
-                liabilities: b
+    private var tokenEntries: [TokenEntry] {
+        allTokens.compactMap { token -> TokenEntry? in
+            guard let asset = token.asset else { return nil }
+            return TokenEntry(
+                assetId: asset.id,
+                symbol: asset.symbol,
+                name: asset.name,
+                category: asset.category,
+                coinGeckoId: asset.coinGeckoId,
+                role: token.role,
+                amount: token.amount,
+                usdValue: token.usdValue,
             )
         }
     }
 
-    private var byAsset: [AssetExposure] {
-        var assetMap: [UUID: (symbol: String, category: AssetCategory, assets: Decimal, borrows: Decimal)] = [:]
-
-        for token in allTokens {
-            guard let asset = token.asset else { continue }
-            let value = tokenUSDValue(token)
-
-            var entry = assetMap[asset.id] ?? (asset.symbol, asset.category, 0, 0)
-            if token.role.isPositive {
-                entry.assets += value
-            } else if token.role.isBorrow {
-                entry.borrows += value
-            }
-            assetMap[asset.id] = entry
-        }
-
-        return assetMap.map { (id, entry) in
-            AssetExposure(id: id, symbol: entry.symbol, category: entry.category,
-                          spotAssets: entry.assets, liabilities: entry.borrows)
-        }
-        .sorted { $0.spotNet > $1.spotNet }
+    private var byCategory: [CategoryExposure] {
+        ExposureFeature.computeCategoryExposure(tokens: tokenEntries, prices: store.prices)
     }
 
-    private var totalSpot: Decimal { byCategory.reduce(0) { $0 + $1.spotAssets } }
-    private var totalLiabilities: Decimal { byCategory.reduce(0) { $0 + $1.liabilities } }
-    private var netExposure: Decimal {
-        byCategory.filter { $0.id != "stablecoin" }.reduce(0) { $0 + $1.spotNet }
+    private var byAsset: [AssetExposure] {
+        ExposureFeature.computeAssetExposure(tokens: tokenEntries, prices: store.prices)
+    }
+
+    private var summary: ExposureSummary {
+        ExposureFeature.computeSummary(from: byCategory)
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Summary cards
                 HStack(spacing: 12) {
-                    summaryCard("Spot Total", value: totalSpot)
+                    summaryCard("Spot Total", value: summary.totalSpot)
                     summaryCard("Derivatives", value: 0, subtitle: "Coming soon")
-                    summaryCard("Net Exposure", value: netExposure, subtitle: "Excl. stablecoins")
+                    summaryCard("Net Exposure", value: summary.netExposure, subtitle: "Excl. stablecoins")
                 }
 
-                // Toggle
-                Picker("View", selection: $showByAsset) {
+                Picker("View", selection: Binding(
+                    get: { store.exposure.showByAsset },
+                    set: { store.send(.exposure(.viewModeChanged($0))) },
+                )) {
                     Text("By Category").tag(false)
                     Text("By Asset").tag(true)
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 250)
 
-                if showByAsset {
+                if store.exposure.showByAsset {
                     assetTable
                 } else {
                     categoryTable
@@ -139,7 +88,7 @@ struct ExposureView: View {
                     .foregroundStyle(row.spotNet < 0 ? .red : .primary)
             }
             .width(min: 80, ideal: 120)
-            TableColumn("Derivatives") { _ in Text("—").foregroundStyle(.tertiary) }
+            TableColumn("Derivatives") { _ in Text("\u{2014}").foregroundStyle(.tertiary) }
                 .width(min: 60, ideal: 80)
             TableColumn("Net Exposure") { row in
                 Text(row.netExposure, format: .currency(code: "USD"))
@@ -191,10 +140,5 @@ struct ExposureView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    private func tokenUSDValue(_ token: PositionToken) -> Decimal {
-        token.asset?.coinGeckoId.flatMap { appState.prices[$0] }.map { token.amount * $0 }
-            ?? token.usdValue
     }
 }
