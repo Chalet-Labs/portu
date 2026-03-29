@@ -81,6 +81,7 @@ struct AppFeature {
         var assetDetail = AssetDetailFeature.State()
         var accounts = AccountsFeature.State()
         var exposure = ExposureFeature.State()
+        var performance = PerformanceFeature.State()
     }
 
     enum Action {
@@ -96,6 +97,7 @@ struct AppFeature {
         case assetDetail(AssetDetailFeature.Action)
         case accounts(AccountsFeature.Action)
         case exposure(ExposureFeature.Action)
+        case performance(PerformanceFeature.Action)
     }
 
     private enum CancelID {
@@ -119,6 +121,9 @@ struct AppFeature {
         }
         Scope(state: \.exposure, action: \.exposure) {
             ExposureFeature()
+        }
+        Scope(state: \.performance, action: \.performance) {
+            PerformanceFeature()
         }
         Reduce { state, action in
             switch action {
@@ -192,6 +197,9 @@ struct AppFeature {
 
             case .exposure:
                 return .none
+
+            case .performance:
+                return .none
             }
         }
     }
@@ -215,6 +223,7 @@ extension AppFeature.Action: Equatable {
         case let (.assetDetail(l), .assetDetail(r)): l == r
         case let (.accounts(l), .accounts(r)): l == r
         case let (.exposure(l), .exposure(r)): l == r
+        case let (.performance(l), .performance(r)): l == r
         default: false
         }
     }

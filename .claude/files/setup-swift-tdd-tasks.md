@@ -72,9 +72,20 @@ Migrate each feature module to TCA reducers.
   - Output structs: CategoryExposure, AssetExposure, ExposureSummary
   - 15 tests: 1 reducer + 5 category + 3 asset + 3 summary + 3 token value
   - Views updated: store bindings, pure functions, tokenEntries mapping from @Query
-- [ ] 4.5 PerformanceFeature (analytics)
-- [ ] 4.6 StatusBarFeature (menu bar)
-- [ ] 4.7 Each feature has TestStore tests before migration is "done"
+- [x] 4.5 PerformanceFeature (analytics)
+  - PerformanceFeature @Reducer with State (selectedAccountId, selectedRange, chartMode, disabledCategories, showCumulative)
+  - Extracted pure functions: lastPerDay, computePnLBars, computeCategoryChanges
+  - New enums: PerformanceChartMode (value/assets/pnl), PerformanceTimeRange (1W-Custom)
+  - Output structs: PnLBar, CategoryChange, CategorySnapshotEntry
+  - 14 tests: 5 reducer + 3 lastPerDay + 3 PnL + 3 category change
+  - All child chart views (ValueChartMode, AssetsChartMode, PnLChartMode) migrated
+  - PerformanceBottomPanel uses computeCategoryChanges pure function
+- [x] 4.6 StatusBarFeature (menu bar)
+  - No child reducer needed — reads directly from AppFeature.State
+  - Replaced @Environment(AppState.self) with store: StoreOf<AppFeature>
+  - Reads syncStatus, storeIsEphemeral, lastPriceUpdate from store
+- [x] 4.7 Each feature has TestStore tests before migration is "done"
+  - 96 tests across 24 suites — all features have full TestStore + pure function coverage
 
 ## Phase 5: CI/CD
 

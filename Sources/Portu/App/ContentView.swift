@@ -18,7 +18,7 @@ struct ContentView: View {
         }
         .frame(minWidth: 900, minHeight: 600)
         .safeAreaInset(edge: .bottom) {
-            StatusBarView()
+            StatusBarView(store: store)
         }
     }
 
@@ -30,7 +30,7 @@ struct ContentView: View {
         case .exposure:
             ExposureView(store: store)
         case .performance:
-            PerformanceView()
+            PerformanceView(store: store)
         case .allAssets:
             AllAssetsView(store: store)
         case .allPositions:
