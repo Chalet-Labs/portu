@@ -55,7 +55,7 @@ struct PortuApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(store: store)
                 .environment(appState)
         }
         .modelContainer(container)

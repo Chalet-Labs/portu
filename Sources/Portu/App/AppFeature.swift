@@ -77,6 +77,7 @@ struct AppFeature {
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?
         var storeIsEphemeral: Bool = false
+        var allAssets = AllAssetsFeature.State()
     }
 
     enum Action {
@@ -88,6 +89,7 @@ struct AppFeature {
         case stopPricePolling
         case pricesReceived(PriceUpdate)
         case priceFetchFailed(Error)
+        case allAssets(AllAssetsFeature.Action)
     }
 
     private enum CancelID {
@@ -100,6 +102,9 @@ struct AppFeature {
     @Dependency(\.date.now) var now
 
     var body: some ReducerOf<Self> {
+        Scope(state: \.allAssets, action: \.allAssets) {
+            AllAssetsFeature()
+        }
         Reduce { state, action in
             switch action {
             case let .sectionSelected(section):
@@ -160,6 +165,9 @@ struct AppFeature {
 
             case .stopPricePolling:
                 return .cancel(id: CancelID.pricePolling)
+
+            case .allAssets:
+                return .none
             }
         }
     }
@@ -179,6 +187,7 @@ extension AppFeature.Action: Equatable {
         case (.stopPricePolling, .stopPricePolling): true
         case let (.pricesReceived(l), .pricesReceived(r)): l == r
         case (.priceFetchFailed, .priceFetchFailed): true
+        case let (.allAssets(l), .allAssets(r)): l == r
         default: false
         }
     }

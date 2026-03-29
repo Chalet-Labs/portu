@@ -43,7 +43,12 @@
 
 Migrate each feature module to TCA reducers.
 
-- [ ] 4.1 AllAssetsFeature (list view + filtering)
+- [x] 4.1 AllAssetsFeature (list view + filtering)
+  - AllAssetsFeature @Reducer with State (selectedTab, searchText, grouping), Action, child of AppFeature
+  - Extracted row aggregation as testable pure functions (aggregateRows, filterRows, generateCSV)
+  - TokenEntry struct decouples aggregation from SwiftData models
+  - 13 tests: 3 reducer (TestStore) + 7 aggregation + 3 filtering/CSV
+  - Views updated: store bindings instead of @State, prices from parent store instead of AppState
 - [ ] 4.2 AssetDetailFeature (price chart + positions)
 - [ ] 4.3 AccountsFeature (sortable table + add account)
 - [ ] 4.4 ExposureFeature (exposure breakdown)

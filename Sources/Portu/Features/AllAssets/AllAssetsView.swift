@@ -1,19 +1,16 @@
 // Sources/Portu/Features/AllAssets/AllAssetsView.swift
+import ComposableArchitecture
 import SwiftUI
 
 struct AllAssetsView: View {
-    @State private var selectedTab: AssetTab = .assets
-
-    enum AssetTab: String, CaseIterable {
-        case assets = "Assets"
-        case nfts = "NFTs"
-        case platforms = "Platforms"
-        case networks = "Networks"
-    }
+    let store: StoreOf<AppFeature>
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Tab", selection: $selectedTab) {
+            Picker("Tab", selection: Binding(
+                get: { store.allAssets.selectedTab },
+                set: { store.send(.allAssets(.tabSelected($0))) },
+            )) {
                 ForEach(AssetTab.allCases, id: \.self) { tab in
                     Text(tab.rawValue).tag(tab)
                 }
@@ -21,8 +18,8 @@ struct AllAssetsView: View {
             .pickerStyle(.segmented)
             .padding()
 
-            switch selectedTab {
-            case .assets: AssetsTab()
+            switch store.allAssets.selectedTab {
+            case .assets: AssetsTab(store: store)
             case .nfts: nftPlaceholder
             case .platforms: PlatformsTab()
             case .networks: NetworksTab()
@@ -35,7 +32,7 @@ struct AllAssetsView: View {
         ContentUnavailableView(
             "NFT Tracking",
             systemImage: "photo.artframe",
-            description: Text("NFT tracking coming soon")
+            description: Text("NFT tracking coming soon"),
         )
     }
 }

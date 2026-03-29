@@ -1,98 +1,39 @@
 // Sources/Portu/Features/AllAssets/AssetsTab.swift
-import SwiftUI
-import SwiftData
+import ComposableArchitecture
 import PortuCore
 import PortuUI
+import SwiftData
+import SwiftUI
 import UniformTypeIdentifiers
 
-// MARK: - Row data (nonisolated for Sendable KeyPaths)
-
-nonisolated struct AssetRowData: Identifiable, Sendable {
-    let id: UUID
-    let symbol: String
-    let name: String
-    let category: AssetCategory
-    let netAmount: Decimal
-    let price: Decimal
-    let value: Decimal
-    let hasLivePrice: Bool
-}
-
 struct AssetsTab: View {
-    @Environment(AppState.self) private var appState
+    let store: StoreOf<AppFeature>
     @Query(filter: #Predicate<PositionToken> { $0.position?.account?.isActive == true })
     private var allTokens: [PositionToken]
 
-    @State private var searchText = ""
     @State private var sortOrder: [KeyPathComparator<AssetRowData>] = [
-        KeyPathComparator(\.value, order: .reverse)
+        KeyPathComparator(\.value, order: .reverse),
     ]
-    @State private var grouping: Grouping = .none
 
-    // MARK: - Grouping
-
-    enum Grouping: String, CaseIterable {
-        case none = "None"
-        case category = "Category"
-        case priceSource = "Price Source"
-    }
-
-    /// Aggregate tokens by Asset.id, compute net amount
+    /// Map @Query tokens to lightweight entries, aggregate with live prices, filter, sort.
     private var rows: [AssetRowData] {
-        var assetTokens: [UUID: (asset: Asset, positive: Decimal, borrow: Decimal,
-                                  positiveUSD: Decimal, borrowUSD: Decimal)] = [:]
-
-        for token in allTokens {
-            guard let asset = token.asset else { continue }
-            if token.role.isReward { continue }
-
-            var entry = assetTokens[asset.id] ?? (asset, 0, 0, 0, 0)
-            if token.role.isBorrow {
-                entry.borrow += token.amount
-                entry.borrowUSD += token.usdValue
-            } else if token.role.isPositive {
-                entry.positive += token.amount
-                entry.positiveUSD += token.usdValue
-            }
-            assetTokens[asset.id] = entry
-        }
-
-        return assetTokens.values.compactMap { entry in
-            let netAmount = entry.positive - entry.borrow
-            let hasLive = entry.asset.coinGeckoId.flatMap { appState.prices[$0] } != nil
-
-            let price: Decimal
-            let value: Decimal
-
-            if let cgId = entry.asset.coinGeckoId, let livePrice = appState.prices[cgId] {
-                price = livePrice
-                value = netAmount * livePrice
-            } else {
-                // Sync-time fallback: weighted average price
-                if entry.positive > 0 {
-                    price = entry.positiveUSD / entry.positive
-                } else if entry.borrow > 0 {
-                    price = entry.borrowUSD / entry.borrow
-                } else {
-                    price = 0
-                }
-                value = entry.positiveUSD - entry.borrowUSD
-            }
-
-            return AssetRowData(
-                id: entry.asset.id,
-                symbol: entry.asset.symbol,
-                name: entry.asset.name,
-                category: entry.asset.category,
-                netAmount: netAmount,
-                price: price,
-                value: value,
-                hasLivePrice: hasLive
+        let entries = allTokens.compactMap { token -> TokenEntry? in
+            guard let asset = token.asset else { return nil }
+            return TokenEntry(
+                assetId: asset.id,
+                symbol: asset.symbol,
+                name: asset.name,
+                category: asset.category,
+                coinGeckoId: asset.coinGeckoId,
+                role: token.role,
+                amount: token.amount,
+                usdValue: token.usdValue,
             )
         }
-        .filter { searchText.isEmpty || $0.symbol.localizedCaseInsensitiveContains(searchText)
-                   || $0.name.localizedCaseInsensitiveContains(searchText) }
-        .sorted(using: sortOrder)
+
+        let aggregated = AllAssetsFeature.aggregateRows(tokens: entries, prices: store.prices)
+        let filtered = AllAssetsFeature.filterRows(aggregated, searchText: store.allAssets.searchText)
+        return filtered.sorted(using: sortOrder)
     }
 
     // MARK: - Body
@@ -110,8 +51,11 @@ struct AssetsTab: View {
         HStack {
             HStack {
                 Image(systemName: "magnifyingglass")
-                TextField("Search assets...", text: $searchText)
-                    .textFieldStyle(.plain)
+                TextField("Search assets...", text: Binding(
+                    get: { store.allAssets.searchText },
+                    set: { store.send(.allAssets(.searchTextChanged($0))) },
+                ))
+                .textFieldStyle(.plain)
             }
             .padding(8)
             .background(.quaternary.opacity(0.5))
@@ -119,8 +63,11 @@ struct AssetsTab: View {
 
             Spacer()
 
-            Picker("Group", selection: $grouping) {
-                ForEach(Grouping.allCases, id: \.self) { g in
+            Picker("Group", selection: Binding(
+                get: { store.allAssets.grouping },
+                set: { store.send(.allAssets(.groupingChanged($0))) },
+            )) {
+                ForEach(AssetGrouping.allCases, id: \.self) { g in
                     Text(g.rawValue).tag(g)
                 }
             }
@@ -164,7 +111,7 @@ struct AssetsTab: View {
             .width(min: 80, ideal: 100)
 
             TableColumn("Net Amount", value: \.netAmount) { row in
-                Text(row.netAmount, format: .number.precision(.fractionLength(2...8)))
+                Text(row.netAmount, format: .number.precision(.fractionLength(2 ... 8)))
                     .foregroundStyle(row.netAmount < 0 ? .red : .primary)
             }
             .width(min: 80, ideal: 120)
@@ -193,12 +140,7 @@ struct AssetsTab: View {
     // MARK: - CSV Export
 
     private func exportCSV() {
-        let header = "Symbol,Name,Category,Net Amount,Price,Value"
-        let lines = rows.map { row in
-            "\(row.symbol),\"\(row.name)\",\(row.category.rawValue),\(row.netAmount),\(row.price),\(row.value)"
-        }
-        let csv = ([header] + lines).joined(separator: "\n")
-
+        let csv = AllAssetsFeature.generateCSV(from: rows)
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
         panel.nameFieldStringValue = "assets.csv"

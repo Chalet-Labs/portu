@@ -1,8 +1,10 @@
-import SwiftUI
-import SwiftData
+import ComposableArchitecture
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct ContentView: View {
+    let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
 
     var body: some View {
@@ -30,7 +32,7 @@ struct ContentView: View {
         case .performance:
             PerformanceView()
         case .allAssets:
-            AllAssetsView()
+            AllAssetsView(store: store)
         case .allPositions:
             AllPositionsView()
         case .accounts:
