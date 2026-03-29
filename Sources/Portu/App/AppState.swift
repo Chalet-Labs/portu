@@ -1,7 +1,7 @@
 import Foundation
 import PortuCore
 
-enum SidebarSection: Hashable, Sendable {
+enum SidebarSection: Hashable {
     case overview
     case exposure
     case performance
@@ -10,13 +10,13 @@ enum SidebarSection: Hashable, Sendable {
     case accounts
 }
 
-enum ConnectionStatus: Hashable, Sendable {
+enum ConnectionStatus: Hashable {
     case idle
     case fetching
     case error(String)
 }
 
-enum SyncStatus: Hashable, Sendable {
+enum SyncStatus: Hashable {
     case idle
     case syncing(progress: Double)
     case completedWithErrors(failedAccounts: [String])

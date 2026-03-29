@@ -7,8 +7,6 @@ public enum PortuTheme {
 
     /// Returns gain/loss color based on a value being positive, negative, or zero.
     public static func changeColor(for value: Decimal) -> Color {
-        if value > 0 { gainColor }
-        else if value < 0 { lossColor }
-        else { neutralColor }
+        if value > 0 { gainColor } else if value < 0 { lossColor } else { neutralColor }
     }
 }

@@ -27,8 +27,7 @@ struct PlatformsTab: View {
             var entry = byProtocol[key] ?? (name, [], 0, 0)
             entry.count += 1
             entry.value += pos.netUSDValue
-            if let chain = pos.chain { entry.chains.insert(chain.rawValue) }
-            else { entry.chains.insert("off-chain") }
+            if let chain = pos.chain { entry.chains.insert(chain.rawValue) } else { entry.chains.insert("off-chain") }
             byProtocol[key] = entry
         }
 

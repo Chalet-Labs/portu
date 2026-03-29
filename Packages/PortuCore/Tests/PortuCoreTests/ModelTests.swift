@@ -60,7 +60,7 @@ struct ModelTests {
         context.delete(account)
         try context.save()
 
-        #expect(try context.fetch(FetchDescriptor<WalletAddress>()).count == 0)
+        #expect(try context.fetch(FetchDescriptor<WalletAddress>()).isEmpty)
     }
 
     @Test func accountCascadeDeletesPositions() throws {
@@ -78,7 +78,7 @@ struct ModelTests {
         context.delete(account)
         try context.save()
 
-        #expect(try context.fetch(FetchDescriptor<Position>()).count == 0)
+        #expect(try context.fetch(FetchDescriptor<Position>()).isEmpty)
     }
 
     @Test func positionCascadeDeletesTokens() throws {
@@ -98,7 +98,7 @@ struct ModelTests {
         context.delete(position)
         try context.save()
 
-        #expect(try context.fetch(FetchDescriptor<PositionToken>()).count == 0)
+        #expect(try context.fetch(FetchDescriptor<PositionToken>()).isEmpty)
         // Asset survives — shared reference data
         #expect(try context.fetch(FetchDescriptor<Asset>()).count == 1)
     }
@@ -118,7 +118,7 @@ struct ModelTests {
         try context.save()
 
         // Asset is gone
-        #expect(try context.fetch(FetchDescriptor<Asset>()).count == 0)
+        #expect(try context.fetch(FetchDescriptor<Asset>()).isEmpty)
         // Token survives — nullify, not cascade
         let tokens = try context.fetch(FetchDescriptor<PositionToken>())
         #expect(tokens.count == 1)
@@ -142,9 +142,9 @@ struct ModelTests {
         context.delete(account)
         try context.save()
 
-        #expect(try context.fetch(FetchDescriptor<Account>()).count == 0)
-        #expect(try context.fetch(FetchDescriptor<Position>()).count == 0)
-        #expect(try context.fetch(FetchDescriptor<PositionToken>()).count == 0)
+        #expect(try context.fetch(FetchDescriptor<Account>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<Position>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<PositionToken>()).isEmpty)
         // Asset survives
         #expect(try context.fetch(FetchDescriptor<Asset>()).count == 1)
     }

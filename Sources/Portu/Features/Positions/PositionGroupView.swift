@@ -44,11 +44,7 @@ struct PositionGroupView: View {
             ForEach(position.tokens, id: \.id) { token in
                 HStack {
                     // Role prefix
-                    if token.role == .supply { Text("-> Supply").font(.caption).foregroundStyle(.green) }
-                    else if token.role.isBorrow { Text("<- Borrow").font(.caption).foregroundStyle(.orange) }
-                    else if token.role.isReward { Text("* Reward").font(.caption).foregroundStyle(.yellow) }
-                    else if token.role == .stake { Text("+ Stake").font(.caption).foregroundStyle(.blue) }
-                    else { Text("o Balance").font(.caption).foregroundStyle(.secondary) }
+                    if token.role == .supply { Text("-> Supply").font(.caption).foregroundStyle(.green) } else if token.role.isBorrow { Text("<- Borrow").font(.caption).foregroundStyle(.orange) } else if token.role.isReward { Text("* Reward").font(.caption).foregroundStyle(.yellow) } else if token.role == .stake { Text("+ Stake").font(.caption).foregroundStyle(.blue) } else { Text("o Balance").font(.caption).foregroundStyle(.secondary) }
 
                     Text(token.asset?.symbol ?? "???")
                         .fontWeight(.medium)

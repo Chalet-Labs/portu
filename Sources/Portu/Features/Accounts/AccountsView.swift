@@ -16,7 +16,7 @@ struct AccountsView: View {
         KeyPathComparator(\.name)
     ]
 
-    private nonisolated struct AccountRowData: Identifiable, Sendable {
+    nonisolated private struct AccountRowData: Identifiable, Sendable {
         let id: UUID
         let name: String
         let group: String

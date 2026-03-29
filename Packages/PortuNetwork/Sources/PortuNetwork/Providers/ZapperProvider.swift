@@ -6,7 +6,7 @@ public actor ZapperProvider: PortfolioDataProvider {
     private let session: URLSession
     private let baseURL: URL
 
-    public nonisolated var capabilities: ProviderCapabilities {
+    nonisolated public var capabilities: ProviderCapabilities {
         ProviderCapabilities(
             supportsTokenBalances: true,
             supportsDeFiPositions: true,
