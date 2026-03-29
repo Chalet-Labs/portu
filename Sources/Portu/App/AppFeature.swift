@@ -78,6 +78,7 @@ struct AppFeature {
         var lastPriceUpdate: Date?
         var storeIsEphemeral: Bool = false
         var allAssets = AllAssetsFeature.State()
+        var assetDetail = AssetDetailFeature.State()
     }
 
     enum Action {
@@ -90,6 +91,7 @@ struct AppFeature {
         case pricesReceived(PriceUpdate)
         case priceFetchFailed(Error)
         case allAssets(AllAssetsFeature.Action)
+        case assetDetail(AssetDetailFeature.Action)
     }
 
     private enum CancelID {
@@ -104,6 +106,9 @@ struct AppFeature {
     var body: some ReducerOf<Self> {
         Scope(state: \.allAssets, action: \.allAssets) {
             AllAssetsFeature()
+        }
+        Scope(state: \.assetDetail, action: \.assetDetail) {
+            AssetDetailFeature()
         }
         Reduce { state, action in
             switch action {
@@ -168,6 +173,9 @@ struct AppFeature {
 
             case .allAssets:
                 return .none
+
+            case .assetDetail:
+                return .none
             }
         }
     }
@@ -188,6 +196,7 @@ extension AppFeature.Action: Equatable {
         case let (.pricesReceived(l), .pricesReceived(r)): l == r
         case (.priceFetchFailed, .priceFetchFailed): true
         case let (.allAssets(l), .allAssets(r)): l == r
+        case let (.assetDetail(l), .assetDetail(r)): l == r
         default: false
         }
     }

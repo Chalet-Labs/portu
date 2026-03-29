@@ -1,43 +1,33 @@
-import SwiftUI
-import SwiftData
+import ComposableArchitecture
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct AssetPositionsTable: View {
     let assetId: UUID
+    let store: StoreOf<AppFeature>
 
-    @Environment(AppState.self) private var appState
     @Query(filter: #Predicate<PositionToken> { $0.position?.account?.isActive == true })
     private var allTokens: [PositionToken]
 
-    private struct PositionRow: Identifiable {
-        let id: UUID
-        let accountName: String
-        let platformName: String
-        let context: String // Staked/Idle/Lending/etc.
-        let network: String
-        let amount: Decimal
-        let usdBalance: Decimal
-    }
-
-    private var rows: [PositionRow] {
-        allTokens
+    private var rows: [PositionRowData] {
+        let entries = allTokens
             .filter { $0.asset?.id == assetId }
-            .compactMap { token -> PositionRow? in
+            .compactMap { token -> PositionTokenEntry? in
                 guard let pos = token.position else { return nil }
-                let value = token.asset?.coinGeckoId.flatMap { appState.prices[$0] }.map { token.amount * $0 }
-                    ?? token.usdValue
-
-                return PositionRow(
-                    id: token.id,
+                return PositionTokenEntry(
+                    tokenId: token.id,
                     accountName: pos.account?.name ?? "Unknown",
-                    platformName: pos.protocolName ?? "Wallet",
-                    context: pos.positionType.rawValue.capitalized,
-                    network: pos.chain?.rawValue.capitalized ?? "Off-chain",
+                    protocolName: pos.protocolName,
+                    positionType: pos.positionType,
+                    chain: pos.chain,
+                    role: token.role,
                     amount: token.amount,
-                    usdBalance: value
+                    usdValue: token.usdValue,
+                    coinGeckoId: token.asset?.coinGeckoId,
                 )
             }
-            .sorted { $0.usdBalance > $1.usdBalance }
+        return AssetDetailFeature.aggregatePositionRows(tokens: entries, prices: store.prices)
     }
 
     var body: some View {
@@ -61,7 +51,7 @@ struct AssetPositionsTable: View {
                 TableColumn("Network") { row in Text(row.network) }
                     .width(min: 60, ideal: 80)
                 TableColumn("Amount") { row in
-                    Text(row.amount, format: .number.precision(.fractionLength(2...8)))
+                    Text(row.amount, format: .number.precision(.fractionLength(2 ... 8)))
                 }
                 .width(min: 80, ideal: 100)
                 TableColumn("USD Balance") { row in

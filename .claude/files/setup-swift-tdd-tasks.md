@@ -49,7 +49,14 @@ Migrate each feature module to TCA reducers.
   - TokenEntry struct decouples aggregation from SwiftData models
   - 13 tests: 3 reducer (TestStore) + 7 aggregation + 3 filtering/CSV
   - Views updated: store bindings instead of @State, prices from parent store instead of AppState
-- [ ] 4.2 AssetDetailFeature (price chart + positions)
+- [x] 4.2 AssetDetailFeature (price chart + positions)
+  - AssetDetailFeature @Reducer with State (chartMode, selectedRange), Action (chartModeChanged, timeRangeChanged), child of AppFeature
+  - Extracted pure functions: aggregatePositionRows, computeHoldingsSummary, aggregateSnapshots, headerPriceInfo
+  - Input structs: PositionTokenEntry (per-token with account/position context), SnapshotEntry (decouples from @Model)
+  - Output structs: PositionRowData, HoldingsSummary + ChainBreakdown, ChartDataPoint, AssetPriceInfo
+  - 21 tests: 2 reducer (TestStore) + 6 position row + 6 holdings summary + 3 snapshot aggregation + 4 header price
+  - Views updated: store bindings instead of @State, prices from parent store instead of AppState
+  - AssetMetadataSidebar unchanged (already pure — no AppState dependency)
 - [ ] 4.3 AccountsFeature (sortable table + add account)
 - [ ] 4.4 ExposureFeature (exposure breakdown)
 - [ ] 4.5 PerformanceFeature (analytics)

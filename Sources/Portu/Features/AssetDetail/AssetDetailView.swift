@@ -1,12 +1,13 @@
-import SwiftUI
-import SwiftData
+import ComposableArchitecture
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct AssetDetailView: View {
     let assetId: UUID
+    let store: StoreOf<AppFeature>
 
     @Query private var assets: [Asset]
-    @Environment(AppState.self) private var appState
 
     private var asset: Asset? {
         assets.first { $0.id == assetId }
@@ -15,13 +16,12 @@ struct AssetDetailView: View {
     var body: some View {
         if let asset {
             HSplitView {
-                // Main content
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         // Breadcrumb
                         HStack {
                             Button("← Assets") {
-                                appState.selectedSection = .allAssets
+                                store.send(.sectionSelected(.allAssets))
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
@@ -40,11 +40,15 @@ struct AssetDetailView: View {
                                 .font(.title2)
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            if let cgId = asset.coinGeckoId, let price = appState.prices[cgId] {
+                            if let info = AssetDetailFeature.headerPriceInfo(
+                                coinGeckoId: asset.coinGeckoId,
+                                prices: store.prices,
+                                changes24h: store.priceChanges24h,
+                            ) {
                                 VStack(alignment: .trailing) {
-                                    Text(price, format: .currency(code: "USD"))
+                                    Text(info.price, format: .currency(code: "USD"))
                                         .font(.title2.weight(.semibold))
-                                    if let change = appState.priceChanges24h[cgId] {
+                                    if let change = info.change24h {
                                         HStack(spacing: 4) {
                                             Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
                                             Text(change, format: .percent.precision(.fractionLength(2)))
@@ -55,16 +59,15 @@ struct AssetDetailView: View {
                             }
                         }
 
-                        AssetPriceChart(assetId: assetId, coinGeckoId: asset.coinGeckoId)
-                        AssetHoldingsSummary(assetId: assetId)
-                        AssetPositionsTable(assetId: assetId)
+                        AssetPriceChart(assetId: assetId, coinGeckoId: asset.coinGeckoId, store: store)
+                        AssetHoldingsSummary(assetId: assetId, store: store)
+                        AssetPositionsTable(assetId: assetId, store: store)
                     }
                     .padding()
                 }
                 .frame(minWidth: 500)
                 .layoutPriority(3)
 
-                // Right sidebar
                 AssetMetadataSidebar(asset: asset)
                     .frame(minWidth: 200, idealWidth: 250, maxWidth: 300)
                     .layoutPriority(1)
