@@ -1,7 +1,7 @@
 // Sources/Portu/Features/Accounts/AddAccountSheet.swift
-import SwiftUI
-import SwiftData
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct AddAccountSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -130,12 +130,15 @@ struct AddAccountSheet: View {
     // MARK: - Save
 
     private var canSave: Bool {
-        switch selectedTab {
-        case 0: !chainName.isEmpty && !chainAddress.isEmpty
-        case 1: !manualName.isEmpty
-        case 2: !exchangeName.isEmpty && !exchangeAPIKey.isEmpty && !exchangeAPISecret.isEmpty
-        default: false
-        }
+        AccountsFeature.canSave(
+            tab: selectedTab,
+            chainName: chainName,
+            chainAddress: chainAddress,
+            manualName: manualName,
+            exchangeName: exchangeName,
+            exchangeAPIKey: exchangeAPIKey,
+            exchangeAPISecret: exchangeAPISecret,
+        )
     }
 
     private func saveAccount() {
@@ -154,7 +157,7 @@ struct AddAccountSheet: View {
             kind: .wallet,
             dataSource: .zapper,
             group: chainGroup.isEmpty ? nil : chainGroup,
-            notes: chainNotes.isEmpty ? nil : chainNotes
+            notes: chainNotes.isEmpty ? nil : chainNotes,
         )
         let chain: Chain? = isEVM ? nil : specificChain
         let addr = WalletAddress(chain: chain, address: chainAddress, account: account)
@@ -170,7 +173,7 @@ struct AddAccountSheet: View {
             kind: .manual,
             dataSource: .manual,
             group: manualGroup.isEmpty ? nil : manualGroup,
-            notes: manualNotes.isEmpty ? nil : manualNotes
+            notes: manualNotes.isEmpty ? nil : manualNotes,
         )
         modelContext.insert(account)
         try? modelContext.save()
@@ -182,7 +185,7 @@ struct AddAccountSheet: View {
             kind: .exchange,
             exchangeType: exchangeType,
             dataSource: .exchange,
-            group: exchangeGroup.isEmpty ? nil : exchangeGroup
+            group: exchangeGroup.isEmpty ? nil : exchangeGroup,
         )
         modelContext.insert(account)
         try? modelContext.save()

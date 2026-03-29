@@ -36,7 +36,7 @@ struct ContentView: View {
         case .allPositions:
             AllPositionsView()
         case .accounts:
-            AccountsView()
+            AccountsView(store: store)
         }
     }
 }
