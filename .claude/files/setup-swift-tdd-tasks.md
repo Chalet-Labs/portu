@@ -89,10 +89,13 @@ Migrate each feature module to TCA reducers.
 
 ## Phase 5: CI/CD
 
-- [ ] 5.1 Set up GitHub Actions workflow (`.github/workflows/test.yml`)
-- [ ] 5.2 Set up local Fastlane (Developer ID signing + notarization)
+- [x] 5.1 GitHub Actions workflow (`.github/workflows/ci.yml`)
+  - `macos-15` runner, Xcode latest-stable, XcodeGen + just via brew
+  - Triggers on push/PR to master, 30-min timeout, concurrency cancellation
+  - Steps: generate → build → test-packages → test
+- [x] ~~5.2~~ Dropped — no Apple Developer license; personal app, no signing/notarization needed
 - [ ] 5.3 Verify: full build + test suite passes on CI
-- [ ] 5.4 First Fastlane release build (sign + notarize + DMG)
+- [x] ~~5.4~~ Dropped — no Developer ID cert; `just release` builds locally without signing
 
 ## Phase 6: Validate SDD Pipeline
 
@@ -108,11 +111,11 @@ Migrate each feature module to TCA reducers.
 ## Decisions Made
 - Architecture: TCA (full migration from @Observable)
 - Target: macOS 15+
-- Distribution: Direct download (no App Store)
+- Distribution: Personal use (no Apple Developer license)
 - Testing: Swift Testing (XCTest only for XCUITest)
 - Spec tooling: OpenSpec
 - CI: GitHub Actions
-- Release: Local Fastlane (Developer ID + notarization)
+- Release: Local `just release` (no signing)
 - AI: Claude Code + XcodeBuildMCP
 - Project gen: XcodeGen (existing `project.yml`)
 
