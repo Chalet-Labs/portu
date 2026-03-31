@@ -65,6 +65,8 @@ The app target (`Sources/Portu/`) imports all three and contains features, app s
 
 Models use cascade delete rules and inverse relationships. When adding new models, follow the existing pattern in `Packages/PortuCore/Sources/Models/`.
 
+**Never use `#Predicate` with optional chaining through relationships** (e.g. `$0.position?.account?.isActive`). CoreData generates unsupported `TERNARY` SQL and crashes at runtime. Use `@Query` without a filter and filter in Swift instead.
+
 ## Formatting
 
 SwiftFormat is used for code formatting. It runs automatically via hooks on file edits.

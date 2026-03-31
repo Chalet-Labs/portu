@@ -101,12 +101,24 @@ Migrate each feature module to TCA reducers.
 
 ## Phase 6: Validate SDD Pipeline
 
-- [ ] 6.1 Write behavioral spec for a NEW feature with OpenSpec
-- [ ] 6.2 Generate tests from spec → verify RED
-- [ ] 6.3 AI implements freely → verify GREEN
-- [ ] 6.4 Add #Preview + verify Prefire snapshot generation
-- [ ] 6.5 Full suite passes locally + on CI
-- [ ] 6.6 Retrospective: what worked, what to adjust
+- [x] 6.1 Behavioral spec for PortfolioHealthFeature (`openspec/changes/portfolio-health-feature/spec.md`)
+  - Asset weights, concentration risk, diversification metrics, risk classification
+  - Reuses TokenEntry from AllAssetsFeature
+- [x] 6.2 Tests written → RED (16 tests, 15 failures, 1 reducer pass)
+  - Fixed: array subscripts on empty stubs caused SIGTRAP crashes — use `#require(array.first)` instead
+- [x] 6.3 Implementation → GREEN (112 tests, 29 suites, all pass)
+  - 4 pure functions + 1 reducer; consistent with ExposureFeature's `resolveTokenUSDValue` pattern
+- [x] 6.4 PortfolioHealthPanel view wired into Overview inspector panel
+  - `#Preview` dropped — requires ModelContainer, not worth the ceremony
+  - Prefire was dropped in Phase 2 (UIKit-only)
+- [x] 6.5 Full suite passes locally + on CI
+  - Also fixed: SwiftData `#Predicate` optional chaining crash across 7 views
+- [x] 6.6 Retrospective
+  - Pure function extraction is the key pattern — trivially testable, no mocks
+  - `#Predicate` optional chaining is broken — added CLAUDE.md rule
+  - `#require(array.first)` mandatory in tests — bare subscripts crash the test process
+  - `#Preview` for @Query views needs ModelContainer — skip for data-dependent views
+  - TokenEntry reuse across features validated (3 features share same input struct)
 
 ---
 
