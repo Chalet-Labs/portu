@@ -94,7 +94,9 @@ Migrate each feature module to TCA reducers.
   - Triggers on push/PR to master, 30-min timeout, concurrency cancellation
   - Steps: generate → build → test-packages → test
 - [x] ~~5.2~~ Dropped — no Apple Developer license; personal app, no signing/notarization needed
-- [ ] 5.3 Verify: full build + test suite passes on CI
+- [x] 5.3 Verify: full build + test suite passes on CI
+  - PR #4 — all steps green in 4m23s
+  - Node.js 20 deprecation warning on actions (cosmetic, deadline Sep 2026)
 - [x] ~~5.4~~ Dropped — no Developer ID cert; `just release` builds locally without signing
 
 ## Phase 6: Validate SDD Pipeline

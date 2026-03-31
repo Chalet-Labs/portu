@@ -26,7 +26,7 @@ struct ContentView: View {
     private var detailView: some View {
         switch appState.selectedSection {
         case .overview:
-            OverviewView()
+            OverviewView(store: store)
         case .exposure:
             ExposureView(store: store)
         case .performance:
