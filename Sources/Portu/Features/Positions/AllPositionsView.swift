@@ -1,11 +1,14 @@
 // Sources/Portu/Features/Positions/AllPositionsView.swift
-import SwiftUI
-import SwiftData
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct AllPositionsView: View {
-    @Query(filter: #Predicate<Position> { $0.account?.isActive == true })
-    private var positions: [Position]
+    @Query private var allPositions: [Position]
+
+    private var positions: [Position] {
+        allPositions.filter { $0.account?.isActive == true }
+    }
 
     @State private var filterType: PositionType? = nil
     @State private var filterProtocol: String? = nil
@@ -30,7 +33,7 @@ struct AllPositionsView: View {
             // Main content
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(groupedByType, id: \.0) { (type, positions) in
+                    ForEach(groupedByType, id: \.0) { type, positions in
                         Section {
                             ForEach(positions, id: \.id) { pos in
                                 PositionGroupView(position: pos)
@@ -66,7 +69,7 @@ struct AllPositionsView: View {
             PositionFilterSidebar(
                 positions: positions,
                 selectedType: $filterType,
-                selectedProtocol: $filterProtocol
+                selectedProtocol: $filterProtocol,
             )
             .frame(minWidth: 200, idealWidth: 250, maxWidth: 300)
         }

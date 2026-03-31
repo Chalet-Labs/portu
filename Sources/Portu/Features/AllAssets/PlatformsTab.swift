@@ -1,11 +1,14 @@
 // Sources/Portu/Features/AllAssets/PlatformsTab.swift
-import SwiftUI
-import SwiftData
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct PlatformsTab: View {
-    @Query(filter: #Predicate<Position> { $0.account?.isActive == true })
-    private var positions: [Position]
+    @Query private var allPositions: [Position]
+
+    private var positions: [Position] {
+        allPositions.filter { $0.account?.isActive == true }
+    }
 
     private struct PlatformRow: Identifiable {
         let id: String // protocolId or sentinel
@@ -31,14 +34,14 @@ struct PlatformsTab: View {
             byProtocol[key] = entry
         }
 
-        return byProtocol.map { (key, entry) in
+        return byProtocol.map { key, entry in
             PlatformRow(
                 id: key,
                 name: entry.name,
                 sharePercent: totalValue > 0 ? entry.value / totalValue : 0,
                 networkCount: entry.chains.count,
                 positionCount: entry.count,
-                usdBalance: entry.value
+                usdBalance: entry.value,
             )
         }
         .sorted { $0.usdBalance > $1.usdBalance }

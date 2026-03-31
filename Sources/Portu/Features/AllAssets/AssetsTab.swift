@@ -8,8 +8,7 @@ import UniformTypeIdentifiers
 
 struct AssetsTab: View {
     let store: StoreOf<AppFeature>
-    @Query(filter: #Predicate<PositionToken> { $0.position?.account?.isActive == true })
-    private var allTokens: [PositionToken]
+    @Query private var allTokens: [PositionToken]
 
     @State private var sortOrder: [KeyPathComparator<AssetRowData>] = [
         KeyPathComparator(\.value, order: .reverse),
@@ -18,7 +17,7 @@ struct AssetsTab: View {
     /// Map @Query tokens to lightweight entries, aggregate with live prices, filter, sort.
     private var rows: [AssetRowData] {
         let entries = allTokens.compactMap { token -> TokenEntry? in
-            guard let asset = token.asset else { return nil }
+            guard let asset = token.asset, token.position?.account?.isActive == true else { return nil }
             return TokenEntry(
                 assetId: asset.id,
                 symbol: asset.symbol,

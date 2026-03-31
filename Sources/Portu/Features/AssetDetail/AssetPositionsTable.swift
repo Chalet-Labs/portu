@@ -7,12 +7,11 @@ struct AssetPositionsTable: View {
     let assetId: UUID
     let store: StoreOf<AppFeature>
 
-    @Query(filter: #Predicate<PositionToken> { $0.position?.account?.isActive == true })
-    private var allTokens: [PositionToken]
+    @Query private var allTokens: [PositionToken]
 
     private var rows: [PositionRowData] {
         let entries = allTokens
-            .filter { $0.asset?.id == assetId }
+            .filter { $0.asset?.id == assetId && $0.position?.account?.isActive == true }
             .compactMap { token -> PositionTokenEntry? in
                 guard let pos = token.position else { return nil }
                 return PositionTokenEntry(

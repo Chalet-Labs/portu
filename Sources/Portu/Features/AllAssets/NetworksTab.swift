@@ -1,11 +1,14 @@
 // Sources/Portu/Features/AllAssets/NetworksTab.swift
-import SwiftUI
-import SwiftData
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct NetworksTab: View {
-    @Query(filter: #Predicate<Position> { $0.account?.isActive == true })
-    private var positions: [Position]
+    @Query private var allPositions: [Position]
+
+    private var positions: [Position] {
+        allPositions.filter { $0.account?.isActive == true }
+    }
 
     private struct NetworkRow: Identifiable {
         let id: String
@@ -27,13 +30,13 @@ struct NetworksTab: View {
             byChain[key] = entry
         }
 
-        return byChain.map { (key, entry) in
+        return byChain.map { key, entry in
             NetworkRow(
                 id: key,
                 name: key == "__offchain__" ? "Off-chain / Custodial" : key.capitalized,
                 sharePercent: totalValue > 0 ? entry.value / totalValue : 0,
                 positionCount: entry.count,
-                usdBalance: entry.value
+                usdBalance: entry.value,
             )
         }
         .sorted { $0.usdBalance > $1.usdBalance }
