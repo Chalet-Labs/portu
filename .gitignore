@@ -23,3 +23,7 @@ build/
 pnevma.toml
 .pnevma/
 .superpowers/
+
+# Claude Code
+.claude/files/
+.claude/scheduled_tasks.lock
