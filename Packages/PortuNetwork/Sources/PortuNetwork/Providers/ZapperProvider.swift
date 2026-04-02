@@ -23,18 +23,19 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     public func fetchBalances(context: SyncContext) async throws -> [PositionDTO] {
-        var allPositions: [PositionDTO] = []
-        for (address, _) in context.addresses {
-            let positions = try await fetchTokenBalances(address: address)
-            allPositions.append(contentsOf: positions)
-        }
-        return allPositions
+        try await fetchForAllAddresses(context: context, fetch: fetchTokenBalances)
     }
 
     public func fetchDeFiPositions(context: SyncContext) async throws -> [PositionDTO] {
+        try await fetchForAllAddresses(context: context, fetch: fetchAppPositions)
+    }
+
+    private func fetchForAllAddresses(
+        context: SyncContext,
+        fetch: (String) async throws -> [PositionDTO]) async throws -> [PositionDTO] {
         var allPositions: [PositionDTO] = []
         for (address, _) in context.addresses {
-            let positions = try await fetchAppPositions(address: address)
+            let positions = try await fetch(address)
             allPositions.append(contentsOf: positions)
         }
         return allPositions
@@ -71,10 +72,7 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     private func parseTokenBalances(data: Data) throws -> [PositionDTO] {
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            throw ZapperError.decodingFailed
-        }
-        return json.compactMap { item -> PositionDTO? in
+        try parseJSONArray(data).compactMap { item -> PositionDTO? in
             guard
                 let symbol = item["symbol"] as? String,
                 let name = item["name"] as? String,
@@ -98,10 +96,7 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     private func parseAppPositions(data: Data) throws -> [PositionDTO] {
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            throw ZapperError.decodingFailed
-        }
-        return json.compactMap { item -> PositionDTO? in
+        try parseJSONArray(data).compactMap { item -> PositionDTO? in
             guard let appId = item["appId"] as? String else { return nil }
             let posType: PositionType = switch item["type"] as? String {
             case "lending": .lending
@@ -145,6 +140,13 @@ public actor ZapperProvider: PortfolioDataProvider {
                 logoURL: item["imgUrl"] as? String,
                 category: .other, isVerified: item["verified"] as? Bool ?? false)
         }
+    }
+
+    private func parseJSONArray(_ data: Data) throws -> [[String: Any]] {
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw ZapperError.decodingFailed
+        }
+        return json
     }
 }
 
