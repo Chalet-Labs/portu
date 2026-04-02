@@ -49,7 +49,7 @@ struct AssetPriceChart: View {
                 Picker("Range", selection: Binding(
                     get: { store.assetDetail.selectedRange },
                     set: { store.send(.assetDetail(.timeRangeChanged($0))) })) {
-                        ForEach(TimeRange.allCases, id: \.self) { r in
+                        ForEach(ChartTimeRange.standard, id: \.self) { r in
                             Text(r.rawValue).tag(r)
                         }
                     }

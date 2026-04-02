@@ -26,7 +26,7 @@ struct PerformanceView: View {
                 Picker("Range", selection: Binding(
                     get: { store.performance.selectedRange },
                     set: { store.send(.performance(.timeRangeChanged($0))) })) {
-                        ForEach(PerformanceTimeRange.allCases, id: \.self) { r in
+                        ForEach(ChartTimeRange.allCases, id: \.self) { r in
                             Text(r.rawValue).tag(r)
                         }
                     }

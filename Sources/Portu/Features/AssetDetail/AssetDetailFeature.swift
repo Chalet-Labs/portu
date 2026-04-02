@@ -10,24 +10,6 @@ enum ChartMode: String, CaseIterable, Equatable, Hashable {
     case amount = "Amount"
 }
 
-enum TimeRange: String, CaseIterable, Equatable, Hashable {
-    case oneWeek = "1W"
-    case oneMonth = "1M"
-    case threeMonths = "3M"
-    case oneYear = "1Y"
-
-    var startDate: Date {
-        let cal = Calendar.current
-        let now = Date.now
-        return switch self {
-        case .oneWeek: cal.date(byAdding: .weekOfYear, value: -1, to: now)!
-        case .oneMonth: cal.date(byAdding: .month, value: -1, to: now)!
-        case .threeMonths: cal.date(byAdding: .month, value: -3, to: now)!
-        case .oneYear: cal.date(byAdding: .year, value: -1, to: now)!
-        }
-    }
-}
-
 /// Per-token input for position row aggregation — decouples from SwiftData models.
 struct PositionTokenEntry: Equatable {
     let tokenId: UUID
@@ -106,12 +88,12 @@ struct AssetDetailFeature {
     @ObservableState
     struct State: Equatable {
         var chartMode: ChartMode = .price
-        var selectedRange: TimeRange = .oneMonth
+        var selectedRange: ChartTimeRange = .oneMonth
     }
 
     enum Action: Equatable {
         case chartModeChanged(ChartMode)
-        case timeRangeChanged(TimeRange)
+        case timeRangeChanged(ChartTimeRange)
     }
 
     var body: some ReducerOf<Self> {
