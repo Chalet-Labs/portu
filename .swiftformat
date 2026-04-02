@@ -12,7 +12,11 @@
 --wrapcollections before-first
 --wrapconditions before-first
 --wrapparameters before-first
---wrapreturntype if-multiline
+--wrapreturntype never
+--closingparen same-line
+
+# Keep opening braces on the same line (K&R style) — Codacy requires this
+--disable wrapMultilineStatementBraces
 
 # Trailing commas — we keep them (disabled in SwiftLint too)
 --commas inline

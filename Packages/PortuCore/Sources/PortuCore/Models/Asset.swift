@@ -37,8 +37,7 @@ public final class Asset {
         debankId: String? = nil,
         logoURL: String? = nil,
         category: AssetCategory = .other,
-        isVerified: Bool = false
-    ) {
+        isVerified: Bool = false) {
         self.id = id
         self.symbol = symbol
         self.name = name

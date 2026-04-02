@@ -59,8 +59,7 @@ struct KrakenClient: ExchangeClient {
                 amount: balance, usdValue: 0,
                 chain: nil, contractAddress: nil, debankId: nil,
                 coinGeckoId: nil, sourceKey: "kraken:\(ticker)",
-                logoURL: nil, category: .other, isVerified: true
-            )
+                logoURL: nil, category: .other, isVerified: true)
         }
     }
 

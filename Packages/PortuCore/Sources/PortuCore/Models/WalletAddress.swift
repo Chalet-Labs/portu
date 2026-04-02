@@ -17,8 +17,7 @@ public final class WalletAddress {
         id: UUID = UUID(),
         chain: Chain? = nil,
         address: String,
-        account: Account? = nil
-    ) {
+        account: Account? = nil) {
         self.id = id
         self.chain = chain
         self.address = address

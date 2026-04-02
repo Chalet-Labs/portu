@@ -41,8 +41,7 @@ public final class Position {
         netUSDValue: Decimal = 0,
         tokens: [PositionToken] = [],
         account: Account? = nil,
-        syncedAt: Date = .now
-    ) {
+        syncedAt: Date = .now) {
         self.id = id
         self.positionType = positionType
         self.chain = chain

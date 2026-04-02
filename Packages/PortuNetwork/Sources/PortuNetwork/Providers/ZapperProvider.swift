@@ -10,15 +10,13 @@ public actor ZapperProvider: PortfolioDataProvider {
         ProviderCapabilities(
             supportsTokenBalances: true,
             supportsDeFiPositions: true,
-            supportsHealthFactors: false
-        )
+            supportsHealthFactors: false)
     }
 
     public init(
         apiKey: String,
         session: URLSession = .shared,
-        baseURL: URL = URL(string: "https://api.zapper.xyz/v2")!
-    ) {
+        baseURL: URL = URL(string: "https://api.zapper.xyz/v2")!) {
         self.apiKey = apiKey
         self.session = session
         self.baseURL = baseURL
@@ -91,13 +89,11 @@ public actor ZapperProvider: PortfolioDataProvider {
                 debankId: nil, coinGeckoId: item["coingeckoId"] as? String,
                 sourceKey: (item["address"] as? String).map { "zapper:\($0)" },
                 logoURL: item["imgUrl"] as? String,
-                category: .other, isVerified: item["verified"] as? Bool ?? false
-            )
+                category: .other, isVerified: item["verified"] as? Bool ?? false)
             return PositionDTO(
                 positionType: .idle, chain: chain,
                 protocolId: nil, protocolName: nil, protocolLogoURL: nil,
-                healthFactor: nil, tokens: [token]
-            )
+                healthFactor: nil, tokens: [token])
         }
     }
 
@@ -122,8 +118,7 @@ public actor ZapperProvider: PortfolioDataProvider {
                 protocolName: item["appName"] as? String,
                 protocolLogoURL: item["appImage"] as? String,
                 healthFactor: item["healthFactor"] as? Double,
-                tokens: tokens
-            )
+                tokens: tokens)
         }
     }
 
@@ -148,8 +143,7 @@ public actor ZapperProvider: PortfolioDataProvider {
                 debankId: nil, coinGeckoId: item["coingeckoId"] as? String,
                 sourceKey: (item["address"] as? String).map { "zapper:\($0)" },
                 logoURL: item["imgUrl"] as? String,
-                category: .other, isVerified: item["verified"] as? Bool ?? false
-            )
+                category: .other, isVerified: item["verified"] as? Bool ?? false)
         }
     }
 }

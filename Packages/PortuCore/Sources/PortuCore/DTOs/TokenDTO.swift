@@ -30,8 +30,7 @@ public struct TokenDTO: Sendable {
         sourceKey: String?,
         logoURL: String?,
         category: AssetCategory,
-        isVerified: Bool
-    ) {
+        isVerified: Bool) {
         self.role = role
         self.symbol = symbol
         self.name = name

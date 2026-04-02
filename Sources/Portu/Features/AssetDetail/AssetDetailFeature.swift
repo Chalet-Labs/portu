@@ -133,10 +133,7 @@ struct AssetDetailFeature {
     /// Map individual token entries to position rows with live price resolution.
     static func aggregatePositionRows(
         tokens: [PositionTokenEntry],
-        prices: [String: Decimal]
-    )
-        -> [PositionRowData]
-    {
+        prices: [String: Decimal]) -> [PositionRowData] {
         tokens.map { token in
             let usdBalance: Decimal = if let cgId = token.coinGeckoId, let livePrice = prices[cgId] {
                 token.amount * livePrice
@@ -151,8 +148,7 @@ struct AssetDetailFeature {
                 context: token.positionType.rawValue.capitalized,
                 network: token.chain?.rawValue.capitalized ?? "Off-chain",
                 amount: token.amount,
-                usdBalance: usdBalance
-            )
+                usdBalance: usdBalance)
         }
         .sorted { $0.usdBalance > $1.usdBalance }
     }
@@ -160,10 +156,7 @@ struct AssetDetailFeature {
     /// Compute holdings summary from token entries for a single asset.
     static func computeHoldingsSummary(
         tokens: [PositionTokenEntry],
-        prices: [String: Decimal]
-    )
-        -> HoldingsSummary
-    {
+        prices: [String: Decimal]) -> HoldingsSummary {
         var positiveAmount: Decimal = 0
         var borrowAmount: Decimal = 0
         var positiveUSD: Decimal = 0
@@ -213,16 +206,12 @@ struct AssetDetailFeature {
             totalAmount: totalAmount,
             totalValue: totalValue,
             accountCount: accountNames.count,
-            byChain: byChain
-        )
+            byChain: byChain)
     }
 
     /// Aggregate snapshot entries by day, summing across accounts.
     static func aggregateSnapshots(
-        entries: [SnapshotEntry]
-    )
-        -> [ChartDataPoint]
-    {
+        entries: [SnapshotEntry]) -> [ChartDataPoint] {
         var byDate: [Date: (Decimal, Decimal, Decimal, Decimal)] = [:]
         let cal = Calendar.current
 
@@ -244,8 +233,7 @@ struct AssetDetailFeature {
                     grossUSD: agg.0,
                     borrowUSD: agg.1,
                     grossAmount: agg.2,
-                    borrowAmount: agg.3
-                )
+                    borrowAmount: agg.3)
             }
     }
 
@@ -253,10 +241,7 @@ struct AssetDetailFeature {
     static func headerPriceInfo(
         coinGeckoId: String?,
         prices: [String: Decimal],
-        changes24h: [String: Decimal]
-    )
-        -> AssetPriceInfo?
-    {
+        changes24h: [String: Decimal]) -> AssetPriceInfo? {
         guard let cgId = coinGeckoId, let price = prices[cgId] else { return nil }
         return AssetPriceInfo(price: price, change24h: changes24h[cgId])
     }

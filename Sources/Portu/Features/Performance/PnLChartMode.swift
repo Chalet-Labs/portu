@@ -30,24 +30,21 @@ struct PnLChartMode: View {
             if bars.isEmpty {
                 ContentUnavailableView(
                     "Insufficient Data", systemImage: "chart.bar",
-                    description: Text("Need at least 2 days of data for PnL")
-                )
-                .frame(height: 300)
+                    description: Text("Need at least 2 days of data for PnL"))
+                    .frame(height: 300)
             } else {
                 Chart(bars) { bar in
                     BarMark(
                         x: .value("Date", bar.date, unit: .day),
-                        y: .value("PnL", bar.pnl)
-                    )
-                    .foregroundStyle(bar.pnl >= 0 ? Color.green : Color.red)
+                        y: .value("PnL", bar.pnl))
+                        .foregroundStyle(bar.pnl >= 0 ? Color.green : Color.red)
 
                     if store.performance.showCumulative {
                         LineMark(
                             x: .value("Date", bar.date, unit: .day),
-                            y: .value("Cumulative", bar.cumulative)
-                        )
-                        .foregroundStyle(.orange)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
+                            y: .value("Cumulative", bar.cumulative))
+                            .foregroundStyle(.orange)
+                            .lineStyle(StrokeStyle(lineWidth: 2))
                     }
                 }
                 .chartYAxis {
@@ -59,9 +56,8 @@ struct PnLChartMode: View {
 
             Toggle("Show Cumulative", isOn: Binding(
                 get: { store.performance.showCumulative },
-                set: { _ in store.send(.performance(.showCumulativeToggled)) }
-            ))
-            .padding(.horizontal)
+                set: { _ in store.send(.performance(.showCumulativeToggled)) }))
+                .padding(.horizontal)
         }
     }
 }

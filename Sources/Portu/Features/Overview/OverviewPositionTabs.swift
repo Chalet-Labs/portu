@@ -126,8 +126,7 @@ struct OverviewPositionTabs: View {
             ContentUnavailableView(
                 "No Borrowing",
                 systemImage: "arrow.down.circle",
-                description: Text("No active borrow positions")
-            )
+                description: Text("No active borrow positions"))
         } else {
             ForEach(borrowPositions, id: \.id) { pos in
                 VStack(alignment: .leading, spacing: 4) {
@@ -198,8 +197,7 @@ struct OverviewPositionTabs: View {
             accountName: position.account?.name ?? "",
             amount: token.amount,
             price: price,
-            value: value
-        )
+            value: value)
     }
 
     private func tokenValue(_ token: PositionToken) -> Decimal {

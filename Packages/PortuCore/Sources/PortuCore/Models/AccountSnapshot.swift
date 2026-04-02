@@ -21,8 +21,7 @@ public final class AccountSnapshot {
         timestamp: Date,
         accountId: UUID,
         totalValue: Decimal,
-        isFresh: Bool
-    ) {
+        isFresh: Bool) {
         self.id = id
         self.syncBatchId = syncBatchId
         self.timestamp = timestamp

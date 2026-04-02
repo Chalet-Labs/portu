@@ -37,8 +37,7 @@ public final class Account {
         notes: String? = nil,
         lastSyncedAt: Date? = nil,
         lastSyncError: String? = nil,
-        isActive: Bool = true
-    ) {
+        isActive: Bool = true) {
         self.id = id
         self.name = name
         self.kind = kind

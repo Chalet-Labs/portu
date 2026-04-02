@@ -26,8 +26,7 @@ struct AssetsTab: View {
                 coinGeckoId: asset.coinGeckoId,
                 role: token.role,
                 amount: token.amount,
-                usdValue: token.usdValue
-            )
+                usdValue: token.usdValue)
         }
 
         let aggregated = AllAssetsFeature.aggregateRows(tokens: entries, prices: store.prices)
@@ -52,9 +51,8 @@ struct AssetsTab: View {
                 Image(systemName: "magnifyingglass")
                 TextField("Search assets...", text: Binding(
                     get: { store.allAssets.searchText },
-                    set: { store.send(.allAssets(.searchTextChanged($0))) }
-                ))
-                .textFieldStyle(.plain)
+                    set: { store.send(.allAssets(.searchTextChanged($0))) }))
+                    .textFieldStyle(.plain)
             }
             .padding(8)
             .background(.quaternary.opacity(0.5))
@@ -64,14 +62,13 @@ struct AssetsTab: View {
 
             Picker("Group", selection: Binding(
                 get: { store.allAssets.grouping },
-                set: { store.send(.allAssets(.groupingChanged($0))) }
-            )) {
-                ForEach(AssetGrouping.allCases, id: \.self) { g in
-                    Text(g.rawValue).tag(g)
+                set: { store.send(.allAssets(.groupingChanged($0))) })) {
+                    ForEach(AssetGrouping.allCases, id: \.self) { g in
+                        Text(g.rawValue).tag(g)
+                    }
                 }
-            }
-            .pickerStyle(.menu)
-            .frame(width: 140)
+                .pickerStyle(.menu)
+                .frame(width: 140)
 
             Button {
                 exportCSV()

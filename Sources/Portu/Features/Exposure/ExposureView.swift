@@ -20,8 +20,7 @@ struct ExposureView: View {
                 coinGeckoId: asset.coinGeckoId,
                 role: token.role,
                 amount: token.amount,
-                usdValue: token.usdValue
-            )
+                usdValue: token.usdValue)
         }
     }
 
@@ -48,13 +47,12 @@ struct ExposureView: View {
 
                 Picker("View", selection: Binding(
                     get: { store.exposure.showByAsset },
-                    set: { store.send(.exposure(.viewModeChanged($0))) }
-                )) {
-                    Text("By Category").tag(false)
-                    Text("By Asset").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 250)
+                    set: { store.send(.exposure(.viewModeChanged($0))) })) {
+                        Text("By Category").tag(false)
+                        Text("By Asset").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 250)
 
                 if store.exposure.showByAsset {
                     assetTable

@@ -30,9 +30,8 @@ struct ValueChartMode: View {
             ContentUnavailableView(
                 "No Performance Data",
                 systemImage: "chart.line.uptrend.xyaxis",
-                description: Text("Sync your accounts to track portfolio performance")
-            )
-            .frame(height: 300)
+                description: Text("Sync your accounts to track portfolio performance"))
+                .frame(height: 300)
         } else {
             Chart {
                 ForEach(dataPoints, id: \.0) { date, value, isPartial in
@@ -40,9 +39,7 @@ struct ValueChartMode: View {
                         .foregroundStyle(
                             .linearGradient(
                                 colors: [Color.accentColor.opacity(0.3), .clear],
-                                startPoint: .top, endPoint: .bottom
-                            )
-                        )
+                                startPoint: .top, endPoint: .bottom))
                     LineMark(x: .value("Date", date), y: .value("Value", value))
                         .foregroundStyle(Color.accentColor)
                         .lineStyle(isPartial ? StrokeStyle(lineWidth: 2, dash: [5, 3]) : StrokeStyle(lineWidth: 2))

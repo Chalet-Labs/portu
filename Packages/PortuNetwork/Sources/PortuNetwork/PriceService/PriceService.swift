@@ -27,8 +27,7 @@ public actor PriceService {
         session: URLSession = .shared,
         cacheTTL: TimeInterval = 10, // must be < polling interval to serve cached data between ticks
         maxRequestsPerWindow: Int = 10,
-        windowDuration: TimeInterval = 60
-    ) {
+        windowDuration: TimeInterval = 60) {
         self.session = session
         self.cacheTTL = cacheTTL
         self.maxRequestsPerWindow = maxRequestsPerWindow
@@ -43,8 +42,7 @@ public actor PriceService {
         if
             let lastFetch = lastFetchDate,
             Date.now.timeIntervalSince(lastFetch) < cacheTTL,
-            coinIds.allSatisfy({ cache[$0] != nil })
-        {
+            coinIds.allSatisfy({ cache[$0] != nil }) {
             return cache.filter { coinIds.contains($0.key) }
         }
 
@@ -110,13 +108,11 @@ public actor PriceService {
             let lastFetch = lastUpdateFetchDate,
             Date.now.timeIntervalSince(lastFetch) < cacheTTL,
             let cached = updateCache,
-            coinIds.allSatisfy({ cached.prices[$0] != nil })
-        {
+            coinIds.allSatisfy({ cached.prices[$0] != nil }) {
             let requested = Set(coinIds)
             return PriceUpdate(
                 prices: cached.prices.filter { requested.contains($0.key) },
-                changes24h: cached.changes24h.filter { requested.contains($0.key) }
-            )
+                changes24h: cached.changes24h.filter { requested.contains($0.key) })
         }
 
         // Proactive rate limiting
@@ -161,8 +157,7 @@ public actor PriceService {
         let requested = Set(coinIds)
         return PriceUpdate(
             prices: parsed.prices.filter { requested.contains($0.key) },
-            changes24h: parsed.changes24h.filter { requested.contains($0.key) }
-        )
+            changes24h: parsed.changes24h.filter { requested.contains($0.key) })
     }
 
     /// Returns an async stream that polls prices at the given interval.
@@ -180,10 +175,7 @@ public actor PriceService {
     ///   set of tracked coins changes.
     public func priceStream(
         for coinIds: [String],
-        interval: TimeInterval = 30
-    )
-        -> AsyncThrowingStream<[String: Decimal], any Error>
-    {
+        interval: TimeInterval = 30) -> AsyncThrowingStream<[String: Decimal], any Error> {
         guard !coinIds.isEmpty else {
             return AsyncThrowingStream { $0.finish() }
         }
@@ -198,8 +190,7 @@ public actor PriceService {
         let (stream, continuation) = AsyncThrowingStream.makeStream(
             of: [String: Decimal].self,
             throwing: (any Error).self,
-            bufferingPolicy: .bufferingNewest(1)
-        )
+            bufferingPolicy: .bufferingNewest(1))
         let task = Task {
             while !Task.isCancelled {
                 do {

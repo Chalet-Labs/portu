@@ -37,8 +37,7 @@ struct ExposureCategoryTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 1,
-                usdValue: 60000
-            ),
+                usdValue: 60000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "ETH",
@@ -47,8 +46,7 @@ struct ExposureCategoryTests {
                 coinGeckoId: nil,
                 role: .supply,
                 amount: 10,
-                usdValue: 30000
-            ),
+                usdValue: 30000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "ETH",
@@ -57,8 +55,7 @@ struct ExposureCategoryTests {
                 coinGeckoId: nil,
                 role: .borrow,
                 amount: 3,
-                usdValue: 9000
-            ),
+                usdValue: 9000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "USDC",
@@ -67,8 +64,7 @@ struct ExposureCategoryTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 5000,
-                usdValue: 5000
-            )
+                usdValue: 5000)
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
@@ -96,8 +92,7 @@ struct ExposureCategoryTests {
                 coinGeckoId: nil,
                 role: .stake,
                 amount: 32,
-                usdValue: 96000
-            ),
+                usdValue: 96000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "RPL",
@@ -106,8 +101,7 @@ struct ExposureCategoryTests {
                 coinGeckoId: nil,
                 role: .reward,
                 amount: 5,
-                usdValue: 150
-            )
+                usdValue: 150)
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
@@ -126,8 +120,7 @@ struct ExposureCategoryTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 1,
-                usdValue: 60000
-            )
+                usdValue: 60000)
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
@@ -146,13 +139,11 @@ struct ExposureCategoryTests {
                 coinGeckoId: "bitcoin",
                 role: .balance,
                 amount: 2,
-                usdValue: 100_000
-            )
+                usdValue: 100_000)
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(
-            tokens: tokens, prices: ["bitcoin": 65000]
-        )
+            tokens: tokens, prices: ["bitcoin": 65000])
 
         #expect(categories[0].spotAssets == 130_000) // 2 * 65000
     }
@@ -167,8 +158,7 @@ struct ExposureCategoryTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 1000,
-                usdValue: 1000
-            ),
+                usdValue: 1000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "BTC",
@@ -177,8 +167,7 @@ struct ExposureCategoryTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 1,
-                usdValue: 60000
-            ),
+                usdValue: 60000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "UNI",
@@ -187,8 +176,7 @@ struct ExposureCategoryTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 100,
-                usdValue: 500
-            )
+                usdValue: 500)
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
@@ -213,8 +201,7 @@ struct ExposureAssetTests {
                 coinGeckoId: nil,
                 role: .supply,
                 amount: 10,
-                usdValue: 30000
-            ),
+                usdValue: 30000),
             TokenEntry(
                 assetId: ethId,
                 symbol: "ETH",
@@ -223,8 +210,7 @@ struct ExposureAssetTests {
                 coinGeckoId: nil,
                 role: .borrow,
                 amount: 3,
-                usdValue: 9000
-            )
+                usdValue: 9000)
         ]
 
         let assets = ExposureFeature.computeAssetExposure(tokens: tokens, prices: [:])
@@ -248,8 +234,7 @@ struct ExposureAssetTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 10,
-                usdValue: 30000
-            ),
+                usdValue: 30000),
             TokenEntry(
                 assetId: btcId,
                 symbol: "BTC",
@@ -258,8 +243,7 @@ struct ExposureAssetTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 1,
-                usdValue: 60000
-            )
+                usdValue: 60000)
         ]
 
         let assets = ExposureFeature.computeAssetExposure(tokens: tokens, prices: [:])
@@ -279,13 +263,11 @@ struct ExposureAssetTests {
                 coinGeckoId: "bitcoin",
                 role: .balance,
                 amount: 2,
-                usdValue: 100_000
-            )
+                usdValue: 100_000)
         ]
 
         let assets = ExposureFeature.computeAssetExposure(
-            tokens: tokens, prices: ["bitcoin": 65000]
-        )
+            tokens: tokens, prices: ["bitcoin": 65000])
 
         #expect(assets[0].spotAssets == 130_000) // 2 * 65000
     }
@@ -333,8 +315,7 @@ struct ExposureTokenValueTests {
     @Test func `uses live price when available`() {
         let value = ExposureFeature.resolveTokenUSDValue(
             amount: 2, coinGeckoId: "bitcoin", usdValue: 100_000,
-            prices: ["bitcoin": 65000]
-        )
+            prices: ["bitcoin": 65000])
 
         #expect(value == 130_000)
     }
@@ -342,8 +323,7 @@ struct ExposureTokenValueTests {
     @Test func `falls back to usd value when no live price`() {
         let value = ExposureFeature.resolveTokenUSDValue(
             amount: 100, coinGeckoId: nil, usdValue: 500,
-            prices: [:]
-        )
+            prices: [:])
 
         #expect(value == 500)
     }
@@ -351,8 +331,7 @@ struct ExposureTokenValueTests {
     @Test func `falls back when coinGeckoId not in prices`() {
         let value = ExposureFeature.resolveTokenUSDValue(
             amount: 10, coinGeckoId: "unknown-token", usdValue: 300,
-            prices: ["bitcoin": 65000]
-        )
+            prices: ["bitcoin": 65000])
 
         #expect(value == 300)
     }

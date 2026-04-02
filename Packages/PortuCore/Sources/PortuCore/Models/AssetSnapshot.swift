@@ -34,8 +34,7 @@ public final class AssetSnapshot {
         amount: Decimal,
         usdValue: Decimal,
         borrowAmount: Decimal = 0,
-        borrowUsdValue: Decimal = 0
-    ) {
+        borrowUsdValue: Decimal = 0) {
         self.id = id
         self.syncBatchId = syncBatchId
         self.timestamp = timestamp

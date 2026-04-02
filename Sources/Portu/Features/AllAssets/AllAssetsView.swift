@@ -9,14 +9,13 @@ struct AllAssetsView: View {
         VStack(spacing: 0) {
             Picker("Tab", selection: Binding(
                 get: { store.allAssets.selectedTab },
-                set: { store.send(.allAssets(.tabSelected($0))) }
-            )) {
-                ForEach(AssetTab.allCases, id: \.self) { tab in
-                    Text(tab.rawValue).tag(tab)
+                set: { store.send(.allAssets(.tabSelected($0))) })) {
+                    ForEach(AssetTab.allCases, id: \.self) { tab in
+                        Text(tab.rawValue).tag(tab)
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
-            .padding()
+                .pickerStyle(.segmented)
+                .padding()
 
             switch store.allAssets.selectedTab {
             case .assets: AssetsTab(store: store)
@@ -32,7 +31,6 @@ struct AllAssetsView: View {
         ContentUnavailableView(
             "NFT Tracking",
             systemImage: "photo.artframe",
-            description: Text("NFT tracking coming soon")
-        )
+            description: Text("NFT tracking coming soon"))
     }
 }

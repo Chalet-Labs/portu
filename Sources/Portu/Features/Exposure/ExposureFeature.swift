@@ -72,10 +72,7 @@ struct ExposureFeature {
         amount: Decimal,
         coinGeckoId: String?,
         usdValue: Decimal,
-        prices: [String: Decimal]
-    )
-        -> Decimal
-    {
+        prices: [String: Decimal]) -> Decimal {
         if let cgId = coinGeckoId, let livePrice = prices[cgId] {
             return amount * livePrice
         }
@@ -85,10 +82,7 @@ struct ExposureFeature {
     /// Aggregate token entries into category-level exposure.
     static func computeCategoryExposure(
         tokens: [TokenEntry],
-        prices: [String: Decimal]
-    )
-        -> [CategoryExposure]
-    {
+        prices: [String: Decimal]) -> [CategoryExposure] {
         var assets: [AssetCategory: Decimal] = [:]
         var borrows: [AssetCategory: Decimal] = [:]
 
@@ -96,8 +90,7 @@ struct ExposureFeature {
             if token.role.isReward { continue }
             let value = resolveTokenUSDValue(
                 amount: token.amount, coinGeckoId: token.coinGeckoId,
-                usdValue: token.usdValue, prices: prices
-            )
+                usdValue: token.usdValue, prices: prices)
             if token.role.isPositive {
                 assets[token.category, default: 0] += value
             } else if token.role.isBorrow {
@@ -113,31 +106,25 @@ struct ExposureFeature {
                 id: cat.rawValue,
                 name: cat.rawValue.capitalized,
                 spotAssets: a,
-                liabilities: b
-            )
+                liabilities: b)
         }
     }
 
     /// Aggregate token entries into asset-level exposure.
     static func computeAssetExposure(
         tokens: [TokenEntry],
-        prices: [String: Decimal]
-    )
-        -> [AssetExposure]
-    {
+        prices: [String: Decimal]) -> [AssetExposure] {
         var assetMap: [UUID: (
             symbol: String,
             category: AssetCategory,
             assets: Decimal,
-            borrows: Decimal
-        )] = [:]
+            borrows: Decimal)] = [:]
 
         for token in tokens {
             if token.role.isReward { continue }
             let value = resolveTokenUSDValue(
                 amount: token.amount, coinGeckoId: token.coinGeckoId,
-                usdValue: token.usdValue, prices: prices
-            )
+                usdValue: token.usdValue, prices: prices)
             var entry = assetMap[token.assetId] ?? (token.symbol, token.category, 0, 0)
             if token.role.isPositive {
                 entry.assets += value
@@ -150,8 +137,7 @@ struct ExposureFeature {
         return assetMap.map { id, entry in
             AssetExposure(
                 id: id, symbol: entry.symbol, category: entry.category,
-                spotAssets: entry.assets, liabilities: entry.borrows
-            )
+                spotAssets: entry.assets, liabilities: entry.borrows)
         }
         .sorted { $0.spotNet > $1.spotNet }
     }
@@ -163,7 +149,6 @@ struct ExposureFeature {
             totalLiabilities: categories.reduce(0) { $0 + $1.liabilities },
             netExposure: categories
                 .filter { $0.id != AssetCategory.stablecoin.rawValue }
-                .reduce(0) { $0 + $1.spotNet }
-        )
+                .reduce(0) { $0 + $1.spotNet })
     }
 }

@@ -44,17 +44,15 @@ struct AssetsChartMode: View {
             if chartData.isEmpty {
                 ContentUnavailableView(
                     "No Asset Data", systemImage: "chart.bar.xaxis",
-                    description: Text("Sync to see asset category breakdown")
-                )
-                .frame(height: 300)
+                    description: Text("Sync to see asset category breakdown"))
+                    .frame(height: 300)
             } else {
                 Chart(chartData) { point in
                     AreaMark(
                         x: .value("Date", point.date),
                         y: .value("Value", point.value),
-                        stacking: .standard
-                    )
-                    .foregroundStyle(by: .value("Category", point.category))
+                        stacking: .standard)
+                        .foregroundStyle(by: .value("Category", point.category))
                 }
                 .chartYAxis {
                     AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))
@@ -75,8 +73,7 @@ struct AssetsChartMode: View {
                             .background(
                                 store.performance.disabledCategories.contains(cat)
                                     ? AnyShapeStyle(.quaternary)
-                                    : AnyShapeStyle(Color.accentColor.opacity(0.2))
-                            )
+                                    : AnyShapeStyle(Color.accentColor.opacity(0.2)))
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)

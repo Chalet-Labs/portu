@@ -95,10 +95,7 @@ struct PortfolioHealthFeature {
     }
 
     static func computeDiversificationMetrics(
-        tokens: [TokenEntry], weights: [AssetWeight], chainCount: Int
-    )
-        -> DiversificationMetrics
-    {
+        tokens: [TokenEntry], weights: [AssetWeight], chainCount: Int) -> DiversificationMetrics {
         let totalValue = weights.reduce(Decimal.zero) { $0 + $1.usdValue }
 
         let stablecoinValue = tokens
@@ -112,8 +109,7 @@ struct PortfolioHealthFeature {
             assetCount: weights.count,
             chainCount: chainCount,
             stablecoinRatio: stablecoinRatio,
-            herfindahlIndex: hhi
-        )
+            herfindahlIndex: hhi)
     }
 
     static func classifyRiskLevel(metrics: DiversificationMetrics) -> RiskLevel {

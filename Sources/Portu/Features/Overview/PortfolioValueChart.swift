@@ -50,37 +50,31 @@ struct PortfolioValueChart: View {
                 ContentUnavailableView(
                     "No Data",
                     systemImage: "chart.line.uptrend.xyaxis",
-                    description: Text("Sync your accounts to see portfolio history")
-                )
-                .frame(height: 200)
+                    description: Text("Sync your accounts to see portfolio history"))
+                    .frame(height: 200)
             } else {
                 Chart(filteredSnapshots, id: \.id) { snapshot in
                     AreaMark(
                         x: .value("Date", snapshot.timestamp),
-                        y: .value("Value", snapshot.totalValue)
-                    )
-                    .foregroundStyle(
-                        .linearGradient(
-                            colors: [Color.accentColor.opacity(0.3), Color.accentColor.opacity(0.05)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                        y: .value("Value", snapshot.totalValue))
+                        .foregroundStyle(
+                            .linearGradient(
+                                colors: [Color.accentColor.opacity(0.3), Color.accentColor.opacity(0.05)],
+                                startPoint: .top,
+                                endPoint: .bottom))
 
                     LineMark(
                         x: .value("Date", snapshot.timestamp),
-                        y: .value("Value", snapshot.totalValue)
-                    )
-                    .foregroundStyle(Color.accentColor)
+                        y: .value("Value", snapshot.totalValue))
+                        .foregroundStyle(Color.accentColor)
 
                     // Partial snapshot indicator
                     if snapshot.isPartial {
                         PointMark(
                             x: .value("Date", snapshot.timestamp),
-                            y: .value("Value", snapshot.totalValue)
-                        )
-                        .symbolSize(20)
-                        .foregroundStyle(.orange.opacity(0.6))
+                            y: .value("Value", snapshot.totalValue))
+                            .symbolSize(20)
+                            .foregroundStyle(.orange.opacity(0.6))
                     }
                 }
                 .chartYAxis {

@@ -82,10 +82,9 @@ struct AppFeatureTests {
 
     @Test func `sync guards against double tap`() async {
         let store = TestStore(
-            initialState: AppFeature.State(syncStatus: .syncing(progress: 0.5))
-        ) {
-            AppFeature()
-        }
+            initialState: AppFeature.State(syncStatus: .syncing(progress: 0.5))) {
+                AppFeature()
+            }
 
         // Should be no-op when already syncing
         await store.send(.syncTapped)
@@ -98,8 +97,7 @@ struct AppFeatureTests {
         let testDate = Date(timeIntervalSince1970: 1_000_000)
         let expectedUpdate = PriceUpdate(
             prices: ["bitcoin": 65000],
-            changes24h: ["bitcoin": 2.5]
-        )
+            changes24h: ["bitcoin": 2.5])
 
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
@@ -135,13 +133,12 @@ struct AppFeatureTests {
         let testClock = TestClock()
 
         let store = TestStore(
-            initialState: AppFeature.State(prices: ["bitcoin": 60000])
-        ) {
-            AppFeature()
-        } withDependencies: {
-            $0.priceService.fetchPrices = { _ in throw PriceFailed() }
-            $0.continuousClock = testClock
-        }
+            initialState: AppFeature.State(prices: ["bitcoin": 60000])) {
+                AppFeature()
+            } withDependencies: {
+                $0.priceService.fetchPrices = { _ in throw PriceFailed() }
+                $0.continuousClock = testClock
+            }
 
         await store.send(.startPricePolling(["bitcoin"])) {
             $0.connectionStatus = .fetching
@@ -160,9 +157,7 @@ struct AppFeatureTests {
         let testDate = Date(timeIntervalSince1970: 1_000_000)
         let store = TestStore(
             initialState: AppFeature.State(
-                prices: ["bitcoin": 60000, "ethereum": 3000]
-            )
-        ) {
+                prices: ["bitcoin": 60000, "ethereum": 3000])) {
             AppFeature()
         } withDependencies: {
             $0.date = .constant(testDate)
@@ -170,11 +165,10 @@ struct AppFeatureTests {
 
         await store.send(.pricesReceived(PriceUpdate(
             prices: ["bitcoin": 65000],
-            changes24h: ["bitcoin": 2.5]
-        ))) {
-            $0.prices = ["bitcoin": 65000, "ethereum": 3000] // merged, not replaced
-            $0.priceChanges24h = ["bitcoin": 2.5]
-            $0.lastPriceUpdate = testDate
-        }
+            changes24h: ["bitcoin": 2.5]))) {
+                $0.prices = ["bitcoin": 65000, "ethereum": 3000] // merged, not replaced
+                $0.priceChanges24h = ["bitcoin": 2.5]
+                $0.lastPriceUpdate = testDate
+            }
     }
 }

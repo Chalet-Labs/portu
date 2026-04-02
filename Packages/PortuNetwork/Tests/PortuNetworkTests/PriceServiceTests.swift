@@ -27,8 +27,7 @@ final nonisolated class MockURLProtocol: URLProtocol, @unchecked Sendable {
             url: url,
             statusCode: statusCode,
             httpVersion: nil,
-            headerFields: nil
-        )!
+            headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         if let data {
             client?.urlProtocol(self, didLoad: data)
@@ -151,8 +150,7 @@ struct PriceServiceTests {
             session: session,
             cacheTTL: 0,
             maxRequestsPerWindow: 3,
-            windowDuration: 60
-        )
+            windowDuration: 60)
 
         // First 3 requests succeed
         for _ in 0 ..< 3 {

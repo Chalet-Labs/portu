@@ -23,8 +23,7 @@ struct AssetHoldingsSummary: View {
                     role: token.role,
                     amount: token.amount,
                     usdValue: token.usdValue,
-                    coinGeckoId: token.asset?.coinGeckoId
-                )
+                    coinGeckoId: token.asset?.coinGeckoId)
             }
         return AssetDetailFeature.computeHoldingsSummary(tokens: entries, prices: store.prices)
     }

@@ -77,8 +77,7 @@ struct AccountRowMappingTests {
             id: UUID(), name: "My Wallet", kind: .wallet,
             exchangeType: nil, group: "DeFi", isActive: true,
             lastSyncError: nil, totalBalance: 50000,
-            firstAddress: "0x1234567890abcdef1234567890abcdef12345678"
-        )
+            firstAddress: "0x1234567890abcdef1234567890abcdef12345678")
 
         let rows = AccountsFeature.mapAccountRows(from: [input])
 
@@ -96,8 +95,7 @@ struct AccountRowMappingTests {
             id: UUID(), name: "My Kraken", kind: .exchange,
             exchangeType: .kraken, group: nil, isActive: true,
             lastSyncError: nil, totalBalance: 10000,
-            firstAddress: nil
-        )
+            firstAddress: nil)
 
         let rows = AccountsFeature.mapAccountRows(from: [input])
 
@@ -110,8 +108,7 @@ struct AccountRowMappingTests {
             id: UUID(), name: "Cash Stash", kind: .manual,
             exchangeType: nil, group: nil, isActive: true,
             lastSyncError: nil, totalBalance: 0,
-            firstAddress: nil
-        )
+            firstAddress: nil)
 
         let rows = AccountsFeature.mapAccountRows(from: [input])
 
@@ -124,8 +121,7 @@ struct AccountRowMappingTests {
             id: UUID(), name: "Short", kind: .wallet,
             exchangeType: nil, group: nil, isActive: true,
             lastSyncError: nil, totalBalance: 0,
-            firstAddress: "abc123"
-        )
+            firstAddress: "abc123")
 
         let rows = AccountsFeature.mapAccountRows(from: [input])
 
@@ -137,8 +133,7 @@ struct AccountRowMappingTests {
             id: UUID(), name: "Broken", kind: .exchange,
             exchangeType: .binance, group: nil, isActive: true,
             lastSyncError: "API rate limit", totalBalance: 0,
-            firstAddress: nil
-        )
+            firstAddress: nil)
 
         let rows = AccountsFeature.mapAccountRows(from: [input])
 
@@ -152,19 +147,16 @@ struct AccountRowFilteringTests {
     private let activeRow = AccountRowData(
         id: UUID(), name: "Active Wallet", group: "DeFi",
         address: "0x123", type: "Wallet", balance: 5000,
-        isActive: true, lastSyncError: nil
-    )
+        isActive: true, lastSyncError: nil)
     private let inactiveRow = AccountRowData(
         id: UUID(), name: "Old Exchange", group: "CEX",
         address: "Kraken", type: "Exchange", balance: 0,
-        isActive: false, lastSyncError: nil
-    )
+        isActive: false, lastSyncError: nil)
 
     @Test func `hides inactive when showInactive is false`() {
         let filtered = AccountsFeature.filterAccountRows(
             [activeRow, inactiveRow],
-            searchText: "", filterGroup: nil, showInactive: false
-        )
+            searchText: "", filterGroup: nil, showInactive: false)
 
         #expect(filtered.count == 1)
         #expect(filtered[0].name == "Active Wallet")
@@ -173,8 +165,7 @@ struct AccountRowFilteringTests {
     @Test func `shows inactive when showInactive is true`() {
         let filtered = AccountsFeature.filterAccountRows(
             [activeRow, inactiveRow],
-            searchText: "", filterGroup: nil, showInactive: true
-        )
+            searchText: "", filterGroup: nil, showInactive: true)
 
         #expect(filtered.count == 2)
     }
@@ -182,8 +173,7 @@ struct AccountRowFilteringTests {
     @Test func `filters by search text case-insensitively`() {
         let filtered = AccountsFeature.filterAccountRows(
             [activeRow, inactiveRow],
-            searchText: "wallet", filterGroup: nil, showInactive: true
-        )
+            searchText: "wallet", filterGroup: nil, showInactive: true)
 
         #expect(filtered.count == 1)
         #expect(filtered[0].name == "Active Wallet")
@@ -192,8 +182,7 @@ struct AccountRowFilteringTests {
     @Test func `filters by group`() {
         let filtered = AccountsFeature.filterAccountRows(
             [activeRow, inactiveRow],
-            searchText: "", filterGroup: "CEX", showInactive: true
-        )
+            searchText: "", filterGroup: "CEX", showInactive: true)
 
         #expect(filtered.count == 1)
         #expect(filtered[0].name == "Old Exchange")
@@ -202,8 +191,7 @@ struct AccountRowFilteringTests {
     @Test func `nil group shows all`() {
         let filtered = AccountsFeature.filterAccountRows(
             [activeRow, inactiveRow],
-            searchText: "", filterGroup: nil, showInactive: true
-        )
+            searchText: "", filterGroup: nil, showInactive: true)
 
         #expect(filtered.count == 2)
     }
@@ -212,13 +200,11 @@ struct AccountRowFilteringTests {
         let defiRow = AccountRowData(
             id: UUID(), name: "DeFi Wallet 2", group: "DeFi",
             address: "0x456", type: "Wallet", balance: 3000,
-            isActive: true, lastSyncError: nil
-        )
+            isActive: true, lastSyncError: nil)
 
         let filtered = AccountsFeature.filterAccountRows(
             [activeRow, inactiveRow, defiRow],
-            searchText: "wallet", filterGroup: "DeFi", showInactive: true
-        )
+            searchText: "wallet", filterGroup: "DeFi", showInactive: true)
 
         #expect(filtered.count == 2) // Active Wallet + DeFi Wallet 2
     }
@@ -238,8 +224,7 @@ struct AccountGroupExtractionTests {
                 isActive: true,
                 lastSyncError: nil,
                 totalBalance: 0,
-                firstAddress: nil
-            ),
+                firstAddress: nil),
             AccountInput(
                 id: UUID(),
                 name: "B",
@@ -249,8 +234,7 @@ struct AccountGroupExtractionTests {
                 isActive: true,
                 lastSyncError: nil,
                 totalBalance: 0,
-                firstAddress: nil
-            ),
+                firstAddress: nil),
             AccountInput(
                 id: UUID(),
                 name: "C",
@@ -260,8 +244,7 @@ struct AccountGroupExtractionTests {
                 isActive: true,
                 lastSyncError: nil,
                 totalBalance: 0,
-                firstAddress: nil
-            ),
+                firstAddress: nil),
             AccountInput(
                 id: UUID(),
                 name: "D",
@@ -271,8 +254,7 @@ struct AccountGroupExtractionTests {
                 isActive: true,
                 lastSyncError: nil,
                 totalBalance: 0,
-                firstAddress: nil
-            )
+                firstAddress: nil)
         ]
 
         let groups = AccountsFeature.extractGroups(from: inputs)
@@ -291,8 +273,7 @@ struct AccountGroupExtractionTests {
                 isActive: true,
                 lastSyncError: nil,
                 totalBalance: 0,
-                firstAddress: nil
-            )
+                firstAddress: nil)
         ]
 
         let groups = AccountsFeature.extractGroups(from: inputs)
@@ -312,8 +293,7 @@ struct AccountFormValidationTests {
             manualName: "",
             exchangeName: "",
             exchangeAPIKey: "",
-            exchangeAPISecret: ""
-        ) == true)
+            exchangeAPISecret: "") == true)
         #expect(AccountsFeature.canSave(
             tab: 0,
             chainName: "",
@@ -321,8 +301,7 @@ struct AccountFormValidationTests {
             manualName: "",
             exchangeName: "",
             exchangeAPIKey: "",
-            exchangeAPISecret: ""
-        ) == false)
+            exchangeAPISecret: "") == false)
         #expect(AccountsFeature.canSave(
             tab: 0,
             chainName: "W",
@@ -330,8 +309,7 @@ struct AccountFormValidationTests {
             manualName: "",
             exchangeName: "",
             exchangeAPIKey: "",
-            exchangeAPISecret: ""
-        ) == false)
+            exchangeAPISecret: "") == false)
     }
 
     @Test func `manual tab requires name`() {
@@ -342,8 +320,7 @@ struct AccountFormValidationTests {
             manualName: "Cash",
             exchangeName: "",
             exchangeAPIKey: "",
-            exchangeAPISecret: ""
-        ) == true)
+            exchangeAPISecret: "") == true)
         #expect(AccountsFeature.canSave(
             tab: 1,
             chainName: "",
@@ -351,8 +328,7 @@ struct AccountFormValidationTests {
             manualName: "",
             exchangeName: "",
             exchangeAPIKey: "",
-            exchangeAPISecret: ""
-        ) == false)
+            exchangeAPISecret: "") == false)
     }
 
     @Test func `exchange tab requires name and both keys`() {
@@ -363,8 +339,7 @@ struct AccountFormValidationTests {
             manualName: "",
             exchangeName: "Kraken",
             exchangeAPIKey: "key",
-            exchangeAPISecret: "secret"
-        ) == true)
+            exchangeAPISecret: "secret") == true)
         #expect(AccountsFeature.canSave(
             tab: 2,
             chainName: "",
@@ -372,8 +347,7 @@ struct AccountFormValidationTests {
             manualName: "",
             exchangeName: "Kraken",
             exchangeAPIKey: "",
-            exchangeAPISecret: "secret"
-        ) == false)
+            exchangeAPISecret: "secret") == false)
         #expect(AccountsFeature.canSave(
             tab: 2,
             chainName: "",
@@ -381,8 +355,7 @@ struct AccountFormValidationTests {
             manualName: "",
             exchangeName: "",
             exchangeAPIKey: "key",
-            exchangeAPISecret: "secret"
-        ) == false)
+            exchangeAPISecret: "secret") == false)
     }
 
     @Test func `unknown tab returns false`() {
@@ -393,7 +366,6 @@ struct AccountFormValidationTests {
             manualName: "x",
             exchangeName: "x",
             exchangeAPIKey: "x",
-            exchangeAPISecret: "x"
-        ) == false)
+            exchangeAPISecret: "x") == false)
     }
 }

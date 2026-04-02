@@ -24,8 +24,7 @@ public final class PositionToken {
         amount: Decimal,
         usdValue: Decimal,
         asset: Asset? = nil,
-        position: Position? = nil
-    ) {
+        position: Position? = nil) {
         self.id = id
         self.role = role
         self.amount = amount

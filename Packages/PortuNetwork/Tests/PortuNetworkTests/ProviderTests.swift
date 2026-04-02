@@ -10,13 +10,11 @@ struct ProviderTests {
             role: .balance, symbol: "ETH", name: "Ethereum",
             amount: 10, usdValue: 21880, chain: .ethereum,
             contractAddress: nil, debankId: nil, coinGeckoId: "ethereum",
-            sourceKey: nil, logoURL: nil, category: .major, isVerified: true
-        )
+            sourceKey: nil, logoURL: nil, category: .major, isVerified: true)
         let position = PositionDTO(
             positionType: .idle, chain: .ethereum,
             protocolId: nil, protocolName: nil, protocolLogoURL: nil,
-            healthFactor: nil, tokens: [ethToken]
-        )
+            healthFactor: nil, tokens: [ethToken])
         await provider.configure(balances: [position])
 
         let ctx = SyncContext(accountId: UUID(), kind: .wallet, addresses: [("0xabc", nil)], exchangeType: nil)

@@ -8,8 +8,7 @@ struct DTOTests {
             accountId: UUID(),
             kind: .wallet,
             addresses: [("0xabc", nil), ("SoL123", .solana)],
-            exchangeType: nil
-        )
+            exchangeType: nil)
         #expect(ctx.kind == .wallet)
         #expect(ctx.addresses.count == 2)
         #expect(ctx.addresses[0].chain == nil) // EVM — all chains
@@ -30,8 +29,7 @@ struct DTOTests {
             sourceKey: nil,
             logoURL: nil,
             category: .major,
-            isVerified: true
-        )
+            isVerified: true)
         let pos = PositionDTO(
             positionType: .idle,
             chain: .ethereum,
@@ -39,8 +37,7 @@ struct DTOTests {
             protocolName: nil,
             protocolLogoURL: nil,
             healthFactor: nil,
-            tokens: [token]
-        )
+            tokens: [token])
         #expect(pos.tokens.count == 1)
         #expect(pos.tokens[0].symbol == "ETH")
         #expect(pos.positionType == .idle)
@@ -60,8 +57,7 @@ struct DTOTests {
             sourceKey: nil,
             logoURL: nil,
             category: .stablecoin,
-            isVerified: true
-        )
+            isVerified: true)
         #expect(borrow.amount > 0)
         #expect(borrow.usdValue > 0)
         #expect(borrow.role == .borrow)
@@ -70,8 +66,7 @@ struct DTOTests {
     @Test func `price update creation`() throws {
         let update = try PriceUpdate(
             prices: ["ethereum": 2188, "bitcoin": 67500],
-            changes24h: ["ethereum": #require(Decimal(string: "0.032")), "bitcoin": #require(Decimal(string: "-0.015"))]
-        )
+            changes24h: ["ethereum": #require(Decimal(string: "0.032")), "bitcoin": #require(Decimal(string: "-0.015"))])
         #expect(update.prices.count == 2)
         #expect(try #require(update.changes24h["ethereum"]) > 0)
         #expect(try #require(update.changes24h["bitcoin"]) < 0)

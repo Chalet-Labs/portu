@@ -53,8 +53,7 @@ final class SyncEngine: @unchecked Sendable {
             accountId: account.id,
             kind: account.kind,
             addresses: account.addresses.map { ($0.address, $0.chain) },
-            exchangeType: account.exchangeType
-        )
+            exchangeType: account.exchangeType)
 
         let provider = try resolveProvider(for: account)
 
@@ -77,8 +76,7 @@ final class SyncEngine: @unchecked Sendable {
                 protocolLogoURL: dto.protocolLogoURL,
                 healthFactor: dto.healthFactor,
                 account: account,
-                syncedAt: .now
-            )
+                syncedAt: .now)
 
             var net: Decimal = 0
             for tokenDTO in dto.tokens {
@@ -88,8 +86,7 @@ final class SyncEngine: @unchecked Sendable {
                     amount: tokenDTO.amount,
                     usdValue: tokenDTO.usdValue,
                     asset: asset,
-                    position: position
-                )
+                    position: position)
                 modelContext.insert(token)
 
                 if tokenDTO.role.isPositive {
@@ -147,8 +144,7 @@ final class SyncEngine: @unchecked Sendable {
             sourceKey: dto.sourceKey,
             logoURL: dto.logoURL,
             category: dto.category,
-            isVerified: dto.isVerified
-        )
+            isVerified: dto.isVerified)
         modelContext.insert(asset)
         return asset
     }
@@ -218,8 +214,7 @@ final class SyncEngine: @unchecked Sendable {
             syncBatchId: batchId, timestamp: batchTimestamp,
             totalValue: totalValue, idleValue: idleValue,
             deployedValue: deployedValue, debtValue: debtValue,
-            isPartial: isPartial
-        )
+            isPartial: isPartial)
         modelContext.insert(portfolioSnap)
 
         // ── AccountSnapshots ──
@@ -231,8 +226,7 @@ final class SyncEngine: @unchecked Sendable {
 
             let snap = AccountSnapshot(
                 syncBatchId: batchId, timestamp: batchTimestamp,
-                accountId: account.id, totalValue: accountTotal, isFresh: isFresh
-            )
+                accountId: account.id, totalValue: accountTotal, isFresh: isFresh)
             modelContext.insert(snap)
         }
 
@@ -267,8 +261,7 @@ final class SyncEngine: @unchecked Sendable {
                         accountId: accountId,
                         assetId: asset.id,
                         symbol: asset.symbol,
-                        category: asset.category
-                    )
+                        category: asset.category)
                 }
 
                 if token.role.isBorrow {
@@ -287,8 +280,7 @@ final class SyncEngine: @unchecked Sendable {
                 accountId: acc.accountId, assetId: acc.assetId,
                 symbol: acc.symbol, category: acc.category,
                 amount: acc.grossAmount, usdValue: acc.grossUsdValue,
-                borrowAmount: acc.borrowAmount, borrowUsdValue: acc.borrowUsdValue
-            )
+                borrowAmount: acc.borrowAmount, borrowUsdValue: acc.borrowUsdValue)
             modelContext.insert(snap)
         }
 

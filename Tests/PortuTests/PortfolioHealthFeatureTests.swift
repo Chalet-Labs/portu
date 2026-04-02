@@ -35,8 +35,7 @@ struct PortfolioHealthWeightTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 1,
-                usdValue: 60000
-            ),
+                usdValue: 60000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "ETH",
@@ -45,8 +44,7 @@ struct PortfolioHealthWeightTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 10,
-                usdValue: 30000
-            ),
+                usdValue: 30000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "USDC",
@@ -55,8 +53,7 @@ struct PortfolioHealthWeightTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 10000,
-                usdValue: 10000
-            )
+                usdValue: 10000)
         ]
 
         let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: [:])
@@ -81,8 +78,7 @@ struct PortfolioHealthWeightTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 5,
-                usdValue: 15000
-            ),
+                usdValue: 15000),
             TokenEntry(
                 assetId: id,
                 symbol: "ETH",
@@ -91,8 +87,7 @@ struct PortfolioHealthWeightTests {
                 coinGeckoId: nil,
                 role: .supply,
                 amount: 5,
-                usdValue: 15000
-            )
+                usdValue: 15000)
         ]
 
         let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: [:])
@@ -114,8 +109,7 @@ struct PortfolioHealthWeightTests {
                 coinGeckoId: "bitcoin",
                 role: .balance,
                 amount: 2,
-                usdValue: 0
-            )
+                usdValue: 0)
         ]
         let prices: [String: Decimal] = ["bitcoin": 50000]
 
@@ -137,8 +131,7 @@ struct PortfolioHealthWeightTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 0,
-                usdValue: 0
-            )
+                usdValue: 0)
         ]
 
         let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: [:])
@@ -156,8 +149,7 @@ struct PortfolioHealthWeightTests {
                 coinGeckoId: nil,
                 role: .supply,
                 amount: 10,
-                usdValue: 30000
-            ),
+                usdValue: 30000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "ETH",
@@ -166,8 +158,7 @@ struct PortfolioHealthWeightTests {
                 coinGeckoId: nil,
                 role: .borrow,
                 amount: 3,
-                usdValue: 9000
-            )
+                usdValue: 9000)
         ]
 
         let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: [:])
@@ -189,8 +180,7 @@ struct PortfolioHealthConcentrationTests {
         ]
 
         let risks = try PortfolioHealthFeature.computeConcentrationRisks(
-            weights: weights, threshold: #require(Decimal(string: "0.25"))
-        )
+            weights: weights, threshold: #require(Decimal(string: "0.25")))
 
         let first = try #require(risks.first, "Expected 1 concentration risk")
         #expect(risks.count == 1)
@@ -206,8 +196,7 @@ struct PortfolioHealthConcentrationTests {
         ]
 
         let risks = try PortfolioHealthFeature.computeConcentrationRisks(
-            weights: weights, threshold: #require(Decimal(string: "0.5"))
-        )
+            weights: weights, threshold: #require(Decimal(string: "0.5")))
 
         #expect(risks.isEmpty)
     }
@@ -218,8 +207,7 @@ struct PortfolioHealthConcentrationTests {
         ]
 
         let risks = try PortfolioHealthFeature.computeConcentrationRisks(
-            weights: weights, threshold: #require(Decimal(string: "0.25"))
-        )
+            weights: weights, threshold: #require(Decimal(string: "0.25")))
 
         #expect(risks.count == 1)
     }
@@ -238,8 +226,7 @@ struct PortfolioHealthDiversificationTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 1,
-                usdValue: 50000
-            ),
+                usdValue: 50000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "ETH",
@@ -248,8 +235,7 @@ struct PortfolioHealthDiversificationTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 10,
-                usdValue: 30000
-            ),
+                usdValue: 30000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "USDC",
@@ -258,8 +244,7 @@ struct PortfolioHealthDiversificationTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 20000,
-                usdValue: 20000
-            )
+                usdValue: 20000)
         ]
         let weights = try [
             AssetWeight(symbol: "BTC", name: "Bitcoin", usdValue: 50000, percentage: #require(Decimal(string: "0.5"))),
@@ -268,8 +253,7 @@ struct PortfolioHealthDiversificationTests {
         ]
 
         let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokens, weights: weights, chainCount: 2
-        )
+            tokens: tokens, weights: weights, chainCount: 2)
 
         #expect(metrics.assetCount == 3)
         #expect(metrics.chainCount == 2)
@@ -280,8 +264,7 @@ struct PortfolioHealthDiversificationTests {
 
     @Test func `empty portfolio returns zero metrics`() {
         let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: [], weights: [], chainCount: 0
-        )
+            tokens: [], weights: [], chainCount: 0)
 
         #expect(metrics.assetCount == 0)
         #expect(metrics.chainCount == 0)
@@ -299,8 +282,7 @@ struct PortfolioHealthDiversificationTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 1,
-                usdValue: 50000
-            ),
+                usdValue: 50000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "USDC",
@@ -309,8 +291,7 @@ struct PortfolioHealthDiversificationTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 25000,
-                usdValue: 25000
-            ),
+                usdValue: 25000),
             TokenEntry(
                 assetId: UUID(),
                 symbol: "DAI",
@@ -319,8 +300,7 @@ struct PortfolioHealthDiversificationTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 25000,
-                usdValue: 25000
-            )
+                usdValue: 25000)
         ]
         let weights = try [
             AssetWeight(symbol: "BTC", name: "Bitcoin", usdValue: 50000, percentage: #require(Decimal(string: "0.5"))),
@@ -329,8 +309,7 @@ struct PortfolioHealthDiversificationTests {
         ]
 
         let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokens, weights: weights, chainCount: 1
-        )
+            tokens: tokens, weights: weights, chainCount: 1)
 
         #expect(metrics.stablecoinRatio == Decimal(string: "0.5")!) // 50000/100000
     }
@@ -344,8 +323,7 @@ struct PortfolioHealthRiskLevelTests {
             assetCount: 2,
             chainCount: 1,
             stablecoinRatio: 0,
-            herfindahlIndex: #require(Decimal(string: "0.55"))
-        )
+            herfindahlIndex: #require(Decimal(string: "0.55")))
 
         #expect(PortfolioHealthFeature.classifyRiskLevel(metrics: metrics) == .high)
     }
@@ -355,8 +333,7 @@ struct PortfolioHealthRiskLevelTests {
             assetCount: 3,
             chainCount: 2,
             stablecoinRatio: #require(Decimal(string: "0.2")),
-            herfindahlIndex: #require(Decimal(string: "0.38"))
-        )
+            herfindahlIndex: #require(Decimal(string: "0.38")))
 
         #expect(PortfolioHealthFeature.classifyRiskLevel(metrics: metrics) == .medium)
     }
@@ -366,8 +343,7 @@ struct PortfolioHealthRiskLevelTests {
             assetCount: 5,
             chainCount: 3,
             stablecoinRatio: #require(Decimal(string: "0.3")),
-            herfindahlIndex: #require(Decimal(string: "0.25"))
-        )
+            herfindahlIndex: #require(Decimal(string: "0.25")))
 
         #expect(PortfolioHealthFeature.classifyRiskLevel(metrics: metrics) == .low)
     }
@@ -377,8 +353,7 @@ struct PortfolioHealthRiskLevelTests {
             assetCount: 0,
             chainCount: 0,
             stablecoinRatio: 0,
-            herfindahlIndex: 0
-        )
+            herfindahlIndex: 0)
 
         #expect(PortfolioHealthFeature.classifyRiskLevel(metrics: metrics) == .low)
     }

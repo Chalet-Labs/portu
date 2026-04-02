@@ -69,9 +69,8 @@ struct AllPositionsView: View {
             PositionFilterSidebar(
                 positions: positions,
                 selectedType: $filterType,
-                selectedProtocol: $filterProtocol
-            )
-            .frame(minWidth: 200, idealWidth: 250, maxWidth: 300)
+                selectedProtocol: $filterProtocol)
+                .frame(minWidth: 200, idealWidth: 250, maxWidth: 300)
         }
         .navigationTitle("All Positions")
     }

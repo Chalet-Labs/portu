@@ -122,8 +122,7 @@ struct AddPositionSheet: View {
             netUSDValue: usdValue,
             tokens: [token],
             account: account,
-            syncedAt: .now
-        )
+            syncedAt: .now)
         modelContext.insert(position)
         try? modelContext.save()
 

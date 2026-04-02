@@ -29,8 +29,7 @@ struct ModelTests {
         let account = Account(
             name: "My Wallet",
             kind: .wallet,
-            dataSource: .zapper
-        )
+            dataSource: .zapper)
         context.insert(account)
         try context.save()
 
@@ -159,18 +158,15 @@ struct ModelTests {
         let portfolioSnap = PortfolioSnapshot(
             syncBatchId: batchId, timestamp: now,
             totalValue: 100_000, idleValue: 50000,
-            deployedValue: 45000, debtValue: 5000, isPartial: false
-        )
+            deployedValue: 45000, debtValue: 5000, isPartial: false)
         let accountSnap = AccountSnapshot(
             syncBatchId: batchId, timestamp: now,
-            accountId: accountId, totalValue: 50000, isFresh: true
-        )
+            accountId: accountId, totalValue: 50000, isFresh: true)
         let assetSnap = AssetSnapshot(
             syncBatchId: batchId, timestamp: now,
             accountId: accountId, assetId: assetId,
             symbol: "ETH", category: .major,
-            amount: 10, usdValue: 21880
-        )
+            amount: 10, usdValue: 21880)
 
         context.insert(portfolioSnap)
         context.insert(accountSnap)

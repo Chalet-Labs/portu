@@ -24,8 +24,7 @@ struct AccountsView: View {
                 isActive: account.isActive,
                 lastSyncError: account.lastSyncError,
                 totalBalance: account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue },
-                firstAddress: account.addresses.first?.address
-            )
+                firstAddress: account.addresses.first?.address)
         }
     }
 
@@ -35,8 +34,7 @@ struct AccountsView: View {
             mapped,
             searchText: store.accounts.searchText,
             filterGroup: store.accounts.filterGroup,
-            showInactive: store.accounts.showInactive
-        )
+            showInactive: store.accounts.showInactive)
         return filtered.sorted(using: sortOrder)
     }
 
@@ -52,9 +50,8 @@ struct AccountsView: View {
         .navigationTitle("Accounts")
         .sheet(isPresented: Binding(
             get: { store.accounts.showAddSheet },
-            set: { store.send(.accounts(.addSheetPresented($0))) }
-        )) {
-            AddAccountSheet()
+            set: { store.send(.accounts(.addSheetPresented($0))) })) {
+                AddAccountSheet()
         }
     }
 
@@ -66,9 +63,8 @@ struct AccountsView: View {
                 Image(systemName: "magnifyingglass")
                 TextField("Search accounts...", text: Binding(
                     get: { store.accounts.searchText },
-                    set: { store.send(.accounts(.searchTextChanged($0))) }
-                ))
-                .textFieldStyle(.plain)
+                    set: { store.send(.accounts(.searchTextChanged($0))) }))
+                    .textFieldStyle(.plain)
             }
             .padding(6)
             .background(.quaternary.opacity(0.5))
@@ -77,19 +73,17 @@ struct AccountsView: View {
 
             Picker("Group", selection: Binding(
                 get: { store.accounts.filterGroup },
-                set: { store.send(.accounts(.filterGroupChanged($0))) }
-            )) {
-                Text("All Groups").tag(nil as String?)
-                ForEach(allGroups, id: \.self) { group in
-                    Text(group).tag(group as String?)
+                set: { store.send(.accounts(.filterGroupChanged($0))) })) {
+                    Text("All Groups").tag(nil as String?)
+                    ForEach(allGroups, id: \.self) { group in
+                        Text(group).tag(group as String?)
+                    }
                 }
-            }
-            .frame(width: 150)
+                .frame(width: 150)
 
             Toggle("Show Inactive", isOn: Binding(
                 get: { store.accounts.showInactive },
-                set: { _ in store.send(.accounts(.showInactiveToggled)) }
-            ))
+                set: { _ in store.send(.accounts(.showInactiveToggled)) }))
 
             Spacer()
 

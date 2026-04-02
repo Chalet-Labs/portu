@@ -58,8 +58,7 @@ public struct KeychainService: SecretStore {
                 kSecAttrAccessible as String: accessibility,
                 kSecValueData as String: data
             ]) { _, new in new } as CFDictionary,
-            nil
-        )
+            nil)
 
         switch addStatus {
         case errSecSuccess:
@@ -70,8 +69,7 @@ public struct KeychainService: SecretStore {
                 [
                     kSecValueData as String: data,
                     kSecAttrAccessible as String: accessibility
-                ] as CFDictionary
-            )
+                ] as CFDictionary)
             guard updateStatus == errSecSuccess else {
                 throw .unexpectedStatus(updateStatus)
             }

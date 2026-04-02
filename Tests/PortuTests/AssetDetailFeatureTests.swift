@@ -55,12 +55,10 @@ struct AssetDetailPositionRowTests {
         let entry = PositionTokenEntry(
             tokenId: UUID(), accountName: "Wallet A", protocolName: nil,
             positionType: .idle, chain: .ethereum, role: .balance,
-            amount: 10, usdValue: 25000, coinGeckoId: "ethereum"
-        )
+            amount: 10, usdValue: 25000, coinGeckoId: "ethereum")
 
         let rows = AssetDetailFeature.aggregatePositionRows(
-            tokens: [entry], prices: ["ethereum": 3000]
-        )
+            tokens: [entry], prices: ["ethereum": 3000])
 
         #expect(rows.count == 1)
         #expect(rows[0].amount == 10)
@@ -71,12 +69,10 @@ struct AssetDetailPositionRowTests {
         let entry = PositionTokenEntry(
             tokenId: UUID(), accountName: "Kraken", protocolName: nil,
             positionType: .idle, chain: nil, role: .balance,
-            amount: 100, usdValue: 500, coinGeckoId: nil
-        )
+            amount: 100, usdValue: 500, coinGeckoId: nil)
 
         let rows = AssetDetailFeature.aggregatePositionRows(
-            tokens: [entry], prices: [:]
-        )
+            tokens: [entry], prices: [:])
 
         #expect(rows.count == 1)
         #expect(rows[0].usdBalance == 500)
@@ -86,12 +82,10 @@ struct AssetDetailPositionRowTests {
         let entry = PositionTokenEntry(
             tokenId: UUID(), accountName: "DeFi Wallet", protocolName: "Aave V3",
             positionType: .lending, chain: .arbitrum, role: .supply,
-            amount: 5, usdValue: 15000, coinGeckoId: nil
-        )
+            amount: 5, usdValue: 15000, coinGeckoId: nil)
 
         let rows = AssetDetailFeature.aggregatePositionRows(
-            tokens: [entry], prices: [:]
-        )
+            tokens: [entry], prices: [:])
 
         #expect(rows[0].accountName == "DeFi Wallet")
         #expect(rows[0].platformName == "Aave V3")
@@ -103,12 +97,10 @@ struct AssetDetailPositionRowTests {
         let entry = PositionTokenEntry(
             tokenId: UUID(), accountName: "Main", protocolName: nil,
             positionType: .idle, chain: .ethereum, role: .balance,
-            amount: 1, usdValue: 3000, coinGeckoId: nil
-        )
+            amount: 1, usdValue: 3000, coinGeckoId: nil)
 
         let rows = AssetDetailFeature.aggregatePositionRows(
-            tokens: [entry], prices: [:]
-        )
+            tokens: [entry], prices: [:])
 
         #expect(rows[0].platformName == "Wallet")
     }
@@ -117,12 +109,10 @@ struct AssetDetailPositionRowTests {
         let entry = PositionTokenEntry(
             tokenId: UUID(), accountName: "Coinbase", protocolName: nil,
             positionType: .idle, chain: nil, role: .balance,
-            amount: 1, usdValue: 60000, coinGeckoId: nil
-        )
+            amount: 1, usdValue: 60000, coinGeckoId: nil)
 
         let rows = AssetDetailFeature.aggregatePositionRows(
-            tokens: [entry], prices: [:]
-        )
+            tokens: [entry], prices: [:])
 
         #expect(rows[0].network == "Off-chain")
     }
@@ -132,18 +122,15 @@ struct AssetDetailPositionRowTests {
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "Small", protocolName: nil,
                 positionType: .idle, chain: .ethereum, role: .balance,
-                amount: 1, usdValue: 100, coinGeckoId: nil
-            ),
+                amount: 1, usdValue: 100, coinGeckoId: nil),
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "Large", protocolName: nil,
                 positionType: .idle, chain: .ethereum, role: .balance,
-                amount: 10, usdValue: 1000, coinGeckoId: nil
-            )
+                amount: 10, usdValue: 1000, coinGeckoId: nil)
         ]
 
         let rows = AssetDetailFeature.aggregatePositionRows(
-            tokens: entries, prices: [:]
-        )
+            tokens: entries, prices: [:])
 
         #expect(rows[0].accountName == "Large")
         #expect(rows[1].accountName == "Small")
@@ -158,18 +145,15 @@ struct AssetDetailHoldingsSummaryTests {
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "A", protocolName: nil,
                 positionType: .idle, chain: .ethereum, role: .supply,
-                amount: 10, usdValue: 30000, coinGeckoId: "ethereum"
-            ),
+                amount: 10, usdValue: 30000, coinGeckoId: "ethereum"),
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "B", protocolName: "Aave",
                 positionType: .lending, chain: .ethereum, role: .borrow,
-                amount: 3, usdValue: 9000, coinGeckoId: "ethereum"
-            )
+                amount: 3, usdValue: 9000, coinGeckoId: "ethereum")
         ]
 
         let summary = AssetDetailFeature.computeHoldingsSummary(
-            tokens: entries, prices: ["ethereum": 3000]
-        )
+            tokens: entries, prices: ["ethereum": 3000])
 
         #expect(summary.totalAmount == 7) // 10 - 3
     }
@@ -179,13 +163,11 @@ struct AssetDetailHoldingsSummaryTests {
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "A", protocolName: nil,
                 positionType: .idle, chain: .ethereum, role: .balance,
-                amount: 5, usdValue: 10000, coinGeckoId: "ethereum"
-            )
+                amount: 5, usdValue: 10000, coinGeckoId: "ethereum")
         ]
 
         let summary = AssetDetailFeature.computeHoldingsSummary(
-            tokens: entries, prices: ["ethereum": 3000]
-        )
+            tokens: entries, prices: ["ethereum": 3000])
 
         #expect(summary.totalValue == 15000) // 5 * 3000
     }
@@ -195,18 +177,15 @@ struct AssetDetailHoldingsSummaryTests {
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "A", protocolName: nil,
                 positionType: .idle, chain: nil, role: .balance,
-                amount: 100, usdValue: 500, coinGeckoId: nil
-            ),
+                amount: 100, usdValue: 500, coinGeckoId: nil),
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "B", protocolName: nil,
                 positionType: .idle, chain: nil, role: .supply,
-                amount: 50, usdValue: 250, coinGeckoId: nil
-            )
+                amount: 50, usdValue: 250, coinGeckoId: nil)
         ]
 
         let summary = AssetDetailFeature.computeHoldingsSummary(
-            tokens: entries, prices: [:]
-        )
+            tokens: entries, prices: [:])
 
         #expect(summary.totalValue == 750) // 500 + 250
     }
@@ -216,23 +195,19 @@ struct AssetDetailHoldingsSummaryTests {
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "Wallet A", protocolName: nil,
                 positionType: .idle, chain: .ethereum, role: .balance,
-                amount: 5, usdValue: 15000, coinGeckoId: nil
-            ),
+                amount: 5, usdValue: 15000, coinGeckoId: nil),
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "Wallet A", protocolName: "Aave",
                 positionType: .lending, chain: .ethereum, role: .supply,
-                amount: 3, usdValue: 9000, coinGeckoId: nil
-            ),
+                amount: 3, usdValue: 9000, coinGeckoId: nil),
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "Coinbase", protocolName: nil,
                 positionType: .idle, chain: nil, role: .balance,
-                amount: 2, usdValue: 6000, coinGeckoId: nil
-            )
+                amount: 2, usdValue: 6000, coinGeckoId: nil)
         ]
 
         let summary = AssetDetailFeature.computeHoldingsSummary(
-            tokens: entries, prices: [:]
-        )
+            tokens: entries, prices: [:])
 
         #expect(summary.accountCount == 2) // "Wallet A" and "Coinbase"
     }
@@ -242,18 +217,15 @@ struct AssetDetailHoldingsSummaryTests {
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "A", protocolName: nil,
                 positionType: .idle, chain: .ethereum, role: .balance,
-                amount: 8, usdValue: 24000, coinGeckoId: nil
-            ),
+                amount: 8, usdValue: 24000, coinGeckoId: nil),
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "B", protocolName: nil,
                 positionType: .idle, chain: .arbitrum, role: .balance,
-                amount: 2, usdValue: 6000, coinGeckoId: nil
-            )
+                amount: 2, usdValue: 6000, coinGeckoId: nil)
         ]
 
         let summary = AssetDetailFeature.computeHoldingsSummary(
-            tokens: entries, prices: [:]
-        )
+            tokens: entries, prices: [:])
 
         #expect(summary.byChain.count == 2)
         // Sorted by value desc → Ethereum first
@@ -268,18 +240,15 @@ struct AssetDetailHoldingsSummaryTests {
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "A", protocolName: nil,
                 positionType: .idle, chain: .ethereum, role: .supply,
-                amount: 10, usdValue: 30000, coinGeckoId: nil
-            ),
+                amount: 10, usdValue: 30000, coinGeckoId: nil),
             PositionTokenEntry(
                 tokenId: UUID(), accountName: "A", protocolName: "Aave",
                 positionType: .lending, chain: .ethereum, role: .borrow,
-                amount: 3, usdValue: 9000, coinGeckoId: nil
-            )
+                amount: 3, usdValue: 9000, coinGeckoId: nil)
         ]
 
         let summary = AssetDetailFeature.computeHoldingsSummary(
-            tokens: entries, prices: [:]
-        )
+            tokens: entries, prices: [:])
 
         // Only supply token counts in byChain
         #expect(summary.byChain.count == 1)
@@ -302,12 +271,10 @@ struct AssetDetailSnapshotTests {
         let entries = [
             SnapshotEntry(
                 assetId: assetId, timestamp: noon,
-                grossUSD: 5000, borrowUSD: 0, grossAmount: 2, borrowAmount: 0
-            ),
+                grossUSD: 5000, borrowUSD: 0, grossAmount: 2, borrowAmount: 0),
             SnapshotEntry(
                 assetId: assetId, timestamp: noon.addingTimeInterval(3600), // same day
-                grossUSD: 3000, borrowUSD: 1000, grossAmount: 1, borrowAmount: 0.4
-            )
+                grossUSD: 3000, borrowUSD: 1000, grossAmount: 1, borrowAmount: 0.4)
         ]
 
         let points = AssetDetailFeature.aggregateSnapshots(entries: entries)
@@ -327,12 +294,10 @@ struct AssetDetailSnapshotTests {
         let entries = [
             SnapshotEntry(
                 assetId: assetId, timestamp: day2,
-                grossUSD: 3000, borrowUSD: 0, grossAmount: 1, borrowAmount: 0
-            ),
+                grossUSD: 3000, borrowUSD: 0, grossAmount: 1, borrowAmount: 0),
             SnapshotEntry(
                 assetId: assetId, timestamp: day1,
-                grossUSD: 5000, borrowUSD: 0, grossAmount: 2, borrowAmount: 0
-            )
+                grossUSD: 5000, borrowUSD: 0, grossAmount: 2, borrowAmount: 0)
         ]
 
         let points = AssetDetailFeature.aggregateSnapshots(entries: entries)
@@ -354,8 +319,7 @@ struct AssetDetailHeaderPriceTests {
         let info = try AssetDetailFeature.headerPriceInfo(
             coinGeckoId: "bitcoin",
             prices: ["bitcoin": 65000],
-            changes24h: ["bitcoin": #require(Decimal(string: "0.035"))]
-        )
+            changes24h: ["bitcoin": #require(Decimal(string: "0.035"))])
 
         let result = try #require(info)
         #expect(result.price == 65000)
@@ -366,8 +330,7 @@ struct AssetDetailHeaderPriceTests {
         let info = AssetDetailFeature.headerPriceInfo(
             coinGeckoId: "bitcoin",
             prices: ["bitcoin": 65000],
-            changes24h: [:]
-        )
+            changes24h: [:])
 
         let result = try #require(info)
         #expect(result.price == 65000)
@@ -378,8 +341,7 @@ struct AssetDetailHeaderPriceTests {
         let info = try AssetDetailFeature.headerPriceInfo(
             coinGeckoId: nil,
             prices: ["bitcoin": 65000],
-            changes24h: ["bitcoin": #require(Decimal(string: "0.035"))]
-        )
+            changes24h: ["bitcoin": #require(Decimal(string: "0.035"))])
 
         #expect(info == nil)
     }
@@ -388,8 +350,7 @@ struct AssetDetailHeaderPriceTests {
         let info = AssetDetailFeature.headerPriceInfo(
             coinGeckoId: "bitcoin",
             prices: [:],
-            changes24h: [:]
-        )
+            changes24h: [:])
 
         #expect(info == nil)
     }

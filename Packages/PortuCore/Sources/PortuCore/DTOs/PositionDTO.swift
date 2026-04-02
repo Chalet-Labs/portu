@@ -17,8 +17,7 @@ public struct PositionDTO: Sendable {
         protocolName: String?,
         protocolLogoURL: String?,
         healthFactor: Double?,
-        tokens: [TokenDTO]
-    ) {
+        tokens: [TokenDTO]) {
         self.positionType = positionType
         self.chain = chain
         self.protocolId = protocolId

@@ -22,8 +22,7 @@ public final class PortfolioSnapshot {
         idleValue: Decimal,
         deployedValue: Decimal,
         debtValue: Decimal,
-        isPartial: Bool
-    ) {
+        isPartial: Bool) {
         self.id = id
         self.syncBatchId = syncBatchId
         self.timestamp = timestamp

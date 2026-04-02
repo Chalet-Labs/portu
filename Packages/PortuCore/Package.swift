@@ -12,14 +12,11 @@ let package = Package(
             name: "PortuCore",
             swiftSettings: [
                 .swiftLanguageMode(.v6)
-            ]
-        ),
+            ]),
         .testTarget(
             name: "PortuCoreTests",
             dependencies: ["PortuCore"],
             swiftSettings: [
                 .swiftLanguageMode(.v6)
-            ]
-        )
-    ]
-)
+            ])
+    ])

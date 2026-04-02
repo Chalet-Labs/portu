@@ -39,8 +39,7 @@ public actor ExchangeProvider: PortfolioDataProvider {
         return [PositionDTO(
             positionType: .idle, chain: nil,
             protocolId: nil, protocolName: exchangeType.rawValue.capitalized,
-            protocolLogoURL: nil, healthFactor: nil, tokens: tokens
-        )]
+            protocolLogoURL: nil, healthFactor: nil, tokens: tokens)]
     }
 
     private func resolveClient(for type: ExchangeType) -> any ExchangeClient {

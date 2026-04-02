@@ -9,8 +9,7 @@ public struct ProviderCapabilities: Sendable {
     public init(
         supportsTokenBalances: Bool = true,
         supportsDeFiPositions: Bool = false,
-        supportsHealthFactors: Bool = false
-    ) {
+        supportsHealthFactors: Bool = false) {
         self.supportsTokenBalances = supportsTokenBalances
         self.supportsDeFiPositions = supportsDeFiPositions
         self.supportsHealthFactors = supportsHealthFactors

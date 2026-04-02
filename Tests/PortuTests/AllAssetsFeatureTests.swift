@@ -76,8 +76,7 @@ struct AssetRowAggregationTests {
                 coinGeckoId: "bitcoin",
                 role: .balance,
                 amount: 1,
-                usdValue: 60000
-            ),
+                usdValue: 60000),
             TokenEntry(
                 assetId: assetId,
                 symbol: "BTC",
@@ -86,8 +85,7 @@ struct AssetRowAggregationTests {
                 coinGeckoId: "bitcoin",
                 role: .balance,
                 amount: 0.5,
-                usdValue: 30000
-            )
+                usdValue: 30000)
         ]
 
         let rows = AllAssetsFeature.aggregateRows(tokens: tokens, prices: [:])
@@ -108,8 +106,7 @@ struct AssetRowAggregationTests {
                 coinGeckoId: "bitcoin",
                 role: .balance,
                 amount: 2,
-                usdValue: 120_000
-            )
+                usdValue: 120_000)
         ]
 
         let rows = AllAssetsFeature.aggregateRows(tokens: tokens, prices: ["bitcoin": 65000])
@@ -131,8 +128,7 @@ struct AssetRowAggregationTests {
                 coinGeckoId: nil,
                 role: .balance,
                 amount: 1_000_000,
-                usdValue: 50
-            )
+                usdValue: 50)
         ]
 
         let rows = AllAssetsFeature.aggregateRows(tokens: tokens, prices: [:])
@@ -155,8 +151,7 @@ struct AssetRowAggregationTests {
                 coinGeckoId: "ethereum",
                 role: .supply,
                 amount: 10,
-                usdValue: 30000
-            ),
+                usdValue: 30000),
             TokenEntry(
                 assetId: assetId,
                 symbol: "ETH",
@@ -165,8 +160,7 @@ struct AssetRowAggregationTests {
                 coinGeckoId: "ethereum",
                 role: .borrow,
                 amount: 3,
-                usdValue: 9000
-            )
+                usdValue: 9000)
         ]
 
         let rows = AllAssetsFeature.aggregateRows(tokens: tokens, prices: ["ethereum": 3000])
@@ -188,8 +182,7 @@ struct AssetRowAggregationTests {
                 coinGeckoId: "ethereum",
                 role: .stake,
                 amount: 32,
-                usdValue: 96000
-            ),
+                usdValue: 96000),
             TokenEntry(
                 assetId: rewardAssetId,
                 symbol: "RPL",
@@ -198,8 +191,7 @@ struct AssetRowAggregationTests {
                 coinGeckoId: "rocket-pool",
                 role: .reward,
                 amount: 5,
-                usdValue: 150
-            )
+                usdValue: 150)
         ]
 
         let rows = AllAssetsFeature.aggregateRows(tokens: tokens, prices: [:])
@@ -220,8 +212,7 @@ struct AssetRowAggregationTests {
                 coinGeckoId: "bitcoin",
                 role: .balance,
                 amount: 1,
-                usdValue: 60000
-            ),
+                usdValue: 60000),
             TokenEntry(
                 assetId: ethId,
                 symbol: "ETH",
@@ -230,8 +221,7 @@ struct AssetRowAggregationTests {
                 coinGeckoId: "ethereum",
                 role: .balance,
                 amount: 10,
-                usdValue: 30000
-            )
+                usdValue: 30000)
         ]
 
         let rows = AllAssetsFeature.aggregateRows(tokens: tokens, prices: [:])
@@ -253,8 +243,7 @@ struct AssetRowAggregationTests {
                 netAmount: 1,
                 price: 60000,
                 value: 60000,
-                hasLivePrice: true
-            ),
+                hasLivePrice: true),
             AssetRowData(
                 id: UUID(),
                 symbol: "ETH",
@@ -263,8 +252,7 @@ struct AssetRowAggregationTests {
                 netAmount: 10,
                 price: 3000,
                 value: 30000,
-                hasLivePrice: true
-            )
+                hasLivePrice: true)
         ]
 
         let filtered = AllAssetsFeature.filterRows(rows, searchText: "btc")
@@ -283,8 +271,7 @@ struct AssetRowAggregationTests {
                 netAmount: 1,
                 price: 60000,
                 value: 60000,
-                hasLivePrice: true
-            ),
+                hasLivePrice: true),
             AssetRowData(
                 id: UUID(),
                 symbol: "ETH",
@@ -293,8 +280,7 @@ struct AssetRowAggregationTests {
                 netAmount: 10,
                 price: 3000,
                 value: 30000,
-                hasLivePrice: true
-            )
+                hasLivePrice: true)
         ]
 
         let filtered = AllAssetsFeature.filterRows(rows, searchText: "ether")
@@ -313,8 +299,7 @@ struct AssetRowAggregationTests {
                 netAmount: 1,
                 price: 60000,
                 value: 60000,
-                hasLivePrice: true
-            ),
+                hasLivePrice: true),
             AssetRowData(
                 id: UUID(),
                 symbol: "ETH",
@@ -323,8 +308,7 @@ struct AssetRowAggregationTests {
                 netAmount: 10,
                 price: 3000,
                 value: 30000,
-                hasLivePrice: true
-            )
+                hasLivePrice: true)
         ]
 
         let filtered = AllAssetsFeature.filterRows(rows, searchText: "")
@@ -344,8 +328,7 @@ struct AssetRowAggregationTests {
                 netAmount: 1.5,
                 price: 60000,
                 value: 90000,
-                hasLivePrice: true
-            )
+                hasLivePrice: true)
         ]
 
         let csv = AllAssetsFeature.generateCSV(from: rows)
