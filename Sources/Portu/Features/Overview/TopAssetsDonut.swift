@@ -1,10 +1,12 @@
 // Sources/Portu/Features/Overview/TopAssetsDonut.swift
 import Charts
+import ComposableArchitecture
 import PortuCore
 import SwiftData
 import SwiftUI
 
 struct TopAssetsDonut: View {
+    let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
     @Query private var tokens: [PositionToken]
 
@@ -94,7 +96,7 @@ struct TopAssetsDonut: View {
             }
 
             Button("See all \u{2192}") {
-                appState.selectedSection = .allAssets
+                store.send(.sectionSelected(.allAssets))
             }
             .font(.caption)
         }

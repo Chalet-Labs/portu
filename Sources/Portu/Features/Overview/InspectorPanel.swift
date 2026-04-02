@@ -8,7 +8,7 @@ struct InspectorPanel: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                TopAssetsDonut()
+                TopAssetsDonut(store: store)
                 Divider()
                 PortfolioHealthPanel(store: store)
                 Divider()

@@ -6,6 +6,7 @@ import SwiftUI
 struct AddPositionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
     @Query(filter: #Predicate<Account> { $0.isActive == true && $0.dataSource.rawValue == "manual" })
     private var manualAccounts: [Account]
     @Query private var assets: [Asset]
@@ -114,7 +115,8 @@ struct AddPositionSheet: View {
             return
         }
 
-        let usdValue = usdValueOverride ?? 0
+        let livePrice = asset.coinGeckoId.flatMap { appState.prices[$0] }
+        let usdValue = usdValueOverride ?? livePrice.map { amount * $0 } ?? 0
         let token = PositionToken(role: .balance, amount: amount, usdValue: usdValue, asset: asset)
         let position = Position(
             positionType: positionType,

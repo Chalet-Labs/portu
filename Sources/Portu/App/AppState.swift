@@ -26,7 +26,6 @@ enum SyncStatus: Hashable {
 @Observable
 @MainActor
 final class AppState {
-    var selectedSection: SidebarSection = .overview
     var lastPriceUpdate: Date?
     var prices: [String: Decimal] = [:]
     var priceChanges24h: [String: Decimal] = [:]

@@ -29,6 +29,7 @@ struct AddAccountSheet: View {
     @State private var exchangeAPISecret = ""
     @State private var exchangePassphrase = ""
     @State private var exchangeGroup = ""
+    @State private var keychainError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,6 +55,13 @@ struct AddAccountSheet: View {
             .padding()
         }
         .frame(width: 500, height: 480)
+        .alert("Keychain Error", isPresented: Binding(
+            get: { keychainError != nil },
+            set: { if !$0 { keychainError = nil } })) {
+                Button("OK") { keychainError = nil }
+        } message: {
+            Text(keychainError ?? "")
+        }
     }
 
     // MARK: - Chain Account Tab
@@ -189,10 +197,14 @@ struct AddAccountSheet: View {
         // Store credentials in Keychain
         let keychain = KeychainService()
         let prefix = "portu.exchange.\(account.id.uuidString)"
-        try? keychain.set(key: "\(prefix).apiKey", value: exchangeAPIKey)
-        try? keychain.set(key: "\(prefix).apiSecret", value: exchangeAPISecret)
-        if !exchangePassphrase.isEmpty {
-            try? keychain.set(key: "\(prefix).passphrase", value: exchangePassphrase)
+        do {
+            try keychain.set(key: "\(prefix).apiKey", value: exchangeAPIKey)
+            try keychain.set(key: "\(prefix).apiSecret", value: exchangeAPISecret)
+            if !exchangePassphrase.isEmpty {
+                try keychain.set(key: "\(prefix).passphrase", value: exchangePassphrase)
+            }
+        } catch {
+            keychainError = "Failed to save credentials: \(error.localizedDescription)"
         }
     }
 }

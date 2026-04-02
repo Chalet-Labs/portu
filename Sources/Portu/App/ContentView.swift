@@ -5,11 +5,10 @@ import SwiftUI
 
 struct ContentView: View {
     let store: StoreOf<AppFeature>
-    @Environment(AppState.self) private var appState
 
     var body: some View {
         NavigationSplitView {
-            SidebarView()
+            SidebarView(store: store)
         } detail: {
             detailView
                 .navigationDestination(for: UUID.self) { assetId in
@@ -24,7 +23,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detailView: some View {
-        switch appState.selectedSection {
+        switch store.selectedSection {
         case .overview:
             OverviewView(store: store)
         case .exposure:
