@@ -1,8 +1,8 @@
 // Sources/Portu/Features/Overview/TopAssetsDonut.swift
-import SwiftUI
-import SwiftData
 import Charts
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct TopAssetsDonut: View {
     @Environment(AppState.self) private var appState
@@ -36,8 +36,8 @@ struct TopAssetsDonut: View {
                 .prefix(8)
                 .enumerated()
                 .map { SliceData(label: $0.element.key.rawValue.capitalized,
-                                  value: $0.element.value,
-                                  color: chartColor(index: $0.offset)) }
+                                 value: $0.element.value,
+                                 color: chartColor(index: $0.offset)) }
         } else {
             // Group by Asset
             var byAsset: [String: Decimal] = [:]
@@ -50,8 +50,8 @@ struct TopAssetsDonut: View {
                 .prefix(8)
                 .enumerated()
                 .map { SliceData(label: $0.element.key,
-                                  value: $0.element.value,
-                                  color: chartColor(index: $0.offset)) }
+                                 value: $0.element.value,
+                                 color: chartColor(index: $0.offset)) }
         }
     }
 
@@ -76,7 +76,7 @@ struct TopAssetsDonut: View {
                     SectorMark(
                         angle: .value("Value", slice.value),
                         innerRadius: .ratio(0.5),
-                        angularInset: 1
+                        angularInset: 1,
                     )
                     .foregroundStyle(slice.color)
                     .annotation(position: .overlay) {
@@ -99,7 +99,7 @@ struct TopAssetsDonut: View {
             }
 
             Button("See all \u{2192}") {
-                // Navigate to All Assets -- handled via appState.selectedSection
+                appState.selectedSection = .allAssets
             }
             .font(.caption)
         }

@@ -152,7 +152,7 @@ struct ExposureFeature {
             totalSpot: categories.reduce(0) { $0 + $1.spotAssets },
             totalLiabilities: categories.reduce(0) { $0 + $1.liabilities },
             netExposure: categories
-                .filter { $0.id != "stablecoin" }
+                .filter { $0.id != AssetCategory.stablecoin.rawValue }
                 .reduce(0) { $0 + $1.spotNet },
         )
     }

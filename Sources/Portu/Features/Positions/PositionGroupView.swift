@@ -1,7 +1,7 @@
 // Sources/Portu/Features/Positions/PositionGroupView.swift
-import SwiftUI
 import PortuCore
 import PortuUI
+import SwiftUI
 
 struct PositionGroupView: View {
     let position: Position
@@ -44,14 +44,30 @@ struct PositionGroupView: View {
             ForEach(position.tokens, id: \.id) { token in
                 HStack {
                     // Role prefix
-                    if token.role == .supply { Text("-> Supply").font(.caption).foregroundStyle(.green) } else if token.role.isBorrow { Text("<- Borrow").font(.caption).foregroundStyle(.orange) } else if token.role.isReward { Text("* Reward").font(.caption).foregroundStyle(.yellow) } else if token.role == .stake { Text("+ Stake").font(.caption).foregroundStyle(.blue) } else { Text("o Balance").font(.caption).foregroundStyle(.secondary) }
+                    Group {
+                        switch token.role {
+                        case .supply:
+                            Text("-> Supply").foregroundStyle(.green)
+                        case .borrow:
+                            Text("<- Borrow").foregroundStyle(.orange)
+                        case .reward:
+                            Text("* Reward").foregroundStyle(.yellow)
+                        case .stake:
+                            Text("+ Stake").foregroundStyle(.blue)
+                        case .lpToken:
+                            Text("~ LP Token").foregroundStyle(.cyan)
+                        case .balance:
+                            Text("o Balance").foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.caption)
 
                     Text(token.asset?.symbol ?? "???")
                         .fontWeight(.medium)
 
                     Spacer()
 
-                    Text(token.amount, format: .number.precision(.fractionLength(2...6)))
+                    Text(token.amount, format: .number.precision(.fractionLength(2 ... 6)))
                         .foregroundStyle(.secondary)
 
                     // Always positive display

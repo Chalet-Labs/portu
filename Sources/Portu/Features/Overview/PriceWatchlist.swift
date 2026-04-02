@@ -1,20 +1,20 @@
 // Sources/Portu/Features/Overview/PriceWatchlist.swift
-import SwiftUI
-import SwiftData
 import PortuCore
 import PortuUI
+import SwiftData
+import SwiftUI
 
 struct PriceWatchlist: View {
     @Environment(AppState.self) private var appState
     @Query private var assets: [Asset]
 
-    /// Top assets by portfolio value (those with coinGeckoId for live pricing)
+    /// Top assets by current price (those with coinGeckoId for live pricing)
     private var watchlistAssets: [Asset] {
         assets
             .filter { $0.coinGeckoId != nil }
             .sorted { (appState.prices[$0.coinGeckoId!] ?? 0) > (appState.prices[$1.coinGeckoId!] ?? 0) }
             .prefix(10)
-            .map { $0 }
+            .map(\.self)
     }
 
     var body: some View {
