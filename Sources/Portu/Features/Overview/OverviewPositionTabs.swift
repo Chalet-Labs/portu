@@ -1,8 +1,8 @@
 // Sources/Portu/Features/Overview/OverviewPositionTabs.swift
-import SwiftUI
-import SwiftData
 import PortuCore
 import PortuUI
+import SwiftData
+import SwiftUI
 
 struct OverviewPositionTabs: View {
     @Environment(AppState.self) private var appState
@@ -53,7 +53,7 @@ struct OverviewPositionTabs: View {
     private var keyChangeTokens: [(PositionToken, Position)] {
         // Tokens with largest 24h USD change (absolute value)
         allActiveTokens
-            .filter { $0.0.role.isPositive }
+            .filter(\.0.role.isPositive)
             .sorted { abs(tokenChange24h($0.0)) > abs(tokenChange24h($1.0)) }
             .prefix(20)
             .map { ($0.0, $0.1) }
@@ -94,7 +94,7 @@ struct OverviewPositionTabs: View {
             .width(min: 80, ideal: 120)
 
             TableColumn("Amount") { row in
-                Text(row.amount, format: .number.precision(.fractionLength(2...6)))
+                Text(row.amount, format: .number.precision(.fractionLength(2 ... 6)))
             }
             .width(min: 80, ideal: 100)
 
@@ -150,12 +150,12 @@ struct OverviewPositionTabs: View {
                     // Token rows
                     ForEach(pos.tokens, id: \.id) { token in
                         HStack {
-                            Text(token.role == .borrow ? "\u{2190} Borrow" : "\u{2192} Supply")
+                            Text(token.role.displayLabel)
                                 .font(.caption)
-                                .foregroundStyle(token.role.isBorrow ? .orange : .green)
+                                .foregroundStyle(token.role.displayColor)
                             Text(token.asset?.symbol ?? "???")
                             Spacer()
-                            Text(token.amount, format: .number.precision(.fractionLength(2...6)))
+                            Text(token.amount, format: .number.precision(.fractionLength(2 ... 6)))
                             Text(tokenValue(token), format: .currency(code: "USD"))
                                 .frame(width: 100, alignment: .trailing)
                         }
@@ -194,7 +194,7 @@ struct OverviewPositionTabs: View {
             accountName: position.account?.name ?? "",
             amount: token.amount,
             price: price,
-            value: value
+            value: value,
         )
     }
 

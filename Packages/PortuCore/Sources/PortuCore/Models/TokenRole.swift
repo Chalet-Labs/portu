@@ -13,6 +13,22 @@ public enum TokenRole: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    public var isBorrow: Bool { self == .borrow }
-    public var isReward: Bool { self == .reward }
+    public var isBorrow: Bool {
+        self == .borrow
+    }
+
+    public var isReward: Bool {
+        self == .reward
+    }
+
+    public var displayLabel: String {
+        switch self {
+        case .supply: "→ Supply"
+        case .borrow: "← Borrow"
+        case .reward: "★ Reward"
+        case .stake: "⊕ Stake"
+        case .lpToken: "◇ LP Token"
+        case .balance: "○ Balance"
+        }
+    }
 }

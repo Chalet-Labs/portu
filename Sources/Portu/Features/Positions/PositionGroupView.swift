@@ -43,24 +43,9 @@ struct PositionGroupView: View {
             // Token rows
             ForEach(position.tokens, id: \.id) { token in
                 HStack {
-                    // Role prefix
-                    Group {
-                        switch token.role {
-                        case .supply:
-                            Text("-> Supply").foregroundStyle(.green)
-                        case .borrow:
-                            Text("<- Borrow").foregroundStyle(.orange)
-                        case .reward:
-                            Text("* Reward").foregroundStyle(.yellow)
-                        case .stake:
-                            Text("+ Stake").foregroundStyle(.blue)
-                        case .lpToken:
-                            Text("~ LP Token").foregroundStyle(.cyan)
-                        case .balance:
-                            Text("o Balance").foregroundStyle(.secondary)
-                        }
-                    }
-                    .font(.caption)
+                    Text(token.role.displayLabel)
+                        .font(.caption)
+                        .foregroundStyle(token.role.displayColor)
 
                     Text(token.asset?.symbol ?? "???")
                         .fontWeight(.medium)

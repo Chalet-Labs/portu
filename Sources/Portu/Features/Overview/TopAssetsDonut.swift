@@ -24,35 +24,31 @@ struct TopAssetsDonut: View {
 
     private var slices: [SliceData] {
         if groupByCategory {
-            // Group by AssetCategory
             var byCategory: [AssetCategory: Decimal] = [:]
             for token in activeTokens where token.role.isPositive {
-                let cat = token.asset?.category ?? .other
-                let value = tokenUSDValue(token)
-                byCategory[cat, default: 0] += value
+                byCategory[token.asset?.category ?? .other, default: 0] += tokenUSDValue(token)
             }
-            return byCategory
-                .sorted { $0.value > $1.value }
-                .prefix(8)
-                .enumerated()
-                .map { SliceData(label: $0.element.key.rawValue.capitalized,
-                                 value: $0.element.value,
-                                 color: chartColor(index: $0.offset)) }
+            return buildSlices(from: byCategory) { $0.rawValue.capitalized }
         } else {
-            // Group by Asset
             var byAsset: [String: Decimal] = [:]
             for token in activeTokens where token.role.isPositive {
-                let symbol = token.asset?.symbol ?? "???"
-                byAsset[symbol, default: 0] += tokenUSDValue(token)
+                byAsset[token.asset?.symbol ?? "???", default: 0] += tokenUSDValue(token)
             }
-            return byAsset
-                .sorted { $0.value > $1.value }
-                .prefix(8)
-                .enumerated()
-                .map { SliceData(label: $0.element.key,
-                                 value: $0.element.value,
-                                 color: chartColor(index: $0.offset)) }
+            return buildSlices(from: byAsset) { $0 }
         }
+    }
+
+    private func buildSlices<K: Hashable>(
+        from aggregated: [K: Decimal],
+        label: (K) -> String,
+    ) -> [SliceData] {
+        aggregated
+            .sorted { $0.value > $1.value }
+            .prefix(8)
+            .enumerated()
+            .map { SliceData(label: label($0.element.key),
+                             value: $0.element.value,
+                             color: chartColor(index: $0.offset)) }
     }
 
     var body: some View {

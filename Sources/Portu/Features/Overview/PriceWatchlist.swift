@@ -11,10 +11,13 @@ struct PriceWatchlist: View {
     /// Top assets by current price (those with coinGeckoId for live pricing)
     private var watchlistAssets: [Asset] {
         assets
-            .filter { $0.coinGeckoId != nil }
-            .sorted { (appState.prices[$0.coinGeckoId!] ?? 0) > (appState.prices[$1.coinGeckoId!] ?? 0) }
+            .compactMap { asset -> (Asset, Decimal)? in
+                guard let cgId = asset.coinGeckoId else { return nil }
+                return (asset, appState.prices[cgId] ?? 0)
+            }
+            .sorted { $0.1 > $1.1 }
             .prefix(10)
-            .map(\.self)
+            .map(\.0)
     }
 
     var body: some View {
