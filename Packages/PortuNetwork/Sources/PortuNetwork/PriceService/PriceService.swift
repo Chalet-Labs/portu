@@ -46,42 +46,9 @@ public actor PriceService {
             return cache.filter { coinIds.contains($0.key) }
         }
 
-        // Proactive rate limiting — reject before sending the request
-        let now = Date.now
-        requestTimestamps.removeAll { now.timeIntervalSince($0.date) > windowDuration }
-        guard requestTimestamps.count < maxRequestsPerWindow else {
-            throw .rateLimited
-        }
-
-        // Record timestamp before the await suspension point to prevent
-        // interleaved calls from bypassing the rate limit
-        let stamp = RequestStamp(id: UUID(), date: .now)
-        requestTimestamps.append(stamp)
-
-        let ids = Set(coinIds).joined(separator: ",")
-        let url = baseURL.appending(path: "simple/price")
-            .appending(queryItems: [
-                URLQueryItem(name: "ids", value: ids),
-                URLQueryItem(name: "vs_currencies", value: "usd")
-            ])
-
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(from: url)
-        } catch {
-            requestTimestamps.removeAll { $0.id == stamp.id }
-            throw .networkUnavailable
-        }
-
-        guard let http = response as? HTTPURLResponse else {
-            throw .invalidResponse(statusCode: 0)
-        }
-        switch http.statusCode {
-        case 200: break
-        case 429: throw .rateLimited
-        default: throw .invalidResponse(statusCode: http.statusCode)
-        }
+        let data = try await rateLimitedFetch(
+            coinIds: coinIds,
+            extraParams: [])
 
         let parsed = try CoinGeckoSimplePriceResponse(from: data)
         let requested = Set(coinIds)
@@ -115,23 +82,42 @@ public actor PriceService {
                 changes24h: cached.changes24h.filter { requested.contains($0.key) })
         }
 
-        // Proactive rate limiting
+        let data = try await rateLimitedFetch(
+            coinIds: coinIds,
+            extraParams: [URLQueryItem(name: "include_24hr_change", value: "true")])
+
+        let parsed = try CoinGeckoSimplePriceResponse.parsePriceUpdate(from: data)
+        updateCache = parsed
+        lastUpdateFetchDate = .now
+        let requested = Set(coinIds)
+        return PriceUpdate(
+            prices: parsed.prices.filter { requested.contains($0.key) },
+            changes24h: parsed.changes24h.filter { requested.contains($0.key) })
+    }
+
+    /// Shared rate limiting, stamping, network call, and HTTP status validation.
+    private func rateLimitedFetch(
+        coinIds: [String],
+        extraParams: [URLQueryItem]) async throws(PriceServiceError) -> Data {
         let now = Date.now
         requestTimestamps.removeAll { now.timeIntervalSince($0.date) > windowDuration }
         guard requestTimestamps.count < maxRequestsPerWindow else {
             throw .rateLimited
         }
 
+        // Record timestamp before the await suspension point to prevent
+        // interleaved calls from bypassing the rate limit
         let stamp = RequestStamp(id: UUID(), date: .now)
         requestTimestamps.append(stamp)
 
         let ids = Set(coinIds).joined(separator: ",")
+        var params = [
+            URLQueryItem(name: "ids", value: ids),
+            URLQueryItem(name: "vs_currencies", value: "usd")
+        ]
+        params.append(contentsOf: extraParams)
         let url = baseURL.appending(path: "simple/price")
-            .appending(queryItems: [
-                URLQueryItem(name: "ids", value: ids),
-                URLQueryItem(name: "vs_currencies", value: "usd"),
-                URLQueryItem(name: "include_24hr_change", value: "true")
-            ])
+            .appending(queryItems: params)
 
         let data: Data
         let response: URLResponse
@@ -151,13 +137,7 @@ public actor PriceService {
         default: throw .invalidResponse(statusCode: http.statusCode)
         }
 
-        let parsed = try CoinGeckoSimplePriceResponse.parsePriceUpdate(from: data)
-        updateCache = parsed
-        lastUpdateFetchDate = .now
-        let requested = Set(coinIds)
-        return PriceUpdate(
-            prices: parsed.prices.filter { requested.contains($0.key) },
-            changes24h: parsed.changes24h.filter { requested.contains($0.key) })
+        return data
     }
 
     /// Returns an async stream that polls prices at the given interval.
