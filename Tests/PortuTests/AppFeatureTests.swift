@@ -82,7 +82,7 @@ struct AppFeatureTests {
 
     @Test func `sync guards against double tap`() async {
         let store = TestStore(
-            initialState: AppFeature.State(syncStatus: .syncing(progress: 0.5)),
+            initialState: AppFeature.State(syncStatus: .syncing(progress: 0.5))
         ) {
             AppFeature()
         }
@@ -98,7 +98,7 @@ struct AppFeatureTests {
         let testDate = Date(timeIntervalSince1970: 1_000_000)
         let expectedUpdate = PriceUpdate(
             prices: ["bitcoin": 65000],
-            changes24h: ["bitcoin": 2.5],
+            changes24h: ["bitcoin": 2.5]
         )
 
         let store = TestStore(initialState: AppFeature.State()) {
@@ -135,7 +135,7 @@ struct AppFeatureTests {
         let testClock = TestClock()
 
         let store = TestStore(
-            initialState: AppFeature.State(prices: ["bitcoin": 60000]),
+            initialState: AppFeature.State(prices: ["bitcoin": 60000])
         ) {
             AppFeature()
         } withDependencies: {
@@ -160,8 +160,8 @@ struct AppFeatureTests {
         let testDate = Date(timeIntervalSince1970: 1_000_000)
         let store = TestStore(
             initialState: AppFeature.State(
-                prices: ["bitcoin": 60000, "ethereum": 3000],
-            ),
+                prices: ["bitcoin": 60000, "ethereum": 3000]
+            )
         ) {
             AppFeature()
         } withDependencies: {
@@ -170,7 +170,7 @@ struct AppFeatureTests {
 
         await store.send(.pricesReceived(PriceUpdate(
             prices: ["bitcoin": 65000],
-            changes24h: ["bitcoin": 2.5],
+            changes24h: ["bitcoin": 2.5]
         ))) {
             $0.prices = ["bitcoin": 65000, "ethereum": 3000] // merged, not replaced
             $0.priceChanges24h = ["bitcoin": 2.5]

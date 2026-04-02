@@ -17,7 +17,21 @@ public struct TokenDTO: Sendable {
     public let category: AssetCategory
     public let isVerified: Bool
 
-    public init(role: TokenRole, symbol: String, name: String, amount: Decimal, usdValue: Decimal, chain: Chain?, contractAddress: String?, debankId: String?, coinGeckoId: String?, sourceKey: String?, logoURL: String?, category: AssetCategory, isVerified: Bool) {
+    public init(
+        role: TokenRole,
+        symbol: String,
+        name: String,
+        amount: Decimal,
+        usdValue: Decimal,
+        chain: Chain?,
+        contractAddress: String?,
+        debankId: String?,
+        coinGeckoId: String?,
+        sourceKey: String?,
+        logoURL: String?,
+        category: AssetCategory,
+        isVerified: Bool
+    ) {
         self.role = role
         self.symbol = symbol
         self.name = name

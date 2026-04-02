@@ -41,7 +41,7 @@ struct PlatformsTab: View {
                 sharePercent: totalValue > 0 ? entry.value / totalValue : 0,
                 networkCount: entry.chains.count,
                 positionCount: entry.count,
-                usdBalance: entry.value,
+                usdBalance: entry.value
             )
         }
         .sorted { $0.usdBalance > $1.usdBalance }

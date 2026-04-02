@@ -1,6 +1,6 @@
+import CryptoKit
 import Foundation
 import PortuCore
-import CryptoKit
 
 struct KrakenClient: ExchangeClient {
     private let session: URLSession
@@ -11,7 +11,7 @@ struct KrakenClient: ExchangeClient {
         self.baseURL = baseURL
     }
 
-    func fetchBalances(apiKey: String, apiSecret: String, passphrase: String?) async throws -> [TokenDTO] {
+    func fetchBalances(apiKey: String, apiSecret: String, passphrase _: String?) async throws -> [TokenDTO] {
         let path = "/0/private/Balance"
         let nonce = String(Int(Date().timeIntervalSince1970 * 1000))
         let postData = "nonce=\(nonce)"
@@ -44,12 +44,14 @@ struct KrakenClient: ExchangeClient {
     }
 
     private func parseKrakenBalances(data: Data) throws -> [TokenDTO] {
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let errors = json["error"] as? [String], errors.isEmpty,
-              let result = json["result"] as? [String: String] else {
+        guard
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let errors = json["error"] as? [String], errors.isEmpty,
+            let result = json["result"] as? [String: String]
+        else {
             throw ExchangeError.decodingFailed
         }
-        return result.compactMap { (ticker, balanceStr) -> TokenDTO? in
+        return result.compactMap { ticker, balanceStr -> TokenDTO? in
             guard let balance = Decimal(string: balanceStr), balance > 0 else { return nil }
             let symbol = normalizeKrakenSymbol(ticker)
             return TokenDTO(
@@ -66,7 +68,7 @@ struct KrakenClient: ExchangeClient {
         let mapping: [String: String] = [
             "XXBT": "BTC", "XETH": "ETH", "XLTC": "LTC",
             "XXRP": "XRP", "XXLM": "XLM", "XZEC": "ZEC",
-            "ZUSD": "USD", "ZEUR": "EUR", "ZGBP": "GBP",
+            "ZUSD": "USD", "ZEUR": "EUR", "ZGBP": "GBP"
         ]
         return mapping[ticker] ?? ticker
     }

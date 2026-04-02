@@ -81,19 +81,27 @@ struct AllAssetsFeature {
     /// Aggregate token entries into display rows, merging live prices where available.
     static func aggregateRows(
         tokens: [TokenEntry],
-        prices: [String: Decimal],
-    ) -> [AssetRowData] {
-        var assetTokens: [UUID: (symbol: String, name: String, category: AssetCategory,
-                                 coinGeckoId: String?,
-                                 positive: Decimal, borrow: Decimal,
-                                 positiveUSD: Decimal, borrowUSD: Decimal)] = [:]
+        prices: [String: Decimal]
+    )
+        -> [AssetRowData]
+    {
+        var assetTokens: [UUID: (
+            symbol: String,
+            name: String,
+            category: AssetCategory,
+            coinGeckoId: String?,
+            positive: Decimal,
+            borrow: Decimal,
+            positiveUSD: Decimal,
+            borrowUSD: Decimal
+        )] = [:]
 
         for token in tokens {
             if token.role.isReward { continue }
 
             var entry = assetTokens[token.assetId] ?? (
                 token.symbol, token.name, token.category, token.coinGeckoId,
-                0, 0, 0, 0,
+                0, 0, 0, 0
             )
 
             if token.role.isBorrow {
@@ -136,7 +144,7 @@ struct AllAssetsFeature {
                 netAmount: netAmount,
                 price: price,
                 value: value,
-                hasLivePrice: hasLive,
+                hasLivePrice: hasLive
             )
         }
     }
@@ -144,8 +152,10 @@ struct AllAssetsFeature {
     /// Filter rows by search text (case-insensitive match on symbol or name).
     static func filterRows(
         _ rows: [AssetRowData],
-        searchText: String,
-    ) -> [AssetRowData] {
+        searchText: String
+    )
+        -> [AssetRowData]
+    {
         guard !searchText.isEmpty else { return rows }
         return rows.filter {
             $0.symbol.localizedCaseInsensitiveContains(searchText)

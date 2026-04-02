@@ -6,7 +6,7 @@ public actor ZapperProvider: PortfolioDataProvider {
     private let session: URLSession
     private let baseURL: URL
 
-    nonisolated public var capabilities: ProviderCapabilities {
+    public nonisolated var capabilities: ProviderCapabilities {
         ProviderCapabilities(
             supportsTokenBalances: true,
             supportsDeFiPositions: true,
@@ -65,7 +65,7 @@ public actor ZapperProvider: PortfolioDataProvider {
             throw ZapperError.invalidResponse
         }
         switch httpResponse.statusCode {
-        case 200...299: return data
+        case 200 ... 299: return data
         case 429: throw ZapperError.rateLimited
         case 401, 403: throw ZapperError.unauthorized
         default: throw ZapperError.httpError(statusCode: httpResponse.statusCode)
@@ -77,10 +77,11 @@ public actor ZapperProvider: PortfolioDataProvider {
             throw ZapperError.decodingFailed
         }
         return json.compactMap { item -> PositionDTO? in
-            guard let symbol = item["symbol"] as? String,
-                  let name = item["name"] as? String,
-                  let balanceUSD = item["balanceUSD"] as? Double,
-                  let balance = item["balance"] as? Double else { return nil }
+            guard
+                let symbol = item["symbol"] as? String,
+                let name = item["name"] as? String,
+                let balanceUSD = item["balanceUSD"] as? Double,
+                let balance = item["balance"] as? Double else { return nil }
             let chainStr = item["network"] as? String
             let chain = chainStr.flatMap { Chain(rawValue: $0) }
             let token = TokenDTO(
@@ -128,9 +129,10 @@ public actor ZapperProvider: PortfolioDataProvider {
 
     private func parsePositionTokens(_ tokensJSON: [[String: Any]]) -> [TokenDTO] {
         tokensJSON.compactMap { item -> TokenDTO? in
-            guard let symbol = item["symbol"] as? String,
-                  let balance = item["balance"] as? Double,
-                  let balanceUSD = item["balanceUSD"] as? Double else { return nil }
+            guard
+                let symbol = item["symbol"] as? String,
+                let balance = item["balance"] as? Double,
+                let balanceUSD = item["balanceUSD"] as? Double else { return nil }
             let role: TokenRole = switch item["type"] as? String {
             case "supply": .supply
             case "borrow": .borrow
@@ -164,7 +166,7 @@ enum ZapperError: Error, LocalizedError {
         case .invalidResponse: "Invalid response from Zapper API"
         case .rateLimited: "Zapper API rate limit exceeded"
         case .unauthorized: "Invalid Zapper API key"
-        case .httpError(let code): "Zapper API returned HTTP \(code)"
+        case let .httpError(code): "Zapper API returned HTTP \(code)"
         case .decodingFailed: "Failed to parse Zapper API response"
         }
     }

@@ -10,7 +10,7 @@ struct SyncEngineTests {
         let schema = Schema([
             Account.self, WalletAddress.self, Position.self,
             PositionToken.self, Asset.self,
-            PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
+            PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])

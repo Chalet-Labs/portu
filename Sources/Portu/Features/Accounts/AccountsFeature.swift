@@ -90,7 +90,7 @@ struct AccountsFeature {
                 type: account.kind.rawValue.capitalized,
                 balance: account.totalBalance,
                 isActive: account.isActive,
-                lastSyncError: account.lastSyncError,
+                lastSyncError: account.lastSyncError
             )
         }
     }
@@ -100,8 +100,10 @@ struct AccountsFeature {
         _ rows: [AccountRowData],
         searchText: String,
         filterGroup: String?,
-        showInactive: Bool,
-    ) -> [AccountRowData] {
+        showInactive: Bool
+    )
+        -> [AccountRowData]
+    {
         rows.filter { row in
             (showInactive || row.isActive)
                 && (searchText.isEmpty || row.name.localizedCaseInsensitiveContains(searchText))
@@ -122,8 +124,10 @@ struct AccountsFeature {
         manualName: String,
         exchangeName: String,
         exchangeAPIKey: String,
-        exchangeAPISecret: String,
-    ) -> Bool {
+        exchangeAPISecret: String
+    )
+        -> Bool
+    {
         switch tab {
         case 0: !chainName.isEmpty && !chainAddress.isEmpty
         case 1: !manualName.isEmpty

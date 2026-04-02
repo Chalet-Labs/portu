@@ -1,7 +1,7 @@
-import SwiftUI
-import SwiftData
 import Charts
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct ValueChartMode: View {
     let accountId: UUID?
@@ -15,11 +15,11 @@ struct ValueChartMode: View {
 
     private var dataPoints: [(Date, Decimal, Bool)] {
         if let accountId {
-            return accountSnapshots
+            accountSnapshots
                 .filter { $0.accountId == accountId && $0.timestamp >= startDate }
                 .map { ($0.timestamp, $0.totalValue, !$0.isFresh) }
         } else {
-            return portfolioSnapshots
+            portfolioSnapshots
                 .filter { $0.timestamp >= startDate }
                 .map { ($0.timestamp, $0.totalValue, $0.isPartial) }
         }
@@ -27,12 +27,15 @@ struct ValueChartMode: View {
 
     var body: some View {
         if dataPoints.isEmpty {
-            ContentUnavailableView("No Performance Data", systemImage: "chart.line.uptrend.xyaxis",
-                                   description: Text("Sync your accounts to track portfolio performance"))
-                .frame(height: 300)
+            ContentUnavailableView(
+                "No Performance Data",
+                systemImage: "chart.line.uptrend.xyaxis",
+                description: Text("Sync your accounts to track portfolio performance")
+            )
+            .frame(height: 300)
         } else {
             Chart {
-                ForEach(dataPoints, id: \.0) { (date, value, isPartial) in
+                ForEach(dataPoints, id: \.0) { date, value, isPartial in
                     AreaMark(x: .value("Date", date), y: .value("Value", value))
                         .foregroundStyle(
                             .linearGradient(

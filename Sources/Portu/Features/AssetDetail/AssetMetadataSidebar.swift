@@ -1,5 +1,5 @@
-import SwiftUI
 import PortuCore
+import SwiftUI
 
 struct AssetMetadataSidebar: View {
     let asset: Asset

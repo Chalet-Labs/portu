@@ -1,6 +1,6 @@
 // Sources/Portu/Features/Positions/PositionFilterSidebar.swift
-import SwiftUI
 import PortuCore
+import SwiftUI
 
 struct PositionFilterSidebar: View {
     let positions: [Position]
@@ -41,7 +41,7 @@ struct PositionFilterSidebar: View {
 
                 // Type filter
                 Section("Position Type") {
-                    ForEach(typeFilters, id: \.1) { (type, label, total) in
+                    ForEach(typeFilters, id: \.1) { type, label, total in
                         Button {
                             selectedType = type
                         } label: {

@@ -1,12 +1,10 @@
-import Testing
 import Foundation
 import PortuCore
 @testable import PortuNetwork
+import Testing
 
-@Suite("Provider Tests")
 struct ProviderTests {
-
-    @Test func mockProviderReturnsBalances() async throws {
+    @Test func `mock provider returns balances`() async throws {
         let provider = MockProvider()
         let ethToken = TokenDTO(
             role: .balance, symbol: "ETH", name: "Ethereum",
@@ -29,14 +27,14 @@ struct ProviderTests {
         #expect(await provider.fetchBalancesCalled)
     }
 
-    @Test func providerCapabilitiesDefault() {
+    @Test func `provider capabilities default`() {
         let caps = ProviderCapabilities()
         #expect(caps.supportsTokenBalances)
         #expect(!caps.supportsDeFiPositions)
         #expect(!caps.supportsHealthFactors)
     }
 
-    @Test func zapperCapabilities() async {
+    @Test func `zapper capabilities`() {
         let provider = ZapperProvider(apiKey: "test-key")
         let caps = provider.capabilities
         #expect(caps.supportsTokenBalances)

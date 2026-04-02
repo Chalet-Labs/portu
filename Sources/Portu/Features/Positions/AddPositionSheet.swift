@@ -1,7 +1,7 @@
 // Sources/Portu/Features/Positions/AddPositionSheet.swift
-import SwiftUI
-import SwiftData
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct AddPositionSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -28,7 +28,7 @@ struct AddPositionSheet: View {
         if assetSearch.isEmpty { return Array(assets.prefix(20)) }
         return assets.filter {
             $0.symbol.localizedCaseInsensitiveContains(assetSearch) ||
-            $0.name.localizedCaseInsensitiveContains(assetSearch)
+                $0.name.localizedCaseInsensitiveContains(assetSearch)
         }
     }
 
@@ -92,7 +92,7 @@ struct AddPositionSheet: View {
                 Button("Add") { savePosition() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(selectedAccountId == nil || amount == 0 ||
-                              (selectedAsset == nil && !createNewAsset))
+                        (selectedAsset == nil && !createNewAsset))
             }
             .padding()
         }
@@ -100,8 +100,9 @@ struct AddPositionSheet: View {
     }
 
     private func savePosition() {
-        guard let accountId = selectedAccountId,
-              let account = manualAccounts.first(where: { $0.id == accountId }) else { return }
+        guard
+            let accountId = selectedAccountId,
+            let account = manualAccounts.first(where: { $0.id == accountId }) else { return }
 
         let asset: Asset
         if createNewAsset {

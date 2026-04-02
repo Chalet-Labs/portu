@@ -9,7 +9,9 @@ public protocol PortfolioDataProvider: Sendable {
     func fetchDeFiPositions(context: SyncContext) async throws -> [PositionDTO]
 }
 
-extension PortfolioDataProvider {
+public extension PortfolioDataProvider {
     /// Default: no DeFi support
-    public func fetchDeFiPositions(context: SyncContext) async throws -> [PositionDTO] { [] }
+    func fetchDeFiPositions(context _: SyncContext) async throws -> [PositionDTO] {
+        []
+    }
 }

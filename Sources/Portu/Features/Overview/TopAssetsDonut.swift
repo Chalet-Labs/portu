@@ -40,15 +40,19 @@ struct TopAssetsDonut: View {
 
     private func buildSlices<K: Hashable>(
         from aggregated: [K: Decimal],
-        label: (K) -> String,
-    ) -> [SliceData] {
+        label: (K) -> String
+    )
+        -> [SliceData]
+    {
         aggregated
             .sorted { $0.value > $1.value }
             .prefix(8)
             .enumerated()
-            .map { SliceData(label: label($0.element.key),
-                             value: $0.element.value,
-                             color: chartColor(index: $0.offset)) }
+            .map { SliceData(
+                label: label($0.element.key),
+                value: $0.element.value,
+                color: chartColor(index: $0.offset)
+            ) }
     }
 
     var body: some View {
@@ -72,7 +76,7 @@ struct TopAssetsDonut: View {
                     SectorMark(
                         angle: .value("Value", slice.value),
                         innerRadius: .ratio(0.5),
-                        angularInset: 1,
+                        angularInset: 1
                     )
                     .foregroundStyle(slice.color)
                     .annotation(position: .overlay) {

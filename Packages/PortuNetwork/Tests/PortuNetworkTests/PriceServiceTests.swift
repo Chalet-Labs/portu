@@ -1,17 +1,21 @@
-import Testing
 import Foundation
 import PortuCore
 @testable import PortuNetwork
+import Testing
 
 /// URLProtocol mock that returns responses via a per-test request handler.
 /// Each test configures `requestHandler` before exercising PriceService,
 /// keeping mock state explicit and co-located with each test case.
-nonisolated
-final class MockURLProtocol: URLProtocol, @unchecked Sendable {
+final nonisolated class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var requestHandler: ((URLRequest) -> (Data?, Int))?
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override class func canInit(with _: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
 
     override func startLoading() {
         let (data, statusCode) = Self.requestHandler?(request) ?? (nil, 500)
@@ -35,17 +39,17 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
-@Suite("PriceService Tests", .serialized)
+@Suite(.serialized)
 struct PriceServiceTests {
     let session: URLSession
 
     init() {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MockURLProtocol.self]
-        session = URLSession(configuration: config)
+        self.session = URLSession(configuration: config)
     }
 
-    @Test func fetchPricesSuccess() async throws {
+    @Test func `fetch prices success`() async throws {
         MockURLProtocol.requestHandler = { _ in
             ("""
             {"bitcoin":{"usd":62400},"ethereum":{"usd":3200}}
@@ -59,7 +63,7 @@ struct PriceServiceTests {
         #expect(prices["ethereum"] == 3200)
     }
 
-    @Test func fetchPricesRateLimited() async {
+    @Test func `fetch prices rate limited`() async {
         MockURLProtocol.requestHandler = { _ in (nil, 429) }
 
         let service = PriceService(session: session)
@@ -68,7 +72,7 @@ struct PriceServiceTests {
         }
     }
 
-    @Test func cacheReturnsCachedData() async throws {
+    @Test func `cache returns cached data`() async throws {
         MockURLProtocol.requestHandler = { _ in
             ("""
             {"bitcoin":{"usd":62400}}
@@ -92,7 +96,7 @@ struct PriceServiceTests {
         #expect(second["bitcoin"] == 62400) // cached
     }
 
-    @Test func invalidateCacheForcesRefetch() async throws {
+    @Test func `invalidate cache forces refetch`() async throws {
         MockURLProtocol.requestHandler = { _ in
             ("""
             {"bitcoin":{"usd":62400}}
@@ -119,7 +123,7 @@ struct PriceServiceTests {
         #expect(second["bitcoin"] == 99999)
     }
 
-    @Test func fetchPriceUpdateIncludes24hChange() async throws {
+    @Test func `fetch price update includes24h change`() async throws {
         MockURLProtocol.requestHandler = { _ in
             ("""
             {"bitcoin":{"usd":67500.0,"usd_24h_change":-1.5},"ethereum":{"usd":2188.0,"usd_24h_change":3.2}}
@@ -131,11 +135,11 @@ struct PriceServiceTests {
 
         #expect(update.prices["bitcoin"] == Decimal(67500))
         #expect(update.prices["ethereum"] == Decimal(2188))
-        #expect(update.changes24h["bitcoin"]! < 0)
-        #expect(update.changes24h["ethereum"]! > 0)
+        #expect(try #require(update.changes24h["bitcoin"]) < 0)
+        #expect(try #require(update.changes24h["ethereum"]) > 0)
     }
 
-    @Test func rateLimiterRejectsExcessiveRequests() async throws {
+    @Test func `rate limiter rejects excessive requests`() async throws {
         MockURLProtocol.requestHandler = { _ in
             ("""
             {"bitcoin":{"usd":62400}}
@@ -151,7 +155,7 @@ struct PriceServiceTests {
         )
 
         // First 3 requests succeed
-        for _ in 0..<3 {
+        for _ in 0 ..< 3 {
             _ = try await service.fetchPrices(for: ["bitcoin"])
             await service.invalidateCache() // force re-fetch each time
         }

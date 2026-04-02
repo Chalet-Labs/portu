@@ -1,11 +1,9 @@
-import Testing
 import Foundation
 @testable import PortuCore
+import Testing
 
-@Suite("DTO Tests")
 struct DTOTests {
-
-    @Test func syncContextCreation() {
+    @Test func `sync context creation`() {
         let ctx = SyncContext(
             accountId: UUID(),
             kind: .wallet,
@@ -18,7 +16,7 @@ struct DTOTests {
         #expect(ctx.addresses[1].chain == .solana)
     }
 
-    @Test func positionDTOCreation() {
+    @Test func `position DTO creation`() {
         let token = TokenDTO(
             role: .balance,
             symbol: "ETH",
@@ -48,7 +46,7 @@ struct DTOTests {
         #expect(pos.positionType == .idle)
     }
 
-    @Test func tokenDTOAmountsArePositive() {
+    @Test func `token DTO amounts are positive`() {
         let borrow = TokenDTO(
             role: .borrow,
             symbol: "USDC",
@@ -69,13 +67,13 @@ struct DTOTests {
         #expect(borrow.role == .borrow)
     }
 
-    @Test func priceUpdateCreation() {
-        let update = PriceUpdate(
+    @Test func `price update creation`() throws {
+        let update = try PriceUpdate(
             prices: ["ethereum": 2188, "bitcoin": 67500],
-            changes24h: ["ethereum": Decimal(string: "0.032")!, "bitcoin": Decimal(string: "-0.015")!]
+            changes24h: ["ethereum": #require(Decimal(string: "0.032")), "bitcoin": #require(Decimal(string: "-0.015"))]
         )
         #expect(update.prices.count == 2)
-        #expect(update.changes24h["ethereum"]! > 0)
-        #expect(update.changes24h["bitcoin"]! < 0)
+        #expect(try #require(update.changes24h["ethereum"]) > 0)
+        #expect(try #require(update.changes24h["bitcoin"]) < 0)
     }
 }

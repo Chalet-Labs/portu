@@ -1,8 +1,8 @@
 // Sources/Portu/Features/Overview/PortfolioValueChart.swift
-import SwiftUI
-import SwiftData
 import Charts
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct PortfolioValueChart: View {
     @Query(sort: \PortfolioSnapshot.timestamp)

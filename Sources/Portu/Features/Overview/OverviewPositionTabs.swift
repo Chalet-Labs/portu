@@ -70,9 +70,10 @@ struct OverviewPositionTabs: View {
     }
 
     private func tokenChange24h(_ token: PositionToken) -> Decimal {
-        guard let cgId = token.asset?.coinGeckoId,
-              let price = appState.prices[cgId],
-              let changePct = appState.priceChanges24h[cgId] else { return 0 }
+        guard
+            let cgId = token.asset?.coinGeckoId,
+            let price = appState.prices[cgId],
+            let changePct = appState.priceChanges24h[cgId] else { return 0 }
         return token.amount * price * changePct
     }
 
@@ -122,8 +123,11 @@ struct OverviewPositionTabs: View {
             pos.tokens.contains { $0.role.isBorrow }
         }
         if borrowPositions.isEmpty {
-            ContentUnavailableView("No Borrowing", systemImage: "arrow.down.circle",
-                                   description: Text("No active borrow positions"))
+            ContentUnavailableView(
+                "No Borrowing",
+                systemImage: "arrow.down.circle",
+                description: Text("No active borrow positions")
+            )
         } else {
             ForEach(borrowPositions, id: \.id) { pos in
                 VStack(alignment: .leading, spacing: 4) {
@@ -194,7 +198,7 @@ struct OverviewPositionTabs: View {
             accountName: position.account?.name ?? "",
             amount: token.amount,
             price: price,
-            value: value,
+            value: value
         )
     }
 

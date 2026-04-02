@@ -10,7 +10,7 @@ struct AccountsView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var sortOrder: [KeyPathComparator<AccountRowData>] = [
-        KeyPathComparator(\.name),
+        KeyPathComparator(\.name)
     ]
 
     private var accountInputs: [AccountInput] {
@@ -24,7 +24,7 @@ struct AccountsView: View {
                 isActive: account.isActive,
                 lastSyncError: account.lastSyncError,
                 totalBalance: account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue },
-                firstAddress: account.addresses.first?.address,
+                firstAddress: account.addresses.first?.address
             )
         }
     }
@@ -35,7 +35,7 @@ struct AccountsView: View {
             mapped,
             searchText: store.accounts.searchText,
             filterGroup: store.accounts.filterGroup,
-            showInactive: store.accounts.showInactive,
+            showInactive: store.accounts.showInactive
         )
         return filtered.sorted(using: sortOrder)
     }
@@ -52,7 +52,7 @@ struct AccountsView: View {
         .navigationTitle("Accounts")
         .sheet(isPresented: Binding(
             get: { store.accounts.showAddSheet },
-            set: { store.send(.accounts(.addSheetPresented($0))) },
+            set: { store.send(.accounts(.addSheetPresented($0))) }
         )) {
             AddAccountSheet()
         }
@@ -66,7 +66,7 @@ struct AccountsView: View {
                 Image(systemName: "magnifyingglass")
                 TextField("Search accounts...", text: Binding(
                     get: { store.accounts.searchText },
-                    set: { store.send(.accounts(.searchTextChanged($0))) },
+                    set: { store.send(.accounts(.searchTextChanged($0))) }
                 ))
                 .textFieldStyle(.plain)
             }
@@ -77,7 +77,7 @@ struct AccountsView: View {
 
             Picker("Group", selection: Binding(
                 get: { store.accounts.filterGroup },
-                set: { store.send(.accounts(.filterGroupChanged($0))) },
+                set: { store.send(.accounts(.filterGroupChanged($0))) }
             )) {
                 Text("All Groups").tag(nil as String?)
                 ForEach(allGroups, id: \.self) { group in
@@ -88,7 +88,7 @@ struct AccountsView: View {
 
             Toggle("Show Inactive", isOn: Binding(
                 get: { store.accounts.showInactive },
-                set: { _ in store.send(.accounts(.showInactiveToggled)) },
+                set: { _ in store.send(.accounts(.showInactiveToggled)) }
             ))
 
             Spacer()

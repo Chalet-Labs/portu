@@ -1,8 +1,7 @@
 import Testing
 
-@Suite("Portu App Tests")
 struct PortuAppTests {
-    @Test func appLaunchesWithoutCrash() {
+    @Test func `app launches without crash`() {
         // Placeholder — verifies the test target links correctly
         #expect(true)
     }

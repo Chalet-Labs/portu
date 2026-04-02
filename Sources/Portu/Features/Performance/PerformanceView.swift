@@ -13,7 +13,7 @@ struct PerformanceView: View {
             HStack {
                 Picker("Account", selection: Binding(
                     get: { store.performance.selectedAccountId },
-                    set: { store.send(.performance(.accountSelected($0))) },
+                    set: { store.send(.performance(.accountSelected($0))) }
                 )) {
                     Text("All Accounts").tag(nil as UUID?)
                     ForEach(accounts.filter(\.isActive), id: \.id) { account in
@@ -26,7 +26,7 @@ struct PerformanceView: View {
 
                 Picker("Range", selection: Binding(
                     get: { store.performance.selectedRange },
-                    set: { store.send(.performance(.timeRangeChanged($0))) },
+                    set: { store.send(.performance(.timeRangeChanged($0))) }
                 )) {
                     ForEach(PerformanceTimeRange.allCases, id: \.self) { r in
                         Text(r.rawValue).tag(r)
@@ -39,7 +39,7 @@ struct PerformanceView: View {
 
                 Picker("Mode", selection: Binding(
                     get: { store.performance.chartMode },
-                    set: { store.send(.performance(.chartModeChanged($0))) },
+                    set: { store.send(.performance(.chartModeChanged($0))) }
                 )) {
                     ForEach(PerformanceChartMode.allCases, id: \.self) { m in
                         Text(m.rawValue).tag(m)
@@ -54,19 +54,19 @@ struct PerformanceView: View {
             case .value:
                 ValueChartMode(
                     accountId: store.performance.selectedAccountId,
-                    startDate: store.performance.selectedRange.startDate,
+                    startDate: store.performance.selectedRange.startDate
                 )
             case .assets:
                 AssetsChartMode(
                     accountId: store.performance.selectedAccountId,
                     startDate: store.performance.selectedRange.startDate,
-                    store: store,
+                    store: store
                 )
             case .pnl:
                 PnLChartMode(
                     accountId: store.performance.selectedAccountId,
                     startDate: store.performance.selectedRange.startDate,
-                    store: store,
+                    store: store
                 )
             }
 
@@ -74,7 +74,7 @@ struct PerformanceView: View {
 
             PerformanceBottomPanel(
                 accountId: store.performance.selectedAccountId,
-                startDate: store.performance.selectedRange.startDate,
+                startDate: store.performance.selectedRange.startDate
             )
         }
         .navigationTitle("Performance")

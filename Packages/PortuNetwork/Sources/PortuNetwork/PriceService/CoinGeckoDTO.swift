@@ -3,8 +3,7 @@ import PortuCore
 
 /// Parses CoinGecko /simple/price JSON response via JSONSerialization.
 /// Keys are coin IDs, values contain price in USD.
-nonisolated
-struct CoinGeckoSimplePriceResponse: Sendable {
+nonisolated struct CoinGeckoSimplePriceResponse {
     let prices: [String: Decimal]
 
     init(from data: Data) throws(PriceServiceError) {

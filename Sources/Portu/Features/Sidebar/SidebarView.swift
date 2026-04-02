@@ -1,6 +1,6 @@
-import SwiftUI
-import SwiftData
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct SidebarView: View {
     @Environment(AppState.self) private var appState

@@ -14,7 +14,7 @@ struct PortfolioHealthPanel: View {
             return TokenEntry(
                 assetId: asset.id, symbol: asset.symbol, name: asset.name,
                 category: asset.category, coinGeckoId: asset.coinGeckoId,
-                role: token.role, amount: token.amount, usdValue: token.usdValue,
+                role: token.role, amount: token.amount, usdValue: token.usdValue
             )
         }
     }
@@ -26,7 +26,7 @@ struct PortfolioHealthPanel: View {
     private var metrics: DiversificationMetrics {
         let chainCount = Set(allTokens.compactMap { $0.position?.chain }).count
         return PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokenEntries, weights: weights, chainCount: chainCount,
+            tokens: tokenEntries, weights: weights, chainCount: chainCount
         )
     }
 

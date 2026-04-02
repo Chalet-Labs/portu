@@ -36,7 +36,7 @@ struct NetworksTab: View {
                 name: key == "__offchain__" ? "Off-chain / Custodial" : key.capitalized,
                 sharePercent: totalValue > 0 ? entry.value / totalValue : 0,
                 positionCount: entry.count,
-                usdBalance: entry.value,
+                usdBalance: entry.value
             )
         }
         .sorted { $0.usdBalance > $1.usdBalance }

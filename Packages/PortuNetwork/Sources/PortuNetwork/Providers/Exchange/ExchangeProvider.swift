@@ -5,7 +5,7 @@ public actor ExchangeProvider: PortfolioDataProvider {
     private let secretStore: any SecretStore
     private let session: URLSession
 
-    nonisolated public var capabilities: ProviderCapabilities {
+    public nonisolated var capabilities: ProviderCapabilities {
         ProviderCapabilities(supportsTokenBalances: true, supportsDeFiPositions: false, supportsHealthFactors: false)
     }
 
@@ -22,8 +22,10 @@ public actor ExchangeProvider: PortfolioDataProvider {
         let apiKey: String
         let apiSecret: String
         do {
-            guard let key = try secretStore.get(key: "\(keyPrefix).apiKey"),
-                  let secret = try secretStore.get(key: "\(keyPrefix).apiSecret") else {
+            guard
+                let key = try secretStore.get(key: "\(keyPrefix).apiKey"),
+                let secret = try secretStore.get(key: "\(keyPrefix).apiSecret")
+            else {
                 throw ExchangeError.missingCredentials
             }
             apiKey = key
@@ -65,7 +67,7 @@ enum ExchangeError: Error, LocalizedError {
         case .invalidCredentials: "Invalid API credentials"
         case .httpError: "Exchange API request failed"
         case .decodingFailed: "Failed to parse exchange API response"
-        case .notImplemented(let name): "\(name) integration not yet implemented"
+        case let .notImplemented(name): "\(name) integration not yet implemented"
         }
     }
 }

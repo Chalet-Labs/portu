@@ -1,20 +1,18 @@
-import Testing
 import Foundation
 @testable import PortuCore
+import Testing
 
-@Suite("Enum Tests")
 struct EnumTests {
-
     // MARK: - DataSource
 
-    @Test func dataSourceCases() {
+    @Test func `data source cases`() {
         #expect(DataSource.allCases.count == 3)
         #expect(DataSource.allCases.contains(.zapper))
         #expect(DataSource.allCases.contains(.exchange))
         #expect(DataSource.allCases.contains(.manual))
     }
 
-    @Test func dataSourceCodable() throws {
+    @Test func `data source codable`() throws {
         let encoded = try JSONEncoder().encode(DataSource.zapper)
         let decoded = try JSONDecoder().decode(DataSource.self, from: encoded)
         #expect(decoded == .zapper)
@@ -22,11 +20,11 @@ struct EnumTests {
 
     // MARK: - PositionType
 
-    @Test func positionTypeCases() {
+    @Test func `position type cases`() {
         #expect(PositionType.allCases.count == 7)
     }
 
-    @Test func positionTypeCodable() throws {
+    @Test func `position type codable`() throws {
         let encoded = try JSONEncoder().encode(PositionType.liquidityPool)
         let decoded = try JSONDecoder().decode(PositionType.self, from: encoded)
         #expect(decoded == .liquidityPool)
@@ -34,11 +32,11 @@ struct EnumTests {
 
     // MARK: - TokenRole
 
-    @Test func tokenRoleCases() {
+    @Test func `token role cases`() {
         #expect(TokenRole.allCases.count == 6)
     }
 
-    @Test func tokenRoleSignHelpers() {
+    @Test func `token role sign helpers`() {
         // Positive roles
         #expect(TokenRole.supply.isPositive)
         #expect(TokenRole.balance.isPositive)
@@ -56,7 +54,7 @@ struct EnumTests {
         #expect(!TokenRole.reward.isBorrow)
     }
 
-    @Test func tokenRoleCodable() throws {
+    @Test func `token role codable`() throws {
         let encoded = try JSONEncoder().encode(TokenRole.lpToken)
         let decoded = try JSONDecoder().decode(TokenRole.self, from: encoded)
         #expect(decoded == .lpToken)
@@ -64,11 +62,11 @@ struct EnumTests {
 
     // MARK: - AssetCategory
 
-    @Test func assetCategoryCases() {
+    @Test func `asset category cases`() {
         #expect(AssetCategory.allCases.count == 8)
     }
 
-    @Test func assetCategoryCodable() throws {
+    @Test func `asset category codable`() throws {
         let encoded = try JSONEncoder().encode(AssetCategory.stablecoin)
         let decoded = try JSONDecoder().decode(AssetCategory.self, from: encoded)
         #expect(decoded == .stablecoin)
@@ -76,7 +74,7 @@ struct EnumTests {
 
     // MARK: - Chain
 
-    @Test func chainCases() {
+    @Test func `chain cases`() {
         #expect(Chain.allCases.count == 11)
         #expect(Chain.allCases.contains(.monad))
         #expect(Chain.allCases.contains(.katana))

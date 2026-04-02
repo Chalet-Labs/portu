@@ -29,14 +29,46 @@ struct ExposureFeatureTests {
 struct ExposureCategoryTests {
     @Test func `groups by category with spot and liabilities`() {
         let tokens = [
-            TokenEntry(assetId: UUID(), symbol: "BTC", name: "Bitcoin", category: .major,
-                       coinGeckoId: nil, role: .balance, amount: 1, usdValue: 60000),
-            TokenEntry(assetId: UUID(), symbol: "ETH", name: "Ethereum", category: .major,
-                       coinGeckoId: nil, role: .supply, amount: 10, usdValue: 30000),
-            TokenEntry(assetId: UUID(), symbol: "ETH", name: "Ethereum", category: .major,
-                       coinGeckoId: nil, role: .borrow, amount: 3, usdValue: 9000),
-            TokenEntry(assetId: UUID(), symbol: "USDC", name: "USD Coin", category: .stablecoin,
-                       coinGeckoId: nil, role: .balance, amount: 5000, usdValue: 5000),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "BTC",
+                name: "Bitcoin",
+                category: .major,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 1,
+                usdValue: 60000
+            ),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "ETH",
+                name: "Ethereum",
+                category: .major,
+                coinGeckoId: nil,
+                role: .supply,
+                amount: 10,
+                usdValue: 30000
+            ),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "ETH",
+                name: "Ethereum",
+                category: .major,
+                coinGeckoId: nil,
+                role: .borrow,
+                amount: 3,
+                usdValue: 9000
+            ),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "USDC",
+                name: "USD Coin",
+                category: .stablecoin,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 5000,
+                usdValue: 5000
+            )
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
@@ -56,10 +88,26 @@ struct ExposureCategoryTests {
 
     @Test func `excludes rewards`() {
         let tokens = [
-            TokenEntry(assetId: UUID(), symbol: "ETH", name: "Ethereum", category: .major,
-                       coinGeckoId: nil, role: .stake, amount: 32, usdValue: 96000),
-            TokenEntry(assetId: UUID(), symbol: "RPL", name: "Rocket Pool", category: .defi,
-                       coinGeckoId: nil, role: .reward, amount: 5, usdValue: 150),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "ETH",
+                name: "Ethereum",
+                category: .major,
+                coinGeckoId: nil,
+                role: .stake,
+                amount: 32,
+                usdValue: 96000
+            ),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "RPL",
+                name: "Rocket Pool",
+                category: .defi,
+                coinGeckoId: nil,
+                role: .reward,
+                amount: 5,
+                usdValue: 150
+            )
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
@@ -70,8 +118,16 @@ struct ExposureCategoryTests {
 
     @Test func `omits categories with zero values`() {
         let tokens = [
-            TokenEntry(assetId: UUID(), symbol: "BTC", name: "Bitcoin", category: .major,
-                       coinGeckoId: nil, role: .balance, amount: 1, usdValue: 60000),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "BTC",
+                name: "Bitcoin",
+                category: .major,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 1,
+                usdValue: 60000
+            )
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
@@ -82,12 +138,20 @@ struct ExposureCategoryTests {
 
     @Test func `uses live prices when available`() {
         let tokens = [
-            TokenEntry(assetId: UUID(), symbol: "BTC", name: "Bitcoin", category: .major,
-                       coinGeckoId: "bitcoin", role: .balance, amount: 2, usdValue: 100_000),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "BTC",
+                name: "Bitcoin",
+                category: .major,
+                coinGeckoId: "bitcoin",
+                role: .balance,
+                amount: 2,
+                usdValue: 100_000
+            )
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(
-            tokens: tokens, prices: ["bitcoin": 65000],
+            tokens: tokens, prices: ["bitcoin": 65000]
         )
 
         #expect(categories[0].spotAssets == 130_000) // 2 * 65000
@@ -95,12 +159,36 @@ struct ExposureCategoryTests {
 
     @Test func `maintains stable category ordering`() {
         let tokens = [
-            TokenEntry(assetId: UUID(), symbol: "USDC", name: "USD Coin", category: .stablecoin,
-                       coinGeckoId: nil, role: .balance, amount: 1000, usdValue: 1000),
-            TokenEntry(assetId: UUID(), symbol: "BTC", name: "Bitcoin", category: .major,
-                       coinGeckoId: nil, role: .balance, amount: 1, usdValue: 60000),
-            TokenEntry(assetId: UUID(), symbol: "UNI", name: "Uniswap", category: .defi,
-                       coinGeckoId: nil, role: .balance, amount: 100, usdValue: 500),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "USDC",
+                name: "USD Coin",
+                category: .stablecoin,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 1000,
+                usdValue: 1000
+            ),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "BTC",
+                name: "Bitcoin",
+                category: .major,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 1,
+                usdValue: 60000
+            ),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "UNI",
+                name: "Uniswap",
+                category: .defi,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 100,
+                usdValue: 500
+            )
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
@@ -117,10 +205,26 @@ struct ExposureAssetTests {
     @Test func `groups by asset with spot and liabilities`() {
         let ethId = UUID()
         let tokens = [
-            TokenEntry(assetId: ethId, symbol: "ETH", name: "Ethereum", category: .major,
-                       coinGeckoId: nil, role: .supply, amount: 10, usdValue: 30000),
-            TokenEntry(assetId: ethId, symbol: "ETH", name: "Ethereum", category: .major,
-                       coinGeckoId: nil, role: .borrow, amount: 3, usdValue: 9000),
+            TokenEntry(
+                assetId: ethId,
+                symbol: "ETH",
+                name: "Ethereum",
+                category: .major,
+                coinGeckoId: nil,
+                role: .supply,
+                amount: 10,
+                usdValue: 30000
+            ),
+            TokenEntry(
+                assetId: ethId,
+                symbol: "ETH",
+                name: "Ethereum",
+                category: .major,
+                coinGeckoId: nil,
+                role: .borrow,
+                amount: 3,
+                usdValue: 9000
+            )
         ]
 
         let assets = ExposureFeature.computeAssetExposure(tokens: tokens, prices: [:])
@@ -136,10 +240,26 @@ struct ExposureAssetTests {
         let btcId = UUID()
         let ethId = UUID()
         let tokens = [
-            TokenEntry(assetId: ethId, symbol: "ETH", name: "Ethereum", category: .major,
-                       coinGeckoId: nil, role: .balance, amount: 10, usdValue: 30000),
-            TokenEntry(assetId: btcId, symbol: "BTC", name: "Bitcoin", category: .major,
-                       coinGeckoId: nil, role: .balance, amount: 1, usdValue: 60000),
+            TokenEntry(
+                assetId: ethId,
+                symbol: "ETH",
+                name: "Ethereum",
+                category: .major,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 10,
+                usdValue: 30000
+            ),
+            TokenEntry(
+                assetId: btcId,
+                symbol: "BTC",
+                name: "Bitcoin",
+                category: .major,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 1,
+                usdValue: 60000
+            )
         ]
 
         let assets = ExposureFeature.computeAssetExposure(tokens: tokens, prices: [:])
@@ -151,12 +271,20 @@ struct ExposureAssetTests {
     @Test func `uses live prices`() {
         let btcId = UUID()
         let tokens = [
-            TokenEntry(assetId: btcId, symbol: "BTC", name: "Bitcoin", category: .major,
-                       coinGeckoId: "bitcoin", role: .balance, amount: 2, usdValue: 100_000),
+            TokenEntry(
+                assetId: btcId,
+                symbol: "BTC",
+                name: "Bitcoin",
+                category: .major,
+                coinGeckoId: "bitcoin",
+                role: .balance,
+                amount: 2,
+                usdValue: 100_000
+            )
         ]
 
         let assets = ExposureFeature.computeAssetExposure(
-            tokens: tokens, prices: ["bitcoin": 65000],
+            tokens: tokens, prices: ["bitcoin": 65000]
         )
 
         #expect(assets[0].spotAssets == 130_000) // 2 * 65000
@@ -170,7 +298,7 @@ struct ExposureSummaryTests {
         let categories = [
             CategoryExposure(id: "major", name: "Major", spotAssets: 90000, liabilities: 9000),
             CategoryExposure(id: "stablecoin", name: "Stablecoin", spotAssets: 5000, liabilities: 0),
-            CategoryExposure(id: "defi", name: "Defi", spotAssets: 1000, liabilities: 500),
+            CategoryExposure(id: "defi", name: "Defi", spotAssets: 1000, liabilities: 500)
         ]
 
         let summary = ExposureFeature.computeSummary(from: categories)
@@ -182,7 +310,7 @@ struct ExposureSummaryTests {
     @Test func `net exposure excludes stablecoins`() {
         let categories = [
             CategoryExposure(id: "major", name: "Major", spotAssets: 90000, liabilities: 9000),
-            CategoryExposure(id: "stablecoin", name: "Stablecoin", spotAssets: 50000, liabilities: 0),
+            CategoryExposure(id: "stablecoin", name: "Stablecoin", spotAssets: 50000, liabilities: 0)
         ]
 
         let summary = ExposureFeature.computeSummary(from: categories)
@@ -205,7 +333,7 @@ struct ExposureTokenValueTests {
     @Test func `uses live price when available`() {
         let value = ExposureFeature.resolveTokenUSDValue(
             amount: 2, coinGeckoId: "bitcoin", usdValue: 100_000,
-            prices: ["bitcoin": 65000],
+            prices: ["bitcoin": 65000]
         )
 
         #expect(value == 130_000)
@@ -214,7 +342,7 @@ struct ExposureTokenValueTests {
     @Test func `falls back to usd value when no live price`() {
         let value = ExposureFeature.resolveTokenUSDValue(
             amount: 100, coinGeckoId: nil, usdValue: 500,
-            prices: [:],
+            prices: [:]
         )
 
         #expect(value == 500)
@@ -223,7 +351,7 @@ struct ExposureTokenValueTests {
     @Test func `falls back when coinGeckoId not in prices`() {
         let value = ExposureFeature.resolveTokenUSDValue(
             amount: 10, coinGeckoId: "unknown-token", usdValue: 300,
-            prices: ["bitcoin": 65000],
+            prices: ["bitcoin": 65000]
         )
 
         #expect(value == 300)

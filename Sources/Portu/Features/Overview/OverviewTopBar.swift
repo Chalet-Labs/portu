@@ -1,8 +1,8 @@
 // Sources/Portu/Features/Overview/OverviewTopBar.swift
-import SwiftUI
-import SwiftData
 import PortuCore
 import PortuUI
+import SwiftData
+import SwiftUI
 
 struct OverviewTopBar: View {
     @Environment(AppState.self) private var appState
@@ -24,10 +24,11 @@ struct OverviewTopBar: View {
         var total: Decimal = 0
         for pos in activePositions {
             for token in pos.tokens {
-                guard let asset = token.asset,
-                      let cgId = asset.coinGeckoId,
-                      let price = appState.prices[cgId],
-                      let changePct = appState.priceChanges24h[cgId] else { continue }
+                guard
+                    let asset = token.asset,
+                    let cgId = asset.coinGeckoId,
+                    let price = appState.prices[cgId],
+                    let changePct = appState.priceChanges24h[cgId] else { continue }
 
                 let contribution = token.amount * price * changePct
                 if token.role.isPositive {

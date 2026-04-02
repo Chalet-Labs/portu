@@ -17,7 +17,7 @@ public struct KeychainService: SecretStore {
             kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecUseDataProtectionKeychain as String: true,
+            kSecUseDataProtectionKeychain as String: true
         ]
 
         var result: AnyObject?
@@ -25,8 +25,9 @@ public struct KeychainService: SecretStore {
 
         switch status {
         case errSecSuccess:
-            guard let data = result as? Data,
-                  let string = String(data: data, encoding: .utf8)
+            guard
+                let data = result as? Data,
+                let string = String(data: data, encoding: .utf8)
             else {
                 throw .encodingFailed
             }
@@ -47,7 +48,7 @@ public struct KeychainService: SecretStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
-            kSecUseDataProtectionKeychain as String: true,
+            kSecUseDataProtectionKeychain as String: true
         ]
         let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
@@ -55,7 +56,7 @@ public struct KeychainService: SecretStore {
         let addStatus = SecItemAdd(
             baseQuery.merging([
                 kSecAttrAccessible as String: accessibility,
-                kSecValueData as String: data,
+                kSecValueData as String: data
             ]) { _, new in new } as CFDictionary,
             nil
         )
@@ -68,7 +69,7 @@ public struct KeychainService: SecretStore {
                 baseQuery as CFDictionary,
                 [
                     kSecValueData as String: data,
-                    kSecAttrAccessible as String: accessibility,
+                    kSecAttrAccessible as String: accessibility
                 ] as CFDictionary
             )
             guard updateStatus == errSecSuccess else {
@@ -84,7 +85,7 @@ public struct KeychainService: SecretStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
-            kSecUseDataProtectionKeychain as String: true,
+            kSecUseDataProtectionKeychain as String: true
         ]
 
         let status = SecItemDelete(query as CFDictionary)

@@ -10,7 +10,15 @@ public struct PositionDTO: Sendable {
     public let healthFactor: Double?
     public let tokens: [TokenDTO]
 
-    public init(positionType: PositionType, chain: Chain?, protocolId: String?, protocolName: String?, protocolLogoURL: String?, healthFactor: Double?, tokens: [TokenDTO]) {
+    public init(
+        positionType: PositionType,
+        chain: Chain?,
+        protocolId: String?,
+        protocolName: String?,
+        protocolLogoURL: String?,
+        healthFactor: Double?,
+        tokens: [TokenDTO]
+    ) {
         self.positionType = positionType
         self.chain = chain
         self.protocolId = protocolId

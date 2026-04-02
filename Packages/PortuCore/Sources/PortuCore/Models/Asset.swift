@@ -7,20 +7,20 @@ public final class Asset {
     public var symbol: String
     public var name: String
 
-    // Tier 1 upsert key — cross-chain canonical identity
+    /// Tier 1 upsert key — cross-chain canonical identity
     public var coinGeckoId: String?
 
     // Tier 2 upsert key — single-chain token without coinGeckoId
     public var upsertChain: Chain?
     public var upsertContract: String?
 
-    // Tier 3 upsert key — provider-specific opaque ID
+    /// Tier 3 upsert key — provider-specific opaque ID
     public var sourceKey: String?
 
-    // Reserved for future DeBankProvider
+    /// Reserved for future DeBankProvider
     public var debankId: String?
 
-    // String, not URL — SwiftData predicate compatibility
+    /// String, not URL — SwiftData predicate compatibility
     public var logoURL: String?
 
     public var category: AssetCategory

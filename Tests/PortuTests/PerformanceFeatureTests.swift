@@ -104,7 +104,7 @@ struct PerformanceLastPerDayTests {
         let values: [(Date, Decimal)] = [
             (noon, 1000),
             (evening, 1200), // same day, later → keep this
-            (nextDay, 1300),
+            (nextDay, 1300)
         ]
 
         let result = PerformanceFeature.lastPerDay(values)
@@ -176,7 +176,7 @@ struct PerformanceCategoryChangeTests {
             CategorySnapshotEntry(timestamp: day1, category: .major, usdValue: 1000),
             CategorySnapshotEntry(timestamp: day2, category: .major, usdValue: 1200),
             CategorySnapshotEntry(timestamp: day1, category: .stablecoin, usdValue: 500),
-            CategorySnapshotEntry(timestamp: day2, category: .stablecoin, usdValue: 500),
+            CategorySnapshotEntry(timestamp: day2, category: .stablecoin, usdValue: 500)
         ]
 
         let changes = PerformanceFeature.computeCategoryChanges(entries: entries)
@@ -197,7 +197,7 @@ struct PerformanceCategoryChangeTests {
 
         let entries: [CategorySnapshotEntry] = [
             CategorySnapshotEntry(timestamp: day1, category: .major, usdValue: 1000),
-            CategorySnapshotEntry(timestamp: day2, category: .major, usdValue: 1100),
+            CategorySnapshotEntry(timestamp: day2, category: .major, usdValue: 1100)
         ]
 
         let changes = PerformanceFeature.computeCategoryChanges(entries: entries)

@@ -40,11 +40,13 @@ struct AssetDetailView: View {
                                 .font(.title2)
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            if let info = AssetDetailFeature.headerPriceInfo(
-                                coinGeckoId: asset.coinGeckoId,
-                                prices: store.prices,
-                                changes24h: store.priceChanges24h,
-                            ) {
+                            if
+                                let info = AssetDetailFeature.headerPriceInfo(
+                                    coinGeckoId: asset.coinGeckoId,
+                                    prices: store.prices,
+                                    changes24h: store.priceChanges24h
+                                )
+                            {
                                 VStack(alignment: .trailing) {
                                     Text(info.price, format: .currency(code: "USD"))
                                         .font(.title2.weight(.semibold))

@@ -139,7 +139,7 @@ struct PerformanceFeature {
                 id: dailyValues[i].0,
                 date: dailyValues[i].0,
                 pnl: pnl,
-                cumulative: cumulative,
+                cumulative: cumulative
             ))
         }
         return result
@@ -147,8 +147,10 @@ struct PerformanceFeature {
 
     /// Compute category start/end/change from snapshot entries.
     static func computeCategoryChanges(
-        entries: [CategorySnapshotEntry],
-    ) -> [CategoryChange] {
+        entries: [CategorySnapshotEntry]
+    )
+        -> [CategoryChange]
+    {
         guard !entries.isEmpty else { return [] }
         let cal = Calendar.current
         let sorted = entries.sorted { $0.timestamp < $1.timestamp }
@@ -173,7 +175,7 @@ struct PerformanceFeature {
                 name: cat.rawValue.capitalized,
                 startValue: start,
                 endValue: end,
-                percentChange: change,
+                percentChange: change
             )
         }
     }

@@ -1,7 +1,7 @@
-import Testing
 import Foundation
-import SwiftData
 @testable import PortuCore
+import SwiftData
+import Testing
 
 /// Helper to create an in-memory ModelContainer with all model types
 @MainActor
@@ -14,17 +14,15 @@ func makeTestContainer() throws -> ModelContainer {
         Asset.self,
         PortfolioSnapshot.self,
         AccountSnapshot.self,
-        AssetSnapshot.self,
+        AssetSnapshot.self
     ])
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     return try ModelContainer(for: schema, configurations: [config])
 }
 
-@Suite("Model Tests")
 @MainActor
 struct ModelTests {
-
-    @Test func createAccount() throws {
+    @Test func `create account`() throws {
         let container = try makeTestContainer()
         let context = container.mainContext
 
@@ -45,7 +43,7 @@ struct ModelTests {
         #expect(fetched[0].lastSyncError == nil)
     }
 
-    @Test func accountCascadeDeletesAddresses() throws {
+    @Test func `account cascade deletes addresses`() throws {
         let container = try makeTestContainer()
         let context = container.mainContext
 
@@ -63,7 +61,7 @@ struct ModelTests {
         #expect(try context.fetch(FetchDescriptor<WalletAddress>()).isEmpty)
     }
 
-    @Test func accountCascadeDeletesPositions() throws {
+    @Test func `account cascade deletes positions`() throws {
         let container = try makeTestContainer()
         let context = container.mainContext
 
@@ -81,7 +79,7 @@ struct ModelTests {
         #expect(try context.fetch(FetchDescriptor<Position>()).isEmpty)
     }
 
-    @Test func positionCascadeDeletesTokens() throws {
+    @Test func `position cascade deletes tokens`() throws {
         let container = try makeTestContainer()
         let context = container.mainContext
 
@@ -103,7 +101,7 @@ struct ModelTests {
         #expect(try context.fetch(FetchDescriptor<Asset>()).count == 1)
     }
 
-    @Test func deletingAssetDoesNotCascadeDeleteToken() throws {
+    @Test func `deleting asset does not cascade delete token`() throws {
         let container = try makeTestContainer()
         let context = container.mainContext
 
@@ -124,7 +122,7 @@ struct ModelTests {
         #expect(tokens.count == 1)
     }
 
-    @Test func fullCascadeDeleteChain() throws {
+    @Test func `full cascade delete chain`() throws {
         let container = try makeTestContainer()
         let context = container.mainContext
 
@@ -149,7 +147,7 @@ struct ModelTests {
         #expect(try context.fetch(FetchDescriptor<Asset>()).count == 1)
     }
 
-    @Test func snapshotsUseUUIDKeysNotRelationships() throws {
+    @Test func `snapshots use UUID keys not relationships`() throws {
         let container = try makeTestContainer()
         let context = container.mainContext
 
@@ -160,7 +158,7 @@ struct ModelTests {
 
         let portfolioSnap = PortfolioSnapshot(
             syncBatchId: batchId, timestamp: now,
-            totalValue: 100000, idleValue: 50000,
+            totalValue: 100_000, idleValue: 50000,
             deployedValue: 45000, debtValue: 5000, isPartial: false
         )
         let accountSnap = AccountSnapshot(
@@ -188,17 +186,17 @@ struct ModelTests {
         #expect(fetched[0].borrowAmount == 0)
     }
 
-    @Test func accountIsActiveByDefault() throws {
+    @Test func `account is active by default`() {
         let account = Account(name: "Test", kind: .wallet, dataSource: .zapper)
         #expect(account.isActive == true)
     }
 
-    @Test func evmAddressHasNilChain() throws {
+    @Test func `evm address has nil chain`() {
         let addr = WalletAddress(address: "0xabc")
         #expect(addr.chain == nil)
     }
 
-    @Test func solanaAddressHasExplicitChain() throws {
+    @Test func `solana address has explicit chain`() {
         let addr = WalletAddress(chain: .solana, address: "SoL123abc")
         #expect(addr.chain == .solana)
     }

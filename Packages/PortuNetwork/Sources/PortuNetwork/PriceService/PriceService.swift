@@ -12,11 +12,12 @@ public actor PriceService {
     private var lastUpdateFetchDate: Date?
     private let cacheTTL: TimeInterval
 
-    // Sliding-window rate limiter
-    private struct RequestStamp: Sendable {
+    /// Sliding-window rate limiter
+    private struct RequestStamp {
         let id: UUID
         let date: Date
     }
+
     private let maxRequestsPerWindow: Int
     private let windowDuration: TimeInterval
     private var requestTimestamps: [RequestStamp] = []
@@ -39,9 +40,11 @@ public actor PriceService {
     public func fetchPrices(for coinIds: [String]) async throws(PriceServiceError) -> [String: Decimal] {
         guard !coinIds.isEmpty else { return [:] }
 
-        if let lastFetch = lastFetchDate,
-           Date.now.timeIntervalSince(lastFetch) < cacheTTL,
-           coinIds.allSatisfy({ cache[$0] != nil }) {
+        if
+            let lastFetch = lastFetchDate,
+            Date.now.timeIntervalSince(lastFetch) < cacheTTL,
+            coinIds.allSatisfy({ cache[$0] != nil })
+        {
             return cache.filter { coinIds.contains($0.key) }
         }
 
@@ -61,7 +64,7 @@ public actor PriceService {
         let url = baseURL.appending(path: "simple/price")
             .appending(queryItems: [
                 URLQueryItem(name: "ids", value: ids),
-                URLQueryItem(name: "vs_currencies", value: "usd"),
+                URLQueryItem(name: "vs_currencies", value: "usd")
             ])
 
         let data: Data
@@ -103,10 +106,12 @@ public actor PriceService {
     public func fetchPriceUpdate(for coinIds: [String]) async throws(PriceServiceError) -> PriceUpdate {
         guard !coinIds.isEmpty else { return PriceUpdate(prices: [:], changes24h: [:]) }
 
-        if let lastFetch = lastUpdateFetchDate,
-           Date.now.timeIntervalSince(lastFetch) < cacheTTL,
-           let cached = updateCache,
-           coinIds.allSatisfy({ cached.prices[$0] != nil }) {
+        if
+            let lastFetch = lastUpdateFetchDate,
+            Date.now.timeIntervalSince(lastFetch) < cacheTTL,
+            let cached = updateCache,
+            coinIds.allSatisfy({ cached.prices[$0] != nil })
+        {
             let requested = Set(coinIds)
             return PriceUpdate(
                 prices: cached.prices.filter { requested.contains($0.key) },
@@ -129,7 +134,7 @@ public actor PriceService {
             .appending(queryItems: [
                 URLQueryItem(name: "ids", value: ids),
                 URLQueryItem(name: "vs_currencies", value: "usd"),
-                URLQueryItem(name: "include_24hr_change", value: "true"),
+                URLQueryItem(name: "include_24hr_change", value: "true")
             ])
 
         let data: Data
@@ -176,7 +181,9 @@ public actor PriceService {
     public func priceStream(
         for coinIds: [String],
         interval: TimeInterval = 30
-    ) -> AsyncThrowingStream<[String: Decimal], any Error> {
+    )
+        -> AsyncThrowingStream<[String: Decimal], any Error>
+    {
         guard !coinIds.isEmpty else {
             return AsyncThrowingStream { $0.finish() }
         }
@@ -202,7 +209,7 @@ public actor PriceService {
                     // Transient — skip this tick, retry next
                 } catch PriceServiceError.networkUnavailable {
                     // Transient — skip this tick, retry next
-                } catch PriceServiceError.invalidResponse(let code) where code >= 500 {
+                } catch let PriceServiceError.invalidResponse(code) where code >= 500 {
                     // Transient server error — skip this tick, retry next
                 } catch {
                     // Non-transient (decoding, 4xx auth errors) — terminate

@@ -11,7 +11,7 @@ struct AssetsTab: View {
     @Query private var allTokens: [PositionToken]
 
     @State private var sortOrder: [KeyPathComparator<AssetRowData>] = [
-        KeyPathComparator(\.value, order: .reverse),
+        KeyPathComparator(\.value, order: .reverse)
     ]
 
     /// Map @Query tokens to lightweight entries, aggregate with live prices, filter, sort.
@@ -26,7 +26,7 @@ struct AssetsTab: View {
                 coinGeckoId: asset.coinGeckoId,
                 role: token.role,
                 amount: token.amount,
-                usdValue: token.usdValue,
+                usdValue: token.usdValue
             )
         }
 
@@ -52,7 +52,7 @@ struct AssetsTab: View {
                 Image(systemName: "magnifyingglass")
                 TextField("Search assets...", text: Binding(
                     get: { store.allAssets.searchText },
-                    set: { store.send(.allAssets(.searchTextChanged($0))) },
+                    set: { store.send(.allAssets(.searchTextChanged($0))) }
                 ))
                 .textFieldStyle(.plain)
             }
@@ -64,7 +64,7 @@ struct AssetsTab: View {
 
             Picker("Group", selection: Binding(
                 get: { store.allAssets.grouping },
-                set: { store.send(.allAssets(.groupingChanged($0))) },
+                set: { store.send(.allAssets(.groupingChanged($0))) }
             )) {
                 ForEach(AssetGrouping.allCases, id: \.self) { g in
                     Text(g.rawValue).tag(g)

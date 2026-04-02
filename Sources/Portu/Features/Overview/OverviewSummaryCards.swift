@@ -1,8 +1,8 @@
 // Sources/Portu/Features/Overview/OverviewSummaryCards.swift
-import SwiftUI
-import SwiftData
 import PortuCore
 import PortuUI
+import SwiftData
+import SwiftUI
 
 struct OverviewSummaryCards: View {
     @Query private var allPositions: [Position]
@@ -30,7 +30,7 @@ struct OverviewSummaryCards: View {
         return [
             ("Stablecoins & Fiat", stablesFiat),
             ("Majors", majors),
-            ("Tokens & Memes", tokens),
+            ("Tokens & Memes", tokens)
         ]
     }
 
@@ -43,7 +43,7 @@ struct OverviewSummaryCards: View {
         var yield: Decimal = 0
 
         for pos in deployed {
-            let posVal = pos.tokens.filter { $0.role.isPositive }.reduce(Decimal.zero) { $0 + $1.usdValue }
+            let posVal = pos.tokens.filter(\.role.isPositive).reduce(Decimal.zero) { $0 + $1.usdValue }
             switch pos.positionType {
             case .lending: lending += posVal
             case .staking: staked += posVal
@@ -54,7 +54,7 @@ struct OverviewSummaryCards: View {
         return [
             ("Lending", lending),
             ("Staked", staked),
-            ("Yield", yield),
+            ("Yield", yield)
         ]
     }
 

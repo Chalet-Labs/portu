@@ -5,14 +5,14 @@ let package = Package(
     name: "PortuUI",
     platforms: [.macOS(.v15)],
     products: [
-        .library(name: "PortuUI", targets: ["PortuUI"]),
+        .library(name: "PortuUI", targets: ["PortuUI"])
     ],
     targets: [
         .target(
             name: "PortuUI",
             swiftSettings: [
                 .swiftLanguageMode(.v6),
-                .defaultIsolation(MainActor.self),
+                .defaultIsolation(MainActor.self)
             ]
         ),
         .testTarget(
@@ -20,8 +20,8 @@ let package = Package(
             dependencies: ["PortuUI"],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
-                .defaultIsolation(MainActor.self),
+                .defaultIsolation(MainActor.self)
             ]
-        ),
+        )
     ]
 )

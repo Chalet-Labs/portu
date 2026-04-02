@@ -15,17 +15,17 @@ struct PortuApp: App {
         var isEphemeral = false
 
         do {
-            container = try ModelContainer(
+            self.container = try ModelContainer(
                 for: Account.self, WalletAddress.self, Position.self, PositionToken.self,
-                Asset.self, PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
+                Asset.self, PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
             )
         } catch {
             let config = ModelConfiguration(isStoredInMemoryOnly: true)
             do {
-                container = try ModelContainer(
+                self.container = try ModelContainer(
                     for: Account.self, WalletAddress.self, Position.self, PositionToken.self,
                     Asset.self, PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
-                    configurations: config,
+                    configurations: config
                 )
                 isEphemeral = true
             } catch {
@@ -35,11 +35,11 @@ struct PortuApp: App {
 
         let syncEngine = SyncEngine(
             modelContext: container.mainContext,
-            secretStore: KeychainService(),
+            secretStore: KeychainService()
         )
         let priceService = PriceService()
 
-        store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
+        self.store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
             AppFeature()
         } withDependencies: {
             $0.syncEngine = .live(engine: syncEngine)
