@@ -10,21 +10,7 @@ struct AssetPositionsTable: View {
     @Query private var allTokens: [PositionToken]
 
     private var rows: [PositionRowData] {
-        let entries = allTokens
-            .filter { $0.asset?.id == assetId && $0.position?.account?.isActive == true }
-            .compactMap { token -> PositionTokenEntry? in
-                guard let pos = token.position else { return nil }
-                return PositionTokenEntry(
-                    tokenId: token.id,
-                    accountName: pos.account?.name ?? "Unknown",
-                    protocolName: pos.protocolName,
-                    positionType: pos.positionType,
-                    chain: pos.chain,
-                    role: token.role,
-                    amount: token.amount,
-                    usdValue: token.usdValue,
-                    coinGeckoId: token.asset?.coinGeckoId)
-            }
+        let entries = PositionTokenEntry.fromActiveTokens(allTokens, assetId: assetId)
         return AssetDetailFeature.aggregatePositionRows(tokens: entries, prices: store.prices)
     }
 

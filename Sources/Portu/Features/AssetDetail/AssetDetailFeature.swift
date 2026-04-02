@@ -21,6 +21,25 @@ struct PositionTokenEntry: Equatable {
     let amount: Decimal
     let usdValue: Decimal
     let coinGeckoId: String?
+
+    /// Convert active tokens for a specific asset into PositionTokenEntries.
+    static func fromActiveTokens(_ tokens: [PositionToken], assetId: UUID) -> [PositionTokenEntry] {
+        tokens
+            .filter { $0.asset?.id == assetId && $0.position?.account?.isActive == true }
+            .compactMap { token in
+                guard let pos = token.position else { return nil }
+                return PositionTokenEntry(
+                    tokenId: token.id,
+                    accountName: pos.account?.name ?? "Unknown",
+                    protocolName: pos.protocolName,
+                    positionType: pos.positionType,
+                    chain: pos.chain,
+                    role: token.role,
+                    amount: token.amount,
+                    usdValue: token.usdValue,
+                    coinGeckoId: token.asset?.coinGeckoId)
+            }
+    }
 }
 
 /// Row data for per-position display in asset detail.

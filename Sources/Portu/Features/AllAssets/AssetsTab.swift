@@ -16,18 +16,7 @@ struct AssetsTab: View {
 
     /// Map @Query tokens to lightweight entries, aggregate with live prices, filter, sort.
     private var rows: [AssetRowData] {
-        let entries = allTokens.compactMap { token -> TokenEntry? in
-            guard let asset = token.asset, token.position?.account?.isActive == true else { return nil }
-            return TokenEntry(
-                assetId: asset.id,
-                symbol: asset.symbol,
-                name: asset.name,
-                category: asset.category,
-                coinGeckoId: asset.coinGeckoId,
-                role: token.role,
-                amount: token.amount,
-                usdValue: token.usdValue)
-        }
+        let entries = TokenEntry.fromActiveTokens(allTokens)
 
         let aggregated = AllAssetsFeature.aggregateRows(tokens: entries, prices: store.prices)
         let filtered = AllAssetsFeature.filterRows(aggregated, searchText: store.allAssets.searchText)
