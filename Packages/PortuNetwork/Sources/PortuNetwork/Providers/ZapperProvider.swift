@@ -42,17 +42,17 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     private func fetchTokenBalances(address: String) async throws -> [PositionDTO] {
-        var components = URLComponents(url: baseURL.appendingPathComponent("balances/tokens"), resolvingAgainstBaseURL: false)!
-        components.queryItems = [URLQueryItem(name: "addresses[]", value: address)]
-        let data = try await makeRequest(url: components.url!)
-        return try parseTokenBalances(data: data)
+        try await parseTokenBalances(data: fetchEndpoint("balances/tokens", address: address))
     }
 
     private func fetchAppPositions(address: String) async throws -> [PositionDTO] {
-        var components = URLComponents(url: baseURL.appendingPathComponent("apps/positions"), resolvingAgainstBaseURL: false)!
+        try await parseAppPositions(data: fetchEndpoint("apps/positions", address: address))
+    }
+
+    private func fetchEndpoint(_ path: String, address: String) async throws -> Data {
+        var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "addresses[]", value: address)]
-        let data = try await makeRequest(url: components.url!)
-        return try parseAppPositions(data: data)
+        return try await makeRequest(url: components.url!)
     }
 
     private func makeRequest(url: URL) async throws -> Data {
@@ -78,16 +78,10 @@ public actor ZapperProvider: PortfolioDataProvider {
                 let name = item["name"] as? String,
                 let balanceUSD = item["balanceUSD"] as? Double,
                 let balance = item["balance"] as? Double else { return nil }
-            let chainStr = item["network"] as? String
-            let chain = chainStr.flatMap { Chain(rawValue: $0) }
-            let token = TokenDTO(
-                role: .balance, symbol: symbol, name: name,
-                amount: Decimal(balance), usdValue: Decimal(balanceUSD),
-                chain: chain, contractAddress: item["address"] as? String,
-                debankId: nil, coinGeckoId: item["coingeckoId"] as? String,
-                sourceKey: (item["address"] as? String).map { "zapper:\($0)" },
-                logoURL: item["imgUrl"] as? String,
-                category: .other, isVerified: item["verified"] as? Bool ?? false)
+            let chain = parseChain(item)
+            let token = buildTokenDTO(
+                item, role: .balance, symbol: symbol, name: name,
+                amount: Decimal(balance), usdValue: Decimal(balanceUSD), chain: chain)
             return PositionDTO(
                 positionType: .idle, chain: chain,
                 protocolId: nil, protocolName: nil, protocolLogoURL: nil,
@@ -108,7 +102,7 @@ public actor ZapperProvider: PortfolioDataProvider {
             let tokens = parsePositionTokens(item["tokens"] as? [[String: Any]] ?? [])
             return PositionDTO(
                 positionType: posType,
-                chain: (item["network"] as? String).flatMap { Chain(rawValue: $0) },
+                chain: parseChain(item),
                 protocolId: appId,
                 protocolName: item["appName"] as? String,
                 protocolLogoURL: item["appImage"] as? String,
@@ -130,16 +124,28 @@ public actor ZapperProvider: PortfolioDataProvider {
             case "stake": .stake
             default: .balance
             }
-            return TokenDTO(
-                role: role, symbol: symbol, name: item["name"] as? String ?? symbol,
+            return buildTokenDTO(
+                item, role: role, symbol: symbol, name: item["name"] as? String ?? symbol,
                 amount: Decimal(abs(balance)), usdValue: Decimal(abs(balanceUSD)),
-                chain: (item["network"] as? String).flatMap { Chain(rawValue: $0) },
-                contractAddress: item["address"] as? String,
-                debankId: nil, coinGeckoId: item["coingeckoId"] as? String,
-                sourceKey: (item["address"] as? String).map { "zapper:\($0)" },
-                logoURL: item["imgUrl"] as? String,
-                category: .other, isVerified: item["verified"] as? Bool ?? false)
+                chain: parseChain(item))
         }
+    }
+
+    private func parseChain(_ item: [String: Any]) -> Chain? {
+        (item["network"] as? String).flatMap { Chain(rawValue: $0) }
+    }
+
+    private func buildTokenDTO(
+        _ item: [String: Any], role: TokenRole, symbol: String, name: String,
+        amount: Decimal, usdValue: Decimal, chain: Chain?) -> TokenDTO {
+        TokenDTO(
+            role: role, symbol: symbol, name: name,
+            amount: amount, usdValue: usdValue,
+            chain: chain, contractAddress: item["address"] as? String,
+            debankId: nil, coinGeckoId: item["coingeckoId"] as? String,
+            sourceKey: (item["address"] as? String).map { "zapper:\($0)" },
+            logoURL: item["imgUrl"] as? String,
+            category: .other, isVerified: item["verified"] as? Bool ?? false)
     }
 
     private func parseJSONArray(_ data: Data) throws -> [[String: Any]] {
