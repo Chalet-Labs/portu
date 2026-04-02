@@ -7,9 +7,13 @@ let package = Package(
     products: [
         .library(name: "PortuUI", targets: ["PortuUI"])
     ],
+    dependencies: [
+        .package(path: "../PortuCore")
+    ],
     targets: [
         .target(
             name: "PortuUI",
+            dependencies: ["PortuCore"],
             swiftSettings: [
                 .swiftLanguageMode(.v6),
                 .defaultIsolation(MainActor.self)
