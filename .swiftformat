@@ -21,6 +21,9 @@
 # Trailing commas — we keep them (disabled in SwiftLint too)
 --commas inline
 
+# Modifier order — nonisolated before access control (matches SwiftLint/Codacy)
+--modifier-order nonisolated,override,acl,setteracl,dynamic,mutating,nonmutating,convenience,required,optional,lazy,final,infix,prefix,postfix,fileprivate,static,class
+
 # Self
 --self init-only
 

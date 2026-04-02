@@ -6,7 +6,7 @@ import Testing
 /// URLProtocol mock that returns responses via a per-test request handler.
 /// Each test configures `requestHandler` before exercising PriceService,
 /// keeping mock state explicit and co-located with each test case.
-final nonisolated class MockURLProtocol: URLProtocol, @unchecked Sendable {
+nonisolated final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var requestHandler: ((URLRequest) -> (Data?, Int))?
 
     override class func canInit(with _: URLRequest) -> Bool {

@@ -5,7 +5,7 @@ public actor ExchangeProvider: PortfolioDataProvider {
     private let secretStore: any SecretStore
     private let session: URLSession
 
-    public nonisolated var capabilities: ProviderCapabilities {
+    nonisolated public var capabilities: ProviderCapabilities {
         ProviderCapabilities(supportsTokenBalances: true, supportsDeFiPositions: false, supportsHealthFactors: false)
     }
 
