@@ -54,6 +54,12 @@ struct PortuApp: App {
         WindowGroup {
             ContentView(store: store)
                 .environment(appState)
+                .onChange(of: store.prices) { _, new in appState.prices = new }
+                .onChange(of: store.priceChanges24h) { _, new in appState.priceChanges24h = new }
+                .onChange(of: store.syncStatus) { _, new in appState.syncStatus = new }
+                .onChange(of: store.connectionStatus) { _, new in appState.connectionStatus = new }
+                .onChange(of: store.lastPriceUpdate) { _, new in appState.lastPriceUpdate = new }
+                .onChange(of: store.storeIsEphemeral) { _, new in appState.storeIsEphemeral = new }
         }
         .modelContainer(container)
 
