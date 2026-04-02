@@ -4,12 +4,13 @@ import PortuCore
 
 // MARK: - Supporting Types
 
-/// Category-level exposure breakdown.
-nonisolated struct CategoryExposure: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let spotAssets: Decimal
-    let liabilities: Decimal
+/// Shared fields for exposure row types.
+protocol ExposureRow: Identifiable, Equatable {
+    var spotAssets: Decimal { get }
+    var liabilities: Decimal { get }
+}
+
+extension ExposureRow {
     var spotNet: Decimal {
         spotAssets - liabilities
     }
@@ -19,20 +20,21 @@ nonisolated struct CategoryExposure: Identifiable, Equatable {
     }
 }
 
+/// Category-level exposure breakdown.
+nonisolated struct CategoryExposure: ExposureRow {
+    let id: String
+    let name: String
+    let spotAssets: Decimal
+    let liabilities: Decimal
+}
+
 /// Asset-level exposure breakdown.
-nonisolated struct AssetExposure: Identifiable, Equatable {
+nonisolated struct AssetExposure: ExposureRow {
     let id: UUID
     let symbol: String
     let category: AssetCategory
     let spotAssets: Decimal
     let liabilities: Decimal
-    var spotNet: Decimal {
-        spotAssets - liabilities
-    }
-
-    var netExposure: Decimal {
-        spotNet
-    }
 }
 
 /// Summary totals for the exposure dashboard.

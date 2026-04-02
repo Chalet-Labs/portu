@@ -60,27 +60,16 @@ struct ExposureView: View {
         Table(byCategory) {
             TableColumn("Category") { row in Text(row.name).fontWeight(.medium) }
                 .width(min: 100, ideal: 140)
-            TableColumn("Spot Assets") { row in
-                Text(row.spotAssets, format: .currency(code: "USD"))
-            }
-            .width(min: 80, ideal: 120)
-            TableColumn("Liabilities") { row in
-                Text(row.liabilities, format: .currency(code: "USD"))
-                    .foregroundStyle(row.liabilities > 0 ? .red : .secondary)
-            }
-            .width(min: 80, ideal: 120)
-            TableColumn("Spot Net") { row in
-                Text(row.spotNet, format: .currency(code: "USD"))
-                    .foregroundStyle(row.spotNet < 0 ? .red : .primary)
-            }
-            .width(min: 80, ideal: 120)
+            TableColumn("Spot Assets") { row in currencyCell(row.spotAssets) }
+                .width(min: 80, ideal: 120)
+            TableColumn("Liabilities") { row in liabilityCell(row.liabilities) }
+                .width(min: 80, ideal: 120)
+            TableColumn("Spot Net") { row in signedCell(row.spotNet) }
+                .width(min: 80, ideal: 120)
             TableColumn("Derivatives") { _ in Text("\u{2014}").foregroundStyle(.tertiary) }
                 .width(min: 60, ideal: 80)
-            TableColumn("Net Exposure") { row in
-                Text(row.netExposure, format: .currency(code: "USD"))
-                    .fontWeight(.medium)
-            }
-            .width(min: 80, ideal: 120)
+            TableColumn("Net Exposure") { row in currencyCell(row.netExposure).fontWeight(.medium) }
+                .width(min: 80, ideal: 120)
         }
     }
 
@@ -89,26 +78,26 @@ struct ExposureView: View {
             TableColumn("Asset") { row in Text(row.symbol).fontWeight(.medium) }
                 .width(min: 60, ideal: 80)
             TableColumn("Category") { row in
-                Text(row.category.rawValue.capitalized)
-                    .font(.caption)
+                Text(row.category.rawValue.capitalized).font(.caption)
             }
             .width(min: 80, ideal: 100)
-            TableColumn("Spot Assets") { row in
-                Text(row.spotAssets, format: .currency(code: "USD"))
-            }
-            TableColumn("Liabilities") { row in
-                Text(row.liabilities, format: .currency(code: "USD"))
-                    .foregroundStyle(row.liabilities > 0 ? .red : .secondary)
-            }
-            TableColumn("Spot Net") { row in
-                Text(row.spotNet, format: .currency(code: "USD"))
-                    .foregroundStyle(row.spotNet < 0 ? .red : .primary)
-            }
-            TableColumn("Net Exposure") { row in
-                Text(row.netExposure, format: .currency(code: "USD"))
-                    .fontWeight(.medium)
-            }
+            TableColumn("Spot Assets") { row in currencyCell(row.spotAssets) }
+            TableColumn("Liabilities") { row in liabilityCell(row.liabilities) }
+            TableColumn("Spot Net") { row in signedCell(row.spotNet) }
+            TableColumn("Net Exposure") { row in currencyCell(row.netExposure).fontWeight(.medium) }
         }
+    }
+
+    private func currencyCell(_ value: Decimal) -> Text {
+        Text(value, format: .currency(code: "USD"))
+    }
+
+    private func liabilityCell(_ value: Decimal) -> some View {
+        currencyCell(value).foregroundStyle(value > 0 ? .red : .secondary)
+    }
+
+    private func signedCell(_ value: Decimal) -> some View {
+        currencyCell(value).foregroundStyle(value < 0 ? .red : .primary)
     }
 
     // MARK: - Helpers
