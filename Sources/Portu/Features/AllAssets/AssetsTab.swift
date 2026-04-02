@@ -86,12 +86,7 @@ struct AssetsTab: View {
             .width(min: 100, ideal: 150)
 
             TableColumn("Category") { row in
-                Text(row.category.rawValue.capitalized)
-                    .font(.caption)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.quaternary)
-                    .clipShape(Capsule())
+                CapsuleBadge(row.category.rawValue.capitalized)
             }
             .width(min: 80, ideal: 100)
 

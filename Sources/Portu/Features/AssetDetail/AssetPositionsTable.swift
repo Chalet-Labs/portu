@@ -24,12 +24,7 @@ struct AssetPositionsTable: View {
                 TableColumn("Platform") { row in Text(row.platformName) }
                     .width(min: 80, ideal: 100)
                 TableColumn("Context") { row in
-                    Text(row.context)
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.quaternary)
-                        .clipShape(Capsule())
+                    CapsuleBadge(row.context)
                 }
                 .width(min: 60, ideal: 80)
                 TableColumn("Network") { row in Text(row.network) }

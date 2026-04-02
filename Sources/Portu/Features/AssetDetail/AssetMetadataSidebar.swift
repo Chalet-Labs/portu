@@ -30,11 +30,7 @@ struct AssetMetadataSidebar: View {
 
                 // Category
                 LabeledContent("Category") {
-                    Text(asset.category.rawValue.capitalized)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.quaternary)
-                        .clipShape(Capsule())
+                    CapsuleBadge(asset.category.rawValue.capitalized)
                 }
 
                 // Verification

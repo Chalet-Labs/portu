@@ -18,12 +18,7 @@ struct PositionGroupView: View {
                 }
 
                 if let chain = position.chain {
-                    Text(chain.rawValue.capitalized)
-                        .font(.caption)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.quaternary)
-                        .clipShape(Capsule())
+                    CapsuleBadge(chain.rawValue.capitalized)
                 }
 
                 Spacer()

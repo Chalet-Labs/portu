@@ -135,12 +135,7 @@ struct OverviewPositionTabs: View {
                         Text(pos.protocolName ?? "Unknown Protocol")
                             .font(.headline)
                         if let chain = pos.chain {
-                            Text(chain.rawValue.capitalized)
-                                .font(.caption)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(.quaternary)
-                                .clipShape(Capsule())
+                            CapsuleBadge(chain.rawValue.capitalized)
                         }
                         Spacer()
                         if let hf = pos.healthFactor {

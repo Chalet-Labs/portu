@@ -125,12 +125,7 @@ struct AccountsView: View {
             .width(min: 100, ideal: 160)
 
             TableColumn("Type") { row in
-                Text(row.type)
-                    .font(.caption)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.quaternary)
-                    .clipShape(Capsule())
+                CapsuleBadge(row.type)
             }
             .width(min: 60, ideal: 80)
 
