@@ -39,6 +39,17 @@ struct TokenEntry: Equatable {
     let role: TokenRole
     let amount: Decimal
     let usdValue: Decimal
+
+    /// Convert active PositionTokens to TokenEntries, filtering out tokens without assets or inactive accounts.
+    static func fromActiveTokens(_ tokens: [PositionToken]) -> [TokenEntry] {
+        tokens.compactMap { token in
+            guard let asset = token.asset, token.position?.account?.isActive == true else { return nil }
+            return TokenEntry(
+                assetId: asset.id, symbol: asset.symbol, name: asset.name,
+                category: asset.category, coinGeckoId: asset.coinGeckoId,
+                role: token.role, amount: token.amount, usdValue: token.usdValue)
+        }
+    }
 }
 
 // MARK: - AllAssetsFeature

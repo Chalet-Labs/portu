@@ -10,18 +10,7 @@ struct ExposureView: View {
     @Query private var allTokens: [PositionToken]
 
     private var tokenEntries: [TokenEntry] {
-        allTokens.compactMap { token -> TokenEntry? in
-            guard let asset = token.asset, token.position?.account?.isActive == true else { return nil }
-            return TokenEntry(
-                assetId: asset.id,
-                symbol: asset.symbol,
-                name: asset.name,
-                category: asset.category,
-                coinGeckoId: asset.coinGeckoId,
-                role: token.role,
-                amount: token.amount,
-                usdValue: token.usdValue)
-        }
+        TokenEntry.fromActiveTokens(allTokens)
     }
 
     private var byCategory: [CategoryExposure] {
