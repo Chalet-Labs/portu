@@ -32,4 +32,9 @@ public final class PositionToken {
         self.asset = asset
         self.position = position
     }
+
+    /// Resolve USD value using live price when available, falling back to stored value.
+    public func resolvedUSDValue(prices: [String: Decimal]) -> Decimal {
+        asset?.coinGeckoId.flatMap { prices[$0] }.map { amount * $0 } ?? usdValue
+    }
 }

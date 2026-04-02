@@ -201,7 +201,6 @@ struct OverviewPositionTabs: View {
     }
 
     private func tokenValue(_ token: PositionToken) -> Decimal {
-        token.asset?.coinGeckoId.flatMap { appState.prices[$0] }.map { token.amount * $0 }
-            ?? token.usdValue
+        token.resolvedUSDValue(prices: appState.prices)
     }
 }

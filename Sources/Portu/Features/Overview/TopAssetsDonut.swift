@@ -101,8 +101,7 @@ struct TopAssetsDonut: View {
     }
 
     private func tokenUSDValue(_ token: PositionToken) -> Decimal {
-        token.asset?.coinGeckoId.flatMap { appState.prices[$0] }.map { token.amount * $0 }
-            ?? token.usdValue
+        token.resolvedUSDValue(prices: appState.prices)
     }
 
     private func chartColor(index: Int) -> Color {
