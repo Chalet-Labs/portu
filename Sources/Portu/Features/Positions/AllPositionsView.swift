@@ -11,13 +11,17 @@ struct AllPositionsView: View {
     }
 
     @State private var filterType: PositionType? = nil
-    @State private var filterProtocol: String? = nil
+    @State private var filterProtocol: ProtocolFilter = .all
     @State private var showAddSheet = false
 
     private var filteredPositions: [Position] {
         positions.filter { pos in
             if let ft = filterType, pos.positionType != ft { return false }
-            if let fp = filterProtocol, pos.protocolId != fp { return false }
+            switch filterProtocol {
+            case .all: break
+            case .none: if pos.protocolId != nil { return false }
+            case let .specific(id): if pos.protocolId != id { return false }
+            }
             return true
         }
     }
