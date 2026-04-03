@@ -18,6 +18,7 @@ struct AssetPriceChart: View {
             .filter { $0.assetId == assetId && $0.timestamp >= startDate }
             .map { s in
                 SnapshotEntry(
+                    accountId: s.accountId,
                     assetId: s.assetId,
                     timestamp: s.timestamp,
                     grossUSD: s.usdValue,

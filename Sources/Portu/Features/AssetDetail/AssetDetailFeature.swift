@@ -73,6 +73,7 @@ struct ChainBreakdown: Equatable, Identifiable {
 
 /// Lightweight input for snapshot aggregation — decouples from SwiftData @Model.
 struct SnapshotEntry: Equatable {
+    let accountId: UUID
     let assetId: UUID
     let timestamp: Date
     let grossUSD: Decimal
@@ -210,31 +211,38 @@ struct AssetDetailFeature {
             byChain: byChain)
     }
 
-    /// Aggregate snapshot entries by day, summing across accounts.
+    /// Aggregate snapshot entries by day, taking the latest per (day, account) then summing across accounts.
     static func aggregateSnapshots(
         entries: [SnapshotEntry]) -> [ChartDataPoint] {
-        var byDate: [Date: (Decimal, Decimal, Decimal, Decimal)] = [:]
         let cal = Calendar.current
 
+        // Step 1: For each (day, accountId), keep only the entry with the latest timestamp.
+        var latest: [Date: [UUID: SnapshotEntry]] = [:]
         for entry in entries {
             let day = cal.startOfDay(for: entry.timestamp)
-            var agg = byDate[day] ?? (0, 0, 0, 0)
-            agg.0 += entry.grossUSD
-            agg.1 += entry.borrowUSD
-            agg.2 += entry.grossAmount
-            agg.3 += entry.borrowAmount
-            byDate[day] = agg
+            let existing = latest[day, default: [:]][entry.accountId]
+            if existing == nil || entry.timestamp > existing!.timestamp {
+                latest[day, default: [:]][entry.accountId] = entry
+            }
         }
 
-        return byDate
+        // Step 2: Sum the deduped entries across accounts per day.
+        return latest
             .sorted { $0.key < $1.key }
-            .map { date, agg in
-                ChartDataPoint(
+            .map { date, accounts in
+                var gross: Decimal = 0, borrow: Decimal = 0, amt: Decimal = 0, borrowAmt: Decimal = 0
+                for entry in accounts.values {
+                    gross += entry.grossUSD
+                    borrow += entry.borrowUSD
+                    amt += entry.grossAmount
+                    borrowAmt += entry.borrowAmount
+                }
+                return ChartDataPoint(
                     date: date,
-                    grossUSD: agg.0,
-                    borrowUSD: agg.1,
-                    grossAmount: agg.2,
-                    borrowAmount: agg.3)
+                    grossUSD: gross,
+                    borrowUSD: borrow,
+                    grossAmount: amt,
+                    borrowAmount: borrowAmt)
             }
     }
 

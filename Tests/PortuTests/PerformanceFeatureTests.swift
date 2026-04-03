@@ -172,11 +172,14 @@ struct PerformanceCategoryChangeTests {
         let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
         let day2 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 12)))
 
+        let acct = UUID()
+        let btc = UUID()
+        let usdc = UUID()
         let entries: [CategorySnapshotEntry] = [
-            CategorySnapshotEntry(timestamp: day1, category: .major, usdValue: 1000),
-            CategorySnapshotEntry(timestamp: day2, category: .major, usdValue: 1200),
-            CategorySnapshotEntry(timestamp: day1, category: .stablecoin, usdValue: 500),
-            CategorySnapshotEntry(timestamp: day2, category: .stablecoin, usdValue: 500)
+            CategorySnapshotEntry(accountId: acct, assetId: btc, timestamp: day1, category: .major, usdValue: 1000),
+            CategorySnapshotEntry(accountId: acct, assetId: btc, timestamp: day2, category: .major, usdValue: 1200),
+            CategorySnapshotEntry(accountId: acct, assetId: usdc, timestamp: day1, category: .stablecoin, usdValue: 500),
+            CategorySnapshotEntry(accountId: acct, assetId: usdc, timestamp: day2, category: .stablecoin, usdValue: 500)
         ]
 
         let changes = PerformanceFeature.computeCategoryChanges(entries: entries)
@@ -195,9 +198,11 @@ struct PerformanceCategoryChangeTests {
         let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
         let day2 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 12)))
 
+        let acct = UUID()
+        let btc = UUID()
         let entries: [CategorySnapshotEntry] = [
-            CategorySnapshotEntry(timestamp: day1, category: .major, usdValue: 1000),
-            CategorySnapshotEntry(timestamp: day2, category: .major, usdValue: 1100)
+            CategorySnapshotEntry(accountId: acct, assetId: btc, timestamp: day1, category: .major, usdValue: 1000),
+            CategorySnapshotEntry(accountId: acct, assetId: btc, timestamp: day2, category: .major, usdValue: 1100)
         ]
 
         let changes = PerformanceFeature.computeCategoryChanges(entries: entries)

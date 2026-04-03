@@ -30,11 +30,20 @@ struct CategoryChange: Identifiable, Equatable {
     let percentChange: Decimal
 }
 
-/// Lightweight input for category change computation.
+/// Lightweight input for category change and chart aggregation.
 struct CategorySnapshotEntry: Equatable {
+    let accountId: UUID
+    let assetId: UUID
     let timestamp: Date
     let category: AssetCategory
     let usdValue: Decimal
+}
+
+/// Aggregated category chart data point (one per day per category).
+struct CategoryChartPoint: Equatable {
+    let date: Date
+    let category: String
+    let value: Decimal
 }
 
 // MARK: - PerformanceFeature
@@ -120,6 +129,48 @@ struct PerformanceFeature {
                 cumulative: cumulative))
         }
         return result
+    }
+
+    /// Aggregate category snapshots by day — one chart point per (day, category).
+    /// Deduplicates by taking the latest snapshot per (day, accountId, assetId, category),
+    /// then sums across unique (accountId, assetId) combinations per (day, category).
+    static func aggregateCategorySnapshots(
+        entries: [CategorySnapshotEntry]) -> [CategoryChartPoint] {
+        let cal = Calendar.current
+
+        // Step 1: Dedup — for each (day, accountId, assetId, category), keep the latest timestamp.
+        struct DedupKey: Hashable {
+            let day: Date
+            let accountId: UUID
+            let assetId: UUID
+            let category: AssetCategory
+        }
+        var latest: [DedupKey: CategorySnapshotEntry] = [:]
+        for entry in entries {
+            let key = DedupKey(
+                day: cal.startOfDay(for: entry.timestamp),
+                accountId: entry.accountId, assetId: entry.assetId,
+                category: entry.category)
+            if let existing = latest[key], existing.timestamp >= entry.timestamp {
+                continue
+            }
+            latest[key] = entry
+        }
+
+        // Step 2: Sum deduped entries by (day, category).
+        var grouped: [Date: [AssetCategory: Decimal]] = [:]
+        for entry in latest.values {
+            let day = cal.startOfDay(for: entry.timestamp)
+            grouped[day, default: [:]][entry.category, default: 0] += entry.usdValue
+        }
+
+        return grouped.flatMap { date, categories in
+            categories.map {
+                CategoryChartPoint(
+                    date: date, category: $0.key.rawValue.capitalized, value: $0.value)
+            }
+        }
+        .sorted { $0.date < $1.date }
     }
 
     /// Compute category start/end/change from snapshot entries.
