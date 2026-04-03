@@ -10,17 +10,25 @@ struct PlatformsTab: View {
         allPositions.filter { $0.account?.isActive == true }
     }
 
-    private struct PlatformRow: Identifiable {
+    struct PlatformInput {
+        let chain: String?
+        let protocolId: String?
+        let protocolName: String?
+        let positionType: PositionType
+        let netUSDValue: Decimal
+    }
+
+    struct PlatformRow: Identifiable {
         let id: String // protocolId or sentinel
         let name: String
-        let sharePercent: Decimal
+        var sharePercent: Decimal
         let networkCount: Int
         let positionCount: Int
         let usdBalance: Decimal
     }
 
-    private var rows: [PlatformRow] {
-        let totalValue = positions.reduce(Decimal.zero) { $0 + max($1.netUSDValue, 0) }
+    nonisolated static func computeRows(from positions: [PlatformInput]) -> [PlatformRow] {
+        let totalValue = positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
 
         var byProtocol: [String: (name: String, chains: Set<String>, count: Int, value: Decimal)] = [:]
 
@@ -30,20 +38,38 @@ struct PlatformsTab: View {
             var entry = byProtocol[key] ?? (name, [], 0, 0)
             entry.count += 1
             entry.value += pos.netUSDValue
-            if let chain = pos.chain { entry.chains.insert(chain.rawValue) } else { entry.chains.insert("off-chain") }
+            if let chain = pos.chain { entry.chains.insert(chain) } else { entry.chains.insert("off-chain") }
             byProtocol[key] = entry
         }
 
-        return byProtocol.map { key, entry in
+        var rows = byProtocol.map { key, entry in
             PlatformRow(
                 id: key,
                 name: entry.name,
-                sharePercent: totalValue > 0 ? entry.value / totalValue : 0,
+                sharePercent: totalValue != 0 ? entry.value / totalValue : 0,
                 networkCount: entry.chains.count,
                 positionCount: entry.count,
                 usdBalance: entry.value)
         }
         .sorted { $0.usdBalance > $1.usdBalance }
+
+        // Adjust for Decimal rounding so shares sum to exactly 1
+        if totalValue != 0, !rows.isEmpty {
+            let residual = 1 - rows.reduce(Decimal.zero) { $0 + $1.sharePercent }
+            rows[0].sharePercent += residual
+        }
+        return rows
+    }
+
+    private var rows: [PlatformRow] {
+        Self.computeRows(from: positions.map {
+            PlatformInput(
+                chain: $0.chain?.rawValue,
+                protocolId: $0.protocolId,
+                protocolName: $0.protocolName,
+                positionType: $0.positionType,
+                netUSDValue: $0.netUSDValue)
+        })
     }
 
     var body: some View {
