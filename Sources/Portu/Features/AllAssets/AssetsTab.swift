@@ -10,6 +10,7 @@ struct AssetsTab: View {
     let store: StoreOf<AppFeature>
     @Query private var allTokens: [PositionToken]
 
+    @State private var exportError: String?
     @State private var sortOrder: [KeyPathComparator<AssetRowData>] = [
         KeyPathComparator(\.value, order: .reverse)
     ]
@@ -29,6 +30,11 @@ struct AssetsTab: View {
         VStack(spacing: 0) {
             toolbar
             assetTable
+        }
+        .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("OK") { exportError = nil }
+        } message: {
+            Text(exportError ?? "")
         }
     }
 
@@ -126,7 +132,11 @@ struct AssetsTab: View {
         panel.nameFieldStringValue = "assets.csv"
 
         if panel.runModal() == .OK, let url = panel.url {
-            try? csv.write(to: url, atomically: true, encoding: .utf8)
+            do {
+                try csv.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                exportError = error.localizedDescription
+            }
         }
     }
 }

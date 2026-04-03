@@ -19,6 +19,8 @@ struct AddPositionSheet: View {
     @State private var protocolName = ""
     @State private var usdValueOverride: Decimal?
 
+    @State private var saveError: String?
+
     // New asset fields
     @State private var newSymbol = ""
     @State private var newName = ""
@@ -93,11 +95,16 @@ struct AddPositionSheet: View {
                 Button("Add") { savePosition() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(selectedAccountId == nil || amount == 0 ||
-                        (selectedAsset == nil && !createNewAsset))
+                        (createNewAsset ? newSymbol.isEmpty || newName.isEmpty : selectedAsset == nil))
             }
             .padding()
         }
         .frame(width: 500, height: 550)
+        .alert("Save Failed", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("OK") { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
     }
 
     private func savePosition() {
@@ -126,8 +133,11 @@ struct AddPositionSheet: View {
             account: account,
             syncedAt: .now)
         modelContext.insert(position)
-        try? modelContext.save()
-
-        dismiss()
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
+        }
     }
 }

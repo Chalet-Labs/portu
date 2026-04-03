@@ -51,9 +51,10 @@ struct OverviewPositionTabs: View {
     }
 
     private var keyChangeTokens: [(PositionToken, Position)] {
-        // Tokens with largest 24h USD change (absolute value)
+        // Tokens with largest 24h USD change (absolute value), excluding those without 24h data
         allActiveTokens
             .filter(\.0.role.isPositive)
+            .filter { tokenChange24h($0.0) != 0 }
             .sorted { abs(tokenChange24h($0.0)) > abs(tokenChange24h($1.0)) }
             .prefix(20)
             .map { ($0.0, $0.1) }

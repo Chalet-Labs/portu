@@ -50,9 +50,14 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     private func fetchEndpoint(_ path: String, address: String) async throws -> Data {
-        var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        guard var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false) else {
+            throw ZapperError.invalidResponse
+        }
         components.queryItems = [URLQueryItem(name: "addresses[]", value: address)]
-        return try await makeRequest(url: components.url!)
+        guard let url = components.url else {
+            throw ZapperError.invalidResponse
+        }
+        return try await makeRequest(url: url)
     }
 
     private func makeRequest(url: URL) async throws -> Data {
@@ -156,14 +161,14 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 }
 
-enum ZapperError: Error, LocalizedError {
+public enum ZapperError: Error, LocalizedError {
     case invalidResponse
     case rateLimited
     case unauthorized
     case httpError(statusCode: Int)
     case decodingFailed
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidResponse: "Invalid response from Zapper API"
         case .rateLimited: "Zapper API rate limit exceeded"

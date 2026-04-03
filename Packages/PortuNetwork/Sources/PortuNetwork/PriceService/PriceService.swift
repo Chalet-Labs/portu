@@ -75,7 +75,7 @@ public actor PriceService {
             let lastFetch = lastUpdateFetchDate,
             Date.now.timeIntervalSince(lastFetch) < cacheTTL,
             let cached = updateCache,
-            coinIds.allSatisfy({ cached.prices[$0] != nil }) {
+            coinIds.allSatisfy({ cached.prices[$0] != nil && cached.changes24h[$0] != nil }) {
             let requested = Set(coinIds)
             return PriceUpdate(
                 prices: cached.prices.filter { requested.contains($0.key) },

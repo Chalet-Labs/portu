@@ -109,6 +109,7 @@ struct AllAssetsFeature {
             var entry = assetTokens[token.assetId] ?? (
                 token.symbol, token.name, token.category, token.coinGeckoId,
                 0, 0, 0, 0)
+            entry.coinGeckoId = entry.coinGeckoId ?? token.coinGeckoId
 
             if token.role.isBorrow {
                 entry.borrow += token.amount

@@ -29,10 +29,14 @@ struct PositionGroupView: View {
                         .foregroundStyle(hf < 1.2 ? .red : hf < 1.5 ? .orange : .green)
                 }
 
-                // Net value (signed)
-                Text(position.netUSDValue, format: .currency(code: "USD"))
+                // Net value (signed) — computed from live prices to match token rows
+                let headerTotal = position.tokens.reduce(Decimal.zero) { sum, token in
+                    let value = tokenValue(token)
+                    return token.role.isBorrow ? sum - value : sum + value
+                }
+                Text(headerTotal, format: .currency(code: "USD"))
                     .font(.headline)
-                    .foregroundStyle(PortuTheme.changeColor(for: position.netUSDValue))
+                    .foregroundStyle(PortuTheme.changeColor(for: headerTotal))
             }
 
             // Token rows
