@@ -5,27 +5,22 @@ let package = Package(
     name: "PortuNetwork",
     platforms: [.macOS(.v15)],
     products: [
-        .library(name: "PortuNetwork", targets: ["PortuNetwork"]),
+        .library(name: "PortuNetwork", targets: ["PortuNetwork"])
     ],
     dependencies: [
-        .package(path: "../PortuCore"),
+        .package(path: "../PortuCore")
     ],
     targets: [
         .target(
             name: "PortuNetwork",
             dependencies: ["PortuCore"],
             swiftSettings: [
-                .swiftLanguageMode(.v6),
-                .defaultIsolation(MainActor.self),
-            ]
-        ),
+                .swiftLanguageMode(.v6)
+            ]),
         .testTarget(
             name: "PortuNetworkTests",
-            dependencies: ["PortuNetwork"],
+            dependencies: ["PortuNetwork", "PortuCore"],
             swiftSettings: [
-                .swiftLanguageMode(.v6),
-                .defaultIsolation(MainActor.self),
-            ]
-        ),
-    ]
-)
+                .swiftLanguageMode(.v6)
+            ])
+    ])

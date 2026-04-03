@@ -3,22 +3,51 @@ import SwiftData
 
 @Model
 public final class Asset {
-    public var id: UUID
+    @Attribute(.unique) public var id: UUID
     public var symbol: String
     public var name: String
-    public var coinGeckoId: String
-    public var chain: Chain?
-    public var contractAddress: String?
 
-    // Back-reference from Holding.asset. No @Relationship here — it's on Holding side.
-    // nullify = optional. Assets are shared reference data, never cascade-deleted.
-    public var holdings: [Holding]
+    /// Tier 1 upsert key — cross-chain canonical identity
+    public var coinGeckoId: String?
 
-    public init(symbol: String, name: String, coinGeckoId: String) {
-        self.id = UUID()
+    // Tier 2 upsert key — single-chain token without coinGeckoId
+    public var upsertChain: Chain?
+    public var upsertContract: String?
+
+    /// Tier 3 upsert key — provider-specific opaque ID
+    public var sourceKey: String?
+
+    /// Reserved for future DeBankProvider
+    public var debankId: String?
+
+    /// String, not URL — SwiftData predicate compatibility
+    public var logoURL: String?
+
+    public var category: AssetCategory
+    public var isVerified: Bool
+
+    public init(
+        id: UUID = UUID(),
+        symbol: String,
+        name: String,
+        coinGeckoId: String? = nil,
+        upsertChain: Chain? = nil,
+        upsertContract: String? = nil,
+        sourceKey: String? = nil,
+        debankId: String? = nil,
+        logoURL: String? = nil,
+        category: AssetCategory = .other,
+        isVerified: Bool = false) {
+        self.id = id
         self.symbol = symbol
         self.name = name
         self.coinGeckoId = coinGeckoId
-        self.holdings = []
+        self.upsertChain = upsertChain
+        self.upsertContract = upsertContract
+        self.sourceKey = sourceKey
+        self.debankId = debankId
+        self.logoURL = logoURL
+        self.category = category
+        self.isVerified = isVerified
     }
 }

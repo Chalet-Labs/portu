@@ -18,6 +18,12 @@ packages:
     path: Packages/PortuNetwork
   PortuUI:
     path: Packages/PortuUI
+  ComposableArchitecture:
+    url: https://github.com/pointfreeco/swift-composable-architecture
+    from: "1.25.0"
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    from: "1.17.0"
 
 targets:
   Portu:
@@ -33,15 +39,18 @@ targets:
       - package: PortuCore
       - package: PortuNetwork
       - package: PortuUI
+      - package: ComposableArchitecture
+        product: ComposableArchitecture
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.portu.app
         INFOPLIST_FILE: Sources/Portu/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/Portu/Resources/Portu.entitlements
         CODE_SIGN_STYLE: Automatic
-        OTHER_SWIFT_FLAGS: "-default-isolation MainActor"
     entitlements:
       path: Sources/Portu/Resources/Portu.entitlements
+      properties:
+        com.apple.security.network.client: true
 
   PortuTests:
     type: bundle.unit-test
@@ -50,10 +59,12 @@ targets:
       - Tests/PortuTests
     dependencies:
       - target: Portu
+      - package: SnapshotTesting
+        product: SnapshotTesting
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.portu.app.tests
-        OTHER_SWIFT_FLAGS: "-default-isolation MainActor"
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   Portu:

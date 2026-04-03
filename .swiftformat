@@ -1,0 +1,37 @@
+# SwiftFormat configuration for Portu
+
+# Line length — matches .swiftlint.yml warning threshold
+--maxwidth 150
+
+# Indentation
+--indent 4
+--smarttabs enabled
+
+# Wrapping
+--wraparguments before-first
+--wrapcollections before-first
+--wrapconditions before-first
+--wrapparameters before-first
+--wrapreturntype never
+--closingparen same-line
+
+# Keep opening braces on the same line (K&R style) — Codacy requires this
+--disable wrapMultilineStatementBraces
+
+# Trailing commas — we keep them (disabled in SwiftLint too)
+--commas inline
+
+# Modifier order — nonisolated before access control (matches SwiftLint/Codacy)
+--modifier-order nonisolated,override,acl,setteracl,dynamic,mutating,nonmutating,convenience,required,optional,lazy,final,infix,prefix,postfix,fileprivate,static,class
+
+# Self
+--self init-only
+
+# Imports
+--importgrouping alpha
+
+# Swift version
+--swiftversion 6.2
+
+# Excluded paths
+--exclude .build,DerivedData,*.xcodeproj

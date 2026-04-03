@@ -1,32 +1,41 @@
-import SwiftUI
-import SwiftData
+import ComposableArchitecture
 import PortuCore
+import SwiftData
+import SwiftUI
 
 struct ContentView: View {
-    @Environment(AppState.self) private var appState
+    let store: StoreOf<AppFeature>
 
     var body: some View {
-        @Bindable var appState = appState
         NavigationSplitView {
-            SidebarView(selection: $appState.selectedSection)
+            SidebarView(store: store)
         } detail: {
-            switch appState.selectedSection {
-            case .portfolio:
-                PortfolioView()
-            case .account(let id):
-                AccountDetailView(accountID: id)
-            }
-        }
-        .frame(minWidth: 700, minHeight: 500)
-        .safeAreaInset(edge: .bottom) {
-            StatusBarView()
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button("Refresh", systemImage: "arrow.clockwise") {
-                    // TODO: Trigger price refresh
+            detailView
+                .navigationDestination(for: UUID.self) { assetId in
+                    AssetDetailView(assetId: assetId, store: store)
                 }
-            }
+        }
+        .frame(minWidth: 900, minHeight: 600)
+        .safeAreaInset(edge: .bottom) {
+            StatusBarView(store: store)
+        }
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch store.selectedSection {
+        case .overview:
+            OverviewView(store: store)
+        case .exposure:
+            ExposureView(store: store)
+        case .performance:
+            PerformanceView(store: store)
+        case .allAssets:
+            AllAssetsView(store: store)
+        case .allPositions:
+            AllPositionsView()
+        case .accounts:
+            AccountsView(store: store)
         }
     }
 }

@@ -1,41 +1,60 @@
+import ComposableArchitecture
+import PortuCore
 import SwiftUI
 
 struct StatusBarView: View {
-    @Environment(AppState.self) private var appState
+    let store: StoreOf<AppFeature>
 
     var body: some View {
-        HStack {
-            if appState.storeIsEphemeral {
-                Label("Data not saved — database error", systemImage: "exclamationmark.triangle.fill")
+        HStack(spacing: 12) {
+            if store.storeIsEphemeral {
+                Label("Database error — using temporary storage", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
+                    .font(.caption)
             }
 
-            switch appState.connectionStatus {
-            case .idle:
-                Label("Idle", systemImage: "circle")
-                    .foregroundStyle(.secondary)
-            case .fetching:
-                Label("Updating...", systemImage: "arrow.trianglehead.2.counterclockwise")
-                    .foregroundStyle(.secondary)
-            case .error(let message):
-                Label(message, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.red)
-            }
+            syncStatusLabel
 
             Spacer()
 
-            if let lastUpdate = appState.lastPriceUpdate {
+            if let lastUpdate = store.lastPriceUpdate {
                 Text("Updated \(lastUpdate, format: .relative(presentation: .named))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Text("CoinGecko")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(.ultraThinMaterial)
+    }
+
+    @ViewBuilder
+    private var syncStatusLabel: some View {
+        switch store.syncStatus {
+        case .idle:
+            Label("Ready", systemImage: "checkmark.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case let .syncing(progress):
+            HStack(spacing: 6) {
+                ProgressView(value: progress)
+                    .frame(width: 60)
+                Text("Syncing\u{2026}")
+                    .font(.caption)
+            }
+        case let .completedWithErrors(failed):
+            Label("\(failed.count) account(s) failed", systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .help("Failed: \(failed.joined(separator: ", "))")
+        case let .error(msg):
+            Label(msg, systemImage: "xmark.circle")
+                .font(.caption)
+                .foregroundStyle(.red)
+        }
     }
 }

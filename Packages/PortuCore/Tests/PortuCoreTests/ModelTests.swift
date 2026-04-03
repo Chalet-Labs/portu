@@ -1,101 +1,199 @@
 import Foundation
-import Testing
-import SwiftData
 @testable import PortuCore
+import SwiftData
+import Testing
 
-@Suite("SwiftData Model Tests")
+/// Helper to create an in-memory ModelContainer with all model types
+@MainActor
+func makeTestContainer() throws -> ModelContainer {
+    let schema = Schema([
+        Account.self,
+        WalletAddress.self,
+        Position.self,
+        PositionToken.self,
+        Asset.self,
+        PortfolioSnapshot.self,
+        AccountSnapshot.self,
+        AssetSnapshot.self
+    ])
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    return try ModelContainer(for: schema, configurations: [config])
+}
+
+@MainActor
 struct ModelTests {
-    let container: ModelContainer
-    let context: ModelContext
+    @Test func `create account`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
 
-    init() throws {
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        container = try ModelContainer(
-            for: Portfolio.self, Account.self, Holding.self, Asset.self,
-            configurations: config
-        )
-        context = container.mainContext
-    }
-
-    @Test func portfolioCreation() throws {
-        let portfolio = Portfolio(name: "Main")
-        context.insert(portfolio)
+        let account = Account(
+            name: "My Wallet",
+            kind: .wallet,
+            dataSource: .zapper)
+        context.insert(account)
         try context.save()
 
-        let fetched = try context.fetch(FetchDescriptor<Portfolio>())
+        let fetched = try context.fetch(FetchDescriptor<Account>())
         #expect(fetched.count == 1)
-        #expect(fetched.first?.name == "Main")
+        #expect(fetched[0].name == "My Wallet")
+        #expect(fetched[0].kind == .wallet)
+        #expect(fetched[0].dataSource == .zapper)
+        #expect(fetched[0].isActive == true)
+        #expect(fetched[0].lastSyncError == nil)
     }
 
-    @Test func accountRelationship() throws {
-        let portfolio = Portfolio(name: "Main")
-        let account = Account(name: "Binance", kind: .exchange)
-        account.exchangeType = .binance
-        account.portfolio = portfolio
-        portfolio.accounts.append(account)
+    @Test func `account cascade deletes addresses`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
 
-        context.insert(portfolio)
+        let account = Account(name: "Test", kind: .wallet, dataSource: .zapper)
+        let addr = WalletAddress(address: "0xabc123")
+        account.addresses.append(addr)
+        context.insert(account)
         try context.save()
 
-        let fetched = try context.fetch(FetchDescriptor<Portfolio>())
-        #expect(fetched.first?.accounts.count == 1)
-        #expect(fetched.first?.accounts.first?.kind == .exchange)
-        #expect(fetched.first?.accounts.first?.exchangeType == .binance)
+        #expect(try context.fetch(FetchDescriptor<WalletAddress>()).count == 1)
+
+        context.delete(account)
+        try context.save()
+
+        #expect(try context.fetch(FetchDescriptor<WalletAddress>()).isEmpty)
     }
 
-    @Test func holdingAssetRelationship() throws {
-        let asset = Asset(symbol: "BTC", name: "Bitcoin", coinGeckoId: "bitcoin")
-        let holding = Holding(amount: 1.5, costBasis: 60000)
-        holding.asset = asset
+    @Test func `account cascade deletes positions`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
 
+        let account = Account(name: "Test", kind: .wallet, dataSource: .zapper)
+        let position = Position(positionType: .idle, chain: .ethereum, netUSDValue: 1000)
+        account.positions.append(position)
+        context.insert(account)
+        try context.save()
+
+        #expect(try context.fetch(FetchDescriptor<Position>()).count == 1)
+
+        context.delete(account)
+        try context.save()
+
+        #expect(try context.fetch(FetchDescriptor<Position>()).isEmpty)
+    }
+
+    @Test func `position cascade deletes tokens`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+
+        let asset = Asset(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum", category: .major)
         context.insert(asset)
-        context.insert(holding)
+
+        let token = PositionToken(role: .balance, amount: 10, usdValue: 21880, asset: asset)
+        let position = Position(positionType: .idle, chain: .ethereum, netUSDValue: 21880, tokens: [token])
+        context.insert(position)
         try context.save()
 
-        let fetched = try context.fetch(FetchDescriptor<Holding>())
-        #expect(fetched.first?.asset?.symbol == "BTC")
-        #expect(fetched.first?.amount == 1.5)
+        #expect(try context.fetch(FetchDescriptor<PositionToken>()).count == 1)
+
+        context.delete(position)
+        try context.save()
+
+        #expect(try context.fetch(FetchDescriptor<PositionToken>()).isEmpty)
+        // Asset survives — shared reference data
+        #expect(try context.fetch(FetchDescriptor<Asset>()).count == 1)
     }
 
-    @Test func cascadeDeletePortfolioRemovesAccounts() throws {
-        let portfolio = Portfolio(name: "Main")
-        let account = Account(name: "Manual", kind: .manual)
-        account.portfolio = portfolio
-        portfolio.accounts.append(account)
+    @Test func `deleting asset does not cascade delete token`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
 
-        context.insert(portfolio)
+        let asset = Asset(symbol: "ETH", name: "Ethereum", category: .major)
+        let token = PositionToken(role: .balance, amount: 10, usdValue: 21880, asset: asset)
+        let position = Position(positionType: .idle, netUSDValue: 21880, tokens: [token])
+        context.insert(position)
+        context.insert(asset)
         try context.save()
 
-        context.delete(portfolio)
+        context.delete(asset)
         try context.save()
 
-        let accounts = try context.fetch(FetchDescriptor<Account>())
-        #expect(accounts.isEmpty)
+        // Asset is gone
+        #expect(try context.fetch(FetchDescriptor<Asset>()).isEmpty)
+        // Token survives — nullify, not cascade
+        let tokens = try context.fetch(FetchDescriptor<PositionToken>())
+        #expect(tokens.count == 1)
     }
 
-    @Test func accountKindFilterAndFetch() throws {
-        let portfolio = Portfolio(name: "Main")
-        let manual = Account(name: "Manual", kind: .manual)
-        let exchange = Account(name: "Binance", kind: .exchange)
-        manual.portfolio = portfolio
-        exchange.portfolio = portfolio
-        portfolio.accounts.append(contentsOf: [manual, exchange])
+    @Test func `full cascade delete chain`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
 
-        context.insert(portfolio)
+        let asset = Asset(symbol: "BTC", name: "Bitcoin", coinGeckoId: "bitcoin", category: .major)
+        let token = PositionToken(role: .balance, amount: 1, usdValue: 67500, asset: asset)
+        let position = Position(positionType: .idle, netUSDValue: 67500, tokens: [token])
+        let account = Account(name: "Hardware", kind: .wallet, dataSource: .zapper, positions: [position])
+        context.insert(account)
+        context.insert(asset)
         try context.save()
 
-        // Fetch all accounts and verify enum-based filtering works correctly.
-        // SwiftData stores RawRepresentable enums by raw value; predicates on
-        // custom enums require in-memory filtering or raw-value workarounds.
-        let all = try context.fetch(FetchDescriptor<Account>())
-        #expect(all.count == 2)
+        #expect(try context.fetch(FetchDescriptor<Position>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<PositionToken>()).count == 1)
 
-        let exchanges = all.filter { $0.kind == .exchange }
-        #expect(exchanges.count == 1)
-        #expect(exchanges.first?.name == "Binance")
+        context.delete(account)
+        try context.save()
 
-        let manuals = all.filter { $0.kind == .manual }
-        #expect(manuals.count == 1)
-        #expect(manuals.first?.name == "Manual")
+        #expect(try context.fetch(FetchDescriptor<Account>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<Position>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<PositionToken>()).isEmpty)
+        // Asset survives
+        #expect(try context.fetch(FetchDescriptor<Asset>()).count == 1)
+    }
+
+    @Test func `snapshots use UUID keys not relationships`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+
+        let accountId = UUID()
+        let assetId = UUID()
+        let batchId = UUID()
+        let now = Date.now
+
+        let portfolioSnap = PortfolioSnapshot(
+            syncBatchId: batchId, timestamp: now,
+            totalValue: 100_000, idleValue: 50000,
+            deployedValue: 45000, debtValue: 5000, isPartial: false)
+        let accountSnap = AccountSnapshot(
+            syncBatchId: batchId, timestamp: now,
+            accountId: accountId, totalValue: 50000, isFresh: true)
+        let assetSnap = AssetSnapshot(
+            syncBatchId: batchId, timestamp: now,
+            accountId: accountId, assetId: assetId,
+            symbol: "ETH", category: .major,
+            amount: 10, usdValue: 21880)
+
+        context.insert(portfolioSnap)
+        context.insert(accountSnap)
+        context.insert(assetSnap)
+        try context.save()
+
+        #expect(try context.fetch(FetchDescriptor<PortfolioSnapshot>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<AccountSnapshot>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<AssetSnapshot>()).count == 1)
+
+        let fetched = try context.fetch(FetchDescriptor<AssetSnapshot>())
+        #expect(fetched[0].syncBatchId == batchId)
+        #expect(fetched[0].borrowAmount == 0)
+    }
+
+    @Test func `account is active by default`() {
+        let account = Account(name: "Test", kind: .wallet, dataSource: .zapper)
+        #expect(account.isActive == true)
+    }
+
+    @Test func `evm address has nil chain`() {
+        let addr = WalletAddress(address: "0xabc")
+        #expect(addr.chain == nil)
+    }
+
+    @Test func `solana address has explicit chain`() {
+        let addr = WalletAddress(chain: .solana, address: "SoL123abc")
+        #expect(addr.chain == .solana)
     }
 }

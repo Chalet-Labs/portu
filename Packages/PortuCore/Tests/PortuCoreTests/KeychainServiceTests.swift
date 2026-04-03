@@ -1,9 +1,8 @@
-import Testing
 @testable import PortuCore
+import Testing
 
 /// In-memory mock for testing code that depends on SecretStore.
-/// MainActor-isolated by default (via package setting), so Sendable is satisfied.
-final class MockSecretStore: SecretStore {
+final class MockSecretStore: SecretStore, @unchecked Sendable {
     private var storage: [String: String] = [:]
 
     func get(key: String) throws(KeychainError) -> String? {
@@ -19,22 +18,21 @@ final class MockSecretStore: SecretStore {
     }
 }
 
-@Suite("SecretStore Tests")
 struct SecretStoreTests {
-    @Test func storeAndRetrieve() throws {
+    @Test func `store and retrieve`() throws {
         let store = MockSecretStore()
         try store.set(key: "portu.abc123.apiKey", value: "my-secret-key")
         let retrieved = try store.get(key: "portu.abc123.apiKey")
         #expect(retrieved == "my-secret-key")
     }
 
-    @Test func retrieveNonExistent() throws {
+    @Test func `retrieve non existent`() throws {
         let store = MockSecretStore()
         let result = try store.get(key: "portu.missing.apiKey")
         #expect(result == nil)
     }
 
-    @Test func deleteKey() throws {
+    @Test func `delete key`() throws {
         let store = MockSecretStore()
         try store.set(key: "portu.abc123.apiKey", value: "secret")
         try store.delete(key: "portu.abc123.apiKey")
@@ -42,7 +40,7 @@ struct SecretStoreTests {
         #expect(result == nil)
     }
 
-    @Test func overwriteExistingKey() throws {
+    @Test func `overwrite existing key`() throws {
         let store = MockSecretStore()
         try store.set(key: "portu.abc123.apiKey", value: "old")
         try store.set(key: "portu.abc123.apiKey", value: "new")

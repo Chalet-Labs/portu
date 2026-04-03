@@ -18,7 +18,12 @@ Package.resolved
 # Build artifacts
 build/
 
+
 .screens/
 pnevma.toml
 .pnevma/
 .superpowers/
+
+# Claude Code
+.claude/files/
+.claude/scheduled_tasks.lock

@@ -8,13 +8,16 @@ public actor PriceService {
     private let baseURL = URL(string: "https://api.coingecko.com/api/v3")!
     private var cache: [String: Decimal] = [:]
     private var lastFetchDate: Date?
+    private var updateCache: PriceUpdate?
+    private var lastUpdateFetchDate: Date?
     private let cacheTTL: TimeInterval
 
-    // Sliding-window rate limiter
-    private struct RequestStamp: Sendable {
+    /// Sliding-window rate limiter
+    private struct RequestStamp {
         let id: UUID
         let date: Date
     }
+
     private let maxRequestsPerWindow: Int
     private let windowDuration: TimeInterval
     private var requestTimestamps: [RequestStamp] = []
@@ -24,8 +27,7 @@ public actor PriceService {
         session: URLSession = .shared,
         cacheTTL: TimeInterval = 10, // must be < polling interval to serve cached data between ticks
         maxRequestsPerWindow: Int = 10,
-        windowDuration: TimeInterval = 60
-    ) {
+        windowDuration: TimeInterval = 60) {
         self.session = session
         self.cacheTTL = cacheTTL
         self.maxRequestsPerWindow = maxRequestsPerWindow
@@ -37,13 +39,66 @@ public actor PriceService {
     public func fetchPrices(for coinIds: [String]) async throws(PriceServiceError) -> [String: Decimal] {
         guard !coinIds.isEmpty else { return [:] }
 
-        if let lastFetch = lastFetchDate,
-           Date.now.timeIntervalSince(lastFetch) < cacheTTL,
-           coinIds.allSatisfy({ cache[$0] != nil }) {
+        if
+            let lastFetch = lastFetchDate,
+            Date.now.timeIntervalSince(lastFetch) < cacheTTL,
+            coinIds.allSatisfy({ cache[$0] != nil }) {
             return cache.filter { coinIds.contains($0.key) }
         }
 
-        // Proactive rate limiting — reject before sending the request
+        let data = try await rateLimitedFetch(
+            coinIds: coinIds,
+            extraParams: [])
+
+        let parsed = try CoinGeckoSimplePriceResponse(from: data)
+        let requested = Set(coinIds)
+
+        // Cap cache to prevent unbounded growth in long-running sessions
+        if cache.count > 500 {
+            cache = [:]
+        }
+        // Remove requested IDs not present in fresh payload to avoid serving stale values
+        for id in requested where parsed.prices[id] == nil {
+            cache.removeValue(forKey: id)
+        }
+        cache.merge(parsed.prices) { _, new in new }
+        lastFetchDate = .now
+        return cache.filter { requested.contains($0.key) }
+    }
+
+    /// Fetch current USD prices and 24h change percentages for the given CoinGecko coin IDs.
+    /// Returns cached data if within TTL. Enforces client-side rate limit.
+    public func fetchPriceUpdate(for coinIds: [String]) async throws(PriceServiceError) -> PriceUpdate {
+        guard !coinIds.isEmpty else { return PriceUpdate(prices: [:], changes24h: [:]) }
+
+        if
+            let lastFetch = lastUpdateFetchDate,
+            Date.now.timeIntervalSince(lastFetch) < cacheTTL,
+            let cached = updateCache,
+            coinIds.allSatisfy({ cached.prices[$0] != nil && cached.changes24h[$0] != nil }) {
+            let requested = Set(coinIds)
+            return PriceUpdate(
+                prices: cached.prices.filter { requested.contains($0.key) },
+                changes24h: cached.changes24h.filter { requested.contains($0.key) })
+        }
+
+        let data = try await rateLimitedFetch(
+            coinIds: coinIds,
+            extraParams: [URLQueryItem(name: "include_24hr_change", value: "true")])
+
+        let parsed = try CoinGeckoSimplePriceResponse.parsePriceUpdate(from: data)
+        updateCache = parsed
+        lastUpdateFetchDate = .now
+        let requested = Set(coinIds)
+        return PriceUpdate(
+            prices: parsed.prices.filter { requested.contains($0.key) },
+            changes24h: parsed.changes24h.filter { requested.contains($0.key) })
+    }
+
+    /// Shared rate limiting, stamping, network call, and HTTP status validation.
+    private func rateLimitedFetch(
+        coinIds: [String],
+        extraParams: [URLQueryItem]) async throws(PriceServiceError) -> Data {
         let now = Date.now
         requestTimestamps.removeAll { now.timeIntervalSince($0.date) > windowDuration }
         guard requestTimestamps.count < maxRequestsPerWindow else {
@@ -56,11 +111,13 @@ public actor PriceService {
         requestTimestamps.append(stamp)
 
         let ids = Set(coinIds).joined(separator: ",")
+        var params = [
+            URLQueryItem(name: "ids", value: ids),
+            URLQueryItem(name: "vs_currencies", value: "usd")
+        ]
+        params.append(contentsOf: extraParams)
         let url = baseURL.appending(path: "simple/price")
-            .appending(queryItems: [
-                URLQueryItem(name: "ids", value: ids),
-                URLQueryItem(name: "vs_currencies", value: "usd"),
-            ])
+            .appending(queryItems: params)
 
         let data: Data
         let response: URLResponse
@@ -80,20 +137,7 @@ public actor PriceService {
         default: throw .invalidResponse(statusCode: http.statusCode)
         }
 
-        let parsed = try CoinGeckoSimplePriceResponse(from: data)
-        let requested = Set(coinIds)
-
-        // Cap cache to prevent unbounded growth in long-running sessions
-        if cache.count > 500 {
-            cache = [:]
-        }
-        // Remove requested IDs not present in fresh payload to avoid serving stale values
-        for id in requested where parsed.prices[id] == nil {
-            cache.removeValue(forKey: id)
-        }
-        cache.merge(parsed.prices) { _, new in new }
-        lastFetchDate = .now
-        return cache.filter { requested.contains($0.key) }
+        return data
     }
 
     /// Returns an async stream that polls prices at the given interval.
@@ -111,8 +155,7 @@ public actor PriceService {
     ///   set of tracked coins changes.
     public func priceStream(
         for coinIds: [String],
-        interval: TimeInterval = 30
-    ) -> AsyncThrowingStream<[String: Decimal], any Error> {
+        interval: TimeInterval = 30) -> AsyncThrowingStream<[String: Decimal], any Error> {
         guard !coinIds.isEmpty else {
             return AsyncThrowingStream { $0.finish() }
         }
@@ -127,8 +170,7 @@ public actor PriceService {
         let (stream, continuation) = AsyncThrowingStream.makeStream(
             of: [String: Decimal].self,
             throwing: (any Error).self,
-            bufferingPolicy: .bufferingNewest(1)
-        )
+            bufferingPolicy: .bufferingNewest(1))
         let task = Task {
             while !Task.isCancelled {
                 do {
@@ -138,7 +180,7 @@ public actor PriceService {
                     // Transient — skip this tick, retry next
                 } catch PriceServiceError.networkUnavailable {
                     // Transient — skip this tick, retry next
-                } catch PriceServiceError.invalidResponse(let code) where code >= 500 {
+                } catch let PriceServiceError.invalidResponse(code) where code >= 500 {
                     // Transient server error — skip this tick, retry next
                 } catch {
                     // Non-transient (decoding, 4xx auth errors) — terminate
@@ -164,5 +206,7 @@ public actor PriceService {
     public func invalidateCache() {
         cache = [:]
         lastFetchDate = nil
+        updateCache = nil
+        lastUpdateFetchDate = nil
     }
 }
