@@ -134,8 +134,9 @@ Migrate each feature module to TCA reducers.
 - Project gen: XcodeGen (existing `project.yml`)
 
 ## Current State
-- @Observable AppState, SyncEngine, 3 SPM packages, Swift Testing tests
-- CLAUDE.md with TDD rules, .mcp.json with XcodeBuildMCP, OpenSpec initialized
-- TCA + swift-snapshot-testing + Prefire added as dependencies (builds clean)
-- 3 app-level tests crash (pre-existing SwiftData/MainActor issue, fix in Phase 3)
-- No CI yet, no TCA usage yet
+- Full TCA migration complete: AppFeature + 6 child feature reducers
+- 109 tests across 24+ suites — all passing on CI
+- GitHub Actions CI workflow operational (macos-15)
+- SwiftData `#Predicate` crash fixed across 7 views
+- Bridge pattern in place: TCA Store + legacy AppState coexist during migration
+- Dependencies: TCA 1.25.3, swift-snapshot-testing 1.19.1 (Prefire removed)

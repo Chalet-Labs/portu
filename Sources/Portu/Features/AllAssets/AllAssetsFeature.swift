@@ -167,9 +167,12 @@ struct AllAssetsFeature {
 
     /// Generate CSV string from asset rows.
     static func generateCSV(from rows: [AssetRowData]) -> String {
+        func csv(_ value: String) -> String {
+            "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+        }
         let header = "Symbol,Name,Category,Net Amount,Price,Value"
         let lines = rows.map { row in
-            "\(row.symbol),\"\(row.name)\",\(row.category.rawValue),\(row.netAmount),\(row.price),\(row.value)"
+            "\(csv(row.symbol)),\(csv(row.name)),\(csv(row.category.rawValue)),\(row.netAmount),\(row.price),\(row.value)"
         }
         return ([header] + lines).joined(separator: "\n")
     }

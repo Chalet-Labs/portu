@@ -336,7 +336,7 @@ struct AssetRowAggregationTests {
 
         #expect(lines.count == 2)
         #expect(lines[0] == "Symbol,Name,Category,Net Amount,Price,Value")
-        #expect(lines[1].hasPrefix("BTC,"))
+        #expect(lines[1].hasPrefix("\"BTC\","))
         #expect(lines[1].contains("\"Bitcoin\""))
     }
 }

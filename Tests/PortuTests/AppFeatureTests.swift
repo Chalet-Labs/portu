@@ -148,7 +148,9 @@ struct AppFeatureTests {
             // prices should NOT be cleared
         }
 
-        await store.send(.stopPricePolling)
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+        }
     }
 
     // MARK: - B7: Price Merge (not replace)

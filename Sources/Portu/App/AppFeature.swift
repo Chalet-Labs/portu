@@ -133,7 +133,7 @@ struct AppFeature {
                 return .none
 
             case .syncTapped:
-                guard state.syncStatus == .idle else { return .none }
+                if case .syncing = state.syncStatus { return .none }
                 state.syncStatus = .syncing(progress: 0)
                 return .run { send in
                     let result = try await syncEngine.sync()
@@ -185,6 +185,7 @@ struct AppFeature {
                 return .none
 
             case .stopPricePolling:
+                state.connectionStatus = .idle
                 return .cancel(id: CancelID.pricePolling)
 
             case .allAssets:

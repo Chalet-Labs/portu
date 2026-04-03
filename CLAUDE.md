@@ -13,8 +13,13 @@ The project uses XcodeGen. **Always run `just generate` after modifying `project
 ```
 just generate        # XcodeGen → Portu.xcodeproj
 just build           # Debug build
+just release         # Release build
 just test-packages   # SPM package tests (PortuCore, PortuNetwork, PortuUI)
 just test            # Full Xcode scheme tests
+just lint            # Lint all Swift files
+just lint-fix        # Auto-fix lintable violations
+just format          # Format all Swift files
+just clean           # Clean build artifacts
 ```
 
 ## Architecture
@@ -23,8 +28,10 @@ Three SPM packages with clean boundaries — **do not introduce cross-package im
 
 ```
 PortuUI (views, theme, components)
-  └── PortuNetwork (API clients, providers, price service)
-       └── PortuCore (models, DTOs, keychain, protocols)
+  └── PortuCore (models, DTOs, keychain, protocols)
+
+PortuNetwork (API clients, providers, price service)
+  └── PortuCore
 ```
 
 The app target (`Sources/Portu/`) imports all three and contains features, app state, and sync orchestration.
