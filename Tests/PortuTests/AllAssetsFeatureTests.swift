@@ -316,6 +316,47 @@ struct AssetRowAggregationTests {
         #expect(filtered.count == 2)
     }
 
+    // MARK: - AssetAccumulator
+
+    @Test func `accumulator struct stores all fields`() {
+        let acc = AssetAccumulator(
+            symbol: "BTC",
+            name: "Bitcoin",
+            category: .major,
+            coinGeckoId: "bitcoin",
+            positive: Decimal(1.5),
+            borrow: Decimal(0.3),
+            positiveUSD: Decimal(90000),
+            borrowUSD: Decimal(18000))
+
+        #expect(acc.symbol == "BTC")
+        #expect(acc.name == "Bitcoin")
+        #expect(acc.category == .major)
+        #expect(acc.coinGeckoId == "bitcoin")
+        #expect(acc.positive == Decimal(1.5))
+        #expect(acc.borrow == Decimal(0.3))
+        #expect(acc.positiveUSD == Decimal(90000))
+        #expect(acc.borrowUSD == Decimal(18000))
+    }
+
+    @Test func `accumulator defaults numeric fields to zero`() {
+        let acc = AssetAccumulator(
+            symbol: "ETH",
+            name: "Ethereum",
+            category: .defi,
+            coinGeckoId: nil,
+            positive: 0,
+            borrow: 0,
+            positiveUSD: 0,
+            borrowUSD: 0)
+
+        #expect(acc.positive == 0)
+        #expect(acc.borrow == 0)
+        #expect(acc.positiveUSD == 0)
+        #expect(acc.borrowUSD == 0)
+        #expect(acc.coinGeckoId == nil)
+    }
+
     // MARK: - B6: CSV Generation
 
     @Test func `CSV has header and formatted rows`() {

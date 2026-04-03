@@ -29,6 +29,18 @@ nonisolated struct AssetRowData: Identifiable {
     let hasLivePrice: Bool
 }
 
+/// Accumulator for aggregating token amounts per asset.
+struct AssetAccumulator {
+    var symbol: String
+    var name: String
+    var category: AssetCategory
+    var coinGeckoId: String?
+    var positive: Decimal = 0
+    var borrow: Decimal = 0
+    var positiveUSD: Decimal = 0
+    var borrowUSD: Decimal = 0
+}
+
 /// Lightweight input for row aggregation — decouples from SwiftData models.
 struct TokenEntry: Equatable {
     let assetId: UUID
@@ -93,22 +105,14 @@ struct AllAssetsFeature {
     static func aggregateRows(
         tokens: [TokenEntry],
         prices: [String: Decimal]) -> [AssetRowData] {
-        var assetTokens: [UUID: (
-            symbol: String,
-            name: String,
-            category: AssetCategory,
-            coinGeckoId: String?,
-            positive: Decimal,
-            borrow: Decimal,
-            positiveUSD: Decimal,
-            borrowUSD: Decimal)] = [:]
+        var assetTokens: [UUID: AssetAccumulator] = [:]
 
         for token in tokens {
             if token.role.isReward { continue }
 
-            var entry = assetTokens[token.assetId] ?? (
-                token.symbol, token.name, token.category, token.coinGeckoId,
-                0, 0, 0, 0)
+            var entry = assetTokens[token.assetId] ?? AssetAccumulator(
+                symbol: token.symbol, name: token.name, category: token.category,
+                coinGeckoId: token.coinGeckoId)
             entry.coinGeckoId = entry.coinGeckoId ?? token.coinGeckoId
 
             if token.role.isBorrow {
