@@ -108,7 +108,7 @@ final class SyncEngine: @unchecked Sendable {
 
     // MARK: - Asset Upsert (3-tier hierarchy)
 
-    private func upsertAsset(from dto: TokenDTO) -> Asset {
+    func upsertAsset(from dto: TokenDTO) -> Asset {
         // Tier 1: coinGeckoId
         if let cgId = dto.coinGeckoId, !cgId.isEmpty {
             if let existing = fetchAsset(coinGeckoId: cgId) {
@@ -138,9 +138,8 @@ final class SyncEngine: @unchecked Sendable {
             symbol: dto.symbol,
             name: dto.name,
             coinGeckoId: dto.coinGeckoId,
-            // Tier 2 fields only set when no coinGeckoId (single-chain token)
-            upsertChain: dto.coinGeckoId == nil ? dto.chain : nil,
-            upsertContract: dto.coinGeckoId == nil ? dto.contractAddress : nil,
+            upsertChain: dto.chain,
+            upsertContract: dto.contractAddress,
             sourceKey: dto.sourceKey,
             logoURL: dto.logoURL,
             category: dto.category,
@@ -162,11 +161,14 @@ final class SyncEngine: @unchecked Sendable {
         // Append-only: fill in missing keys, never overwrite
         if asset.coinGeckoId == nil, let cgId = dto.coinGeckoId { asset.coinGeckoId = cgId }
         if asset.sourceKey == nil, let key = dto.sourceKey { asset.sourceKey = key }
+        if asset.upsertChain == nil, let chain = dto.chain { asset.upsertChain = chain }
+        if asset.upsertContract == nil, let contract = dto.contractAddress { asset.upsertContract = contract }
         if asset.debankId == nil, let dbId = dto.debankId { asset.debankId = dbId }
     }
 
     // MARK: - Phase B: Snapshots
 
+    // swiftlint:disable:next function_body_length
     private func createSnapshots(isPartial: Bool) throws {
         let batchId = UUID()
         let batchTimestamp = Date.now
