@@ -19,7 +19,7 @@ struct PortfolioHealthPanel: View {
     private var metrics: DiversificationMetrics {
         let chainCount = Set(allTokens.compactMap { $0.position?.chain }).count
         return PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokenEntries, weights: weights, chainCount: chainCount)
+            tokens: tokenEntries, weights: weights, chainCount: chainCount, prices: store.prices)
     }
 
     private var riskLevel: RiskLevel {

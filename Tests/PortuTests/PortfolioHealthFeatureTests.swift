@@ -253,7 +253,7 @@ struct PortfolioHealthDiversificationTests {
         ]
 
         let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokens, weights: weights, chainCount: 2)
+            tokens: tokens, weights: weights, chainCount: 2, prices: [:])
 
         #expect(metrics.assetCount == 3)
         #expect(metrics.chainCount == 2)
@@ -264,7 +264,7 @@ struct PortfolioHealthDiversificationTests {
 
     @Test func `empty portfolio returns zero metrics`() {
         let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: [], weights: [], chainCount: 0)
+            tokens: [], weights: [], chainCount: 0, prices: [:])
 
         #expect(metrics.assetCount == 0)
         #expect(metrics.chainCount == 0)
@@ -309,9 +309,125 @@ struct PortfolioHealthDiversificationTests {
         ]
 
         let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokens, weights: weights, chainCount: 1)
+            tokens: tokens, weights: weights, chainCount: 1, prices: [:])
 
         #expect(metrics.stablecoinRatio == Decimal(string: "0.5")!) // 50000/100000
+    }
+
+    @Test func `stablecoin ratio uses resolved values when live prices available`() throws {
+        let tokens = [
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "BTC",
+                name: "Bitcoin",
+                category: .major,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 1,
+                usdValue: 50000),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "USDC",
+                name: "USD Coin",
+                category: .stablecoin,
+                coinGeckoId: "usd-coin",
+                role: .balance,
+                amount: 10000,
+                usdValue: 10000)
+        ]
+        let prices: [String: Decimal] = try ["usd-coin": #require(Decimal(string: "1.05"))]
+        let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: prices)
+
+        let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
+            tokens: tokens, weights: weights, chainCount: 1, prices: prices)
+
+        // Resolved USDC = 10000 * 1.05 = 10500, total = 60500
+        #expect(metrics.stablecoinRatio == Decimal(10500) / Decimal(60500))
+    }
+
+    @Test func `stablecoin ratio excludes borrowed stablecoins`() {
+        let tokens = [
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "BTC",
+                name: "Bitcoin",
+                category: .major,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 1,
+                usdValue: 50000),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "USDC",
+                name: "USD Coin",
+                category: .stablecoin,
+                coinGeckoId: nil,
+                role: .supply,
+                amount: 20000,
+                usdValue: 20000),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "DAI",
+                name: "Dai",
+                category: .stablecoin,
+                coinGeckoId: nil,
+                role: .borrow,
+                amount: 5000,
+                usdValue: 5000)
+        ]
+        let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: [:])
+
+        let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
+            tokens: tokens, weights: weights, chainCount: 1, prices: [:])
+
+        // Only positive-role stablecoins: USDC supply (20000)
+        // DAI borrow excluded by isPositive filter, also filtered from weights (net < 0)
+        // Weights total: BTC(50000) + USDC(20000) = 70000
+        #expect(metrics.stablecoinRatio == Decimal(20000) / Decimal(70000))
+    }
+
+    @Test func `stablecoin ratio consistent when all tokens have live prices`() throws {
+        let tokens = [
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "BTC",
+                name: "Bitcoin",
+                category: .major,
+                coinGeckoId: "bitcoin",
+                role: .balance,
+                amount: 1,
+                usdValue: 50000),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "ETH",
+                name: "Ethereum",
+                category: .major,
+                coinGeckoId: "ethereum",
+                role: .balance,
+                amount: 10,
+                usdValue: 25000),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "USDC",
+                name: "USD Coin",
+                category: .stablecoin,
+                coinGeckoId: "usd-coin",
+                role: .balance,
+                amount: 10000,
+                usdValue: 10000)
+        ]
+        let prices: [String: Decimal] = try [
+            "bitcoin": 55000,
+            "ethereum": 3000,
+            "usd-coin": #require(Decimal(string: "1.01"))
+        ]
+        let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: prices)
+
+        let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
+            tokens: tokens, weights: weights, chainCount: 3, prices: prices)
+
+        // Resolved: BTC=55000, ETH=30000, USDC=10100, total=95100
+        #expect(metrics.stablecoinRatio == Decimal(10100) / Decimal(95100))
     }
 }
 
