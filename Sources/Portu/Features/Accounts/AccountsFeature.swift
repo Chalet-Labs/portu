@@ -124,7 +124,7 @@ struct AccountsFeature {
         func filled(_ value: String) -> Bool {
             !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        switch tab {
+        return switch tab {
         case 0: filled(chainName) && filled(chainAddress)
         case 1: filled(manualName)
         case 2: filled(exchangeName) && filled(exchangeAPIKey) && filled(exchangeAPISecret)
