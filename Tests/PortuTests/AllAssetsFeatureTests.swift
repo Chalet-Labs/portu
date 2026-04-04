@@ -343,12 +343,7 @@ struct AssetRowAggregationTests {
         let acc = AssetAccumulator(
             symbol: "ETH",
             name: "Ethereum",
-            category: .defi,
-            coinGeckoId: nil,
-            positive: 0,
-            borrow: 0,
-            positiveUSD: 0,
-            borrowUSD: 0)
+            category: .defi)
 
         #expect(acc.positive == 0)
         #expect(acc.borrow == 0)
