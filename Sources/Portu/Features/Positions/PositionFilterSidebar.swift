@@ -5,7 +5,7 @@ import SwiftUI
 struct PositionFilterSidebar: View {
     let positions: [Position]
     @Binding var selectedType: PositionType?
-    @Binding var selectedProtocol: String?
+    @Binding var selectedProtocol: ProtocolFilter
 
     private var typeFilters: [(PositionType?, String, Decimal)] {
         var result: [(PositionType?, String, Decimal)] = [
@@ -63,20 +63,21 @@ struct PositionFilterSidebar: View {
                 // Protocol filter (uses protocolId to match AllPositionsView filtering)
                 Section("Protocol") {
                     Button {
-                        selectedProtocol = nil
+                        selectedProtocol = .all
                     } label: {
                         Text("All Protocols")
-                            .foregroundStyle(selectedProtocol == nil ? .primary : .secondary)
+                            .foregroundStyle(selectedProtocol == .all ? .primary : .secondary)
                     }
                     .buttonStyle(.plain)
 
                     ForEach(protocolFilters, id: \.id) { filter in
+                        let filterValue: ProtocolFilter = filter.id == "__none__" ? .none : .specific(filter.id)
                         Button {
-                            selectedProtocol = filter.id == "__none__" ? nil : filter.id
+                            selectedProtocol = filterValue
                         } label: {
                             HStack {
                                 Text(filter.name)
-                                    .foregroundStyle(selectedProtocol == filter.id ? .primary : .secondary)
+                                    .foregroundStyle(selectedProtocol == filterValue ? .primary : .secondary)
                                 Spacer()
                                 Text(filter.value, format: .currency(code: "USD"))
                                     .font(.caption)
