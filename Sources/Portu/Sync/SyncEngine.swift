@@ -137,10 +137,10 @@ final class SyncEngine: @unchecked Sendable {
         let asset = Asset(
             symbol: dto.symbol,
             name: dto.name,
-            coinGeckoId: dto.coinGeckoId,
+            coinGeckoId: dto.coinGeckoId.flatMap { $0.isEmpty ? nil : $0 },
             upsertChain: dto.chain,
-            upsertContract: dto.contractAddress,
-            sourceKey: dto.sourceKey,
+            upsertContract: dto.contractAddress.flatMap { $0.isEmpty ? nil : $0 },
+            sourceKey: dto.sourceKey.flatMap { $0.isEmpty ? nil : $0 },
             logoURL: dto.logoURL,
             category: dto.category,
             isVerified: dto.isVerified)
@@ -159,11 +159,16 @@ final class SyncEngine: @unchecked Sendable {
         if dto.isVerified { asset.isVerified = true }
 
         // Append-only: fill in missing keys, never overwrite
-        if asset.coinGeckoId == nil, let cgId = dto.coinGeckoId { asset.coinGeckoId = cgId }
-        if asset.sourceKey == nil, let key = dto.sourceKey { asset.sourceKey = key }
+        if asset.coinGeckoId == nil, let cgId = dto.coinGeckoId, !cgId.isEmpty { asset.coinGeckoId = cgId }
+        if asset.sourceKey == nil, let key = dto.sourceKey, !key.isEmpty { asset.sourceKey = key }
         if asset.upsertChain == nil, let chain = dto.chain { asset.upsertChain = chain }
-        if asset.upsertContract == nil, let contract = dto.contractAddress { asset.upsertContract = contract }
-        if asset.debankId == nil, let dbId = dto.debankId { asset.debankId = dbId }
+        if
+            asset.upsertContract == nil,
+            let contract = dto.contractAddress, !contract.isEmpty,
+            asset.upsertChain == dto.chain {
+            asset.upsertContract = contract
+        }
+        if asset.debankId == nil, let dbId = dto.debankId, !dbId.isEmpty { asset.debankId = dbId }
     }
 
     // MARK: - Phase B: Snapshots
