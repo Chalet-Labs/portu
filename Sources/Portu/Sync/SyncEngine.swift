@@ -175,7 +175,6 @@ final class SyncEngine: @unchecked Sendable {
 
     // MARK: - Phase B: Snapshots
 
-    // swiftlint:disable:next function_body_length
     private func createSnapshots(isPartial: Bool) throws {
         let batchId = UUID()
         let batchTimestamp = Date.now
@@ -186,24 +185,30 @@ final class SyncEngine: @unchecked Sendable {
         let allPositions = try modelContext.fetch(allPositionsDescriptor)
             .filter { $0.account?.isActive == true }
 
-        // ── PortfolioSnapshot ──
+        createPortfolioSnapshot(batchId: batchId, timestamp: batchTimestamp, positions: allPositions, isPartial: isPartial)
+        createAccountSnapshots(batchId: batchId, timestamp: batchTimestamp)
+        createAssetSnapshots(batchId: batchId, timestamp: batchTimestamp, positions: allPositions)
+
+        pruneSnapshots()
+        try modelContext.save()
+    }
+
+    private func createPortfolioSnapshot(batchId: UUID, timestamp: Date, positions: [Position], isPartial: Bool) {
         var totalValue: Decimal = 0
         var idleValue: Decimal = 0
         var deployedValue: Decimal = 0
         var debtValue: Decimal = 0
 
-        for pos in allPositions {
+        for pos in positions {
             totalValue += pos.netUSDValue
 
             switch pos.positionType {
             case .idle:
-                // Idle value = sum of positive tokens
                 let posIdle = pos.tokens
                     .filter(\.role.isPositive)
                     .reduce(Decimal.zero) { $0 + $1.usdValue }
                 idleValue += posIdle
             case .lending, .staking, .farming, .liquidityPool:
-                // Deployed = positive roles
                 let posDep = pos.tokens
                     .filter(\.role.isPositive)
                     .reduce(Decimal.zero) { $0 + $1.usdValue }
@@ -212,61 +217,46 @@ final class SyncEngine: @unchecked Sendable {
                 break
             }
 
-            // Debt from all borrow tokens
             let posBorrow = pos.tokens
                 .filter(\.role.isBorrow)
                 .reduce(Decimal.zero) { $0 + $1.usdValue }
             debtValue += posBorrow
         }
 
-        let portfolioSnap = PortfolioSnapshot(
-            syncBatchId: batchId, timestamp: batchTimestamp,
+        let snap = PortfolioSnapshot(
+            syncBatchId: batchId, timestamp: timestamp,
             totalValue: totalValue, idleValue: idleValue,
             deployedValue: deployedValue, debtValue: debtValue,
             isPartial: isPartial)
-        modelContext.insert(portfolioSnap)
+        modelContext.insert(snap)
+    }
 
-        // ── AccountSnapshots ──
-        let activeAccounts = fetchAllActiveAccounts()
-
-        for account in activeAccounts {
+    private func createAccountSnapshots(batchId: UUID, timestamp: Date) {
+        for account in fetchAllActiveAccounts() {
             let accountTotal = account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
             let isFresh = account.dataSource == .manual || account.lastSyncError == nil
 
             let snap = AccountSnapshot(
-                syncBatchId: batchId, timestamp: batchTimestamp,
+                syncBatchId: batchId, timestamp: timestamp,
                 accountId: account.id, totalValue: accountTotal, isFresh: isFresh)
             modelContext.insert(snap)
         }
+    }
 
-        // ── AssetSnapshots ──
-        // Group PositionTokens by (accountId, assetId)
-        typealias SnapKey = String // "accountId:assetId"
+    private func createAssetSnapshots(batchId: UUID, timestamp: Date, positions: [Position]) {
+        var accumulators: [String: AssetSnapshotAccumulator] = [:]
 
-        struct SnapAccumulator {
-            var accountId: UUID
-            var assetId: UUID
-            var symbol: String
-            var category: AssetCategory
-            var grossAmount: Decimal = 0
-            var grossUsdValue: Decimal = 0
-            var borrowAmount: Decimal = 0
-            var borrowUsdValue: Decimal = 0
-        }
-
-        var accumulators: [SnapKey: SnapAccumulator] = [:]
-
-        for pos in allPositions {
+        for pos in positions {
             guard let accountId = pos.account?.id else { continue }
 
             for token in pos.tokens {
                 guard let asset = token.asset else { continue }
-                if token.role.isReward { continue } // rewards excluded
+                if token.role.isReward { continue }
 
                 let key = "\(accountId):\(asset.id)"
 
                 if accumulators[key] == nil {
-                    accumulators[key] = SnapAccumulator(
+                    accumulators[key] = AssetSnapshotAccumulator(
                         accountId: accountId,
                         assetId: asset.id,
                         symbol: asset.symbol,
@@ -285,18 +275,13 @@ final class SyncEngine: @unchecked Sendable {
 
         for acc in accumulators.values {
             let snap = AssetSnapshot(
-                syncBatchId: batchId, timestamp: batchTimestamp,
+                syncBatchId: batchId, timestamp: timestamp,
                 accountId: acc.accountId, assetId: acc.assetId,
                 symbol: acc.symbol, category: acc.category,
                 amount: acc.grossAmount, usdValue: acc.grossUsdValue,
                 borrowAmount: acc.borrowAmount, borrowUsdValue: acc.borrowUsdValue)
             modelContext.insert(snap)
         }
-
-        // ── Prune old snapshots ──
-        pruneSnapshots()
-
-        try modelContext.save()
     }
 
     // MARK: - Snapshot Pruning
@@ -383,6 +368,17 @@ final class SyncEngine: @unchecked Sendable {
         let all = (try? modelContext.fetch(descriptor)) ?? []
         return all.first { $0.sourceKey == sourceKey }
     }
+}
+
+private struct AssetSnapshotAccumulator {
+    var accountId: UUID
+    var assetId: UUID
+    var symbol: String
+    var category: AssetCategory
+    var grossAmount: Decimal = 0
+    var grossUsdValue: Decimal = 0
+    var borrowAmount: Decimal = 0
+    var borrowUsdValue: Decimal = 0
 }
 
 enum SyncError: Error, LocalizedError, Equatable {
