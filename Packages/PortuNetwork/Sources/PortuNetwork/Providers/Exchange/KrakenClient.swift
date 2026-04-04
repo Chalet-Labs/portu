@@ -45,7 +45,7 @@ struct KrakenClient: ExchangeClient {
 
     private func parseKrakenBalances(data: Data) throws -> [TokenDTO] {
         guard
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let errors = json["error"] as? [String]
         else {
             throw ExchangeError.decodingFailed

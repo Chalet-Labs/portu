@@ -44,12 +44,25 @@ struct KrakenClientTests {
     // Regression test for Issue #10: non-empty Kraken `error` array must throw
     // `.apiError(messages:)`, not `.decodingFailed`.
     @Test func `kraken api error payload throws apiError not decodingFailed`() async {
+        defer { KrakenMockURLProtocol.requestHandler = nil }
         KrakenMockURLProtocol.requestHandler = { _ in
             (Data(#"{"error":["EAPI:Invalid key"],"result":{}}"#.utf8), 200)
         }
 
         let client = KrakenClient(session: session)
         await #expect(throws: ExchangeError.apiError(messages: ["EAPI:Invalid key"])) {
+            try await client.fetchBalances(apiKey: "test-key", apiSecret: "dGVzdA==", passphrase: nil)
+        }
+    }
+
+    @Test func `kraken malformed success payload throws decodingFailed`() async {
+        defer { KrakenMockURLProtocol.requestHandler = nil }
+        KrakenMockURLProtocol.requestHandler = { _ in
+            (Data(#"{"error":[]}"#.utf8), 200)
+        }
+
+        let client = KrakenClient(session: session)
+        await #expect(throws: ExchangeError.decodingFailed) {
             try await client.fetchBalances(apiKey: "test-key", apiSecret: "dGVzdA==", passphrase: nil)
         }
     }
