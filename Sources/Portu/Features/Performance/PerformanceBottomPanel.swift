@@ -13,7 +13,11 @@ struct PerformanceBottomPanel: View {
             .filter { s in
                 s.timestamp >= startDate && (accountId == nil || s.accountId == accountId)
             }
-            .map { CategorySnapshotEntry(timestamp: $0.timestamp, category: $0.category, usdValue: $0.usdValue) }
+            .map {
+                CategorySnapshotEntry(
+                    accountId: $0.accountId, assetId: $0.assetId,
+                    timestamp: $0.timestamp, category: $0.category, usdValue: $0.usdValue)
+            }
         return PerformanceFeature.computeCategoryChanges(entries: entries)
     }
 

@@ -73,6 +73,7 @@ struct ChainBreakdown: Equatable, Identifiable {
 
 /// Lightweight input for snapshot aggregation — decouples from SwiftData @Model.
 struct SnapshotEntry: Equatable {
+    let accountId: UUID
     let assetId: UUID
     let timestamp: Date
     let grossUSD: Decimal
@@ -210,23 +211,41 @@ struct AssetDetailFeature {
             byChain: byChain)
     }
 
-    /// Aggregate snapshot entries by day, summing across accounts.
+    /// Aggregate snapshot entries by day, taking the latest per (day, account, asset) then summing across accounts.
     static func aggregateSnapshots(
         entries: [SnapshotEntry]) -> [ChartDataPoint] {
-        var byDate: [Date: (Decimal, Decimal, Decimal, Decimal)] = [:]
         let cal = Calendar.current
 
+        // Step 1: For each (day, accountId, assetId), keep only the entry with the latest timestamp.
+        struct DedupKey: Hashable {
+            let day: Date
+            let accountId: UUID
+            let assetId: UUID
+        }
+        var latest: [DedupKey: SnapshotEntry] = [:]
         for entry in entries {
+            let key = DedupKey(
+                day: cal.startOfDay(for: entry.timestamp),
+                accountId: entry.accountId, assetId: entry.assetId)
+            if let existing = latest[key], entry.timestamp <= existing.timestamp {
+                continue
+            }
+            latest[key] = entry
+        }
+
+        // Step 2: Sum deduped entries across accounts/assets per day.
+        var grouped: [Date: (Decimal, Decimal, Decimal, Decimal)] = [:]
+        for entry in latest.values {
             let day = cal.startOfDay(for: entry.timestamp)
-            var agg = byDate[day] ?? (0, 0, 0, 0)
+            var agg = grouped[day] ?? (0, 0, 0, 0)
             agg.0 += entry.grossUSD
             agg.1 += entry.borrowUSD
             agg.2 += entry.grossAmount
             agg.3 += entry.borrowAmount
-            byDate[day] = agg
+            grouped[day] = agg
         }
 
-        return byDate
+        return grouped
             .sorted { $0.key < $1.key }
             .map { date, agg in
                 ChartDataPoint(

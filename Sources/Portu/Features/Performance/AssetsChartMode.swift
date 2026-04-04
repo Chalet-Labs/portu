@@ -28,15 +28,13 @@ struct AssetsChartMode: View {
     }
 
     private var chartData: [ChartPoint] {
-        var grouped: [Date: [AssetCategory: Decimal]] = [:]
-        for snap in filtered {
-            let day = Calendar.current.startOfDay(for: snap.timestamp)
-            grouped[day, default: [:]][snap.category, default: 0] += snap.usdValue
+        let entries = filtered.map {
+            CategorySnapshotEntry(
+                accountId: $0.accountId, assetId: $0.assetId,
+                timestamp: $0.timestamp, category: $0.category, usdValue: $0.usdValue)
         }
-        return grouped.flatMap { date, categories in
-            categories.map { ChartPoint(date: date, category: $0.key.rawValue.capitalized, value: $0.value) }
-        }
-        .sorted { $0.date < $1.date }
+        return PerformanceFeature.aggregateCategorySnapshots(entries: entries)
+            .map { ChartPoint(date: $0.date, category: $0.category, value: $0.value) }
     }
 
     var body: some View {
