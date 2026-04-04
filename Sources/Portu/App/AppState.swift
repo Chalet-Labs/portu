@@ -1,3 +1,4 @@
+import ComposableArchitecture
 import Foundation
 import PortuCore
 
@@ -35,4 +36,27 @@ final class AppState {
 
     /// Bridge: called by features to trigger sync until they're migrated to TCA (Phase 4)
     var onSyncRequested: (@MainActor () -> Void)?
+
+    /// Syncs all TCA state fields from the store; does not touch `onSyncRequested`.
+    func bridge(from store: StoreOf<AppFeature>) {
+        prices = store.prices
+        priceChanges24h = store.priceChanges24h
+        syncStatus = store.syncStatus
+        connectionStatus = store.connectionStatus
+        lastPriceUpdate = store.lastPriceUpdate
+        storeIsEphemeral = store.storeIsEphemeral
+    }
+
+    /// Continuously observes TCA store and syncs changes to AppState.
+    /// Uses recursive `withObservationTracking` so this is centralized at app level,
+    /// not duplicated per-window.
+    func observe(_ store: StoreOf<AppFeature>) {
+        withObservationTracking {
+            bridge(from: store)
+        } onChange: {
+            Task { @MainActor [weak self] in
+                self?.observe(store)
+            }
+        }
+    }
 }
