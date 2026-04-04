@@ -398,7 +398,6 @@ struct AssetDetailSnapshotTests {
 
 struct AssetsChartAggregationTests {
     private let accountA = UUID()
-    private let accountB = UUID()
     private let assetBTC = UUID()
     private let assetETH = UUID()
     private let cal = Calendar.current
