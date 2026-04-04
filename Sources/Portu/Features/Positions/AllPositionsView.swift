@@ -17,11 +17,7 @@ struct AllPositionsView: View {
     private var filteredPositions: [Position] {
         positions.filter { pos in
             if let ft = filterType, pos.positionType != ft { return false }
-            switch filterProtocol {
-            case .all: break
-            case .none: if pos.protocolId != nil { return false }
-            case let .specific(id): if pos.protocolId != id { return false }
-            }
+            if !filterProtocol.matches(pos.protocolId) { return false }
             return true
         }
     }

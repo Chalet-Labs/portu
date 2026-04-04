@@ -35,16 +35,7 @@ struct ProtocolFilterTests {
     private func filtered(
         _ positions: [(protocolId: String?, netUSDValue: Decimal)],
         by filter: ProtocolFilter) -> [(protocolId: String?, netUSDValue: Decimal)] {
-        positions.filter { pos in
-            switch filter {
-            case .all:
-                true
-            case .none:
-                pos.protocolId == nil
-            case let .specific(id):
-                pos.protocolId == id
-            }
-        }
+        positions.filter { filter.matches($0.protocolId) }
     }
 
     @Test func `all returns everything`() {
