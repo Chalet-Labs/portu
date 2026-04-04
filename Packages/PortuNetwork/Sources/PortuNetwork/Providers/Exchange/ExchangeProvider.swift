@@ -51,12 +51,13 @@ public actor ExchangeProvider: PortfolioDataProvider {
     }
 }
 
-enum ExchangeError: Error, LocalizedError {
+enum ExchangeError: Error, LocalizedError, Equatable {
     case missingExchangeType
     case missingCredentials
     case invalidCredentials
     case httpError
     case decodingFailed
+    case apiError(messages: [String])
     case notImplemented(String)
 
     var errorDescription: String? {
@@ -66,6 +67,7 @@ enum ExchangeError: Error, LocalizedError {
         case .invalidCredentials: "Invalid API credentials"
         case .httpError: "Exchange API request failed"
         case .decodingFailed: "Failed to parse exchange API response"
+        case let .apiError(messages): "Exchange API error: \(messages.joined(separator: ", "))"
         case let .notImplemented(name): "\(name) integration not yet implemented"
         }
     }
