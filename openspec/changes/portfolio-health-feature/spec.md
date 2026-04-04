@@ -65,13 +65,13 @@ Enum: `.low`, `.medium`, `.high`
 - Default threshold: 0.25 (25%)
 
 ### B3: Diversification metrics
-`computeDiversificationMetrics(tokens:weights:chainCount:prices:) -> DiversificationMetrics`
+`computeDiversificationMetrics(tokens:weights:chainCount:) -> DiversificationMetrics`
 
 - `assetCount`: count of weights
 - `chainCount`: passed in by caller (distinct chains from positions)
-- `stablecoinRatio`: sum of resolved stablecoin USD values / total portfolio value
-  - Stablecoin identified by `category == .stablecoin` and `role.isPositive`
-  - Uses `resolveValue(token:prices:)` so numerator matches the denominator's value source
+- `stablecoinRatio`: sum of `usdValue` from weights matching stablecoin assets / total portfolio value
+  - Stablecoin identified by `category == .stablecoin` in tokens (matched to weights via `symbol + name`)
+  - Uses net values from weights so numerator and denominator are consistent (borrows netted)
 - `herfindahlIndex`: sum of `percentage²` across all weights
 - When portfolio is empty (total = 0): assetCount = 0, chainCount = 0, stablecoinRatio = 0, herfindahlIndex = 0
 

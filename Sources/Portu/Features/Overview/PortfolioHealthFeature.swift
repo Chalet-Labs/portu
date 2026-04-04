@@ -95,12 +95,13 @@ struct PortfolioHealthFeature {
     }
 
     static func computeDiversificationMetrics(
-        tokens: [TokenEntry], weights: [AssetWeight], chainCount: Int, prices: [String: Decimal]) -> DiversificationMetrics {
+        tokens: [TokenEntry], weights: [AssetWeight], chainCount: Int) -> DiversificationMetrics {
         let totalValue = weights.reduce(Decimal.zero) { $0 + $1.usdValue }
 
-        let stablecoinValue = tokens
-            .filter { $0.category == .stablecoin && $0.role.isPositive }
-            .reduce(Decimal.zero) { $0 + resolveValue(token: $1, prices: prices) }
+        let stablecoinIds = Set(tokens.filter { $0.category == .stablecoin }.map { $0.symbol + $0.name })
+        let stablecoinValue = weights
+            .filter { stablecoinIds.contains($0.id) }
+            .reduce(Decimal.zero) { $0 + $1.usdValue }
 
         let stablecoinRatio = totalValue > 0 ? stablecoinValue / totalValue : 0
         let hhi = weights.reduce(Decimal.zero) { $0 + $1.percentage * $1.percentage }
