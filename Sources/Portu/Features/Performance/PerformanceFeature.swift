@@ -132,32 +132,31 @@ struct PerformanceFeature {
     }
 
     /// Aggregate category snapshots by day — one chart point per (day, category).
-    /// Deduplicates by taking the latest snapshot per (day, accountId, assetId, category),
+    /// Deduplicates by taking the latest snapshot per (day, accountId, assetId),
     /// then sums across unique (accountId, assetId) combinations per (day, category).
     static func aggregateCategorySnapshots(
         entries: [CategorySnapshotEntry]) -> [CategoryChartPoint] {
         let cal = Calendar.current
 
-        // Step 1: Dedup — for each (day, accountId, assetId, category), keep the latest timestamp.
+        // Step 1: Dedup — for each (day, accountId, assetId), keep the latest timestamp.
+        // Category is excluded from the key so a mid-day category change doesn't cause double-counting.
         struct DedupKey: Hashable {
             let day: Date
             let accountId: UUID
             let assetId: UUID
-            let category: AssetCategory
         }
         var latest: [DedupKey: CategorySnapshotEntry] = [:]
         for entry in entries {
             let key = DedupKey(
                 day: cal.startOfDay(for: entry.timestamp),
-                accountId: entry.accountId, assetId: entry.assetId,
-                category: entry.category)
+                accountId: entry.accountId, assetId: entry.assetId)
             if let existing = latest[key], existing.timestamp >= entry.timestamp {
                 continue
             }
             latest[key] = entry
         }
 
-        // Step 2: Sum deduped entries by (day, category).
+        // Step 2: Sum deduped entries by (day, category from latest snapshot).
         var grouped: [Date: [AssetCategory: Decimal]] = [:]
         for entry in latest.values {
             let day = cal.startOfDay(for: entry.timestamp)
@@ -170,7 +169,10 @@ struct PerformanceFeature {
                     date: date, category: $0.key.rawValue.capitalized, value: $0.value)
             }
         }
-        .sorted { $0.date < $1.date }
+        .sorted {
+            if $0.date != $1.date { return $0.date < $1.date }
+            return $0.category < $1.category
+        }
     }
 
     /// Compute category start/end/change from snapshot entries.

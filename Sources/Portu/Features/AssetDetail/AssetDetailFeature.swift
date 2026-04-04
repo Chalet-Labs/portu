@@ -211,38 +211,49 @@ struct AssetDetailFeature {
             byChain: byChain)
     }
 
-    /// Aggregate snapshot entries by day, taking the latest per (day, account) then summing across accounts.
+    /// Aggregate snapshot entries by day, taking the latest per (day, account, asset) then summing across accounts.
     static func aggregateSnapshots(
         entries: [SnapshotEntry]) -> [ChartDataPoint] {
         let cal = Calendar.current
 
-        // Step 1: For each (day, accountId), keep only the entry with the latest timestamp.
-        var latest: [Date: [UUID: SnapshotEntry]] = [:]
+        // Step 1: For each (day, accountId, assetId), keep only the entry with the latest timestamp.
+        struct DedupKey: Hashable {
+            let day: Date
+            let accountId: UUID
+            let assetId: UUID
+        }
+        var latest: [DedupKey: SnapshotEntry] = [:]
         for entry in entries {
-            let day = cal.startOfDay(for: entry.timestamp)
-            let existing = latest[day, default: [:]][entry.accountId]
-            if existing == nil || entry.timestamp > existing!.timestamp {
-                latest[day, default: [:]][entry.accountId] = entry
+            let key = DedupKey(
+                day: cal.startOfDay(for: entry.timestamp),
+                accountId: entry.accountId, assetId: entry.assetId)
+            if let existing = latest[key], entry.timestamp <= existing.timestamp {
+                continue
             }
+            latest[key] = entry
         }
 
-        // Step 2: Sum the deduped entries across accounts per day.
-        return latest
+        // Step 2: Sum deduped entries across accounts/assets per day.
+        var grouped: [Date: (Decimal, Decimal, Decimal, Decimal)] = [:]
+        for entry in latest.values {
+            let day = cal.startOfDay(for: entry.timestamp)
+            var agg = grouped[day] ?? (0, 0, 0, 0)
+            agg.0 += entry.grossUSD
+            agg.1 += entry.borrowUSD
+            agg.2 += entry.grossAmount
+            agg.3 += entry.borrowAmount
+            grouped[day] = agg
+        }
+
+        return grouped
             .sorted { $0.key < $1.key }
-            .map { date, accounts in
-                var gross: Decimal = 0, borrow: Decimal = 0, amt: Decimal = 0, borrowAmt: Decimal = 0
-                for entry in accounts.values {
-                    gross += entry.grossUSD
-                    borrow += entry.borrowUSD
-                    amt += entry.grossAmount
-                    borrowAmt += entry.borrowAmount
-                }
-                return ChartDataPoint(
+            .map { date, agg in
+                ChartDataPoint(
                     date: date,
-                    grossUSD: gross,
-                    borrowUSD: borrow,
-                    grossAmount: amt,
-                    borrowAmount: borrowAmt)
+                    grossUSD: agg.0,
+                    borrowUSD: agg.1,
+                    grossAmount: agg.2,
+                    borrowAmount: agg.3)
             }
     }
 
