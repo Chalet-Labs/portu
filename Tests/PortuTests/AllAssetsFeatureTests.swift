@@ -340,3 +340,95 @@ struct AssetRowAggregationTests {
         #expect(lines[1].contains("\"Bitcoin\""))
     }
 }
+
+// MARK: - Share Percent Tests (Issue #9)
+
+struct SharePercentTests {
+    // MARK: - NetworksTab
+
+    @Test func `networks tab all positive sum to 100 percent`() {
+        let positions: [(chain: String?, netUSDValue: Decimal)] = [
+            (chain: "ethereum", netUSDValue: 500),
+            (chain: "polygon", netUSDValue: 300),
+            (chain: "arbitrum", netUSDValue: 200)
+        ]
+
+        let rows = NetworksTab.computeRows(from: positions)
+        let sum = rows.reduce(Decimal.zero) { $0 + $1.sharePercent }
+
+        #expect(sum == 1, "All-positive shares should sum to 100%, got \(sum)")
+    }
+
+    @Test func `networks tab mixed positive negative sum to 100 percent`() {
+        // Chain A: +100 supply, Chain B: -50 borrow
+        // Net portfolio = 100 + (-50) = 50
+        // Correct: A = 100/50 = 200%, B = -50/50 = -100%, sum = 100%
+        // Bug: totalValue = max(100,0) + max(-50,0) = 100
+        //      A = 100/100 = 100%, B = -50/100 = -50%, sum = 50% (broken)
+        let positions: [(chain: String?, netUSDValue: Decimal)] = [
+            (chain: "ethereum", netUSDValue: 100),
+            (chain: "polygon", netUSDValue: -50)
+        ]
+
+        let rows = NetworksTab.computeRows(from: positions)
+        let sum = rows.reduce(Decimal.zero) { $0 + $1.sharePercent }
+
+        #expect(sum == 1, "Mixed positive/negative shares should sum to 100%, got \(sum)")
+    }
+
+    @Test func `networks tab all negative handled gracefully`() {
+        // All negative — totalValue should be negative, not clamped to zero
+        let positions: [(chain: String?, netUSDValue: Decimal)] = [
+            (chain: "ethereum", netUSDValue: -100),
+            (chain: "polygon", netUSDValue: -50)
+        ]
+
+        let rows = NetworksTab.computeRows(from: positions)
+
+        // Should not crash (no division by zero) and rows should exist
+        #expect(rows.count == 2)
+
+        // With all-negative, shares should still sum to 1.0
+        // (each share = value / totalValue, where totalValue is negative)
+        let sum = rows.reduce(Decimal.zero) { $0 + $1.sharePercent }
+        #expect(sum == 1, "All-negative shares should sum to 100%, got \(sum)")
+    }
+
+    // MARK: - PlatformsTab
+
+    @Test func `platforms tab mixed positive negative sum to 100 percent`() {
+        let positions: [PlatformsTab.PlatformInput] = [
+            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "aave-v3", protocolName: "Aave V3", positionType: .lending, netUSDValue: 200),
+            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "compound", protocolName: "Compound", positionType: .lending, netUSDValue: -80)
+        ]
+
+        let rows = PlatformsTab.computeRows(from: positions)
+        let sum = rows.reduce(Decimal.zero) { $0 + $1.sharePercent }
+
+        #expect(sum == 1, "Platform mixed shares should sum to 100%, got \(sum)")
+    }
+
+    // MARK: - Cross-tab consistency
+
+    @Test func `both tabs same calculation strategy`() {
+        // Given equivalent inputs, both tabs should produce the same percentage sum
+        let netA: Decimal = 300
+        let netB: Decimal = -100
+
+        let networkRows = NetworksTab.computeRows(from: [
+            (chain: "ethereum", netUSDValue: netA),
+            (chain: "polygon", netUSDValue: netB)
+        ])
+
+        let platformRows = PlatformsTab.computeRows(from: [
+            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "proto-a", protocolName: "Proto A", positionType: .lending, netUSDValue: netA),
+            PlatformsTab.PlatformInput(chain: "polygon", protocolId: "proto-b", protocolName: "Proto B", positionType: .lending, netUSDValue: netB)
+        ])
+
+        let networkSum = networkRows.reduce(Decimal.zero) { $0 + $1.sharePercent }
+        let platformSum = platformRows.reduce(Decimal.zero) { $0 + $1.sharePercent }
+
+        #expect(networkSum == platformSum, "Both tabs should use the same percentage strategy")
+        #expect(networkSum == 1, "Shares should sum to 100%")
+    }
+}
