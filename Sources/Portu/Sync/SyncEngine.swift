@@ -141,6 +141,7 @@ final class SyncEngine: @unchecked Sendable {
             upsertChain: dto.chain,
             upsertContract: dto.contractAddress.flatMap { $0.isEmpty ? nil : $0 },
             sourceKey: dto.sourceKey.flatMap { $0.isEmpty ? nil : $0 },
+            debankId: dto.debankId.flatMap { $0.isEmpty ? nil : $0 },
             logoURL: dto.logoURL,
             category: dto.category,
             isVerified: dto.isVerified)
@@ -165,7 +166,8 @@ final class SyncEngine: @unchecked Sendable {
         if
             asset.upsertContract == nil,
             let contract = dto.contractAddress, !contract.isEmpty,
-            asset.upsertChain == dto.chain {
+            let dtoChain = dto.chain,
+            asset.upsertChain == dtoChain {
             asset.upsertContract = contract
         }
         if asset.debankId == nil, let dbId = dto.debankId, !dbId.isEmpty { asset.debankId = dbId }
