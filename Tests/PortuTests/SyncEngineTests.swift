@@ -51,6 +51,34 @@ struct SyncEngineTests {
         #expect(result.failedAccounts.isEmpty)
     }
 
+    // MARK: - Error Persistence
+
+    /// Regression test for: lastSyncError is set in memory but never saved before
+    /// allAccountsFailed is thrown. A fresh context sees nil instead of the error.
+    @Test func `lastSyncError persisted when all syncable accounts fail`() async throws {
+        let (context, engine) = try makeTestContext()
+
+        // Zapper account with no API key in MockSecretStore → resolveProvider throws missingAPIKey
+        let account = Account(name: "My Wallet", kind: .wallet, dataSource: .zapper)
+        context.insert(account)
+        try context.save()
+
+        do {
+            _ = try await engine.sync()
+            Issue.record("Expected SyncError.allAccountsFailed")
+        } catch let error as SyncError {
+            #expect(error == .allAccountsFailed)
+        }
+
+        // Verify via fresh context — confirms error state was written to the store.
+        // Bug: save() is never called before the allAccountsFailed throw, so
+        // lastSyncError is nil in the persistent store even though it was set in memory.
+        let freshContext = ModelContext(context.container)
+        let accounts = try freshContext.fetch(FetchDescriptor<Account>())
+        let fetched = try #require(accounts.first)
+        #expect(fetched.lastSyncError != nil)
+    }
+
     // MARK: - Upsert Backfill & Dedup
 
     @Test func `backfill sets chain and contract when nil`() throws {
