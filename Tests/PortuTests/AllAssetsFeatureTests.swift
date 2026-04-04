@@ -346,7 +346,7 @@ struct AssetRowAggregationTests {
 struct SharePercentTests {
     // MARK: - NetworksTab
 
-    @Test func `networks tab all positive sum to100 percent`() {
+    @Test func `networks tab all positive sum to 100 percent`() {
         let positions: [(chain: String?, netUSDValue: Decimal)] = [
             (chain: "ethereum", netUSDValue: 500),
             (chain: "polygon", netUSDValue: 300),
@@ -359,7 +359,7 @@ struct SharePercentTests {
         #expect(sum == 1, "All-positive shares should sum to 100%, got \(sum)")
     }
 
-    @Test func `networks tab mixed positive negative sum to100 percent`() {
+    @Test func `networks tab mixed positive negative sum to 100 percent`() {
         // Chain A: +100 supply, Chain B: -50 borrow
         // Net portfolio = 100 + (-50) = 50
         // Correct: A = 100/50 = 200%, B = -50/50 = -100%, sum = 100%
@@ -396,7 +396,7 @@ struct SharePercentTests {
 
     // MARK: - PlatformsTab
 
-    @Test func `platforms tab mixed positive negative sum to100 percent`() {
+    @Test func `platforms tab mixed positive negative sum to 100 percent`() {
         let positions: [PlatformsTab.PlatformInput] = [
             PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "aave-v3", protocolName: "Aave V3", positionType: .lending, netUSDValue: 200),
             PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "compound", protocolName: "Compound", positionType: .lending, netUSDValue: -80)

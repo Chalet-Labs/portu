@@ -41,10 +41,22 @@ struct NetworksTab: View {
         }
         .sorted { $0.usdBalance > $1.usdBalance }
 
-        // Adjust for Decimal rounding so shares sum to exactly 1
+        // Round to display precision (0.1% → 3 decimal places) then adjust residual
+        // so the formatted percentages always sum to exactly 100.0%
         if totalValue != 0, !rows.isEmpty {
+            for i in rows.indices {
+                var rounded = Decimal()
+                NSDecimalRound(&rounded, &rows[i].sharePercent, 3, .plain)
+                rows[i].sharePercent = rounded
+            }
             let residual = 1 - rows.reduce(Decimal.zero) { $0 + $1.sharePercent }
-            rows[0].sharePercent += residual
+            if
+                residual != 0,
+                let idx = rows.indices.max(by: {
+                    abs(rows[$0].usdBalance) < abs(rows[$1].usdBalance)
+                }) {
+                rows[idx].sharePercent += residual
+            }
         }
         return rows
     }
