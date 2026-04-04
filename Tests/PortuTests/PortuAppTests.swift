@@ -148,7 +148,13 @@ struct AppStateBridgeTests {
         // Continuous observation should propagate this
         #expect(appState.syncStatus == .syncing(progress: 0))
 
-        // Clean up: complete the sync
+        // Clean up: complete the sync and wait for the in-flight effect
         syncCompleted.continuation.finish()
+
+        for _ in 0 ..< 100 where appState.syncStatus != .idle {
+            await Task.yield()
+        }
+
+        #expect(appState.syncStatus == .idle)
     }
 }

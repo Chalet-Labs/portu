@@ -38,13 +38,21 @@ final class AppState {
     var onSyncRequested: (@MainActor () -> Void)?
 
     /// Syncs all TCA state fields from the store; does not touch `onSyncRequested`.
+    /// Guards each assignment to avoid redundant Observation notifications.
     func bridge(from store: StoreOf<AppFeature>) {
-        prices = store.prices
-        priceChanges24h = store.priceChanges24h
-        syncStatus = store.syncStatus
-        connectionStatus = store.connectionStatus
-        lastPriceUpdate = store.lastPriceUpdate
-        storeIsEphemeral = store.storeIsEphemeral
+        updateIfChanged(\.prices, to: store.prices)
+        updateIfChanged(\.priceChanges24h, to: store.priceChanges24h)
+        updateIfChanged(\.syncStatus, to: store.syncStatus)
+        updateIfChanged(\.connectionStatus, to: store.connectionStatus)
+        updateIfChanged(\.lastPriceUpdate, to: store.lastPriceUpdate)
+        updateIfChanged(\.storeIsEphemeral, to: store.storeIsEphemeral)
+    }
+
+    private func updateIfChanged<Value: Equatable>(
+        _ keyPath: ReferenceWritableKeyPath<AppState, Value>,
+        to newValue: Value) {
+        guard self[keyPath: keyPath] != newValue else { return }
+        self[keyPath: keyPath] = newValue
     }
 
     /// Continuously observes TCA store and syncs changes to AppState.
