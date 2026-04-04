@@ -89,7 +89,6 @@ public actor ZapperProvider: PortfolioDataProvider {
         for item in items {
             guard
                 let symbol = item["symbol"] as? String,
-                let name = item["name"] as? String,
                 let balanceUSD = item["balanceUSD"] as? Double,
                 let balance = item["balance"] as? Double
             else {
@@ -99,10 +98,11 @@ public actor ZapperProvider: PortfolioDataProvider {
                 }
                 continue
             }
+            let name = item["name"] as? String ?? symbol
             let chain = parseChain(item)
             let token = buildTokenDTO(
                 item, role: .balance, symbol: symbol, name: name,
-                amount: Decimal(balance), usdValue: Decimal(balanceUSD), chain: chain)
+                amount: Decimal(abs(balance)), usdValue: Decimal(abs(balanceUSD)), chain: chain)
             positions.append(PositionDTO(
                 positionType: .idle, chain: chain,
                 protocolId: nil, protocolName: nil, protocolLogoURL: nil,
@@ -110,7 +110,9 @@ public actor ZapperProvider: PortfolioDataProvider {
         }
         if droppedCount > 0 {
             let keys = firstDroppedKeys.map { $0.joined(separator: ", ") } ?? "none"
-            Self.logger.warning("parseTokenBalances: dropped \(droppedCount)/\(items.count) items — first dropped item keys: [\(keys)]")
+            let total = items.count
+            Self.logger.warning(
+                "parseTokenBalances: dropped \(droppedCount, privacy: .public)/\(total, privacy: .public) items — keys: [\(keys, privacy: .public)]")
         }
         if positions.isEmpty {
             throw ZapperError.schemaChanged(context: "parseTokenBalances: 0/\(items.count) items parsed successfully")
@@ -139,10 +141,25 @@ public actor ZapperProvider: PortfolioDataProvider {
             case "farming": .farming
             default: .other
             }
-            let tokens = parsePositionTokens(item["tokens"] as? [[String: Any]] ?? [])
+            let chain = parseChain(item)
+            guard let tokensJSON = item["tokens"] as? [[String: Any]] else {
+                droppedCount += 1
+                if firstDroppedKeys == nil {
+                    firstDroppedKeys = Array(item.keys).sorted()
+                }
+                continue
+            }
+            let tokens = parsePositionTokens(tokensJSON, chain: chain)
+            if !tokensJSON.isEmpty, tokens.isEmpty {
+                droppedCount += 1
+                if firstDroppedKeys == nil {
+                    firstDroppedKeys = Array(item.keys).sorted()
+                }
+                continue
+            }
             positions.append(PositionDTO(
                 positionType: posType,
-                chain: parseChain(item),
+                chain: chain,
                 protocolId: appId,
                 protocolName: item["appName"] as? String,
                 protocolLogoURL: item["appImage"] as? String,
@@ -151,7 +168,9 @@ public actor ZapperProvider: PortfolioDataProvider {
         }
         if droppedCount > 0 {
             let keys = firstDroppedKeys.map { $0.joined(separator: ", ") } ?? "none"
-            Self.logger.warning("parseAppPositions: dropped \(droppedCount)/\(items.count) items — first dropped item keys: [\(keys)]")
+            let total = items.count
+            Self.logger.warning(
+                "parseAppPositions: dropped \(droppedCount, privacy: .public)/\(total, privacy: .public) items — keys: [\(keys, privacy: .public)]")
         }
         if positions.isEmpty {
             throw ZapperError.schemaChanged(context: "parseAppPositions: 0/\(items.count) items parsed successfully")
@@ -159,7 +178,7 @@ public actor ZapperProvider: PortfolioDataProvider {
         return positions
     }
 
-    private func parsePositionTokens(_ tokensJSON: [[String: Any]]) -> [TokenDTO] {
+    private func parsePositionTokens(_ tokensJSON: [[String: Any]], chain: Chain? = nil) -> [TokenDTO] {
         var tokens: [TokenDTO] = []
         var droppedCount = 0
         var firstDroppedKeys: [String]?
@@ -185,11 +204,13 @@ public actor ZapperProvider: PortfolioDataProvider {
             tokens.append(buildTokenDTO(
                 item, role: role, symbol: symbol, name: item["name"] as? String ?? symbol,
                 amount: Decimal(abs(balance)), usdValue: Decimal(abs(balanceUSD)),
-                chain: parseChain(item)))
+                chain: parseChain(item) ?? chain))
         }
         if droppedCount > 0 {
             let keys = firstDroppedKeys.map { $0.joined(separator: ", ") } ?? "none"
-            Self.logger.warning("parsePositionTokens: dropped \(droppedCount)/\(tokensJSON.count) tokens — first dropped item keys: [\(keys)]")
+            let total = tokensJSON.count
+            Self.logger.warning(
+                "parsePositionTokens: dropped \(droppedCount, privacy: .public)/\(total, privacy: .public) — keys: [\(keys, privacy: .public)]")
         }
         return tokens
     }
@@ -224,7 +245,7 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 }
 
-public enum ZapperError: Error, LocalizedError {
+public enum ZapperError: Error, LocalizedError, Sendable {
     case invalidResponse
     case rateLimited
     case unauthorized
