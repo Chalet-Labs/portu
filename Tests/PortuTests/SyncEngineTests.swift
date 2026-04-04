@@ -51,6 +51,123 @@ struct SyncEngineTests {
         #expect(result.failedAccounts.isEmpty)
     }
 
+    // MARK: - Upsert Backfill & Dedup
+
+    @Test func `backfill sets chain and contract when nil`() throws {
+        let (context, engine) = try makeTestContext()
+
+        // Pre-existing asset with no chain/contract (e.g. first seen via coinGeckoId)
+        let asset = Asset(symbol: "UNI", name: "Uniswap", coinGeckoId: "uniswap")
+        context.insert(asset)
+        try context.save()
+
+        #expect(asset.upsertChain == nil)
+        #expect(asset.upsertContract == nil)
+
+        // A DTO arrives with the same coinGeckoId plus chain/contract info
+        let dto = makeTokenDTO(
+            symbol: "UNI", name: "Uniswap",
+            chain: .ethereum, contractAddress: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+            coinGeckoId: "uniswap")
+        let result = engine.upsertAsset(from: dto)
+
+        // Should reuse existing asset (not create a new one)
+        #expect(result.id == asset.id)
+        // Backfill: chain and contract should now be filled
+        #expect(asset.upsertChain == .ethereum)
+        #expect(asset.upsertContract == "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984")
+    }
+
+    @Test func `backfill does not overwrite existing chain and contract`() throws {
+        let (context, engine) = try makeTestContext()
+
+        let asset = Asset(
+            symbol: "WETH", name: "Wrapped Ether",
+            coinGeckoId: "weth",
+            upsertChain: .ethereum, upsertContract: "0xoriginal")
+        context.insert(asset)
+        try context.save()
+
+        // DTO with same coinGeckoId but different chain/contract
+        let dto = makeTokenDTO(
+            symbol: "WETH", name: "Wrapped Ether",
+            chain: .polygon, contractAddress: "0xdifferent",
+            coinGeckoId: "weth")
+        let result = engine.upsertAsset(from: dto)
+
+        #expect(result.id == asset.id)
+        // Original values must be preserved (append-only)
+        #expect(asset.upsertChain == .ethereum)
+        #expect(asset.upsertContract == "0xoriginal")
+    }
+
+    @Test func `cross-tier dedup coinGeckoId first then chain contract`() throws {
+        let (context, engine) = try makeTestContext()
+
+        // DTO-A: has coinGeckoId + chain/contract
+        let dtoA = makeTokenDTO(
+            symbol: "ETH", name: "Ethereum",
+            chain: .ethereum, contractAddress: "0xabc",
+            coinGeckoId: "ethereum")
+        _ = engine.upsertAsset(from: dtoA)
+
+        // DTO-B: same chain/contract, no coinGeckoId
+        let dtoB = makeTokenDTO(
+            symbol: "ETH", name: "Ethereum",
+            chain: .ethereum, contractAddress: "0xabc")
+        _ = engine.upsertAsset(from: dtoB)
+
+        let allAssets = try context.fetch(FetchDescriptor<Asset>())
+        #expect(allAssets.count == 1)
+    }
+
+    @Test func `cross-tier dedup chain contract first then coinGeckoId`() throws {
+        let (context, engine) = try makeTestContext()
+
+        // DTO-A: chain/contract only, no coinGeckoId
+        let dtoA = makeTokenDTO(
+            symbol: "ETH", name: "Ethereum",
+            chain: .ethereum, contractAddress: "0xabc")
+        _ = engine.upsertAsset(from: dtoA)
+
+        // DTO-B: same chain/contract + coinGeckoId
+        let dtoB = makeTokenDTO(
+            symbol: "ETH", name: "Ethereum",
+            chain: .ethereum, contractAddress: "0xabc",
+            coinGeckoId: "ethereum")
+        _ = engine.upsertAsset(from: dtoB)
+
+        let allAssets = try context.fetch(FetchDescriptor<Asset>())
+        #expect(allAssets.count == 1)
+    }
+
+    // MARK: - Helpers
+
+    private func makeTokenDTO(
+        role: TokenRole = .balance,
+        symbol: String = "TEST",
+        name: String = "Test Token",
+        amount: Decimal = 100,
+        usdValue: Decimal = 100,
+        chain: Chain? = nil,
+        contractAddress: String? = nil,
+        debankId: String? = nil,
+        coinGeckoId: String? = nil,
+        sourceKey: String? = nil,
+        logoURL: String? = nil,
+        category: AssetCategory = .other,
+        isVerified: Bool = false) -> TokenDTO {
+        TokenDTO(
+            role: role, symbol: symbol, name: name,
+            amount: amount, usdValue: usdValue,
+            chain: chain, contractAddress: contractAddress,
+            debankId: debankId, coinGeckoId: coinGeckoId,
+            sourceKey: sourceKey, logoURL: logoURL,
+            category: category, isVerified: isVerified)
+    }
+
+    // MARK: - Snapshots
+
     @Test func `snapshot batch ids link correctly`() async throws {
         let (context, engine) = try makeTestContext()
         let asset = Asset(symbol: "ETH", name: "Ethereum", category: .major)

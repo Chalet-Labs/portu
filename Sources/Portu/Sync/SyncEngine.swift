@@ -108,7 +108,7 @@ final class SyncEngine: @unchecked Sendable {
 
     // MARK: - Asset Upsert (3-tier hierarchy)
 
-    private func upsertAsset(from dto: TokenDTO) -> Asset {
+    func upsertAsset(from dto: TokenDTO) -> Asset {
         // Tier 1: coinGeckoId
         if let cgId = dto.coinGeckoId, !cgId.isEmpty {
             if let existing = fetchAsset(coinGeckoId: cgId) {
@@ -137,11 +137,11 @@ final class SyncEngine: @unchecked Sendable {
         let asset = Asset(
             symbol: dto.symbol,
             name: dto.name,
-            coinGeckoId: dto.coinGeckoId,
-            // Tier 2 fields only set when no coinGeckoId (single-chain token)
-            upsertChain: dto.coinGeckoId == nil ? dto.chain : nil,
-            upsertContract: dto.coinGeckoId == nil ? dto.contractAddress : nil,
-            sourceKey: dto.sourceKey,
+            coinGeckoId: dto.coinGeckoId.flatMap { $0.isEmpty ? nil : $0 },
+            upsertChain: dto.chain,
+            upsertContract: dto.contractAddress.flatMap { $0.isEmpty ? nil : $0 },
+            sourceKey: dto.sourceKey.flatMap { $0.isEmpty ? nil : $0 },
+            debankId: dto.debankId.flatMap { $0.isEmpty ? nil : $0 },
             logoURL: dto.logoURL,
             category: dto.category,
             isVerified: dto.isVerified)
@@ -160,9 +160,17 @@ final class SyncEngine: @unchecked Sendable {
         if dto.isVerified { asset.isVerified = true }
 
         // Append-only: fill in missing keys, never overwrite
-        if asset.coinGeckoId == nil, let cgId = dto.coinGeckoId { asset.coinGeckoId = cgId }
-        if asset.sourceKey == nil, let key = dto.sourceKey { asset.sourceKey = key }
-        if asset.debankId == nil, let dbId = dto.debankId { asset.debankId = dbId }
+        if asset.coinGeckoId == nil, let cgId = dto.coinGeckoId, !cgId.isEmpty { asset.coinGeckoId = cgId }
+        if asset.sourceKey == nil, let key = dto.sourceKey, !key.isEmpty { asset.sourceKey = key }
+        if asset.upsertChain == nil, let chain = dto.chain { asset.upsertChain = chain }
+        if
+            asset.upsertContract == nil,
+            let contract = dto.contractAddress, !contract.isEmpty,
+            let dtoChain = dto.chain,
+            asset.upsertChain == dtoChain {
+            asset.upsertContract = contract
+        }
+        if asset.debankId == nil, let dbId = dto.debankId, !dbId.isEmpty { asset.debankId = dbId }
     }
 
     // MARK: - Phase B: Snapshots
@@ -177,24 +185,30 @@ final class SyncEngine: @unchecked Sendable {
         let allPositions = try modelContext.fetch(allPositionsDescriptor)
             .filter { $0.account?.isActive == true }
 
-        // ── PortfolioSnapshot ──
+        createPortfolioSnapshot(batchId: batchId, timestamp: batchTimestamp, positions: allPositions, isPartial: isPartial)
+        createAccountSnapshots(batchId: batchId, timestamp: batchTimestamp)
+        createAssetSnapshots(batchId: batchId, timestamp: batchTimestamp, positions: allPositions)
+
+        pruneSnapshots()
+        try modelContext.save()
+    }
+
+    private func createPortfolioSnapshot(batchId: UUID, timestamp: Date, positions: [Position], isPartial: Bool) {
         var totalValue: Decimal = 0
         var idleValue: Decimal = 0
         var deployedValue: Decimal = 0
         var debtValue: Decimal = 0
 
-        for pos in allPositions {
+        for pos in positions {
             totalValue += pos.netUSDValue
 
             switch pos.positionType {
             case .idle:
-                // Idle value = sum of positive tokens
                 let posIdle = pos.tokens
                     .filter(\.role.isPositive)
                     .reduce(Decimal.zero) { $0 + $1.usdValue }
                 idleValue += posIdle
             case .lending, .staking, .farming, .liquidityPool:
-                // Deployed = positive roles
                 let posDep = pos.tokens
                     .filter(\.role.isPositive)
                     .reduce(Decimal.zero) { $0 + $1.usdValue }
@@ -203,61 +217,46 @@ final class SyncEngine: @unchecked Sendable {
                 break
             }
 
-            // Debt from all borrow tokens
             let posBorrow = pos.tokens
                 .filter(\.role.isBorrow)
                 .reduce(Decimal.zero) { $0 + $1.usdValue }
             debtValue += posBorrow
         }
 
-        let portfolioSnap = PortfolioSnapshot(
-            syncBatchId: batchId, timestamp: batchTimestamp,
+        let snap = PortfolioSnapshot(
+            syncBatchId: batchId, timestamp: timestamp,
             totalValue: totalValue, idleValue: idleValue,
             deployedValue: deployedValue, debtValue: debtValue,
             isPartial: isPartial)
-        modelContext.insert(portfolioSnap)
+        modelContext.insert(snap)
+    }
 
-        // ── AccountSnapshots ──
-        let activeAccounts = fetchAllActiveAccounts()
-
-        for account in activeAccounts {
+    private func createAccountSnapshots(batchId: UUID, timestamp: Date) {
+        for account in fetchAllActiveAccounts() {
             let accountTotal = account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
             let isFresh = account.dataSource == .manual || account.lastSyncError == nil
 
             let snap = AccountSnapshot(
-                syncBatchId: batchId, timestamp: batchTimestamp,
+                syncBatchId: batchId, timestamp: timestamp,
                 accountId: account.id, totalValue: accountTotal, isFresh: isFresh)
             modelContext.insert(snap)
         }
+    }
 
-        // ── AssetSnapshots ──
-        // Group PositionTokens by (accountId, assetId)
-        typealias SnapKey = String // "accountId:assetId"
+    private func createAssetSnapshots(batchId: UUID, timestamp: Date, positions: [Position]) {
+        var accumulators: [String: AssetSnapshotAccumulator] = [:]
 
-        struct SnapAccumulator {
-            var accountId: UUID
-            var assetId: UUID
-            var symbol: String
-            var category: AssetCategory
-            var grossAmount: Decimal = 0
-            var grossUsdValue: Decimal = 0
-            var borrowAmount: Decimal = 0
-            var borrowUsdValue: Decimal = 0
-        }
-
-        var accumulators: [SnapKey: SnapAccumulator] = [:]
-
-        for pos in allPositions {
+        for pos in positions {
             guard let accountId = pos.account?.id else { continue }
 
             for token in pos.tokens {
                 guard let asset = token.asset else { continue }
-                if token.role.isReward { continue } // rewards excluded
+                if token.role.isReward { continue }
 
                 let key = "\(accountId):\(asset.id)"
 
                 if accumulators[key] == nil {
-                    accumulators[key] = SnapAccumulator(
+                    accumulators[key] = AssetSnapshotAccumulator(
                         accountId: accountId,
                         assetId: asset.id,
                         symbol: asset.symbol,
@@ -276,18 +275,13 @@ final class SyncEngine: @unchecked Sendable {
 
         for acc in accumulators.values {
             let snap = AssetSnapshot(
-                syncBatchId: batchId, timestamp: batchTimestamp,
+                syncBatchId: batchId, timestamp: timestamp,
                 accountId: acc.accountId, assetId: acc.assetId,
                 symbol: acc.symbol, category: acc.category,
                 amount: acc.grossAmount, usdValue: acc.grossUsdValue,
                 borrowAmount: acc.borrowAmount, borrowUsdValue: acc.borrowUsdValue)
             modelContext.insert(snap)
         }
-
-        // ── Prune old snapshots ──
-        pruneSnapshots()
-
-        try modelContext.save()
     }
 
     // MARK: - Snapshot Pruning
@@ -374,6 +368,17 @@ final class SyncEngine: @unchecked Sendable {
         let all = (try? modelContext.fetch(descriptor)) ?? []
         return all.first { $0.sourceKey == sourceKey }
     }
+}
+
+private struct AssetSnapshotAccumulator {
+    var accountId: UUID
+    var assetId: UUID
+    var symbol: String
+    var category: AssetCategory
+    var grossAmount: Decimal = 0
+    var grossUsdValue: Decimal = 0
+    var borrowAmount: Decimal = 0
+    var borrowUsdValue: Decimal = 0
 }
 
 enum SyncError: Error, LocalizedError, Equatable {
