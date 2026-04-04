@@ -9,7 +9,7 @@ struct AssetPriceChart: View {
     let coinGeckoId: String?
     let store: StoreOf<AppFeature>
 
-    @Query(sort: \AssetSnapshot.timestamp)
+    @Query
     private var snapshots: [AssetSnapshot]
 
     init(assetId: UUID, coinGeckoId: String?, store: StoreOf<AppFeature>) {
