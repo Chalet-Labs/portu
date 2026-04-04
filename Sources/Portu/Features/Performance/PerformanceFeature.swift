@@ -184,10 +184,27 @@ struct PerformanceFeature {
         let firstDay = cal.startOfDay(for: sorted.first!.timestamp)
         let lastDay = cal.startOfDay(for: sorted.last!.timestamp)
 
+        // Dedup: for each (day, accountId, assetId), keep only the latest timestamp.
+        struct DedupKey: Hashable {
+            let day: Date
+            let accountId: UUID
+            let assetId: UUID
+        }
+        var latest: [DedupKey: CategorySnapshotEntry] = [:]
+        for entry in sorted {
+            let key = DedupKey(
+                day: cal.startOfDay(for: entry.timestamp),
+                accountId: entry.accountId, assetId: entry.assetId)
+            if let existing = latest[key], existing.timestamp >= entry.timestamp {
+                continue
+            }
+            latest[key] = entry
+        }
+
         var startValues: [AssetCategory: Decimal] = [:]
         var endValues: [AssetCategory: Decimal] = [:]
 
-        for entry in sorted {
+        for entry in latest.values {
             let day = cal.startOfDay(for: entry.timestamp)
             if day == firstDay { startValues[entry.category, default: 0] += entry.usdValue }
             if day == lastDay { endValues[entry.category, default: 0] += entry.usdValue }
