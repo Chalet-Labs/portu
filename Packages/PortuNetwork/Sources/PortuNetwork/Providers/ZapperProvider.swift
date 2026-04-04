@@ -1,10 +1,12 @@
 import Foundation
+import os
 import PortuCore
 
 public actor ZapperProvider: PortfolioDataProvider {
     private let apiKey: String
     private let session: URLSession
     private let baseURL: URL
+    private static let logger = Logger(subsystem: "com.portu.network", category: "ZapperProvider")
 
     nonisolated public var capabilities: ProviderCapabilities {
         ProviderCapabilities(
@@ -16,6 +18,8 @@ public actor ZapperProvider: PortfolioDataProvider {
     public init(
         apiKey: String,
         session: URLSession = .shared,
+        // Zapper API v2 (deprecated). Response may be a raw JSON array or a {"data": [...]} envelope.
+        // See: https://github.com/Zapper-fi/protocol — v2 sunset announced but exact date TBD.
         baseURL: URL = URL(string: "https://api.zapper.xyz/v2")!) {
         self.apiKey = apiKey
         self.session = session
@@ -77,26 +81,59 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     private func parseTokenBalances(data: Data) throws -> [PositionDTO] {
-        try parseJSONArray(data).compactMap { item -> PositionDTO? in
+        let items = try parseJSONArray(data)
+        guard !items.isEmpty else { return [] }
+        var positions: [PositionDTO] = []
+        var droppedCount = 0
+        var firstDroppedKeys: [String]?
+        for item in items {
             guard
                 let symbol = item["symbol"] as? String,
-                let name = item["name"] as? String,
                 let balanceUSD = item["balanceUSD"] as? Double,
-                let balance = item["balance"] as? Double else { return nil }
+                let balance = item["balance"] as? Double
+            else {
+                droppedCount += 1
+                if firstDroppedKeys == nil {
+                    firstDroppedKeys = Array(item.keys).sorted()
+                }
+                continue
+            }
+            let name = item["name"] as? String ?? symbol
             let chain = parseChain(item)
             let token = buildTokenDTO(
                 item, role: .balance, symbol: symbol, name: name,
-                amount: Decimal(balance), usdValue: Decimal(balanceUSD), chain: chain)
-            return PositionDTO(
+                amount: Decimal(abs(balance)), usdValue: Decimal(abs(balanceUSD)), chain: chain)
+            positions.append(PositionDTO(
                 positionType: .idle, chain: chain,
                 protocolId: nil, protocolName: nil, protocolLogoURL: nil,
-                healthFactor: nil, tokens: [token])
+                healthFactor: nil, tokens: [token]))
         }
+        if droppedCount > 0 {
+            let keys = firstDroppedKeys.map { $0.joined(separator: ", ") } ?? "none"
+            let total = items.count
+            Self.logger.warning(
+                "parseTokenBalances: dropped \(droppedCount, privacy: .public)/\(total, privacy: .public) items — keys: [\(keys, privacy: .public)]")
+        }
+        if positions.isEmpty {
+            throw ZapperError.schemaChanged(context: "parseTokenBalances: 0/\(items.count) items parsed successfully")
+        }
+        return positions
     }
 
     private func parseAppPositions(data: Data) throws -> [PositionDTO] {
-        try parseJSONArray(data).compactMap { item -> PositionDTO? in
-            guard let appId = item["appId"] as? String else { return nil }
+        let items = try parseJSONArray(data)
+        guard !items.isEmpty else { return [] }
+        var positions: [PositionDTO] = []
+        var droppedCount = 0
+        var firstDroppedKeys: [String]?
+        for item in items {
+            guard let appId = item["appId"] as? String else {
+                droppedCount += 1
+                if firstDroppedKeys == nil {
+                    firstDroppedKeys = Array(item.keys).sorted()
+                }
+                continue
+            }
             let posType: PositionType = switch item["type"] as? String {
             case "lending": .lending
             case "liquidity-pool": .liquidityPool
@@ -104,24 +141,59 @@ public actor ZapperProvider: PortfolioDataProvider {
             case "farming": .farming
             default: .other
             }
-            let tokens = parsePositionTokens(item["tokens"] as? [[String: Any]] ?? [])
-            return PositionDTO(
+            let chain = parseChain(item)
+            guard let tokensJSON = item["tokens"] as? [[String: Any]] else {
+                droppedCount += 1
+                if firstDroppedKeys == nil {
+                    firstDroppedKeys = Array(item.keys).sorted()
+                }
+                continue
+            }
+            let tokens = parsePositionTokens(tokensJSON, chain: chain)
+            if !tokensJSON.isEmpty, tokens.isEmpty {
+                droppedCount += 1
+                if firstDroppedKeys == nil {
+                    firstDroppedKeys = Array(item.keys).sorted()
+                }
+                continue
+            }
+            positions.append(PositionDTO(
                 positionType: posType,
-                chain: parseChain(item),
+                chain: chain,
                 protocolId: appId,
                 protocolName: item["appName"] as? String,
                 protocolLogoURL: item["appImage"] as? String,
                 healthFactor: item["healthFactor"] as? Double,
-                tokens: tokens)
+                tokens: tokens))
         }
+        if droppedCount > 0 {
+            let keys = firstDroppedKeys.map { $0.joined(separator: ", ") } ?? "none"
+            let total = items.count
+            Self.logger.warning(
+                "parseAppPositions: dropped \(droppedCount, privacy: .public)/\(total, privacy: .public) items — keys: [\(keys, privacy: .public)]")
+        }
+        if positions.isEmpty {
+            throw ZapperError.schemaChanged(context: "parseAppPositions: 0/\(items.count) items parsed successfully")
+        }
+        return positions
     }
 
-    private func parsePositionTokens(_ tokensJSON: [[String: Any]]) -> [TokenDTO] {
-        tokensJSON.compactMap { item -> TokenDTO? in
+    private func parsePositionTokens(_ tokensJSON: [[String: Any]], chain: Chain? = nil) -> [TokenDTO] {
+        var tokens: [TokenDTO] = []
+        var droppedCount = 0
+        var firstDroppedKeys: [String]?
+        for item in tokensJSON {
             guard
                 let symbol = item["symbol"] as? String,
                 let balance = item["balance"] as? Double,
-                let balanceUSD = item["balanceUSD"] as? Double else { return nil }
+                let balanceUSD = item["balanceUSD"] as? Double
+            else {
+                droppedCount += 1
+                if firstDroppedKeys == nil {
+                    firstDroppedKeys = Array(item.keys).sorted()
+                }
+                continue
+            }
             let role: TokenRole = switch item["type"] as? String {
             case "supply": .supply
             case "borrow": .borrow
@@ -129,17 +201,25 @@ public actor ZapperProvider: PortfolioDataProvider {
             case "stake": .stake
             default: .balance
             }
-            return buildTokenDTO(
+            tokens.append(buildTokenDTO(
                 item, role: role, symbol: symbol, name: item["name"] as? String ?? symbol,
                 amount: Decimal(abs(balance)), usdValue: Decimal(abs(balanceUSD)),
-                chain: parseChain(item))
+                chain: parseChain(item) ?? chain))
         }
+        if droppedCount > 0 {
+            let keys = firstDroppedKeys.map { $0.joined(separator: ", ") } ?? "none"
+            let total = tokensJSON.count
+            Self.logger.warning(
+                "parsePositionTokens: dropped \(droppedCount, privacy: .public)/\(total, privacy: .public) — keys: [\(keys, privacy: .public)]")
+        }
+        return tokens
     }
 
     private func parseChain(_ item: [String: Any]) -> Chain? {
         (item["network"] as? String).flatMap { Chain(rawValue: $0) }
     }
 
+    // swiftlint:disable:next function_parameter_count
     private func buildTokenDTO(
         _ item: [String: Any], role: TokenRole, symbol: String, name: String,
         amount: Decimal, usdValue: Decimal, chain: Chain?) -> TokenDTO {
@@ -154,19 +234,24 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     private func parseJSONArray(_ data: Data) throws -> [[String: Any]] {
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            throw ZapperError.decodingFailed
+        let json = try JSONSerialization.jsonObject(with: data)
+        if let envelope = json as? [String: Any], let array = envelope["data"] as? [[String: Any]] {
+            return array
         }
-        return json
+        if let array = json as? [[String: Any]] {
+            return array
+        }
+        throw ZapperError.decodingFailed
     }
 }
 
-public enum ZapperError: Error, LocalizedError {
+public enum ZapperError: Error, LocalizedError, Sendable {
     case invalidResponse
     case rateLimited
     case unauthorized
     case httpError(statusCode: Int)
     case decodingFailed
+    case schemaChanged(context: String)
 
     public var errorDescription: String? {
         switch self {
@@ -175,6 +260,7 @@ public enum ZapperError: Error, LocalizedError {
         case .unauthorized: "Invalid Zapper API key"
         case let .httpError(code): "Zapper API returned HTTP \(code)"
         case .decodingFailed: "Failed to parse Zapper API response"
+        case let .schemaChanged(ctx): "Zapper API schema may have changed: \(ctx)"
         }
     }
 }
