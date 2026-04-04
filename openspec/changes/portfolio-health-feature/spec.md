@@ -50,7 +50,7 @@ Enum: `.low`, `.medium`, `.high`
 `computeAssetWeights(tokens:prices:) -> [AssetWeight]`
 
 - Groups tokens by asset identity (symbol + name pair)
-- Resolves USD value per token: uses `usdValue` if non-zero, otherwise `amount × price` via coinGeckoId
+- Resolves USD value per token: prefers live price (`amount × prices[coinGeckoId]`) when available, falls back to `usdValue`
 - Sums USD values per asset
 - Computes percentage as `assetValue / totalPortfolioValue`
 - Returns sorted descending by percentage
@@ -65,12 +65,13 @@ Enum: `.low`, `.medium`, `.high`
 - Default threshold: 0.25 (25%)
 
 ### B3: Diversification metrics
-`computeDiversificationMetrics(tokens:weights:) -> DiversificationMetrics`
+`computeDiversificationMetrics(tokens:weights:chainCount:) -> DiversificationMetrics`
 
-- `assetCount`: count of weights with `usdValue > 0`
-- `chainCount`: count of distinct non-nil `chainName` values from tokens
-- `stablecoinRatio`: sum of stablecoin token USD values / total portfolio value
-  - Stablecoin identified by `category == .stablecoin`
+- `assetCount`: count of weights
+- `chainCount`: passed in by caller (distinct chains from positions)
+- `stablecoinRatio`: sum of `usdValue` from weights matching stablecoin assets / total portfolio value
+  - Stablecoin identified by `category == .stablecoin` in tokens (matched to weights via `symbol + name`)
+  - Uses net values from weights so numerator and denominator are consistent (borrows netted)
 - `herfindahlIndex`: sum of `percentage²` across all weights
 - When portfolio is empty (total = 0): assetCount = 0, chainCount = 0, stablecoinRatio = 0, herfindahlIndex = 0
 
