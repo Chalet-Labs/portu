@@ -12,10 +12,20 @@ struct AssetPriceChart: View {
     @Query(sort: \AssetSnapshot.timestamp)
     private var snapshots: [AssetSnapshot]
 
+    init(assetId: UUID, coinGeckoId: String?, store: StoreOf<AppFeature>) {
+        self.assetId = assetId
+        self.coinGeckoId = coinGeckoId
+        self.store = store
+        let targetAssetId = assetId
+        _snapshots = Query(
+            filter: #Predicate<AssetSnapshot> { $0.assetId == targetAssetId },
+            sort: \.timestamp)
+    }
+
     private var chartEntries: [SnapshotEntry] {
         let startDate = store.assetDetail.selectedRange.startDate
         return snapshots
-            .filter { $0.assetId == assetId && $0.timestamp >= startDate }
+            .filter { $0.timestamp >= startDate }
             .map { s in
                 SnapshotEntry(
                     accountId: s.accountId,
