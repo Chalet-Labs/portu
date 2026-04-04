@@ -97,7 +97,7 @@ struct SyncEngineTests {
             symbol: "UNI", name: "Uniswap",
             chain: .ethereum, contractAddress: "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
             coinGeckoId: "uniswap")
-        let result = engine.upsertAsset(from: dto)
+        let result = try engine.upsertAsset(from: dto)
 
         // Should reuse existing asset (not create a new one)
         #expect(result.id == asset.id)
@@ -121,7 +121,7 @@ struct SyncEngineTests {
             symbol: "WETH", name: "Wrapped Ether",
             chain: .polygon, contractAddress: "0xdifferent",
             coinGeckoId: "weth")
-        let result = engine.upsertAsset(from: dto)
+        let result = try engine.upsertAsset(from: dto)
 
         #expect(result.id == asset.id)
         // Original values must be preserved (append-only)
@@ -137,13 +137,13 @@ struct SyncEngineTests {
             symbol: "ETH", name: "Ethereum",
             chain: .ethereum, contractAddress: "0xabc",
             coinGeckoId: "ethereum")
-        _ = engine.upsertAsset(from: dtoA)
+        _ = try engine.upsertAsset(from: dtoA)
 
         // DTO-B: same chain/contract, no coinGeckoId
         let dtoB = makeTokenDTO(
             symbol: "ETH", name: "Ethereum",
             chain: .ethereum, contractAddress: "0xabc")
-        _ = engine.upsertAsset(from: dtoB)
+        _ = try engine.upsertAsset(from: dtoB)
 
         let allAssets = try context.fetch(FetchDescriptor<Asset>())
         #expect(allAssets.count == 1)
@@ -156,14 +156,14 @@ struct SyncEngineTests {
         let dtoA = makeTokenDTO(
             symbol: "ETH", name: "Ethereum",
             chain: .ethereum, contractAddress: "0xabc")
-        _ = engine.upsertAsset(from: dtoA)
+        _ = try engine.upsertAsset(from: dtoA)
 
         // DTO-B: same chain/contract + coinGeckoId
         let dtoB = makeTokenDTO(
             symbol: "ETH", name: "Ethereum",
             chain: .ethereum, contractAddress: "0xabc",
             coinGeckoId: "ethereum")
-        _ = engine.upsertAsset(from: dtoB)
+        _ = try engine.upsertAsset(from: dtoB)
 
         let allAssets = try context.fetch(FetchDescriptor<Asset>())
         #expect(allAssets.count == 1)
