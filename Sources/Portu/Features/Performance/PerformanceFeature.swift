@@ -99,6 +99,29 @@ struct PerformanceFeature {
 
     // MARK: - Pure Functions
 
+    /// Deduplicate snapshot entries: for each (day, accountId, assetId), keep only the latest timestamp.
+    /// Category is excluded from the key so a mid-day category change doesn't cause double-counting.
+    private static func deduplicateByDayAndAsset(
+        _ entries: [CategorySnapshotEntry]) -> [CategorySnapshotEntry] {
+        let cal = Calendar.current
+        struct DedupKey: Hashable {
+            let day: Date
+            let accountId: UUID
+            let assetId: UUID
+        }
+        var latest: [DedupKey: CategorySnapshotEntry] = [:]
+        for entry in entries {
+            let key = DedupKey(
+                day: cal.startOfDay(for: entry.timestamp),
+                accountId: entry.accountId, assetId: entry.assetId)
+            if let existing = latest[key], existing.timestamp >= entry.timestamp {
+                continue
+            }
+            latest[key] = entry
+        }
+        return Array(latest.values)
+    }
+
     /// Keep only the last value per calendar day, sorted ascending.
     static func lastPerDay(_ values: [(Date, Decimal)]) -> [(Date, Decimal)] {
         let cal = Calendar.current
@@ -137,28 +160,10 @@ struct PerformanceFeature {
     static func aggregateCategorySnapshots(
         entries: [CategorySnapshotEntry]) -> [CategoryChartPoint] {
         let cal = Calendar.current
+        let deduped = deduplicateByDayAndAsset(entries)
 
-        // Step 1: Dedup — for each (day, accountId, assetId), keep the latest timestamp.
-        // Category is excluded from the key so a mid-day category change doesn't cause double-counting.
-        struct DedupKey: Hashable {
-            let day: Date
-            let accountId: UUID
-            let assetId: UUID
-        }
-        var latest: [DedupKey: CategorySnapshotEntry] = [:]
-        for entry in entries {
-            let key = DedupKey(
-                day: cal.startOfDay(for: entry.timestamp),
-                accountId: entry.accountId, assetId: entry.assetId)
-            if let existing = latest[key], existing.timestamp >= entry.timestamp {
-                continue
-            }
-            latest[key] = entry
-        }
-
-        // Step 2: Sum deduped entries by (day, category from latest snapshot).
         var grouped: [Date: [AssetCategory: Decimal]] = [:]
-        for entry in latest.values {
+        for entry in deduped {
             let day = cal.startOfDay(for: entry.timestamp)
             grouped[day, default: [:]][entry.category, default: 0] += entry.usdValue
         }
@@ -183,11 +188,12 @@ struct PerformanceFeature {
         let sorted = entries.sorted { $0.timestamp < $1.timestamp }
         let firstDay = cal.startOfDay(for: sorted.first!.timestamp)
         let lastDay = cal.startOfDay(for: sorted.last!.timestamp)
+        let deduped = deduplicateByDayAndAsset(sorted)
 
         var startValues: [AssetCategory: Decimal] = [:]
         var endValues: [AssetCategory: Decimal] = [:]
 
-        for entry in sorted {
+        for entry in deduped {
             let day = cal.startOfDay(for: entry.timestamp)
             if day == firstDay { startValues[entry.category, default: 0] += entry.usdValue }
             if day == lastDay { endValues[entry.category, default: 0] += entry.usdValue }

@@ -214,4 +214,31 @@ struct PerformanceCategoryChangeTests {
         let changes = PerformanceFeature.computeCategoryChanges(entries: [])
         #expect(changes.isEmpty)
     }
+
+    @Test func `uses only latest snapshot per asset per day not sum of all syncs`() throws {
+        let cal = Calendar.current
+        let acct = UUID()
+        let btc = UUID()
+
+        let day1Morning = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 8)))
+        let day1Evening = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 20)))
+        let day2Morning = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 8)))
+        let day2Evening = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 20)))
+
+        // Two syncs on each day for the same (accountId, assetId)
+        let entries: [CategorySnapshotEntry] = [
+            CategorySnapshotEntry(accountId: acct, assetId: btc, timestamp: day1Morning, category: .major, usdValue: 900),
+            CategorySnapshotEntry(accountId: acct, assetId: btc, timestamp: day1Evening, category: .major, usdValue: 1000),
+            CategorySnapshotEntry(accountId: acct, assetId: btc, timestamp: day2Morning, category: .major, usdValue: 1100),
+            CategorySnapshotEntry(accountId: acct, assetId: btc, timestamp: day2Evening, category: .major, usdValue: 1200)
+        ]
+
+        let changes = PerformanceFeature.computeCategoryChanges(entries: entries)
+
+        let major = changes.first { $0.name == "Major" }
+        // Must use the latest snapshot per (day, accountId, assetId), not sum all syncs
+        #expect(major?.startValue == 1000) // day1Evening only, not 900 + 1000 = 1900
+        #expect(major?.endValue == 1200) // day2Evening only, not 1100 + 1200 = 2300
+        #expect(major?.percentChange == Decimal(string: "0.2")!)
+    }
 }
