@@ -6,16 +6,17 @@ import Testing
 
 // MARK: - AppState Bridge Tests
 
-// Tests for centralized TCA → AppState bridge.
+// Tests for the centralized TCA → AppState bridge/observation flow.
 //
-// Bug #16: The bridge is currently scattered across per-window .onAppear/.onChange
-// view modifiers in WindowGroup body. Each Cmd+N window duplicates the bridge,
-// and the Settings scene has no bridge at all.
+// Bug #16 was that the bridge used to be scattered across per-window
+// .onAppear/.onChange view modifiers in the WindowGroup body, which duplicated
+// bridging for each Cmd+N window and left the Settings scene without coverage.
 //
-// These tests verify that AppState exposes a `bridge(from:)` method that:
+// These tests verify the centralized AppState bridge behavior by checking that it:
 // - Syncs all 6 TCA state fields to AppState in one call
 // - Preserves existing callbacks (onSyncRequested)
 // - Is idempotent (safe to call multiple times)
+// - Continuously propagates store changes via observe(_:)
 
 @MainActor
 struct AppStateBridgeTests {

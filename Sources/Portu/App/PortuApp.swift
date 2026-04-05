@@ -51,12 +51,11 @@ struct PortuApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        Window("Portu", id: "main") {
             ContentView(store: store)
                 .environment(appState)
         }
         .modelContainer(container)
-        .commands { CommandGroup(replacing: .newItem) {} }
 
         Settings {
             SettingsView()
