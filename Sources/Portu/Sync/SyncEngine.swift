@@ -331,8 +331,9 @@ final class SyncEngine: @unchecked Sendable {
         }
     }
 
-    // SwiftData predicates have limitations with enum comparisons.
-    // Use FetchDescriptor without predicate and filter in memory for safety.
+    // SwiftData predicates have limitations with enum comparisons and optional
+    // properties. Plain Bool predicates (isActive) are safe; enum and Optional<String>
+    // filters use in-memory filtering to avoid runtime crashes.
 
     private func fetchActiveSyncableAccounts() throws -> [Account] {
         let descriptor = FetchDescriptor<Account>()
