@@ -239,5 +239,6 @@ struct PerformanceCategoryChangeTests {
         // Must use the latest snapshot per (day, accountId, assetId), not sum all syncs
         #expect(major?.startValue == 1000) // day1Evening only, not 900 + 1000 = 1900
         #expect(major?.endValue == 1200) // day2Evening only, not 1100 + 1200 = 2300
+        #expect(major?.percentChange == Decimal(string: "0.2")!)
     }
 }
