@@ -345,8 +345,8 @@ final class SyncEngine: @unchecked Sendable {
     }
 
     private func fetchAllActiveAccounts() throws -> [Account] {
-        let descriptor = FetchDescriptor<Account>()
-        return try modelContext.fetch(descriptor).filter(\.isActive)
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.isActive })
+        return try modelContext.fetch(descriptor)
     }
 
     private func fetchAsset(coinGeckoId: String) throws -> Asset? {

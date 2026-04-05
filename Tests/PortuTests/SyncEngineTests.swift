@@ -71,8 +71,8 @@ struct SyncEngineTests {
         }
 
         // Verify via fresh context — confirms error state was written to the store.
-        // Bug: save() is never called before the allAccountsFailed throw, so
-        // lastSyncError is nil in the persistent store even though it was set in memory.
+        // Previously, save() was not called before throwing allAccountsFailed, so
+        // lastSyncError remained nil in the persistent store despite being set in memory.
         let freshContext = ModelContext(context.container)
         let accounts = try freshContext.fetch(FetchDescriptor<Account>())
         let fetched = try #require(accounts.first)
