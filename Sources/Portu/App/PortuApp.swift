@@ -44,30 +44,16 @@ struct PortuApp: App {
         }
 
         // Bridge: features can trigger sync via AppState until migrated to TCA
-        appState.storeIsEphemeral = isEphemeral
         appState.onSyncRequested = { [store] in
             store.send(.syncTapped)
         }
+        appState.observe(store)
     }
 
     var body: some Scene {
-        WindowGroup {
+        Window("Portu", id: "main") {
             ContentView(store: store)
                 .environment(appState)
-                .onAppear {
-                    appState.prices = store.prices
-                    appState.priceChanges24h = store.priceChanges24h
-                    appState.syncStatus = store.syncStatus
-                    appState.connectionStatus = store.connectionStatus
-                    appState.lastPriceUpdate = store.lastPriceUpdate
-                    appState.storeIsEphemeral = store.storeIsEphemeral
-                }
-                .onChange(of: store.prices) { _, new in appState.prices = new }
-                .onChange(of: store.priceChanges24h) { _, new in appState.priceChanges24h = new }
-                .onChange(of: store.syncStatus) { _, new in appState.syncStatus = new }
-                .onChange(of: store.connectionStatus) { _, new in appState.connectionStatus = new }
-                .onChange(of: store.lastPriceUpdate) { _, new in appState.lastPriceUpdate = new }
-                .onChange(of: store.storeIsEphemeral) { _, new in appState.storeIsEphemeral = new }
         }
         .modelContainer(container)
 
