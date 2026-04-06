@@ -180,14 +180,15 @@ final class SyncEngine: @unchecked Sendable {
         let batchId = UUID()
         let batchTimestamp = Date.now
 
-        // Query all positions from active accounts — filter in memory to avoid
-        // SwiftData predicate issues with optional chaining
+        // Prefetch all throwing queries before any inserts to avoid staged
+        // orphan snapshots if a fetch fails mid-way.
         let allPositionsDescriptor = FetchDescriptor<Position>()
         let allPositions = try modelContext.fetch(allPositionsDescriptor)
             .filter { $0.account?.isActive == true }
+        let activeAccounts = try fetchAllActiveAccounts()
 
         createPortfolioSnapshot(batchId: batchId, timestamp: batchTimestamp, positions: allPositions, isPartial: isPartial)
-        try createAccountSnapshots(batchId: batchId, timestamp: batchTimestamp)
+        createAccountSnapshots(batchId: batchId, timestamp: batchTimestamp, accounts: activeAccounts)
         createAssetSnapshots(batchId: batchId, timestamp: batchTimestamp, positions: allPositions)
 
         pruneSnapshots()
@@ -232,8 +233,8 @@ final class SyncEngine: @unchecked Sendable {
         modelContext.insert(snap)
     }
 
-    private func createAccountSnapshots(batchId: UUID, timestamp: Date) throws {
-        for account in try fetchAllActiveAccounts() {
+    private func createAccountSnapshots(batchId: UUID, timestamp: Date, accounts: [Account]) {
+        for account in accounts {
             let accountTotal = account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
             let isFresh = account.dataSource == .manual || account.lastSyncError == nil
 
