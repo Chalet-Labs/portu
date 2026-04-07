@@ -37,6 +37,15 @@ struct SidebarView: View {
                     Text("")
                 }
                 .disabled(true)
+
+                Section {
+                    SettingsLink {
+                        Label("Settings", systemImage: "gear")
+                    }
+                    .buttonStyle(.plain)
+                } header: {
+                    Text("")
+                }
             }
             .listStyle(.sidebar)
             .navigationTitle("Portu")

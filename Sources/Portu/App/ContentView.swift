@@ -7,18 +7,18 @@ struct ContentView: View {
     let store: StoreOf<AppFeature>
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView(store: store)
-        } detail: {
-            detailView
-                .navigationDestination(for: UUID.self) { assetId in
-                    AssetDetailView(assetId: assetId, store: store)
-                }
-        }
-        .frame(minWidth: 900, minHeight: 600)
-        .safeAreaInset(edge: .bottom) {
+        VStack(spacing: 0) {
+            NavigationSplitView {
+                SidebarView(store: store)
+            } detail: {
+                detailView
+                    .navigationDestination(for: UUID.self) { assetId in
+                        AssetDetailView(assetId: assetId, store: store)
+                    }
+            }
             StatusBarView(store: store)
         }
+        .frame(minWidth: 900, minHeight: 600)
     }
 
     @ViewBuilder

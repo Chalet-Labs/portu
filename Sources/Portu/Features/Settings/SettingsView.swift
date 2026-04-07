@@ -6,11 +6,11 @@ struct SettingsView: View {
             Tab("General", systemImage: "gear") {
                 GeneralSettingsTab()
             }
-            Tab("Accounts", systemImage: "building.columns") {
-                AccountsSettingsTab()
+            Tab("API Keys", systemImage: "key.fill") {
+                APIKeysSettingsTab()
             }
         }
-        .frame(width: 450, height: 300)
+        .frame(width: 450, height: 400)
     }
 }
 
@@ -30,25 +30,5 @@ private struct GeneralSettingsTab: View {
         }
         .formStyle(.grouped)
         .navigationTitle("General")
-    }
-}
-
-private struct AccountsSettingsTab: View {
-    var body: some View {
-        Form {
-            Section("Exchange API Keys") {
-                Text("Configure exchange connections here.")
-                    .foregroundStyle(.secondary)
-                // TODO: API key management forms
-            }
-
-            Section("Wallet Addresses") {
-                Text("Add wallet addresses for on-chain tracking.")
-                    .foregroundStyle(.secondary)
-                // TODO: Wallet address management
-            }
-        }
-        .formStyle(.grouped)
-        .navigationTitle("Accounts")
     }
 }
