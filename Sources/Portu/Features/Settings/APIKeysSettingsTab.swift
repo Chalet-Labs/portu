@@ -50,27 +50,29 @@ struct APIKeysSettingsTab: View {
                         }
                     }
 
-                HStack {
-                    Picker("Chain", selection: $newRPCChain) {
-                        ForEach(availableChains, id: \.self) { chain in
-                            Text(chain.rawValue.capitalized).tag(chain)
+                if !availableChains.isEmpty {
+                    HStack {
+                        Picker("Chain", selection: $newRPCChain) {
+                            ForEach(availableChains, id: \.self) { chain in
+                                Text(chain.rawValue.capitalized).tag(chain)
+                            }
                         }
-                    }
-                    .labelsHidden()
-                    .frame(width: 120)
+                        .labelsHidden()
+                        .frame(width: 120)
 
-                    TextField("RPC URL", text: $newRPCURL)
-                        .textFieldStyle(.roundedBorder)
+                        TextField("RPC URL", text: $newRPCURL)
+                            .textFieldStyle(.roundedBorder)
 
-                    Button("Add") {
-                        guard !newRPCURL.isEmpty else { return }
-                        viewModel.addRPCEndpoint(chain: newRPCChain, url: newRPCURL)
-                        newRPCURL = ""
-                        if let next = availableChains.first {
-                            newRPCChain = next
+                        Button("Add") {
+                            guard !newRPCURL.isEmpty else { return }
+                            viewModel.addRPCEndpoint(chain: newRPCChain, url: newRPCURL)
+                            newRPCURL = ""
+                            if let next = availableChains.first {
+                                newRPCChain = next
+                            }
                         }
+                        .disabled(newRPCURL.isEmpty)
                     }
-                    .disabled(newRPCURL.isEmpty || availableChains.isEmpty)
                 }
             }
         }

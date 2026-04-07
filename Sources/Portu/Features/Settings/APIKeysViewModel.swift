@@ -41,9 +41,8 @@ final class APIKeysViewModel {
             try saveKey(Keys.debank, value: debankAPIKey)
             try saveKey(Keys.coingecko, value: coingeckoAPIKey)
 
-            let savedChains = rpcEndpoints
             for chain in Chain.allCases {
-                if let url = savedChains[chain], !url.isEmpty {
+                if let url = rpcEndpoints[chain], !url.isEmpty {
                     try saveKey(Keys.rpc(chain), value: url)
                 } else {
                     try secretStore.delete(key: Keys.rpc(chain))
