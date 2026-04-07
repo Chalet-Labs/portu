@@ -30,7 +30,7 @@ final class APIKeysViewModel {
                 }
             }
         } catch {
-            keychainError = "Failed to load API keys: \(error)"
+            keychainError = "Unable to load API keys from Keychain. Try restarting the app."
         }
     }
 
@@ -49,7 +49,7 @@ final class APIKeysViewModel {
                 }
             }
         } catch {
-            keychainError = "Failed to save API keys: \(error)"
+            keychainError = "Unable to save API keys to Keychain. Check that the app has Keychain access."
         }
     }
 
