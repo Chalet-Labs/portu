@@ -16,8 +16,8 @@ final class SyncEngine: @unchecked Sendable {
     // MARK: - Public API
 
     func sync() async throws -> SyncResult {
-        let activeSyncable = fetchActiveSyncableAccounts()
-        let activeManual = fetchActiveManualAccounts()
+        let activeSyncable = try fetchActiveSyncableAccounts()
+        let activeManual = try fetchActiveManualAccounts()
 
         guard !activeSyncable.isEmpty || !activeManual.isEmpty else {
             throw SyncError.noActiveAccounts
@@ -38,6 +38,7 @@ final class SyncEngine: @unchecked Sendable {
         // ── Phase B: Snapshot all tiers ──
         let allSyncAttemptedFailed = failedAccounts.count == activeSyncable.count
         if allSyncAttemptedFailed, activeManual.isEmpty, !activeSyncable.isEmpty {
+            try modelContext.save()
             throw SyncError.allAccountsFailed
         }
 
@@ -80,7 +81,7 @@ final class SyncEngine: @unchecked Sendable {
 
             var net: Decimal = 0
             for tokenDTO in dto.tokens {
-                let asset = upsertAsset(from: tokenDTO)
+                let asset = try upsertAsset(from: tokenDTO)
                 let token = PositionToken(
                     role: tokenDTO.role,
                     amount: tokenDTO.amount,
@@ -108,10 +109,10 @@ final class SyncEngine: @unchecked Sendable {
 
     // MARK: - Asset Upsert (3-tier hierarchy)
 
-    func upsertAsset(from dto: TokenDTO) -> Asset {
+    func upsertAsset(from dto: TokenDTO) throws -> Asset {
         // Tier 1: coinGeckoId
         if let cgId = dto.coinGeckoId, !cgId.isEmpty {
-            if let existing = fetchAsset(coinGeckoId: cgId) {
+            if let existing = try fetchAsset(coinGeckoId: cgId) {
                 updateAssetMetadata(existing, from: dto)
                 return existing
             }
@@ -119,7 +120,7 @@ final class SyncEngine: @unchecked Sendable {
 
         // Tier 2: upsertChain + upsertContract
         if let chain = dto.chain, let contract = dto.contractAddress, !contract.isEmpty {
-            if let existing = fetchAsset(chain: chain, contract: contract) {
+            if let existing = try fetchAsset(chain: chain, contract: contract) {
                 updateAssetMetadata(existing, from: dto)
                 return existing
             }
@@ -127,7 +128,7 @@ final class SyncEngine: @unchecked Sendable {
 
         // Tier 3: sourceKey
         if let key = dto.sourceKey, !key.isEmpty {
-            if let existing = fetchAsset(sourceKey: key) {
+            if let existing = try fetchAsset(sourceKey: key) {
                 updateAssetMetadata(existing, from: dto)
                 return existing
             }
@@ -179,14 +180,15 @@ final class SyncEngine: @unchecked Sendable {
         let batchId = UUID()
         let batchTimestamp = Date.now
 
-        // Query all positions from active accounts — filter in memory to avoid
-        // SwiftData predicate issues with optional chaining
+        // Prefetch all throwing queries before any inserts to avoid staged
+        // orphan snapshots if a fetch fails mid-way.
         let allPositionsDescriptor = FetchDescriptor<Position>()
         let allPositions = try modelContext.fetch(allPositionsDescriptor)
             .filter { $0.account?.isActive == true }
+        let activeAccounts = try fetchAllActiveAccounts()
 
         createPortfolioSnapshot(batchId: batchId, timestamp: batchTimestamp, positions: allPositions, isPartial: isPartial)
-        createAccountSnapshots(batchId: batchId, timestamp: batchTimestamp)
+        createAccountSnapshots(batchId: batchId, timestamp: batchTimestamp, accounts: activeAccounts)
         createAssetSnapshots(batchId: batchId, timestamp: batchTimestamp, positions: allPositions)
 
         pruneSnapshots()
@@ -231,8 +233,8 @@ final class SyncEngine: @unchecked Sendable {
         modelContext.insert(snap)
     }
 
-    private func createAccountSnapshots(batchId: UUID, timestamp: Date) {
-        for account in fetchAllActiveAccounts() {
+    private func createAccountSnapshots(batchId: UUID, timestamp: Date, accounts: [Account]) {
+        for account in accounts {
             let accountTotal = account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
             let isFresh = account.dataSource == .manual || account.lastSyncError == nil
 
@@ -330,43 +332,38 @@ final class SyncEngine: @unchecked Sendable {
         }
     }
 
-    // SwiftData predicates have limitations with enum comparisons.
-    // Use FetchDescriptor without predicate and filter in memory for safety.
+    // SwiftData predicates have limitations with enum comparisons and optional
+    // properties. Plain Bool predicates (isActive) are safe; enum and Optional<String>
+    // filters use in-memory filtering to avoid runtime crashes.
 
-    private func fetchActiveSyncableAccounts() -> [Account] {
+    private func fetchActiveSyncableAccounts() throws -> [Account] {
         let descriptor = FetchDescriptor<Account>()
-        let all = (try? modelContext.fetch(descriptor)) ?? []
-        return all.filter { $0.isActive && $0.dataSource != .manual }
+        return try modelContext.fetch(descriptor).filter { $0.isActive && $0.dataSource != .manual }
     }
 
-    private func fetchActiveManualAccounts() -> [Account] {
+    private func fetchActiveManualAccounts() throws -> [Account] {
         let descriptor = FetchDescriptor<Account>()
-        let all = (try? modelContext.fetch(descriptor)) ?? []
-        return all.filter { $0.isActive && $0.dataSource == .manual }
+        return try modelContext.fetch(descriptor).filter { $0.isActive && $0.dataSource == .manual }
     }
 
-    private func fetchAllActiveAccounts() -> [Account] {
-        let descriptor = FetchDescriptor<Account>()
-        let all = (try? modelContext.fetch(descriptor)) ?? []
-        return all.filter(\.isActive)
+    private func fetchAllActiveAccounts() throws -> [Account] {
+        let descriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.isActive })
+        return try modelContext.fetch(descriptor)
     }
 
-    private func fetchAsset(coinGeckoId: String) -> Asset? {
+    private func fetchAsset(coinGeckoId: String) throws -> Asset? {
         let descriptor = FetchDescriptor<Asset>()
-        let all = (try? modelContext.fetch(descriptor)) ?? []
-        return all.first { $0.coinGeckoId == coinGeckoId }
+        return try modelContext.fetch(descriptor).first { $0.coinGeckoId == coinGeckoId }
     }
 
-    private func fetchAsset(chain: Chain, contract: String) -> Asset? {
+    private func fetchAsset(chain: Chain, contract: String) throws -> Asset? {
         let descriptor = FetchDescriptor<Asset>()
-        let all = (try? modelContext.fetch(descriptor)) ?? []
-        return all.first { $0.upsertChain == chain && $0.upsertContract == contract }
+        return try modelContext.fetch(descriptor).first { $0.upsertChain == chain && $0.upsertContract == contract }
     }
 
-    private func fetchAsset(sourceKey: String) -> Asset? {
+    private func fetchAsset(sourceKey: String) throws -> Asset? {
         let descriptor = FetchDescriptor<Asset>()
-        let all = (try? modelContext.fetch(descriptor)) ?? []
-        return all.first { $0.sourceKey == sourceKey }
+        return try modelContext.fetch(descriptor).first { $0.sourceKey == sourceKey }
     }
 }
 
