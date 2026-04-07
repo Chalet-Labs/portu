@@ -8,6 +8,7 @@ final class APIKeysViewModel {
     var debankAPIKey = ""
     var coingeckoAPIKey = ""
     var rpcEndpoints: [Chain: String] = [:]
+    var keychainError: String?
 
     private let secretStore: SecretStore
 
@@ -16,31 +17,40 @@ final class APIKeysViewModel {
     }
 
     func load() {
-        zapperAPIKey = (try? secretStore.get(key: Keys.zapper)) ?? ""
-        debankAPIKey = (try? secretStore.get(key: Keys.debank)) ?? ""
-        coingeckoAPIKey = (try? secretStore.get(key: Keys.coingecko)) ?? ""
+        keychainError = nil
+        do {
+            zapperAPIKey = try secretStore.get(key: Keys.zapper) ?? ""
+            debankAPIKey = try secretStore.get(key: Keys.debank) ?? ""
+            coingeckoAPIKey = try secretStore.get(key: Keys.coingecko) ?? ""
 
-        rpcEndpoints = [:]
-        for chain in Chain.allCases {
-            if let url = try? secretStore.get(key: Keys.rpc(chain)), !url.isEmpty {
-                rpcEndpoints[chain] = url
+            rpcEndpoints = [:]
+            for chain in Chain.allCases {
+                if let url = try secretStore.get(key: Keys.rpc(chain)), !url.isEmpty {
+                    rpcEndpoints[chain] = url
+                }
             }
+        } catch {
+            keychainError = "Failed to load API keys: \(error)"
         }
     }
 
     func save() {
-        saveKey(Keys.zapper, value: zapperAPIKey)
-        saveKey(Keys.debank, value: debankAPIKey)
-        saveKey(Keys.coingecko, value: coingeckoAPIKey)
+        keychainError = nil
+        do {
+            try saveKey(Keys.zapper, value: zapperAPIKey)
+            try saveKey(Keys.debank, value: debankAPIKey)
+            try saveKey(Keys.coingecko, value: coingeckoAPIKey)
 
-        // Save current RPC endpoints
-        let savedChains = rpcEndpoints
-        for chain in Chain.allCases {
-            if let url = savedChains[chain], !url.isEmpty {
-                saveKey(Keys.rpc(chain), value: url)
-            } else {
-                try? secretStore.delete(key: Keys.rpc(chain))
+            let savedChains = rpcEndpoints
+            for chain in Chain.allCases {
+                if let url = savedChains[chain], !url.isEmpty {
+                    try saveKey(Keys.rpc(chain), value: url)
+                } else {
+                    try secretStore.delete(key: Keys.rpc(chain))
+                }
             }
+        } catch {
+            keychainError = "Failed to save API keys: \(error)"
         }
     }
 
@@ -54,11 +64,11 @@ final class APIKeysViewModel {
 
     // MARK: - Private
 
-    private func saveKey(_ key: String, value: String) {
+    private func saveKey(_ key: String, value: String) throws(KeychainError) {
         if value.isEmpty {
-            try? secretStore.delete(key: key)
+            try secretStore.delete(key: key)
         } else {
-            try? secretStore.set(key: key, value: value)
+            try secretStore.set(key: key, value: value)
         }
     }
 

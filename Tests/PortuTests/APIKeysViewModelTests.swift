@@ -17,6 +17,20 @@ private final class MockSecretStore: SecretStore, @unchecked Sendable {
     }
 }
 
+private final class FailingSecretStore: SecretStore, @unchecked Sendable {
+    func get(key _: String) throws(KeychainError) -> String? {
+        throw .unexpectedStatus(-25308) // errSecInteractionNotAllowed
+    }
+
+    func set(key _: String, value _: String) throws(KeychainError) {
+        throw .unexpectedStatus(-25308)
+    }
+
+    func delete(key _: String) throws(KeychainError) {
+        throw .unexpectedStatus(-25308)
+    }
+}
+
 @MainActor
 struct APIKeysViewModelTests {
     // MARK: - Initial State
@@ -146,5 +160,33 @@ struct APIKeysViewModelTests {
         vm.removeRPCEndpoint(chain: .solana)
 
         #expect(vm.rpcEndpoints[.solana] == nil)
+    }
+
+    // MARK: - Error Handling
+
+    @Test func `load surfaces keychain error`() {
+        let vm = APIKeysViewModel(secretStore: FailingSecretStore())
+        vm.load()
+
+        #expect(vm.keychainError != nil)
+        #expect(vm.zapperAPIKey.isEmpty)
+    }
+
+    @Test func `save surfaces keychain error`() {
+        let vm = APIKeysViewModel(secretStore: FailingSecretStore())
+        vm.zapperAPIKey = "some-key"
+        vm.save()
+
+        #expect(vm.keychainError != nil)
+    }
+
+    @Test func `successful operations clear error`() {
+        let store = MockSecretStore()
+        let vm = APIKeysViewModel(secretStore: store)
+        vm.keychainError = "stale error"
+
+        vm.load()
+
+        #expect(vm.keychainError == nil)
     }
 }

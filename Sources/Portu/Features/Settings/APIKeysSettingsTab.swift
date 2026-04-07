@@ -5,6 +5,7 @@ struct APIKeysSettingsTab: View {
     @State private var viewModel = APIKeysViewModel()
     @State private var newRPCChain: Chain = .ethereum
     @State private var newRPCURL = ""
+    @State private var showError = false
 
     var body: some View {
         Form {
@@ -42,7 +43,6 @@ struct APIKeysSettingsTab: View {
                             Spacer()
                             Button(role: .destructive) {
                                 viewModel.removeRPCEndpoint(chain: chain)
-                                viewModel.save()
                             } label: {
                                 Image(systemName: "trash")
                             }
@@ -65,19 +65,27 @@ struct APIKeysSettingsTab: View {
                     Button("Add") {
                         guard !newRPCURL.isEmpty else { return }
                         viewModel.addRPCEndpoint(chain: newRPCChain, url: newRPCURL)
-                        viewModel.save()
                         newRPCURL = ""
+                        if let next = availableChains.first {
+                            newRPCChain = next
+                        }
                     }
-                    .disabled(newRPCURL.isEmpty)
+                    .disabled(newRPCURL.isEmpty || availableChains.isEmpty)
                 }
             }
         }
         .formStyle(.grouped)
         .navigationTitle("API Keys")
         .onAppear { viewModel.load() }
-        .onChange(of: viewModel.zapperAPIKey) { viewModel.save() }
-        .onChange(of: viewModel.debankAPIKey) { viewModel.save() }
-        .onChange(of: viewModel.coingeckoAPIKey) { viewModel.save() }
+        .onDisappear { viewModel.save() }
+        .onChange(of: viewModel.keychainError) { _, error in
+            showError = error != nil
+        }
+        .alert("Keychain Error", isPresented: $showError) {
+            Button("OK") { viewModel.keychainError = nil }
+        } message: {
+            Text(viewModel.keychainError ?? "")
+        }
     }
 
     private var availableChains: [Chain] {
