@@ -9,6 +9,7 @@ final class APIKeysViewModel {
     var coingeckoAPIKey = ""
     var rpcEndpoints: [Chain: String] = [:]
     var keychainError: String?
+    private(set) var isLoading = false
 
     private let secretStore: SecretStore
 
@@ -17,6 +18,8 @@ final class APIKeysViewModel {
     }
 
     func load() {
+        isLoading = true
+        defer { isLoading = false }
         keychainError = nil
         do {
             zapperAPIKey = try secretStore.get(key: Keys.zapper) ?? ""
