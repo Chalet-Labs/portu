@@ -57,7 +57,9 @@ final class APIKeysViewModel {
     }
 
     func addRPCEndpoint(chain: Chain, url: String) {
-        rpcEndpoints[chain] = url
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        rpcEndpoints[chain] = trimmed
     }
 
     func removeRPCEndpoint(chain: Chain) {
