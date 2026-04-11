@@ -132,7 +132,8 @@
                         return
                     }
 
-                    if error != nil {
+                    if let error {
+                        logger.debug("Connection receive error: \(error)")
                         connection.cancel()
                         return
                     }

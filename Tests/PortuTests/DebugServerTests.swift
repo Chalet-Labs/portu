@@ -65,6 +65,7 @@ struct DebugServerTests {
         defer { server1.stop() }
 
         let server2 = DebugServer(port: 19004)
+        defer { server2.stop() }
         do {
             try await server2.start()
             Issue.record("Expected start to throw when port is in use")
