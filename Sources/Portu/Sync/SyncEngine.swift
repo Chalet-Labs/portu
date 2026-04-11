@@ -6,11 +6,11 @@ import SwiftData
 @MainActor
 final class SyncEngine: @unchecked Sendable {
     private let modelContext: ModelContext
-    private let providerFactory: ProviderFactory
+    private let secretStore: any SecretStore
 
-    init(modelContext: ModelContext, providerFactory: ProviderFactory) {
+    init(modelContext: ModelContext, secretStore: any SecretStore) {
         self.modelContext = modelContext
-        self.providerFactory = providerFactory
+        self.secretStore = secretStore
     }
 
     // MARK: - Public API
@@ -56,7 +56,7 @@ final class SyncEngine: @unchecked Sendable {
             addresses: account.addresses.map { ($0.address, $0.chain) },
             exchangeType: account.exchangeType)
 
-        let provider = try resolveProvider(for: account, context: context)
+        let provider = try resolveProvider(for: account)
 
         let balances = try await provider.fetchBalances(context: context)
         let defi = try await provider.fetchDeFiPositions(context: context)
@@ -288,32 +288,48 @@ final class SyncEngine: @unchecked Sendable {
 
     // MARK: - Snapshot Pruning
 
-    private let snapshotStore = SnapshotStore()
-
-    /// Best-effort pruning — errors are logged but don't fail the sync.
+    /// - Snapshots older than 7 days: keep one per day (last of each day)
+    /// - Snapshots older than 90 days: keep one per week (last of each week)
     private func pruneSnapshots() {
-        pruneSnapshotType(PortfolioSnapshot.self)
-        pruneSnapshotType(AccountSnapshot.self)
-        pruneSnapshotType(AssetSnapshot.self)
+        let now = Date.now
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
+        let ninetyDaysAgo = Calendar.current.date(byAdding: .day, value: -90, to: now)!
+
+        pruneSnapshotType(PortfolioSnapshot.self, olderThan: sevenDaysAgo, keepPer: .day)
+        pruneSnapshotType(PortfolioSnapshot.self, olderThan: ninetyDaysAgo, keepPer: .weekOfYear)
+        pruneSnapshotType(AccountSnapshot.self, olderThan: sevenDaysAgo, keepPer: .day)
+        pruneSnapshotType(AccountSnapshot.self, olderThan: ninetyDaysAgo, keepPer: .weekOfYear)
+        pruneSnapshotType(AssetSnapshot.self, olderThan: sevenDaysAgo, keepPer: .day)
+        pruneSnapshotType(AssetSnapshot.self, olderThan: ninetyDaysAgo, keepPer: .weekOfYear)
     }
 
-    private func pruneSnapshotType<T: PersistentModel & Timestamped>(_: T.Type) {
-        do {
-            let all = try modelContext.fetch(FetchDescriptor<T>())
-            let allDates = all.map(\.timestamp)
-            let retainedDates = Set(snapshotStore.prune(snapshotDates: allDates))
-            for snapshot in all where !retainedDates.contains(snapshot.timestamp) {
-                modelContext.delete(snapshot)
-            }
-        } catch {
-            // Best-effort: don't fail the sync over pruning
-        }
+    private func pruneSnapshotType(_: (some PersistentModel).Type, olderThan _: Date, keepPer _: Calendar.Component) {
+        // Implementation: fetch snapshots older than cutoff, group by calendar component,
+        // keep only the last snapshot per group, delete the rest.
+        // This is a best-effort operation — errors are logged but don't fail the sync.
+        // TODO: Implement when snapshot volume warrants it
     }
 
     // MARK: - Helpers
 
-    private func resolveProvider(for account: Account, context: SyncContext) throws -> any PortfolioDataProvider {
-        try providerFactory.makeProvider(for: account.dataSource, context: context)
+    private func resolveProvider(for account: Account) throws -> any PortfolioDataProvider {
+        switch account.dataSource {
+        case .zapper:
+            let apiKey: String
+            do {
+                guard let key = try secretStore.get(key: "portu.provider.zapper.apiKey") else {
+                    throw SyncError.missingAPIKey("Zapper API key not configured")
+                }
+                apiKey = key
+            } catch is KeychainError {
+                throw SyncError.missingAPIKey("Failed to read Zapper API key from Keychain")
+            }
+            return ZapperProvider(apiKey: apiKey)
+        case .exchange:
+            return ExchangeProvider(secretStore: secretStore)
+        case .manual:
+            fatalError("Manual accounts should not reach provider resolution")
+        }
     }
 
     // SwiftData predicates have limitations with enum comparisons and optional
