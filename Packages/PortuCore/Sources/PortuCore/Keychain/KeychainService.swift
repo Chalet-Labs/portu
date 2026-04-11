@@ -10,11 +10,11 @@ public struct KeychainService: SecretStore {
         self.service = service
     }
 
-    public func get(key: KeychainKey) throws(KeychainError) -> String? {
+    public func get(key: String) throws(KeychainError) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawKey,
+            kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
             kSecUseDataProtectionKeychain as String: false
@@ -34,14 +34,12 @@ public struct KeychainService: SecretStore {
             return string
         case errSecItemNotFound:
             return nil
-        case errSecInteractionNotAllowed:
-            throw .interactionNotAllowed
         default:
             throw .unexpectedStatus(status)
         }
     }
 
-    public func set(key: KeychainKey, value: String) throws(KeychainError) {
+    public func set(key: String, value: String) throws(KeychainError) {
         guard let data = value.data(using: .utf8) else {
             throw .encodingFailed
         }
@@ -49,9 +47,7 @@ public struct KeychainService: SecretStore {
         let baseQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawKey,
-            kSecUseDataProtectionKeychain as String: false
-            kSecAttrAccount as String: key.rawKey,
+            kSecAttrAccount as String: key,
             kSecUseDataProtectionKeychain as String: false
         ]
         let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
@@ -77,20 +73,16 @@ public struct KeychainService: SecretStore {
             guard updateStatus == errSecSuccess else {
                 throw .unexpectedStatus(updateStatus)
             }
-        case errSecInteractionNotAllowed:
-            throw .interactionNotAllowed
         default:
             throw .unexpectedStatus(addStatus)
         }
     }
 
-    public func delete(key: KeychainKey) throws(KeychainError) {
+    public func delete(key: String) throws(KeychainError) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawKey,
-            kSecUseDataProtectionKeychain as String: false
-            kSecAttrAccount as String: key.rawKey,
+            kSecAttrAccount as String: key,
             kSecUseDataProtectionKeychain as String: false
         ]
 

@@ -12,14 +12,19 @@ struct PortuApp: App {
     let container: ModelContainer
 
     init() {
-        let factory = ModelContainerFactory()
         var isEphemeral = false
 
         do {
-            self.container = try factory.makeForProduction()
+            self.container = try ModelContainer(
+                for: Account.self, WalletAddress.self, Position.self, PositionToken.self,
+                Asset.self, PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self)
         } catch {
+            let config = ModelConfiguration(isStoredInMemoryOnly: true)
             do {
-                self.container = try factory.makeInMemory()
+                self.container = try ModelContainer(
+                    for: Account.self, WalletAddress.self, Position.self, PositionToken.self,
+                    Asset.self, PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
+                    configurations: config)
                 isEphemeral = true
             } catch {
                 fatalError("Failed to create even an in-memory ModelContainer: \(error)")
@@ -28,7 +33,7 @@ struct PortuApp: App {
 
         let syncEngine = SyncEngine(
             modelContext: container.mainContext,
-            providerFactory: ProviderFactory(secretStore: KeychainService()))
+            secretStore: KeychainService())
         let priceService = PriceService()
 
         self.store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
