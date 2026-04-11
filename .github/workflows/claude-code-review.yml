@@ -77,12 +77,15 @@ jobs:
 
             Note: The PR branch is already checked out in the current working directory.
 
-            Use `gh pr comment` for top-level feedback.
-            Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`) to highlight specific code issues.
-            Only post GitHub comments - don't submit review text as messages.
+            Submit all feedback as a single atomic GitHub review:
+            1. Create a pending review with `mcp__github__pull_request_review_write` (method: "create", no event).
+            2. Add inline comments with `mcp__github__add_comment_to_pending_review` (path, line, body).
+            3. Submit the review with `mcp__github__pull_request_review_write` (method: "submit_pending", event: "COMMENT", body: summary).
+            IMPORTANT: Never use event "APPROVE" or "REQUEST_CHANGES" — always use "COMMENT".
+            Only post GitHub review comments — don't submit review text as messages.
 
           claude_args: |
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --allowedTools "mcp__github__pull_request_review_write,mcp__github__add_comment_to_pending_review,Bash(gh pr diff:*),Bash(gh pr view:*)"
           
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
