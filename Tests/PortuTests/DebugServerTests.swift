@@ -5,14 +5,12 @@ import Testing
 
 @MainActor
 struct DebugServerTests {
-    // MARK: - HTTPParser Integration (already unit-tested, quick smoke check)
+    // MARK: - Health Endpoint
 
     @Test func `health endpoint returns valid JSON`() async throws {
         let server = DebugServer(port: 19001)
         try await server.start()
-
-        // Give listener a moment to be ready
-        try await Task.sleep(for: .milliseconds(100))
+        defer { server.stop() }
 
         let (data, response) = try await URLSession.shared.data(
             from: #require(URL(string: "http://127.0.0.1:19001/health")))
@@ -25,14 +23,14 @@ struct DebugServerTests {
         #expect(json["status"] as? String == "ok")
         #expect(json["version"] != nil)
         #expect(json["uptime"] != nil)
-
-        server.stop()
     }
+
+    // MARK: - 404 Fallback
 
     @Test func `unknown path returns 404`() async throws {
         let server = DebugServer(port: 19002)
         try await server.start()
-        try await Task.sleep(for: .milliseconds(100))
+        defer { server.stop() }
 
         let (data, response) = try await URLSession.shared.data(
             from: #require(URL(string: "http://127.0.0.1:19002/nonexistent")))
@@ -42,19 +40,17 @@ struct DebugServerTests {
 
         let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(json["error"] as? String == "Not found")
-
-        server.stop()
     }
+
+    // MARK: - Server Lifecycle
 
     @Test func `server stop cancels listener`() async throws {
         let server = DebugServer(port: 19003)
         try await server.start()
-        try await Task.sleep(for: .milliseconds(100))
 
         server.stop()
         try await Task.sleep(for: .milliseconds(100))
 
-        // After stop, connections should be refused
         do {
             _ = try await URLSession.shared.data(
                 from: #require(URL(string: "http://127.0.0.1:19003/health")))
@@ -67,7 +63,7 @@ struct DebugServerTests {
     @Test func `port in use does not crash`() async throws {
         let server1 = DebugServer(port: 19004)
         try await server1.start()
-        try await Task.sleep(for: .milliseconds(100))
+        defer { server1.stop() }
 
         let server2 = DebugServer(port: 19004)
         do {
@@ -76,27 +72,28 @@ struct DebugServerTests {
         } catch {
             // Expected — port already bound
         }
-
-        server1.stop()
     }
+
+    // MARK: - Localhost Binding
 
     @Test func `server binds to localhost only`() async throws {
         let server = DebugServer(port: 19005)
         try await server.start()
-        try await Task.sleep(for: .milliseconds(100))
+        defer { server.stop() }
 
-        // Verify we can reach it on 127.0.0.1
         let (_, response) = try await URLSession.shared.data(
             from: #require(URL(string: "http://127.0.0.1:19005/health")))
         let httpResponse = try #require(response as? HTTPURLResponse)
         #expect(httpResponse.statusCode == 200)
-
-        server.stop()
     }
+
+    // MARK: - Uptime
 
     @Test func `uptime increases over time`() async throws {
         let server = DebugServer(port: 19006)
         try await server.start()
+        defer { server.stop() }
+
         try await Task.sleep(for: .milliseconds(200))
 
         let (data, _) = try await URLSession.shared.data(
@@ -105,7 +102,5 @@ struct DebugServerTests {
         let uptime = try #require(json["uptime"] as? Double)
 
         #expect(uptime >= 0.1)
-
-        server.stop()
     }
 }

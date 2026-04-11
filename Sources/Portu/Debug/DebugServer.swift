@@ -1,8 +1,10 @@
 #if DEBUG
 
+    import ComposableArchitecture
     import Foundation
     import Network
     import os
+    import SwiftData
 
     @MainActor
     final class DebugServer {
@@ -12,14 +14,25 @@
         private let startTime = ContinuousClock.now
         private let logger = Logger(subsystem: "com.portu.app", category: "DebugServer")
 
-        init(port: UInt16 = 9999) {
+        // Stored for future endpoints (sub-issues #3, #4)
+        private let modelContainer: ModelContainer?
+        private let store: StoreOf<AppFeature>?
+
+        init(
+            port: UInt16 = 9999,
+            modelContainer: ModelContainer? = nil,
+            store: StoreOf<AppFeature>? = nil) {
             self.port = port
+            self.modelContainer = modelContainer
+            self.store = store
             registerBuiltInRoutes()
         }
 
         // MARK: - Lifecycle
 
         func start() async throws {
+            guard listener == nil else { return }
+
             let params = NWParameters.tcp
 
             guard let nwPort = NWEndpoint.Port(rawValue: port) else {
@@ -31,6 +44,8 @@
             listener = newListener
 
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                // Safety: `resumed` is only mutated from the .main queue (see newListener.start below),
+                // so concurrent access cannot occur. nonisolated(unsafe) suppresses the Swift 6 diagnostic.
                 nonisolated(unsafe) var resumed = false
 
                 newListener.stateUpdateHandler = { [weak self] state in
@@ -148,7 +163,10 @@
         // MARK: - Helpers
 
         nonisolated private static func jsonResponse(statusCode: Int, body: [String: any Sendable]) -> HTTPResponse {
-            let data = (try? JSONSerialization.data(withJSONObject: body)) ?? Data("{}".utf8)
+            guard let data = try? JSONSerialization.data(withJSONObject: body) else {
+                assertionFailure("DebugServer: failed to serialize JSON response")
+                return HTTPResponse(statusCode: 500, body: Data("{\"error\":\"serialization failed\"}".utf8))
+            }
             return HTTPResponse(statusCode: statusCode, body: data)
         }
     }
