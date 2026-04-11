@@ -32,7 +32,7 @@
         // MARK: - Lifecycle
 
         func start() async throws {
-            guard listener == nil else { return }
+            guard listener == nil, startingListener == nil else { return }
 
             let params = NWParameters.tcp
 
