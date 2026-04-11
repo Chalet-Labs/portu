@@ -12,6 +12,7 @@
         private var listener: NWListener?
         private var startingListener: NWListener?
         private var routes: [String: [String: @Sendable (HTTPRequest) -> HTTPResponse]] = [:]
+        private var activeConnections: [ObjectIdentifier: NWConnection] = [:]
         private let startTime = ContinuousClock.now
         private let logger = Logger(subsystem: "com.portu.app", category: "DebugServer")
 
@@ -79,6 +80,7 @@
                                 connection.cancel()
                                 return
                             }
+                            self.activeConnections[ObjectIdentifier(connection)] = connection
                             self.handleConnection(connection)
                         }
                     }
@@ -100,6 +102,10 @@
         }
 
         func stop() {
+            for connection in activeConnections.values {
+                connection.cancel()
+            }
+            activeConnections.removeAll()
             startingListener?.cancel()
             startingListener = nil
             listener?.cancel()
@@ -130,6 +136,11 @@
 
         // MARK: - Connection Handling
 
+        private func finishConnection(_ connection: NWConnection) {
+            activeConnections.removeValue(forKey: ObjectIdentifier(connection))
+            connection.cancel()
+        }
+
         private func handleConnection(_ connection: NWConnection) {
             connection.start(queue: .main)
 
@@ -142,7 +153,7 @@
 
                     if let error {
                         self.logger.debug("Connection receive error: \(error)")
-                        connection.cancel()
+                        self.finishConnection(connection)
                         return
                     }
 
@@ -176,11 +187,13 @@
             var payload = Data(header.utf8)
             payload.append(response.body)
 
-            connection.send(content: payload, completion: .contentProcessed { [logger] error in
+            connection.send(content: payload, completion: .contentProcessed { [weak self, logger] error in
                 if let error {
                     logger.debug("Connection send error: \(error)")
                 }
-                connection.cancel()
+                Task { @MainActor in
+                    self?.finishConnection(connection) ?? connection.cancel()
+                }
             })
         }
 
