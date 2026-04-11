@@ -46,6 +46,10 @@ private func waitForEntries(
     while await buffer.entryCount < count, Date.now < deadline {
         try await Task.sleep(for: .milliseconds(10))
     }
+    let actual = await buffer.entryCount
+    if actual < count {
+        Issue.record("Timed out waiting for \(count) log entries; got \(actual) after \(timeout)s")
+    }
 }
 
 // MARK: - Integration Tests

@@ -99,10 +99,14 @@ struct NetworkLogEntryTests {
         let data = try JSONEncoder().encode(entry)
         let decoded = try JSONDecoder().decode(NetworkLogEntry.self, from: data)
         #expect(decoded.id == entry.id)
+        #expect(decoded.timestamp == entry.timestamp)
         #expect(decoded.url == entry.url)
         #expect(decoded.method == entry.method)
         #expect(decoded.statusCode == entry.statusCode)
         #expect(decoded.responseSizeBytes == entry.responseSizeBytes)
+        #expect(decoded.elapsed == entry.elapsed)
+        #expect(decoded.headers == entry.headers)
+        #expect(decoded.errorDescription == entry.errorDescription)
     }
 
     @Test func `nil status code for failed request`() {

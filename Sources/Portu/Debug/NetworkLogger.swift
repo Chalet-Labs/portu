@@ -88,10 +88,12 @@ final class NetworkLogger: URLProtocol, @unchecked Sendable {
     private var startTime: Date?
     private var responseSizeCounter = 0
 
-    /// Test hook: protocol classes prepended to the internal forwarding session.
-    /// Globally registered protocols don't apply to URLSession(configuration:) sessions,
-    /// so tests inject a mock responder here instead.
-    nonisolated(unsafe) static var forwardingProtocolClasses: [AnyClass] = []
+    #if DEBUG
+        /// Test hook: protocol classes prepended to the internal forwarding session.
+        /// Globally registered protocols don't apply to URLSession(configuration:) sessions,
+        /// so tests inject a mock responder here instead.
+        nonisolated(unsafe) static var forwardingProtocolClasses: [AnyClass] = []
+    #endif
 
     // swiftlint:disable:next static_over_final_class
     override class func canInit(with request: URLRequest) -> Bool {
@@ -114,9 +116,11 @@ final class NetworkLogger: URLProtocol, @unchecked Sendable {
         }
         URLProtocol.setProperty(true, forKey: Self.handledKey, in: mutable)
         let config = URLSessionConfiguration.default
-        if !Self.forwardingProtocolClasses.isEmpty {
-            config.protocolClasses = Self.forwardingProtocolClasses + (config.protocolClasses ?? [])
-        }
+        #if DEBUG
+            if !Self.forwardingProtocolClasses.isEmpty {
+                config.protocolClasses = Self.forwardingProtocolClasses + (config.protocolClasses ?? [])
+            }
+        #endif
         internalSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
         internalTask = internalSession?.dataTask(with: mutable as URLRequest)
         internalTask?.resume()
@@ -130,6 +134,7 @@ final class NetworkLogger: URLProtocol, @unchecked Sendable {
 
     static func debugSession() -> URLSession {
         let config = URLSessionConfiguration.default
+        // Replace (not prepend) — this session is fully owned by the logger.
         config.protocolClasses = [NetworkLogger.self]
         return URLSession(configuration: config)
     }
@@ -168,6 +173,8 @@ extension NetworkLogger: URLSessionDataDelegate {
             headers: NetworkLogEntry.redactHeaders(headers),
             errorDescription: error?.localizedDescription)
 
+        // URLSessionDataDelegate is synchronous — bridge to the actor asynchronously.
+        // Entries appear after the next runloop turn; tests use waitForEntries() polling.
         Task { await NetworkLogBuffer.shared.append(entry) }
 
         if let error {
