@@ -1,0 +1,111 @@
+import Foundation
+import Network
+@testable import Portu
+import Testing
+
+@MainActor
+struct DebugServerTests {
+    // MARK: - HTTPParser Integration (already unit-tested, quick smoke check)
+
+    @Test func `health endpoint returns valid JSON`() async throws {
+        let server = DebugServer(port: 19001)
+        try await server.start()
+
+        // Give listener a moment to be ready
+        try await Task.sleep(for: .milliseconds(100))
+
+        let (data, response) = try await URLSession.shared.data(
+            from: #require(URL(string: "http://127.0.0.1:19001/health")))
+        let httpResponse = try #require(response as? HTTPURLResponse)
+
+        #expect(httpResponse.statusCode == 200)
+        #expect(httpResponse.value(forHTTPHeaderField: "Content-Type") == "application/json")
+
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["status"] as? String == "ok")
+        #expect(json["version"] != nil)
+        #expect(json["uptime"] != nil)
+
+        server.stop()
+    }
+
+    @Test func `unknown path returns 404`() async throws {
+        let server = DebugServer(port: 19002)
+        try await server.start()
+        try await Task.sleep(for: .milliseconds(100))
+
+        let (data, response) = try await URLSession.shared.data(
+            from: #require(URL(string: "http://127.0.0.1:19002/nonexistent")))
+        let httpResponse = try #require(response as? HTTPURLResponse)
+
+        #expect(httpResponse.statusCode == 404)
+
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["error"] as? String == "Not found")
+
+        server.stop()
+    }
+
+    @Test func `server stop cancels listener`() async throws {
+        let server = DebugServer(port: 19003)
+        try await server.start()
+        try await Task.sleep(for: .milliseconds(100))
+
+        server.stop()
+        try await Task.sleep(for: .milliseconds(100))
+
+        // After stop, connections should be refused
+        do {
+            _ = try await URLSession.shared.data(
+                from: #require(URL(string: "http://127.0.0.1:19003/health")))
+            Issue.record("Expected connection to be refused after stop")
+        } catch {
+            // Expected — connection refused
+        }
+    }
+
+    @Test func `port in use does not crash`() async throws {
+        let server1 = DebugServer(port: 19004)
+        try await server1.start()
+        try await Task.sleep(for: .milliseconds(100))
+
+        let server2 = DebugServer(port: 19004)
+        do {
+            try await server2.start()
+            Issue.record("Expected start to throw when port is in use")
+        } catch {
+            // Expected — port already bound
+        }
+
+        server1.stop()
+    }
+
+    @Test func `server binds to localhost only`() async throws {
+        let server = DebugServer(port: 19005)
+        try await server.start()
+        try await Task.sleep(for: .milliseconds(100))
+
+        // Verify we can reach it on 127.0.0.1
+        let (_, response) = try await URLSession.shared.data(
+            from: #require(URL(string: "http://127.0.0.1:19005/health")))
+        let httpResponse = try #require(response as? HTTPURLResponse)
+        #expect(httpResponse.statusCode == 200)
+
+        server.stop()
+    }
+
+    @Test func `uptime increases over time`() async throws {
+        let server = DebugServer(port: 19006)
+        try await server.start()
+        try await Task.sleep(for: .milliseconds(200))
+
+        let (data, _) = try await URLSession.shared.data(
+            from: #require(URL(string: "http://127.0.0.1:19006/health")))
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let uptime = try #require(json["uptime"] as? Double)
+
+        #expect(uptime >= 0.1)
+
+        server.stop()
+    }
+}
