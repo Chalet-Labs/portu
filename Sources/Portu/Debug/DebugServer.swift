@@ -86,6 +86,10 @@
                 throw error
             }
 
+            guard startingListener === newListener else {
+                newListener.cancel()
+                throw DebugServerError.cancelled
+            }
             listener = newListener
             let boundPort = port
             logger.info("Debug server listening on 127.0.0.1:\(boundPort)")
@@ -133,7 +137,7 @@
                     }
 
                     if let error {
-                        logger.debug("Connection receive error: \(error)")
+                        self.logger.debug("Connection receive error: \(error)")
                         connection.cancel()
                         return
                     }
