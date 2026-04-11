@@ -18,7 +18,7 @@
             case 400: "Bad Request"
             case 404: "Not Found"
             case 500: "Internal Server Error"
-            default: "Unknown"
+            default: "Status \(statusCode)"
             }
         }
     }

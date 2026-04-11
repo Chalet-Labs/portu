@@ -10,6 +10,7 @@
     final class DebugServer {
         private let port: UInt16
         private var listener: NWListener?
+        private var startingListener: NWListener?
         private var routes: [String: [String: @Sendable (HTTPRequest) -> HTTPResponse]] = [:]
         private let startTime = ContinuousClock.now
         private let logger = Logger(subsystem: "com.portu.app", category: "DebugServer")
@@ -41,6 +42,8 @@
             params.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: nwPort)
 
             let newListener = try NWListener(using: params)
+            startingListener = newListener
+            defer { startingListener = nil }
 
             do {
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -89,6 +92,8 @@
         }
 
         func stop() {
+            startingListener?.cancel()
+            startingListener = nil
             listener?.cancel()
             listener = nil
             logger.info("Debug server stopped")
