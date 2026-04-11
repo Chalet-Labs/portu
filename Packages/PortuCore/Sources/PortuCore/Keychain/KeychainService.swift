@@ -51,8 +51,6 @@ public struct KeychainService: SecretStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: key.rawKey,
             kSecUseDataProtectionKeychain as String: false
-            kSecAttrAccount as String: key.rawKey,
-            kSecUseDataProtectionKeychain as String: false
         ]
         let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
@@ -74,8 +72,10 @@ public struct KeychainService: SecretStore {
                     kSecValueData as String: data,
                     kSecAttrAccessible as String: accessibility
                 ] as CFDictionary)
-            guard updateStatus == errSecSuccess else {
-                throw .unexpectedStatus(updateStatus)
+            switch updateStatus {
+            case errSecSuccess: break
+            case errSecInteractionNotAllowed: throw .interactionNotAllowed
+            default: throw .unexpectedStatus(updateStatus)
             }
         case errSecInteractionNotAllowed:
             throw .interactionNotAllowed
@@ -88,8 +88,6 @@ public struct KeychainService: SecretStore {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawKey,
-            kSecUseDataProtectionKeychain as String: false
             kSecAttrAccount as String: key.rawKey,
             kSecUseDataProtectionKeychain as String: false
         ]

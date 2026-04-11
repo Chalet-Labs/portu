@@ -19,23 +19,13 @@ public actor ExchangeProvider: PortfolioDataProvider {
             throw ExchangeError.missingExchangeType
         }
         let id = context.accountId
-        let apiKey: String
-        let apiSecret: String
-        do {
-            guard let key = try secretStore.get(key: .exchangeAPIKey(id)) else {
-                throw ExchangeError.missingAPIKey
-            }
-            guard let secret = try secretStore.get(key: .exchangeAPISecret(id)) else {
-                throw ExchangeError.missingAPISecret
-            }
-            apiKey = key
-            apiSecret = secret
-        } catch let error as ExchangeError {
-            throw error
-        } catch {
+        guard let apiKey = try secretStore.get(key: .exchangeAPIKey(id)) else {
             throw ExchangeError.missingAPIKey
         }
-        let passphrase = try? secretStore.get(key: .exchangePassphrase(id))
+        guard let apiSecret = try secretStore.get(key: .exchangeAPISecret(id)) else {
+            throw ExchangeError.missingAPISecret
+        }
+        let passphrase = try secretStore.get(key: .exchangePassphrase(id))
         let client = resolveClient(for: exchangeType)
         let tokens = try await client.fetchBalances(apiKey: apiKey, apiSecret: apiSecret, passphrase: passphrase)
         return [PositionDTO(
