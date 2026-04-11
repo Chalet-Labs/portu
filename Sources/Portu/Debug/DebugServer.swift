@@ -41,42 +41,49 @@
             params.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: nwPort)
 
             let newListener = try NWListener(using: params)
-            listener = newListener
 
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                // Safety: `resumed` is only mutated from the .main queue (see newListener.start below),
-                // so concurrent access cannot occur. nonisolated(unsafe) suppresses the Swift 6 diagnostic.
-                nonisolated(unsafe) var resumed = false
+            do {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                    // Safety: `resumed` is only mutated from the .main queue (see newListener.start below),
+                    // so concurrent access cannot occur. nonisolated(unsafe) suppresses the Swift 6 diagnostic.
+                    nonisolated(unsafe) var resumed = false
 
-                newListener.stateUpdateHandler = { [weak self] state in
-                    guard self != nil else { return }
-                    switch state {
-                    case .ready:
-                        if !resumed {
-                            resumed = true
-                            continuation.resume()
+                    newListener.stateUpdateHandler = { state in
+                        switch state {
+                        case .ready:
+                            if !resumed {
+                                resumed = true
+                                continuation.resume()
+                            }
+                        case let .failed(error):
+                            if !resumed {
+                                resumed = true
+                                continuation.resume(throwing: error)
+                            }
+                        case .cancelled:
+                            if !resumed {
+                                resumed = true
+                                continuation.resume(throwing: DebugServerError.cancelled)
+                            }
+                        default:
+                            break
                         }
-                    case let .failed(error):
-                        if !resumed {
-                            resumed = true
-                            continuation.resume(throwing: error)
+                    }
+
+                    newListener.newConnectionHandler = { [weak self] connection in
+                        Task { @MainActor in
+                            self?.handleConnection(connection)
                         }
-                    case .cancelled:
-                        break
-                    default:
-                        break
                     }
-                }
 
-                newListener.newConnectionHandler = { [weak self] connection in
-                    Task { @MainActor in
-                        self?.handleConnection(connection)
-                    }
+                    newListener.start(queue: .main)
                 }
-
-                newListener.start(queue: .main)
+            } catch {
+                newListener.cancel()
+                throw error
             }
 
+            listener = newListener
             let boundPort = port
             logger.info("Debug server listening on 127.0.0.1:\(boundPort)")
         }
@@ -175,11 +182,14 @@
 
     enum DebugServerError: LocalizedError {
         case invalidPort(UInt16)
+        case cancelled
 
         var errorDescription: String? {
             switch self {
             case let .invalidPort(port):
                 "Invalid port: \(port)"
+            case .cancelled:
+                "Server start cancelled"
             }
         }
     }
