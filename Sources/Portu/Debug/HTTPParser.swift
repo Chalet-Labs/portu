@@ -43,7 +43,7 @@
 
             // "GET /path HTTP/1.1"
             let parts = requestLine.split(separator: " ", maxSplits: 2)
-            guard parts.count == 3 else { return nil }
+            guard parts.count == 3, parts[2].hasPrefix("HTTP/") else { return nil }
 
             let method = String(parts[0])
             let rawURI = String(parts[1])
