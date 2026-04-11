@@ -2,9 +2,9 @@
 import Foundation
 
 public struct ProviderCapabilities: Sendable {
-    public var supportsTokenBalances: Bool
-    public var supportsDeFiPositions: Bool
-    public var supportsHealthFactors: Bool
+    public let supportsTokenBalances: Bool
+    public let supportsDeFiPositions: Bool
+    public let supportsHealthFactors: Bool
 
     public init(
         supportsTokenBalances: Bool = true,

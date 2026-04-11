@@ -196,12 +196,12 @@ struct AddAccountSheet: View {
 
         // Store credentials in Keychain
         let keychain = KeychainService()
-        let prefix = "portu.exchange.\(account.id.uuidString)"
+        let id = account.id
         do {
-            try keychain.set(key: "\(prefix).apiKey", value: exchangeAPIKey)
-            try keychain.set(key: "\(prefix).apiSecret", value: exchangeAPISecret)
+            try keychain.set(key: .exchangeAPIKey(id), value: exchangeAPIKey)
+            try keychain.set(key: .exchangeAPISecret(id), value: exchangeAPISecret)
             if !exchangePassphrase.isEmpty {
-                try keychain.set(key: "\(prefix).passphrase", value: exchangePassphrase)
+                try keychain.set(key: .exchangePassphrase(id), value: exchangePassphrase)
             }
         } catch {
             keychainError = "Failed to save credentials: \(error.localizedDescription)"
