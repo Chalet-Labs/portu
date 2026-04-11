@@ -87,21 +87,23 @@ jobs:
               -f body="<your overall review summary>" \
               -f 'comments[0][path]=<file>' \
               -f 'comments[0][line]=<line_number>' \
+              -f 'comments[0][side]=RIGHT' \
               -f 'comments[0][body]=<comment text>' \
               -f 'comments[1][path]=<file>' \
               -f 'comments[1][line]=<line_number>' \
+              -f 'comments[1][side]=RIGHT' \
               -f 'comments[1][body]=<comment text>'
             ```
 
             Rules:
             - Increment the array index (comments[0], comments[1], ...) for each inline comment.
-            - `line` is the line number in the diff hunk (last line of the relevant range).
+            - `line` is the file line number on the new version of the file. Always use `side=RIGHT`.
             - IMPORTANT: Never use event "APPROVE" or "REQUEST_CHANGES" — always use "COMMENT".
             - If you have no inline comments, omit the comments array entirely and just post the body.
             - Only post GitHub review comments — don't submit review text as messages.
 
           claude_args: |
-            --allowedTools "Bash(gh api repos/*/pulls/*/reviews:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+            --allowedTools "Bash(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
           
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
