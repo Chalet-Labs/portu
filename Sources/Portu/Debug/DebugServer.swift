@@ -168,7 +168,10 @@
             var payload = Data(header.utf8)
             payload.append(response.body)
 
-            connection.send(content: payload, completion: .contentProcessed { _ in
+            connection.send(content: payload, completion: .contentProcessed { [logger] error in
+                if let error {
+                    logger.debug("Connection send error: \(error)")
+                }
                 connection.cancel()
             })
         }

@@ -89,6 +89,11 @@ struct HTTPParserTests {
         #expect(request == nil)
     }
 
+    @Test func `returns nil for invalid HTTP version`() {
+        let request = HTTPParser.parse(Data("GET / GARBAGE\r\n\r\n".utf8))
+        #expect(request == nil)
+    }
+
     @Test func `returns nil for missing header terminator`() {
         // No \r\n\r\n — incomplete request
         let request = HTTPParser.parse(Data("GET /health HTTP/1.1\r\nHost: localhost".utf8))
