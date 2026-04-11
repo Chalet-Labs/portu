@@ -61,7 +61,8 @@ actor NetworkLogBuffer {
                 result.append(entry)
             }
         }
-        guard let limit, limit > 0 else { return result }
+        guard let limit else { return result }
+        guard limit > 0 else { return [] }
         return Array(result.suffix(limit))
     }
 

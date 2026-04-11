@@ -115,6 +115,13 @@ struct NetworkLogBufferTests {
         #expect(entries[1].url == "https://example.com/4")
     }
 
+    @Test func `limit zero returns empty`() async {
+        let buffer = NetworkLogBuffer(capacity: 10)
+        await buffer.append(makeEntry(url: "https://example.com"))
+        let entries = await buffer.entries(limit: 0)
+        #expect(entries.isEmpty)
+    }
+
     @Test func `clear resets buffer`() async {
         let buffer = NetworkLogBuffer(capacity: 10)
         for _ in 0 ..< 5 {
