@@ -50,12 +50,13 @@ struct ModelContainerFactory {
     }
 
     private func destroyStoreArtifacts(at storeURL: URL) throws {
+        let storePath = storeURL.path(percentEncoded: false)
         let urls = [
             storeURL,
-            URL(fileURLWithPath: storeURL.path + "-shm"),
-            URL(fileURLWithPath: storeURL.path + "-wal")
+            URL(fileURLWithPath: storePath + "-shm"),
+            URL(fileURLWithPath: storePath + "-wal")
         ]
-        for url in urls where fileManager.fileExists(atPath: url.path()) {
+        for url in urls where fileManager.fileExists(atPath: url.path(percentEncoded: false)) {
             try fileManager.removeItem(at: url)
         }
     }

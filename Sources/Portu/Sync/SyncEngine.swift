@@ -1,4 +1,5 @@
 import Foundation
+import os
 import PortuCore
 import PortuNetwork
 import SwiftData
@@ -290,23 +291,26 @@ final class SyncEngine: @unchecked Sendable {
 
     private let snapshotStore = SnapshotStore()
 
+    private static let logger = Logger(subsystem: "com.portu.app", category: "SyncEngine")
+
     /// Best-effort pruning — errors are logged but don't fail the sync.
     private func pruneSnapshots() {
-        pruneSnapshotType(PortfolioSnapshot.self)
-        pruneSnapshotType(AccountSnapshot.self)
-        pruneSnapshotType(AssetSnapshot.self)
+        let now = Date.now
+        pruneSnapshotType(PortfolioSnapshot.self, now: now)
+        pruneSnapshotType(AccountSnapshot.self, now: now)
+        pruneSnapshotType(AssetSnapshot.self, now: now)
     }
 
-    private func pruneSnapshotType<T: PersistentModel & Timestamped>(_: T.Type) {
+    private func pruneSnapshotType<T: PersistentModel & Timestamped>(_: T.Type, now: Date) {
         do {
             let all = try modelContext.fetch(FetchDescriptor<T>())
             let allDates = all.map(\.timestamp)
-            let retainedDates = Set(snapshotStore.prune(snapshotDates: allDates))
+            let retainedDates = Set(snapshotStore.prune(snapshotDates: allDates, now: now))
             for snapshot in all where !retainedDates.contains(snapshot.timestamp) {
                 modelContext.delete(snapshot)
             }
         } catch {
-            NSLog("Snapshot pruning failed for %@: %@", String(describing: T.self), String(describing: error))
+            Self.logger.error("Snapshot pruning failed for \(String(describing: T.self)): \(error)")
         }
     }
 
