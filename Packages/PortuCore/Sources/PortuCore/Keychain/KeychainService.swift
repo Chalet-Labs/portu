@@ -93,8 +93,10 @@ public struct KeychainService: SecretStore {
         ]
 
         let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw .unexpectedStatus(status)
+        switch status {
+        case errSecSuccess, errSecItemNotFound: break
+        case errSecInteractionNotAllowed: throw .interactionNotAllowed
+        default: throw .unexpectedStatus(status)
         }
     }
 }
