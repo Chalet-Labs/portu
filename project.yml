@@ -46,8 +46,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.portu.app
         INFOPLIST_FILE: Sources/Portu/Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: Sources/Portu/Resources/Portu.entitlements
-        CODE_SIGN_IDENTITY: "Portu Dev"
-        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_STYLE: Automatic
     entitlements:
       path: Sources/Portu/Resources/Portu.entitlements
       properties:

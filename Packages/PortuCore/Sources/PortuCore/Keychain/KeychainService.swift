@@ -17,7 +17,7 @@ public struct KeychainService: SecretStore {
             kSecAttrAccount as String: key.rawKey,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecUseDataProtectionKeychain as String: false
+            kSecUseDataProtectionKeychain as String: true
         ]
 
         var result: AnyObject?
@@ -50,7 +50,7 @@ public struct KeychainService: SecretStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key.rawKey,
-            kSecUseDataProtectionKeychain as String: false
+            kSecUseDataProtectionKeychain as String: true
         ]
         let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
@@ -89,7 +89,7 @@ public struct KeychainService: SecretStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key.rawKey,
-            kSecUseDataProtectionKeychain as String: false
+            kSecUseDataProtectionKeychain as String: true
         ]
 
         let status = SecItemDelete(query as CFDictionary)
