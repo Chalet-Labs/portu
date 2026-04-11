@@ -10,6 +10,7 @@ final class APIKeysViewModel {
     var rpcEndpoints: [Chain: String] = [:]
     var keychainError: String?
     private(set) var isLoading = false
+    private(set) var hasLoaded = false
 
     private let secretStore: SecretStore
 
@@ -19,7 +20,7 @@ final class APIKeysViewModel {
 
     func load() {
         isLoading = true
-        defer { isLoading = false }
+        defer { isLoading = false; hasLoaded = true }
         keychainError = nil
         do {
             zapperAPIKey = try secretStore.get(key: .providerAPIKey(.zapper)) ?? ""
