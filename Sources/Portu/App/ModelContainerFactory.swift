@@ -41,18 +41,22 @@ struct ModelContainerFactory {
     }
 
     private func persistentStoreURL() throws -> URL {
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            throw CocoaError(.fileNoSuchFile, userInfo: [NSLocalizedDescriptionKey: "Could not find Application Support directory"])
+        }
         let directory = appSupport.appending(path: "Portu", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appending(path: "Portu.store")
     }
 
     private func destroyStoreArtifacts(at storeURL: URL) throws {
-        for ext in ["", ".shm", ".wal"] {
-            let url = ext.isEmpty ? storeURL : storeURL.appendingPathExtension(ext.dropFirst().description)
-            if fileManager.fileExists(atPath: url.path()) {
-                try fileManager.removeItem(at: url)
-            }
+        let urls = [
+            storeURL,
+            URL(fileURLWithPath: storeURL.path + "-shm"),
+            URL(fileURLWithPath: storeURL.path + "-wal")
+        ]
+        for url in urls where fileManager.fileExists(atPath: url.path()) {
+            try fileManager.removeItem(at: url)
         }
     }
 

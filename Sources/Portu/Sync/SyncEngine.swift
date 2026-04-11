@@ -306,7 +306,7 @@ final class SyncEngine: @unchecked Sendable {
                 modelContext.delete(snapshot)
             }
         } catch {
-            // Best-effort: don't fail the sync over pruning
+            NSLog("Snapshot pruning failed for %@: %@", String(describing: T.self), String(describing: error))
         }
     }
 

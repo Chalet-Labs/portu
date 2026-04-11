@@ -11,14 +11,8 @@ struct ProviderFactory {
         self.resolver = { dataSource, _ in
             switch dataSource {
             case .zapper:
-                let apiKey: String
-                do {
-                    guard let key = try secretStore.get(key: .providerAPIKey(.zapper)) else {
-                        throw SyncError.missingAPIKey("Zapper API key not configured")
-                    }
-                    apiKey = key
-                } catch is KeychainError {
-                    throw SyncError.missingAPIKey("Failed to read Zapper API key from Keychain")
+                guard let apiKey = try secretStore.get(key: .providerAPIKey(.zapper)) else {
+                    throw SyncError.missingAPIKey("Zapper API key not configured")
                 }
                 return ZapperProvider(apiKey: apiKey, session: session)
             case .exchange:

@@ -22,13 +22,12 @@ public struct SnapshotStore: Sendable {
         var weeklyBuckets: [Date: Date] = [:]
 
         for snapshotDate in snapshotDates {
-            switch snapshotDate {
-            case sevenDaysAgo...:
+            if snapshotDate > sevenDaysAgo {
                 retainedRecent.append(snapshotDate)
-            case ninetyDaysAgo...:
+            } else if snapshotDate >= ninetyDaysAgo {
                 let bucket = calendar.startOfDay(for: snapshotDate)
                 dailyBuckets[bucket] = max(dailyBuckets[bucket] ?? snapshotDate, snapshotDate)
-            default:
+            } else {
                 let bucket = weekBucket(for: snapshotDate)
                 weeklyBuckets[bucket] = max(weeklyBuckets[bucket] ?? snapshotDate, snapshotDate)
             }
@@ -45,6 +44,9 @@ public struct SnapshotStore: Sendable {
     private static var utcGregorianCalendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        calendar.locale = Locale(identifier: "en_US_POSIX")
+        calendar.firstWeekday = 2
+        calendar.minimumDaysInFirstWeek = 4
         return calendar
     }
 }

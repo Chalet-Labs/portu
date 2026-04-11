@@ -13,8 +13,13 @@ struct CSVDocument: FileDocument {
     }
 
     init(configuration: ReadConfiguration) throws {
-        let data = configuration.file.regularFileContents ?? Data()
-        self.text = String(bytes: data, encoding: .utf8) ?? ""
+        guard let data = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw CocoaError(.fileReadInapplicableStringEncoding)
+        }
+        self.text = text
     }
 
     func fileWrapper(configuration _: WriteConfiguration) throws -> FileWrapper {
