@@ -17,8 +17,8 @@ struct SyncEngineTests {
         // Use a fresh ModelContext per test — container.mainContext shares thread-local
         // state across tests which causes SIGTRAP when multiple containers exist.
         let context = ModelContext(container)
-        let mockStore = MockSecretStore()
-        let engine = SyncEngine(modelContext: context, secretStore: mockStore)
+        let factory = ProviderFactory(secretStore: MockSecretStore())
+        let engine = SyncEngine(modelContext: context, providerFactory: factory)
         return (context, engine)
     }
 
@@ -230,15 +230,15 @@ struct SyncEngineTests {
 
 private final class MockSecretStore: SecretStore, @unchecked Sendable {
     private var store: [String: String] = [:]
-    func get(key: String) throws(KeychainError) -> String? {
-        store[key]
+    func get(key: KeychainKey) throws(KeychainError) -> String? {
+        store[key.rawKey]
     }
 
-    func set(key: String, value: String) throws(KeychainError) {
-        store[key] = value
+    func set(key: KeychainKey, value: String) throws(KeychainError) {
+        store[key.rawKey] = value
     }
 
-    func delete(key: String) throws(KeychainError) {
-        store.removeValue(forKey: key)
+    func delete(key: KeychainKey) throws(KeychainError) {
+        store.removeValue(forKey: key.rawKey)
     }
 }

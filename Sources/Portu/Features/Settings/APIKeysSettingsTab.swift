@@ -23,7 +23,7 @@ struct APIKeysSettingsTab: View {
             .padding()
         }
         .navigationTitle("API Keys")
-        .onAppear { viewModel.load() }
+        .task { if !viewModel.hasLoaded { viewModel.load() } }
         .onChange(of: viewModel.zapperAPIKey) { debounceSave() }
         .onChange(of: viewModel.debankAPIKey) { debounceSave() }
         .onChange(of: viewModel.coingeckoAPIKey) { debounceSave() }

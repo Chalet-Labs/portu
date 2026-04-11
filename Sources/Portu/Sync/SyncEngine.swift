@@ -1,4 +1,5 @@
 import Foundation
+import os
 import PortuCore
 import PortuNetwork
 import SwiftData
@@ -6,11 +7,11 @@ import SwiftData
 @MainActor
 final class SyncEngine: @unchecked Sendable {
     private let modelContext: ModelContext
-    private let secretStore: any SecretStore
+    private let providerFactory: ProviderFactory
 
-    init(modelContext: ModelContext, secretStore: any SecretStore) {
+    init(modelContext: ModelContext, providerFactory: ProviderFactory) {
         self.modelContext = modelContext
-        self.secretStore = secretStore
+        self.providerFactory = providerFactory
     }
 
     // MARK: - Public API
@@ -56,7 +57,7 @@ final class SyncEngine: @unchecked Sendable {
             addresses: account.addresses.map { ($0.address, $0.chain) },
             exchangeType: account.exchangeType)
 
-        let provider = try resolveProvider(for: account)
+        let provider = try resolveProvider(for: account, context: context)
 
         let balances = try await provider.fetchBalances(context: context)
         let defi = try await provider.fetchDeFiPositions(context: context)
@@ -288,48 +289,35 @@ final class SyncEngine: @unchecked Sendable {
 
     // MARK: - Snapshot Pruning
 
-    /// - Snapshots older than 7 days: keep one per day (last of each day)
-    /// - Snapshots older than 90 days: keep one per week (last of each week)
+    private let snapshotStore = SnapshotStore()
+
+    private static let logger = Logger(subsystem: "com.portu.app", category: "SyncEngine")
+
+    /// Best-effort pruning — errors are logged but don't fail the sync.
     private func pruneSnapshots() {
         let now = Date.now
-        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: now)!
-        let ninetyDaysAgo = Calendar.current.date(byAdding: .day, value: -90, to: now)!
-
-        pruneSnapshotType(PortfolioSnapshot.self, olderThan: sevenDaysAgo, keepPer: .day)
-        pruneSnapshotType(PortfolioSnapshot.self, olderThan: ninetyDaysAgo, keepPer: .weekOfYear)
-        pruneSnapshotType(AccountSnapshot.self, olderThan: sevenDaysAgo, keepPer: .day)
-        pruneSnapshotType(AccountSnapshot.self, olderThan: ninetyDaysAgo, keepPer: .weekOfYear)
-        pruneSnapshotType(AssetSnapshot.self, olderThan: sevenDaysAgo, keepPer: .day)
-        pruneSnapshotType(AssetSnapshot.self, olderThan: ninetyDaysAgo, keepPer: .weekOfYear)
+        pruneSnapshotType(PortfolioSnapshot.self, now: now)
+        pruneSnapshotType(AccountSnapshot.self, now: now)
+        pruneSnapshotType(AssetSnapshot.self, now: now)
     }
 
-    private func pruneSnapshotType(_: (some PersistentModel).Type, olderThan _: Date, keepPer _: Calendar.Component) {
-        // Implementation: fetch snapshots older than cutoff, group by calendar component,
-        // keep only the last snapshot per group, delete the rest.
-        // This is a best-effort operation — errors are logged but don't fail the sync.
-        // TODO: Implement when snapshot volume warrants it
+    private func pruneSnapshotType<T: PersistentModel & Timestamped>(_: T.Type, now: Date) {
+        do {
+            let all = try modelContext.fetch(FetchDescriptor<T>())
+            let allDates = all.map(\.timestamp)
+            let retainedDates = Set(snapshotStore.prune(snapshotDates: allDates, now: now))
+            for snapshot in all where !retainedDates.contains(snapshot.timestamp) {
+                modelContext.delete(snapshot)
+            }
+        } catch {
+            Self.logger.error("Snapshot pruning failed for \(String(describing: T.self)): \(error)")
+        }
     }
 
     // MARK: - Helpers
 
-    private func resolveProvider(for account: Account) throws -> any PortfolioDataProvider {
-        switch account.dataSource {
-        case .zapper:
-            let apiKey: String
-            do {
-                guard let key = try secretStore.get(key: "portu.provider.zapper.apiKey") else {
-                    throw SyncError.missingAPIKey("Zapper API key not configured")
-                }
-                apiKey = key
-            } catch is KeychainError {
-                throw SyncError.missingAPIKey("Failed to read Zapper API key from Keychain")
-            }
-            return ZapperProvider(apiKey: apiKey)
-        case .exchange:
-            return ExchangeProvider(secretStore: secretStore)
-        case .manual:
-            fatalError("Manual accounts should not reach provider resolution")
-        }
+    private func resolveProvider(for account: Account, context: SyncContext) throws -> any PortfolioDataProvider {
+        try providerFactory.makeProvider(for: account.dataSource, context: context)
     }
 
     // SwiftData predicates have limitations with enum comparisons and optional

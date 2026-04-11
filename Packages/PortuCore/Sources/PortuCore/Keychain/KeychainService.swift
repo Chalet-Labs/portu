@@ -10,14 +10,14 @@ public struct KeychainService: SecretStore {
         self.service = service
     }
 
-    public func get(key: String) throws(KeychainError) -> String? {
+    public func get(key: KeychainKey) throws(KeychainError) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
+            kSecAttrAccount as String: key.rawKey,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecUseDataProtectionKeychain as String: false
+            kSecUseDataProtectionKeychain as String: true
         ]
 
         var result: AnyObject?
@@ -34,12 +34,14 @@ public struct KeychainService: SecretStore {
             return string
         case errSecItemNotFound:
             return nil
+        case errSecInteractionNotAllowed:
+            throw .interactionNotAllowed
         default:
             throw .unexpectedStatus(status)
         }
     }
 
-    public func set(key: String, value: String) throws(KeychainError) {
+    public func set(key: KeychainKey, value: String) throws(KeychainError) {
         guard let data = value.data(using: .utf8) else {
             throw .encodingFailed
         }
@@ -47,8 +49,8 @@ public struct KeychainService: SecretStore {
         let baseQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecUseDataProtectionKeychain as String: false
+            kSecAttrAccount as String: key.rawKey,
+            kSecUseDataProtectionKeychain as String: true
         ]
         let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
@@ -70,25 +72,31 @@ public struct KeychainService: SecretStore {
                     kSecValueData as String: data,
                     kSecAttrAccessible as String: accessibility
                 ] as CFDictionary)
-            guard updateStatus == errSecSuccess else {
-                throw .unexpectedStatus(updateStatus)
+            switch updateStatus {
+            case errSecSuccess: break
+            case errSecInteractionNotAllowed: throw .interactionNotAllowed
+            default: throw .unexpectedStatus(updateStatus)
             }
+        case errSecInteractionNotAllowed:
+            throw .interactionNotAllowed
         default:
             throw .unexpectedStatus(addStatus)
         }
     }
 
-    public func delete(key: String) throws(KeychainError) {
+    public func delete(key: KeychainKey) throws(KeychainError) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecUseDataProtectionKeychain as String: false
+            kSecAttrAccount as String: key.rawKey,
+            kSecUseDataProtectionKeychain as String: true
         ]
 
         let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw .unexpectedStatus(status)
+        switch status {
+        case errSecSuccess, errSecItemNotFound: break
+        case errSecInteractionNotAllowed: throw .interactionNotAllowed
+        default: throw .unexpectedStatus(status)
         }
     }
 }

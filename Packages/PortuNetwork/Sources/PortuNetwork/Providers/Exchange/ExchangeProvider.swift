@@ -18,22 +18,14 @@ public actor ExchangeProvider: PortfolioDataProvider {
         guard let exchangeType = context.exchangeType else {
             throw ExchangeError.missingExchangeType
         }
-        let keyPrefix = "portu.exchange.\(context.accountId.uuidString)"
-        let apiKey: String
-        let apiSecret: String
-        do {
-            guard
-                let key = try secretStore.get(key: "\(keyPrefix).apiKey"),
-                let secret = try secretStore.get(key: "\(keyPrefix).apiSecret")
-            else {
-                throw ExchangeError.missingCredentials
-            }
-            apiKey = key
-            apiSecret = secret
-        } catch is KeychainError {
-            throw ExchangeError.missingCredentials
+        let id = context.accountId
+        guard let apiKey = try secretStore.get(key: .exchangeAPIKey(id)) else {
+            throw ExchangeError.missingAPIKey
         }
-        let passphrase = try? secretStore.get(key: "\(keyPrefix).passphrase")
+        guard let apiSecret = try secretStore.get(key: .exchangeAPISecret(id)) else {
+            throw ExchangeError.missingAPISecret
+        }
+        let passphrase = try secretStore.get(key: .exchangePassphrase(id))
         let client = resolveClient(for: exchangeType)
         let tokens = try await client.fetchBalances(apiKey: apiKey, apiSecret: apiSecret, passphrase: passphrase)
         return [PositionDTO(
@@ -53,7 +45,8 @@ public actor ExchangeProvider: PortfolioDataProvider {
 
 enum ExchangeError: Error, LocalizedError, Equatable {
     case missingExchangeType
-    case missingCredentials
+    case missingAPIKey
+    case missingAPISecret
     case invalidCredentials
     case httpError
     case decodingFailed
@@ -63,7 +56,8 @@ enum ExchangeError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .missingExchangeType: "Account has no exchange type set"
-        case .missingCredentials: "API credentials not found in Keychain"
+        case .missingAPIKey: "API key not found in Keychain"
+        case .missingAPISecret: "API secret not found in Keychain"
         case .invalidCredentials: "Invalid API credentials"
         case .httpError: "Exchange API request failed"
         case .decodingFailed: "Failed to parse exchange API response"
