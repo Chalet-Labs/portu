@@ -28,7 +28,7 @@ enum AssetValueFormatter {
     }
 
     static func fallbackPrice(for token: PositionToken) -> Decimal? {
-        guard token.amount != .zero else { return nil }
+        guard token.amount > .zero, token.usdValue >= .zero else { return nil }
         return token.usdValue / token.amount
     }
 
