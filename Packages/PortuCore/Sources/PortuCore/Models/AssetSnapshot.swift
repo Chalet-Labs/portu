@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-public final class AssetSnapshot {
+public final class AssetSnapshot: Timestamped {
     @Attribute(.unique) public var id: UUID
     public var syncBatchId: UUID
     public var timestamp: Date
