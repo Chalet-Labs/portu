@@ -36,6 +36,18 @@ private final class LoggerTestProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
+// MARK: - Helpers
+
+private func waitForEntries(
+    in buffer: NetworkLogBuffer = .shared,
+    count: Int,
+    timeout: TimeInterval = 1.0) async throws {
+    let deadline = Date.now.addingTimeInterval(timeout)
+    while await buffer.entryCount < count, Date.now < deadline {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+}
+
 // MARK: - Integration Tests
 
 @Suite(.serialized) struct NetworkLoggerTests {
@@ -59,8 +71,7 @@ private final class LoggerTestProtocol: URLProtocol, @unchecked Sendable {
         #expect(httpResponse.statusCode == 200)
         #expect(data == LoggerTestProtocol.responseBody)
 
-        // Allow the async Task inside NetworkLogger to complete
-        try await Task.sleep(for: .milliseconds(200))
+        try await waitForEntries(count: 1)
 
         let entries = await NetworkLogBuffer.shared.entries()
         #expect(entries.count == 1)
@@ -84,7 +95,7 @@ private final class LoggerTestProtocol: URLProtocol, @unchecked Sendable {
             #expect(error is URLError)
         }
 
-        try await Task.sleep(for: .milliseconds(200))
+        try await waitForEntries(count: 1)
 
         let entries = await NetworkLogBuffer.shared.entries()
         #expect(entries.count == 1)
@@ -99,11 +110,10 @@ private final class LoggerTestProtocol: URLProtocol, @unchecked Sendable {
         let session = NetworkLogger.debugSession()
         _ = try await session.data(from: #require(URL(string: "https://test.local/large")))
 
-        try await Task.sleep(for: .milliseconds(200))
+        try await waitForEntries(count: 1)
 
         let entries = await NetworkLogBuffer.shared.entries()
         #expect(entries.count == 1)
-        // Entry tracks size but has no body field — only metadata
         #expect(entries[0].responseSizeBytes == 4096)
     }
 
@@ -115,7 +125,7 @@ private final class LoggerTestProtocol: URLProtocol, @unchecked Sendable {
             _ = try await session.data(from: #require(URL(string: "https://test.local/req/\(i)")))
         }
 
-        try await Task.sleep(for: .milliseconds(200))
+        try await waitForEntries(count: 3)
 
         let entries = await NetworkLogBuffer.shared.entries()
         #expect(entries.count == 3)

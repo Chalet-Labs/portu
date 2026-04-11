@@ -35,9 +35,10 @@ actor NetworkLogBuffer {
     private var buffer: [NetworkLogEntry?]
     private var writeIndex = 0
     private var filled = 0
-    let capacity: Int
+    private let capacity: Int
 
     init(capacity: Int = 500) {
+        precondition(capacity > 0, "NetworkLogBuffer capacity must be positive")
         self.capacity = capacity
         self.buffer = Array(repeating: nil, count: capacity)
     }
@@ -60,8 +61,8 @@ actor NetworkLogBuffer {
                 result.append(entry)
             }
         }
-        if let limit { return Array(result.suffix(limit)) }
-        return result
+        guard let limit, limit > 0 else { return result }
+        return Array(result.suffix(limit))
     }
 
     var entryCount: Int {
@@ -77,12 +78,14 @@ actor NetworkLogBuffer {
 
 // MARK: - NetworkLogger
 
+/// URLProtocol serializes startLoading, stopLoading, and all URLSessionDataDelegate
+/// callbacks on its own private queue, so mutable instance state is single-threaded.
 final class NetworkLogger: URLProtocol, @unchecked Sendable {
     private static let handledKey = "NetworkLogger.handled"
     private var internalSession: URLSession?
     private var internalTask: URLSessionDataTask?
     private var startTime: Date?
-    private var responseData = Data()
+    private var responseSizeCounter = 0
 
     /// Test hook: protocol classes prepended to the internal forwarding session.
     /// Globally registered protocols don't apply to URLSession(configuration:) sessions,
@@ -91,7 +94,10 @@ final class NetworkLogger: URLProtocol, @unchecked Sendable {
 
     // swiftlint:disable:next static_over_final_class
     override class func canInit(with request: URLRequest) -> Bool {
-        URLProtocol.property(forKey: handledKey, in: request) == nil
+        guard let scheme = request.url?.scheme, scheme == "http" || scheme == "https" else {
+            return false
+        }
+        return URLProtocol.property(forKey: handledKey, in: request) == nil
     }
 
     // swiftlint:disable:next static_over_final_class
@@ -141,7 +147,7 @@ extension NetworkLogger: URLSessionDataDelegate {
     }
 
     func urlSession(_: URLSession, dataTask _: URLSessionDataTask, didReceive data: Data) {
-        responseData.append(data)
+        responseSizeCounter += data.count
         client?.urlProtocol(self, didLoad: data)
     }
 
@@ -156,12 +162,11 @@ extension NetworkLogger: URLSessionDataDelegate {
             url: request.url?.absoluteString ?? "unknown",
             method: request.httpMethod ?? "GET",
             statusCode: statusCode,
-            responseSizeBytes: responseData.count,
+            responseSizeBytes: responseSizeCounter,
             elapsed: elapsed,
             headers: NetworkLogEntry.redactHeaders(headers),
             errorDescription: error?.localizedDescription)
 
-        responseData = Data()
         Task { await NetworkLogBuffer.shared.append(entry) }
 
         if let error {
