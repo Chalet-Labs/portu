@@ -39,7 +39,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          track_progress: true # ✨ Enables tracking comments
+          track_progress: false # ✨ Enables tracking comments
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: |
             code-review@claude-code-plugins
@@ -101,6 +101,8 @@ jobs:
             - IMPORTANT: Never use event "APPROVE" or "REQUEST_CHANGES" — always use "COMMENT".
             - If you have no inline comments, omit the comments array entirely and just post the body.
             - Only post GitHub review comments — don't submit review text as messages.
+            - Only post actionable inline comments, don't post confirmations.
+            - Don't repeat correctly addressed items.
 
           claude_args: |
             --allowedTools "Bash(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
