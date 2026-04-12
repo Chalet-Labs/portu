@@ -77,7 +77,7 @@
 
         // MARK: - Localhost Binding
 
-        @Test func `server binds to localhost only`() async throws {
+        @Test func `server responds on loopback`() async throws {
             let server = DebugServer(port: 19005)
             try await server.start()
             defer { server.stop() }
