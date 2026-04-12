@@ -103,6 +103,9 @@
             if let name = position.protocolName {
                 dict["protocolName"] = name
             }
+            if let accountId = position.account?.id {
+                dict["accountId"] = accountId.uuidString
+            }
             return dict
         }
 
@@ -112,12 +115,15 @@
             let limit = request.intParam("limit", default: 50)
             let offset = request.intParam("offset", default: 0)
 
-            guard let allAssets = try? context.fetch(FetchDescriptor<Asset>()) else {
+            var descriptor = FetchDescriptor<Asset>(sortBy: [SortDescriptor(\.symbol)])
+            descriptor.fetchOffset = offset
+            descriptor.fetchLimit = limit
+
+            guard let assets = try? context.fetch(descriptor) else {
                 return errorResponse("Failed to fetch assets")
             }
 
-            let paginated = Array(allAssets.dropFirst(offset).prefix(limit))
-            let body: [[String: any Sendable]] = paginated.map { asset in
+            let body: [[String: any Sendable]] = assets.map { asset in
                 var dict: [String: any Sendable] = [
                     "id": asset.id.uuidString,
                     "symbol": asset.symbol,
@@ -232,7 +238,15 @@
             buffer: NetworkLogBuffer = .shared,
             request: HTTPRequest) async -> HTTPResponse {
             let limit = request.intParam("limit", default: 50)
-            let since = request.queryParams["since"].flatMap { iso8601.date(from: $0) }
+            let since: Date?
+            if let rawSince = request.queryParams["since"] {
+                guard let parsed = iso8601.date(from: rawSince.removingPercentEncoding ?? rawSince) else {
+                    return errorResponse("Invalid since parameter", statusCode: 400)
+                }
+                since = parsed
+            } else {
+                since = nil
+            }
 
             let entries = await buffer.entries(since: since, limit: limit)
             let body: [[String: any Sendable]] = entries.map { entry in
@@ -249,6 +263,9 @@
                 }
                 if let error = entry.errorDescription {
                     dict["errorDescription"] = error
+                }
+                if !entry.headers.isEmpty {
+                    dict["headers"] = entry.headers
                 }
                 return dict
             }
@@ -276,7 +293,7 @@
 
     extension HTTPRequest {
         func intParam(_ key: String, default defaultValue: Int) -> Int {
-            queryParams[key].flatMap(Int.init) ?? defaultValue
+            max(queryParams[key].flatMap(Int.init) ?? defaultValue, 0)
         }
     }
 

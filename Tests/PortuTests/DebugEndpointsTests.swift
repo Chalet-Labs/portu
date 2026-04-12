@@ -165,6 +165,23 @@
             #expect(item["isVerified"] as? Bool == true)
         }
 
+        @Test func `assets clamps negative offset to zero`() throws {
+            let container = try makeTestContainer()
+            let context = ModelContext(container)
+
+            context.insert(Asset(symbol: "ETH", name: "Ethereum", category: .major))
+            try context.save()
+
+            let request = HTTPRequest(
+                method: "GET", path: "/state/assets",
+                queryParams: ["offset": "-1"])
+            let response = DebugEndpoints.assets(context: context, request: request)
+            #expect(response.statusCode == 200)
+
+            let json = try #require(JSONSerialization.jsonObject(with: response.body) as? [[String: Any]])
+            #expect(json.count == 1)
+        }
+
         // MARK: - /state/snapshots/portfolio
 
         @Test func `portfolio snapshots sorted by timestamp desc`() throws {
@@ -344,6 +361,49 @@
             #expect(json[0]["elapsed"] as? Double == 0.35)
         }
 
+        @Test func `network log filters by since parameter`() async throws {
+            let buffer = NetworkLogBuffer(capacity: 10)
+            let old = NetworkLogEntry(
+                id: UUID(),
+                timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+                url: "https://api.example.com/old",
+                method: "GET",
+                statusCode: 200,
+                responseSizeBytes: 512,
+                elapsed: 0.1,
+                headers: [:])
+            let recent = NetworkLogEntry(
+                id: UUID(),
+                timestamp: Date(timeIntervalSince1970: 1_700_100_000),
+                url: "https://api.example.com/recent",
+                method: "POST",
+                statusCode: 201,
+                responseSizeBytes: 256,
+                elapsed: 0.2,
+                headers: [:])
+            await buffer.append(old)
+            await buffer.append(recent)
+
+            let request = HTTPRequest(
+                method: "GET", path: "/network/log",
+                queryParams: ["since": "2023-11-16T00:00:00.000Z"])
+            let response = await DebugEndpoints.networkLog(buffer: buffer, request: request)
+            #expect(response.statusCode == 200)
+
+            let json = try #require(JSONSerialization.jsonObject(with: response.body) as? [[String: Any]])
+            #expect(json.count == 1)
+            #expect(json[0]["url"] as? String == "https://api.example.com/recent")
+        }
+
+        @Test func `network log rejects invalid since parameter`() async {
+            let buffer = NetworkLogBuffer(capacity: 10)
+            let request = HTTPRequest(
+                method: "GET", path: "/network/log",
+                queryParams: ["since": "not-a-date"])
+            let response = await DebugEndpoints.networkLog(buffer: buffer, request: request)
+            #expect(response.statusCode == 400)
+        }
+
         @Test func `network log empty buffer returns empty array`() async throws {
             let buffer = NetworkLogBuffer(capacity: 10)
 
@@ -386,12 +446,13 @@
             context.insert(Account(name: "Integrated", kind: .manual, dataSource: .manual))
             try context.save()
 
-            let server = DebugServer(port: 19040, modelContainer: container)
+            let port = UInt16.random(in: 49152 ... 65535)
+            let server = DebugServer(port: port, modelContainer: container)
             try await server.start()
             defer { server.stop() }
 
             let (data, response) = try await URLSession.shared.data(
-                from: #require(URL(string: "http://127.0.0.1:19040/state/accounts")))
+                from: #require(URL(string: "http://127.0.0.1:\(port)/state/accounts")))
             let httpResponse = try #require(response as? HTTPURLResponse)
             #expect(httpResponse.statusCode == 200)
             #expect(httpResponse.value(forHTTPHeaderField: "Content-Type") == "application/json")
