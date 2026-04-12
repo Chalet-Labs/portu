@@ -11,14 +11,13 @@
         private let port: UInt16
         private var listener: NWListener?
         private var startingListener: NWListener?
-        private var routes: [String: [String: @MainActor (HTTPRequest) -> HTTPResponse]] = [:]
+        private var routes: [String: [String: @MainActor (HTTPRequest) async -> HTTPResponse]] = [:]
         private var activeConnections: [ObjectIdentifier: NWConnection] = [:]
         private let startTime = ContinuousClock.now
         private let logger = Logger(subsystem: "com.portu.app", category: "DebugServer")
 
-        // Stored for future endpoints (sub-issues #3, #4)
         private let modelContainer: ModelContainer?
-        private let store: StoreOf<AppFeature>?
+        private let store: StoreOf<AppFeature>? // sub-issue #4: TCA state endpoints
 
         init(
             port: UInt16 = 9999,
@@ -28,6 +27,9 @@
             self.modelContainer = modelContainer
             self.store = store
             registerBuiltInRoutes()
+            if let modelContainer {
+                DebugEndpoints.register(on: self, modelContainer: modelContainer)
+            }
         }
 
         // MARK: - Lifecycle
@@ -115,7 +117,7 @@
 
         // MARK: - Routing
 
-        func addRoute(_ method: String, _ path: String, handler: @MainActor @escaping (HTTPRequest) -> HTTPResponse) {
+        func addRoute(_ method: String, _ path: String, handler: @MainActor @escaping (HTTPRequest) async -> HTTPResponse) {
             routes[path, default: [:]][method] = handler
         }
 
@@ -179,7 +181,7 @@
                     let response: HTTPResponse = if
                         let pathRoutes = self.routes[request.path],
                         let handler = pathRoutes[request.method] {
-                        handler(request)
+                        await handler(request)
                     } else {
                         Self.jsonResponse(statusCode: 404, body: ["error": "Not found"])
                     }
