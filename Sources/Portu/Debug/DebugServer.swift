@@ -144,6 +144,7 @@
         private func handleConnection(_ connection: NWConnection) {
             connection.stateUpdateHandler = { [weak self] state in
                 Task { @MainActor in
+                    // Only .failed needs cleanup here — .cancelled is covered by stop() via activeConnections.removeAll()
                     guard case .failed = state else { return }
                     if let self {
                         self.finishConnection(connection)
