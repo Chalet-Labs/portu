@@ -76,7 +76,7 @@
 
                     newListener.newConnectionHandler = { [weak self] connection in
                         Task { @MainActor in
-                            guard let self, self.listener != nil else {
+                            guard let self, self.listener != nil || self.startingListener != nil else {
                                 connection.cancel()
                                 return
                             }
@@ -142,6 +142,17 @@
         }
 
         private func handleConnection(_ connection: NWConnection) {
+            connection.stateUpdateHandler = { [weak self] state in
+                Task { @MainActor in
+                    guard case .failed = state else { return }
+                    if let self {
+                        self.finishConnection(connection)
+                    } else {
+                        connection.cancel()
+                    }
+                }
+            }
+
             connection.start(queue: .main)
 
             connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] content, _, _, error in
