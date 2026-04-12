@@ -51,6 +51,7 @@ targets:
       path: Sources/Portu/Resources/Portu.entitlements
       properties:
         com.apple.security.network.client: true
+        com.apple.security.network.server: true
 
   PortuTests:
     type: bundle.unit-test
