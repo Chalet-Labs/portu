@@ -81,19 +81,23 @@
         static func positions(context: ModelContext, request: HTTPRequest) -> HTTPResponse {
             let limit = request.intParam("limit", default: 100)
 
-            guard let positions = try? context.fetch(FetchDescriptor<Position>()) else {
-                return errorResponse("Failed to fetch positions")
-            }
-
             if let rawId = request.queryParams["accountId"] {
                 guard let accountId = UUID(uuidString: rawId) else {
                     return errorResponse("Invalid accountId", statusCode: 400)
+                }
+                guard let positions = try? context.fetch(FetchDescriptor<Position>()) else {
+                    return errorResponse("Failed to fetch positions")
                 }
                 let filtered = positions.filter { $0.account?.id == accountId }
                 return jsonArrayResponse(Array(filtered.prefix(limit)).map(positionDict))
             }
 
-            return jsonArrayResponse(Array(positions.prefix(limit)).map(positionDict))
+            var descriptor = FetchDescriptor<Position>()
+            descriptor.fetchLimit = limit
+            guard let positions = try? context.fetch(descriptor) else {
+                return errorResponse("Failed to fetch positions")
+            }
+            return jsonArrayResponse(positions.map(positionDict))
         }
 
         private static func positionDict(_ position: Position) -> [String: any Sendable] {
