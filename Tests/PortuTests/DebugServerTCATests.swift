@@ -163,8 +163,56 @@
             let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
             #expect(json["triggered"] as? Bool == true)
 
-            try await Task.sleep(for: .milliseconds(50))
+            let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+            while !invalidateCalled, ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
             #expect(invalidateCalled)
+        }
+
+        @Test func `price invalidate returns 500 when priceService is nil`() async throws {
+            let store = makeStore()
+            let server = DebugServer(port: 19029, store: store)
+            try await server.start()
+            defer { server.stop() }
+
+            var request = try URLRequest(
+                url: #require(URL(string: "http://127.0.0.1:19029/actions/price-invalidate")))
+            request.httpMethod = "POST"
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = try #require(response as? HTTPURLResponse)
+
+            #expect(httpResponse.statusCode == 500)
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(json["error"] as? String == "Price service unavailable")
+        }
+
+        // MARK: - Error state serialization
+
+        @Test func `sync endpoint serializes error status with message`() async throws {
+            let store = makeStore(syncStatus: .error("Sync failed"))
+            let server = DebugServer(port: 19030, store: store)
+            try await server.start()
+            defer { server.stop() }
+
+            let (data, _) = try await URLSession.shared.data(
+                from: #require(URL(string: "http://127.0.0.1:19030/state/sync")))
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(json["syncStatus"] as? String == "error")
+            #expect(json["errorMessage"] as? String == "Sync failed")
+        }
+
+        @Test func `sync endpoint serializes error connection status`() async throws {
+            let store = makeStore(connectionStatus: .error("Connection lost"))
+            let server = DebugServer(port: 19031, store: store)
+            try await server.start()
+            defer { server.stop() }
+
+            let (data, _) = try await URLSession.shared.data(
+                from: #require(URL(string: "http://127.0.0.1:19031/state/sync")))
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(json["connectionStatus"] as? String == "error")
+            #expect(json["connectionErrorMessage"] as? String == "Connection lost")
         }
 
         // MARK: - 405 on TCA routes
@@ -180,6 +228,7 @@
             let (_, response) = try await URLSession.shared.data(for: request)
             let httpResponse = try #require(response as? HTTPURLResponse)
             #expect(httpResponse.statusCode == 405)
+            #expect(httpResponse.value(forHTTPHeaderField: "Allow") == "GET")
         }
     }
 #endif

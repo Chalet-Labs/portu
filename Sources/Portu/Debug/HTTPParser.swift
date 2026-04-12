@@ -11,6 +11,7 @@
     struct HTTPResponse {
         let statusCode: Int
         let body: Data
+        var headers: [String: String] = [:]
 
         var statusText: String {
             switch statusCode {

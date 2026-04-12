@@ -196,9 +196,10 @@
             }
 
             addRoute("POST", "/actions/price-invalidate") { [weak self] _ in
-                if let priceService = self?.priceService {
-                    Task { await priceService.invalidateCache() }
+                guard let priceService = self?.priceService else {
+                    return Self.jsonResponse(statusCode: 500, body: ["error": "Price service unavailable"])
                 }
+                Task { await priceService.invalidateCache() }
                 return Self.jsonResponse(statusCode: 200, body: ["triggered": true])
             }
         }
@@ -249,7 +250,10 @@
                         if let handler = pathRoutes[request.method] {
                             await handler(request)
                         } else {
-                            Self.jsonResponse(statusCode: 405, body: ["error": "Method not allowed"])
+                            Self.jsonResponse(
+                                statusCode: 405,
+                                body: ["error": "Method not allowed"],
+                                headers: ["Allow": pathRoutes.keys.sorted().joined(separator: ", ")])
                         }
                     } else {
                         Self.jsonResponse(statusCode: 404, body: ["error": "Not found"])
@@ -265,6 +269,9 @@
             header += "Content-Type: application/json\r\n"
             header += "Content-Length: \(response.body.count)\r\n"
             header += "Connection: close\r\n"
+            for (key, value) in response.headers {
+                header += "\(key): \(value)\r\n"
+            }
             header += "\r\n"
 
             var payload = Data(header.utf8)
@@ -286,12 +293,15 @@
 
         // MARK: - Helpers
 
-        nonisolated private static func jsonResponse(statusCode: Int, body: [String: any Sendable]) -> HTTPResponse {
+        nonisolated private static func jsonResponse(
+            statusCode: Int,
+            body: [String: any Sendable],
+            headers: [String: String] = [:]) -> HTTPResponse {
             guard let data = try? JSONSerialization.data(withJSONObject: body) else {
                 assertionFailure("DebugServer: failed to serialize JSON response")
                 return HTTPResponse(statusCode: 500, body: Data("{\"error\":\"serialization failed\"}".utf8))
             }
-            return HTTPResponse(statusCode: statusCode, body: data)
+            return HTTPResponse(statusCode: statusCode, body: data, headers: headers)
         }
     }
 
