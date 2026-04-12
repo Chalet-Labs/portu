@@ -191,7 +191,10 @@
             }
 
             addRoute("POST", "/actions/sync") { [weak self] _ in
-                self?.store?.send(.syncTapped)
+                guard let store = self?.store else {
+                    return Self.jsonResponse(statusCode: 500, body: ["error": "Store unavailable"])
+                }
+                store.send(.syncTapped)
                 return Self.jsonResponse(statusCode: 200, body: ["triggered": true])
             }
 

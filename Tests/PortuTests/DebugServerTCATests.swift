@@ -51,7 +51,7 @@
             let prices = try #require(json["prices"] as? [String: Double])
             #expect(prices["bitcoin"] == 50000)
             let changes = try #require(json["changes24h"] as? [String: Double])
-            #expect(changes["bitcoin"] != nil)
+            #expect(changes["bitcoin"] == 2.5)
             #expect(json["lastUpdate"] is String)
         }
 
@@ -229,6 +229,34 @@
             let httpResponse = try #require(response as? HTTPURLResponse)
             #expect(httpResponse.statusCode == 405)
             #expect(httpResponse.value(forHTTPHeaderField: "Allow") == "GET")
+        }
+
+        @Test func `actions sync returns 405 for GET`() async throws {
+            let store = makeStore()
+            let server = DebugServer(port: 19032, store: store)
+            try await server.start()
+            defer { server.stop() }
+
+            let (_, response) = try await URLSession.shared.data(
+                from: #require(URL(string: "http://127.0.0.1:19032/actions/sync")))
+            let httpResponse = try #require(response as? HTTPURLResponse)
+            #expect(httpResponse.statusCode == 405)
+            #expect(httpResponse.value(forHTTPHeaderField: "Allow") == "POST")
+        }
+
+        @Test func `actions price-invalidate returns 405 for GET`() async throws {
+            let store = makeStore()
+            let server = DebugServer(port: 19033, store: store, priceService: PriceServiceClient(
+                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                invalidateCache: {}))
+            try await server.start()
+            defer { server.stop() }
+
+            let (_, response) = try await URLSession.shared.data(
+                from: #require(URL(string: "http://127.0.0.1:19033/actions/price-invalidate")))
+            let httpResponse = try #require(response as? HTTPURLResponse)
+            #expect(httpResponse.statusCode == 405)
+            #expect(httpResponse.value(forHTTPHeaderField: "Allow") == "POST")
         }
     }
 #endif
