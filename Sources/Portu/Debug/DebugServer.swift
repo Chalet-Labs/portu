@@ -13,22 +13,29 @@
         private var startingListener: NWListener?
         private var routes: [String: [String: @MainActor (HTTPRequest) async -> HTTPResponse]] = [:]
         private var activeConnections: [ObjectIdentifier: NWConnection] = [:]
+        private static let iso8601Formatter = ISO8601DateFormatter()
         private let startTime = ContinuousClock.now
         private let logger = Logger(subsystem: "com.portu.app", category: "DebugServer")
 
         private let modelContainer: ModelContainer?
-        private let store: StoreOf<AppFeature>? // sub-issue #4: TCA state endpoints
+        private let store: StoreOf<AppFeature>?
+        private let priceService: PriceServiceClient?
 
         init(
             port: UInt16 = 9999,
             modelContainer: ModelContainer? = nil,
-            store: StoreOf<AppFeature>? = nil) {
+            store: StoreOf<AppFeature>? = nil,
+            priceService: PriceServiceClient? = nil) {
             self.port = port
             self.modelContainer = modelContainer
             self.store = store
+            self.priceService = priceService
             registerBuiltInRoutes()
             if let modelContainer {
                 DebugEndpoints.register(on: self, modelContainer: modelContainer)
+            }
+            if store != nil {
+                registerTCARoutes()
             }
         }
 
@@ -136,6 +143,66 @@
             }
         }
 
+        private func registerTCARoutes() {
+            addRoute("GET", "/state/prices") { [weak self] _ in
+                guard let store = self?.store else {
+                    return Self.jsonResponse(statusCode: 500, body: ["error": "Store unavailable"])
+                }
+                let prices = store.prices.mapValues { ($0 as NSDecimalNumber).doubleValue }
+                let changes = store.priceChanges24h.mapValues { ($0 as NSDecimalNumber).doubleValue }
+                var body: [String: any Sendable] = [
+                    "prices": prices,
+                    "changes24h": changes
+                ]
+                if let date = store.lastPriceUpdate {
+                    body["lastUpdate"] = Self.iso8601Formatter.string(from: date)
+                }
+                return Self.jsonResponse(statusCode: 200, body: body)
+            }
+
+            addRoute("GET", "/state/sync") { [weak self] _ in
+                guard let store = self?.store else {
+                    return Self.jsonResponse(statusCode: 500, body: ["error": "Store unavailable"])
+                }
+                var body: [String: any Sendable] = ["storeIsEphemeral": store.storeIsEphemeral]
+                switch store.syncStatus {
+                case .idle:
+                    body["syncStatus"] = "idle"
+                case let .syncing(progress):
+                    body["syncStatus"] = "syncing"
+                    body["progress"] = progress
+                case let .completedWithErrors(failedAccounts):
+                    body["syncStatus"] = "completedWithErrors"
+                    body["failedAccounts"] = failedAccounts
+                case let .error(message):
+                    body["syncStatus"] = "error"
+                    body["errorMessage"] = message
+                }
+                switch store.connectionStatus {
+                case .idle:
+                    body["connectionStatus"] = "idle"
+                case .fetching:
+                    body["connectionStatus"] = "fetching"
+                case let .error(message):
+                    body["connectionStatus"] = "error"
+                    body["connectionErrorMessage"] = message
+                }
+                return Self.jsonResponse(statusCode: 200, body: body)
+            }
+
+            addRoute("POST", "/actions/sync") { [weak self] _ in
+                self?.store?.send(.syncTapped)
+                return Self.jsonResponse(statusCode: 200, body: ["triggered": true])
+            }
+
+            addRoute("POST", "/actions/price-invalidate") { [weak self] _ in
+                if let priceService = self?.priceService {
+                    Task { await priceService.invalidateCache() }
+                }
+                return Self.jsonResponse(statusCode: 200, body: ["triggered": true])
+            }
+        }
+
         // MARK: - Connection Handling
 
         private func finishConnection(_ connection: NWConnection) {
@@ -178,10 +245,12 @@
                         return
                     }
 
-                    let response: HTTPResponse = if
-                        let pathRoutes = self.routes[request.path],
-                        let handler = pathRoutes[request.method] {
-                        await handler(request)
+                    let response: HTTPResponse = if let pathRoutes = self.routes[request.path] {
+                        if let handler = pathRoutes[request.method] {
+                            await handler(request)
+                        } else {
+                            Self.jsonResponse(statusCode: 405, body: ["error": "Method not allowed"])
+                        }
                     } else {
                         Self.jsonResponse(statusCode: 404, body: ["error": "Not found"])
                     }

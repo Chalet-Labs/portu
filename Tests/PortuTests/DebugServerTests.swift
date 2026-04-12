@@ -88,7 +88,47 @@
             #expect(httpResponse.statusCode == 200)
         }
 
+        // MARK: - 405 Method Not Allowed
+
+        @Test func `known path with wrong method returns 405`() async throws {
+            let server = DebugServer(port: 19010)
+            server.addRoute("GET", "/only-get") { _ in
+                Self.makeOKResponse()
+            }
+            try await server.start()
+            defer { server.stop() }
+
+            var request = try URLRequest(url: #require(URL(string: "http://127.0.0.1:19010/only-get")))
+            request.httpMethod = "POST"
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let httpResponse = try #require(response as? HTTPURLResponse)
+
+            #expect(httpResponse.statusCode == 405)
+
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(json["error"] as? String == "Method not allowed")
+        }
+
+        @Test func `known path with correct method is not 405`() async throws {
+            let server = DebugServer(port: 19011)
+            server.addRoute("GET", "/only-get") { _ in
+                Self.makeOKResponse()
+            }
+            try await server.start()
+            defer { server.stop() }
+
+            let (_, response) = try await URLSession.shared.data(
+                from: #require(URL(string: "http://127.0.0.1:19011/only-get")))
+            let httpResponse = try #require(response as? HTTPURLResponse)
+
+            #expect(httpResponse.statusCode == 200)
+        }
+
         // MARK: - Uptime
+
+        private static func makeOKResponse() -> HTTPResponse {
+            HTTPResponse(statusCode: 200, body: Data("{}".utf8))
+        }
 
         @Test func `uptime increases over time`() async throws {
             let server = DebugServer(port: 19006)
