@@ -11,7 +11,7 @@
         private let port: UInt16
         private var listener: NWListener?
         private var startingListener: NWListener?
-        private var routes: [String: [String: @Sendable (HTTPRequest) -> HTTPResponse]] = [:]
+        private var routes: [String: [String: @MainActor (HTTPRequest) -> HTTPResponse]] = [:]
         private var activeConnections: [ObjectIdentifier: NWConnection] = [:]
         private let startTime = ContinuousClock.now
         private let logger = Logger(subsystem: "com.portu.app", category: "DebugServer")
@@ -115,7 +115,7 @@
 
         // MARK: - Routing
 
-        func addRoute(_ method: String, _ path: String, handler: @Sendable @escaping (HTTPRequest) -> HTTPResponse) {
+        func addRoute(_ method: String, _ path: String, handler: @MainActor @escaping (HTTPRequest) -> HTTPResponse) {
             routes[path, default: [:]][method] = handler
         }
 
