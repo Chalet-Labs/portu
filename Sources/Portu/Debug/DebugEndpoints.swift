@@ -12,6 +12,12 @@
             return formatter
         }()
 
+        private static let iso8601NoFractional: ISO8601DateFormatter = {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime]
+            return formatter
+        }()
+
         // MARK: - Route Registration
 
         static func register(on server: DebugServer, modelContainer: ModelContainer) {
@@ -73,21 +79,21 @@
         // MARK: - /state/positions
 
         static func positions(context: ModelContext, request: HTTPRequest) -> HTTPResponse {
-            if let rawId = request.queryParams["accountId"] {
-                guard let accountId = UUID(uuidString: rawId) else {
-                    return errorResponse("Invalid accountId", statusCode: 400)
-                }
-                guard let positions = try? context.fetch(FetchDescriptor<Position>()) else {
-                    return errorResponse("Failed to fetch positions")
-                }
-                let filtered = positions.filter { $0.account?.id == accountId }
-                return jsonArrayResponse(filtered.map(positionDict))
-            }
+            let limit = request.intParam("limit", default: 100)
 
             guard let positions = try? context.fetch(FetchDescriptor<Position>()) else {
                 return errorResponse("Failed to fetch positions")
             }
-            return jsonArrayResponse(positions.map(positionDict))
+
+            if let rawId = request.queryParams["accountId"] {
+                guard let accountId = UUID(uuidString: rawId) else {
+                    return errorResponse("Invalid accountId", statusCode: 400)
+                }
+                let filtered = positions.filter { $0.account?.id == accountId }
+                return jsonArrayResponse(Array(filtered.prefix(limit)).map(positionDict))
+            }
+
+            return jsonArrayResponse(Array(positions.prefix(limit)).map(positionDict))
         }
 
         private static func positionDict(_ position: Position) -> [String: any Sendable] {
@@ -177,15 +183,15 @@
             }
             let limit = request.intParam("limit", default: 10)
 
-            let descriptor = FetchDescriptor<AccountSnapshot>(
+            var descriptor = FetchDescriptor<AccountSnapshot>(
+                predicate: #Predicate { $0.accountId == accountId },
                 sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+            descriptor.fetchLimit = limit
 
             guard let snapshots = try? context.fetch(descriptor) else {
                 return errorResponse("Failed to fetch account snapshots")
             }
-
-            let filtered = Array(snapshots.lazy.filter { $0.accountId == accountId }.prefix(limit))
-            let body: [[String: any Sendable]] = filtered.map { snap in
+            let body: [[String: any Sendable]] = snapshots.map { snap in
                 [
                     "id": snap.id.uuidString,
                     "timestamp": iso8601.string(from: snap.timestamp),
@@ -208,15 +214,15 @@
             }
             let limit = request.intParam("limit", default: 10)
 
-            let descriptor = FetchDescriptor<AssetSnapshot>(
+            var descriptor = FetchDescriptor<AssetSnapshot>(
+                predicate: #Predicate { $0.assetId == assetId },
                 sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+            descriptor.fetchLimit = limit
 
             guard let snapshots = try? context.fetch(descriptor) else {
                 return errorResponse("Failed to fetch asset snapshots")
             }
-
-            let filtered = Array(snapshots.lazy.filter { $0.assetId == assetId }.prefix(limit))
-            let body: [[String: any Sendable]] = filtered.map { snap in
+            let body: [[String: any Sendable]] = snapshots.map { snap in
                 [
                     "id": snap.id.uuidString,
                     "timestamp": iso8601.string(from: snap.timestamp),
@@ -240,7 +246,8 @@
             let limit = request.intParam("limit", default: 50)
             let since: Date?
             if let rawSince = request.queryParams["since"] {
-                guard let parsed = iso8601.date(from: rawSince.removingPercentEncoding ?? rawSince) else {
+                let decoded = rawSince.removingPercentEncoding ?? rawSince
+                guard let parsed = iso8601.date(from: decoded) ?? iso8601NoFractional.date(from: decoded) else {
                     return errorResponse("Invalid since parameter", statusCode: 400)
                 }
                 since = parsed
@@ -293,7 +300,7 @@
 
     extension HTTPRequest {
         func intParam(_ key: String, default defaultValue: Int) -> Int {
-            max(queryParams[key].flatMap(Int.init) ?? defaultValue, 0)
+            min(max(queryParams[key].flatMap(Int.init) ?? defaultValue, 0), 1000)
         }
     }
 
