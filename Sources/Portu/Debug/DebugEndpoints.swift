@@ -121,7 +121,7 @@
             let limit = request.intParam("limit", default: 50)
             let offset = request.intParam("offset", default: 0)
 
-            var descriptor = FetchDescriptor<Asset>(sortBy: [SortDescriptor(\.symbol)])
+            var descriptor = FetchDescriptor<Asset>(sortBy: [SortDescriptor(\.symbol), SortDescriptor(\.id)])
             descriptor.fetchOffset = offset
             descriptor.fetchLimit = limit
 
