@@ -203,7 +203,11 @@
                     logger.debug("Connection send error: \(error)")
                 }
                 Task { @MainActor in
-                    self?.finishConnection(connection) ?? connection.cancel()
+                    if let self {
+                        self.finishConnection(connection)
+                    } else {
+                        connection.cancel()
+                    }
                 }
             })
         }
