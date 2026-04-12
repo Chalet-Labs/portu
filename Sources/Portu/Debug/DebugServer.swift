@@ -76,7 +76,7 @@
 
                     newListener.newConnectionHandler = { [weak self] connection in
                         Task { @MainActor in
-                            guard let self else {
+                            guard let self, self.listener != nil else {
                                 connection.cancel()
                                 return
                             }
