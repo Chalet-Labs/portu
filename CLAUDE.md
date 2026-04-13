@@ -47,7 +47,8 @@ The app target (`Sources/Portu/`) imports all three and contains features, app s
 ## Testing
 
 - Use **Swift Testing** (`import Testing`), not XCTest
-- Syntax: `@Suite`, `@Test`, `#expect()`, `#require()`, async test methods
+- Syntax: `@Test`, `#expect()`, `#require()`, async test methods
+- Use `@Suite(.serialized)` only when tests share mutable state — do not add plain `@Suite` without traits
 - Tests live in each package's `Tests/` directory and `Tests/PortuTests/`
 
 ## TDD Rules
