@@ -38,18 +38,23 @@ extension DependencyValues {
 
 struct PriceServiceClient {
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
+    var invalidateCache: @Sendable () async -> Void
 }
 
 extension PriceServiceClient: DependencyKey {
     static let liveValue = Self(
-        fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") })
+        fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        invalidateCache: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") })
     static let testValue = Self(
-        fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) })
+        fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+        invalidateCache: {})
 
     static func live(service: PriceService) -> Self {
-        Self(fetchPrices: { coinIds in
-            try await service.fetchPriceUpdate(for: coinIds)
-        })
+        Self(
+            fetchPrices: { coinIds in
+                try await service.fetchPriceUpdate(for: coinIds)
+            },
+            invalidateCache: { await service.invalidateCache() })
     }
 }
 
@@ -213,6 +218,7 @@ struct AppFeature {
 // MARK: - Equatable for Result
 
 extension AppFeature.Action: Equatable {
+    // swiftlint:disable:next cyclomatic_complexity
     static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case let (.sectionSelected(l), .sectionSelected(r)): l == r

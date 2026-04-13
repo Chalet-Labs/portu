@@ -153,6 +153,17 @@ struct AppFeatureTests {
         }
     }
 
+    // MARK: - PriceServiceClient invalidateCache
+
+    @Test func `priceServiceClient invalidateCache is callable`() async {
+        nonisolated(unsafe) var called = false
+        let client = PriceServiceClient(
+            fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+            invalidateCache: { called = true })
+        await client.invalidateCache()
+        #expect(called)
+    }
+
     // MARK: - B7: Price Merge (not replace)
 
     @Test func `prices merge with existing`() async {
