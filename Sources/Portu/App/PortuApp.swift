@@ -1,4 +1,7 @@
 import ComposableArchitecture
+#if DEBUG
+    import os
+#endif
 import PortuCore
 import PortuNetwork
 import PortuUI
@@ -26,10 +29,17 @@ struct PortuApp: App {
             }
         }
 
+        #if DEBUG
+            let debugEnabled = DebugMode.isEnabled()
+            let session: URLSession = debugEnabled ? NetworkLogger.debugSession() : .shared
+        #else
+            let session: URLSession = .shared
+        #endif
+
         let syncEngine = SyncEngine(
             modelContext: container.mainContext,
-            providerFactory: ProviderFactory(secretStore: KeychainService()))
-        let priceService = PriceService()
+            providerFactory: ProviderFactory(secretStore: KeychainService(), session: session))
+        let priceService = PriceService(session: session)
 
         self.store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
             AppFeature()
@@ -43,6 +53,28 @@ struct PortuApp: App {
             store.send(.syncTapped)
         }
         appState.observe(store)
+
+        #if DEBUG
+            if debugEnabled {
+                let debugServer = DebugServer(
+                    port: DebugMode.port(),
+                    modelContainer: container,
+                    store: store,
+                    priceService: .live(service: priceService))
+                // App.init is implicitly @MainActor via App protocol conformance
+                let state = appState
+                Task { @MainActor in
+                    do {
+                        try await debugServer.start()
+                        state.debugServer = debugServer
+                    } catch {
+                        state.debugServerStartFailed = true
+                        Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app", category: "DebugServer")
+                            .error("Debug server failed to start: \(String(describing: error), privacy: .public)")
+                    }
+                }
+            }
+        #endif
     }
 
     var body: some Scene {

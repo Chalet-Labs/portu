@@ -8,7 +8,7 @@
 
     @MainActor
     final class DebugServer {
-        private let port: UInt16
+        let port: UInt16
         private var listener: NWListener?
         private var startingListener: NWListener?
         private var routes: [String: [String: @MainActor (HTTPRequest) async -> HTTPResponse]] = [:]
