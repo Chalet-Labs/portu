@@ -6,11 +6,12 @@
         static let enabledKey = "debugServerEnabled"
         static let portKey = "debugServerPort"
         static let defaultPort: UInt16 = 9999
+        static let launchArgument = "--debug-server"
 
         static func isEnabled(
             arguments: [String] = ProcessInfo.processInfo.arguments,
             defaults: UserDefaults = .standard) -> Bool {
-            arguments.contains("--debug-server")
+            arguments.contains(launchArgument)
                 || defaults.bool(forKey: enabledKey)
         }
 

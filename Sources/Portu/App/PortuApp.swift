@@ -66,7 +66,6 @@ struct PortuApp: App {
                         try await debugServer.start()
                         state.debugServer = debugServer
                     } catch {
-                        state.debugServer = nil
                         Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app", category: "DebugServer")
                             .error("Debug server failed to start: \(String(describing: error), privacy: .public)")
                     }

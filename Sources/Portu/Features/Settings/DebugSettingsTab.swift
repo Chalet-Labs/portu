@@ -6,14 +6,14 @@
         @Environment(AppState.self) private var appState
         @AppStorage(DebugMode.enabledKey) private var isEnabled = false
         @AppStorage(DebugMode.portKey) private var port = Int(DebugMode.defaultPort)
-        @AppStorage("debugServerToggleSet") private var toggleEverSet = false
+        @State private var toggleEverSet = false
 
         private var isRunning: Bool {
             appState.debugServer != nil
         }
 
         private var launchArgActive: Bool {
-            ProcessInfo.processInfo.arguments.contains("--debug-server")
+            ProcessInfo.processInfo.arguments.contains(DebugMode.launchArgument)
         }
 
         private var needsRestart: Bool {
