@@ -38,6 +38,21 @@ lint-fix:
 format:
     swiftformat .
 
+# Build and launch with debug server on localhost:9999
+debug-run: build
+    #!/bin/bash
+    APP=$(xcodebuild -scheme Portu -configuration Debug -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | awk '{print $3}')/Portu.app
+    open "$APP" --args --debug-server
+    echo "Waiting for debug server..."
+    until curl -s http://localhost:9999/health > /dev/null 2>&1; do sleep 0.5; done
+    curl -s http://localhost:9999/health | jq .
+    echo "Debug server ready at http://localhost:9999"
+
+# Stop the running debug app
+debug-stop:
+    pkill -f "Portu.app/Contents/MacOS/Portu" || true
+    @echo "Debug app stopped"
+
 # Clean build artifacts
 clean:
     xcodebuild -scheme Portu -skipMacroValidation clean
