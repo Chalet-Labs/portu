@@ -6,7 +6,6 @@
         @Environment(AppState.self) private var appState
         @AppStorage(DebugMode.enabledKey) private var isEnabled = false
         @AppStorage(DebugMode.portKey) private var port = Int(DebugMode.defaultPort)
-        @State private var toggleEverSet = false
 
         private var isRunning: Bool {
             appState.debugServer != nil
@@ -17,8 +16,9 @@
         }
 
         private var needsRestart: Bool {
-            if launchArgActive, isRunning, !isEnabled { return false }
-            if toggleEverSet, isEnabled != isRunning { return true }
+            if launchArgActive, isRunning { return false }
+            if appState.debugServerStartFailed { return false }
+            if isEnabled != isRunning { return true }
             if isRunning, let serverPort = appState.debugServer?.port, port != Int(serverPort) { return true }
             return false
         }
@@ -27,10 +27,9 @@
             Form {
                 Section("Debug Server") {
                     Toggle("Enable Debug Server", isOn: $isEnabled)
-                        .onChange(of: isEnabled) { _, _ in toggleEverSet = true }
 
                     if launchArgActive, isRunning {
-                        Text("Enabled via --debug-server launch argument")
+                        Text("Enabled via \(DebugMode.launchArgument) launch argument")
                             .foregroundStyle(.secondary)
                             .font(.callout)
                     }
@@ -52,6 +51,12 @@
                             .frame(width: 8, height: 8)
                         Text(isRunning ? "Running on port \(appState.debugServer?.port ?? DebugMode.defaultPort)" : "Stopped")
                             .foregroundStyle(.secondary)
+                    }
+
+                    if appState.debugServerStartFailed {
+                        Label("Server failed to start — check Console for details", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                            .font(.callout)
                     }
                 }
 

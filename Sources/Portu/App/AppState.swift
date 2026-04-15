@@ -39,6 +39,7 @@ final class AppState {
 
     #if DEBUG
         var debugServer: DebugServer?
+        var debugServerStartFailed = false
     #endif
 
     /// Syncs all TCA state fields from the store; does not touch `onSyncRequested`.
