@@ -1,5 +1,7 @@
 import ComposableArchitecture
-import os
+#if DEBUG
+    import os
+#endif
 import PortuCore
 import PortuNetwork
 import PortuUI

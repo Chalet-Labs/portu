@@ -16,8 +16,10 @@
         }
 
         private var needsRestart: Bool {
-            if launchArgActive, isRunning { return false }
-            if appState.debugServerStartFailed { return false }
+            if launchArgActive {
+                if isRunning, let serverPort = appState.debugServer?.port, port != Int(serverPort) { return true }
+                return false
+            }
             if isEnabled != isRunning { return true }
             if isRunning, let serverPort = appState.debugServer?.port, port != Int(serverPort) { return true }
             return false
@@ -53,7 +55,7 @@
                             .foregroundStyle(.secondary)
                     }
 
-                    if appState.debugServerStartFailed, isEnabled {
+                    if appState.debugServerStartFailed, isEnabled || launchArgActive {
                         Label("Server failed to start — check Console for details", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
                             .font(.callout)
