@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import os
 import PortuCore
 import PortuNetwork
 import PortuUI
@@ -26,10 +27,17 @@ struct PortuApp: App {
             }
         }
 
+        #if DEBUG
+            let debugEnabled = DebugMode.isEnabled()
+            let session: URLSession = debugEnabled ? NetworkLogger.debugSession() : .shared
+        #else
+            let session: URLSession = .shared
+        #endif
+
         let syncEngine = SyncEngine(
             modelContext: container.mainContext,
-            providerFactory: ProviderFactory(secretStore: KeychainService()))
-        let priceService = PriceService()
+            providerFactory: ProviderFactory(secretStore: KeychainService(), session: session))
+        let priceService = PriceService(session: session)
 
         self.store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
             AppFeature()
@@ -43,6 +51,25 @@ struct PortuApp: App {
             store.send(.syncTapped)
         }
         appState.observe(store)
+
+        #if DEBUG
+            if debugEnabled {
+                let debugServer = DebugServer(
+                    port: DebugMode.port(),
+                    modelContainer: container,
+                    store: store,
+                    priceService: .live(service: priceService))
+                appState.debugServer = debugServer
+                Task { @MainActor in
+                    do {
+                        try await debugServer.start()
+                    } catch {
+                        Logger(subsystem: "com.portu.app", category: "DebugServer")
+                            .error("Debug server failed to start: \(error)")
+                    }
+                }
+            }
+        #endif
     }
 
     var body: some Scene {

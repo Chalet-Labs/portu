@@ -9,6 +9,11 @@ struct SettingsView: View {
             Tab("API Keys", systemImage: "key.fill") {
                 APIKeysSettingsTab()
             }
+            #if DEBUG
+                Tab("Debug", systemImage: "ant.fill") {
+                    DebugSettingsTab()
+                }
+            #endif
         }
         .frame(width: 450, height: 400)
     }

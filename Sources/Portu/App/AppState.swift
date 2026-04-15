@@ -37,6 +37,10 @@ final class AppState {
     /// Bridge: called by features to trigger sync until they're migrated to TCA (Phase 4)
     var onSyncRequested: (@MainActor () -> Void)?
 
+    #if DEBUG
+        var debugServer: DebugServer?
+    #endif
+
     /// Syncs all TCA state fields from the store; does not touch `onSyncRequested`.
     /// Guards each assignment to avoid redundant Observation notifications.
     func bridge(from store: StoreOf<AppFeature>) {
