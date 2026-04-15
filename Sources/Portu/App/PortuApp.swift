@@ -59,6 +59,7 @@ struct PortuApp: App {
                     modelContainer: container,
                     store: store,
                     priceService: .live(service: priceService))
+                // App.init is implicitly @MainActor via App protocol conformance
                 let state = appState
                 Task { @MainActor in
                     do {
