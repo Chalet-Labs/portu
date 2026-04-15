@@ -20,7 +20,7 @@ For each route, note the HTTP method, path, query parameters (with defaults and 
 
 Check if the debug server is already running:
 
-```
+```bash
 curl -s http://localhost:9999/health
 ```
 
