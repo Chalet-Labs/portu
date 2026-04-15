@@ -41,7 +41,7 @@ format:
 # Build and launch with debug server on localhost:9999
 debug-run: build
     #!/bin/bash
-    APP=$(xcodebuild -scheme Portu -configuration Debug -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | head -1 | cut -d '=' -f 2 | xargs)/Portu.app
+    APP=$(xcodebuild -scheme Portu -configuration Debug -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | head -1 | cut -d '=' -f 2- | sed 's/^[[:space:]]*//')/Portu.app
     if [ ! -d "$APP" ]; then echo "Could not locate Portu.app at $APP" >&2; exit 1; fi
     open -n "$APP" --args --debug-server
     echo "Waiting for debug server..."
