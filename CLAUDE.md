@@ -72,7 +72,7 @@ A local HTTP debug server (`localhost:9999`) for runtime inspection. `#if DEBUG`
 
 Endpoint categories: SwiftData state (accounts, positions, assets, snapshots), TCA state (sync status, prices), actions (trigger sync, invalidate prices), network log. Run `/debug-verify` for dynamic endpoint discovery and verification from source.
 
-When adding new SwiftData models or TCA state, add corresponding debug endpoints in `DebugEndpoints.swift`.
+When adding new SwiftData models or network log endpoints, add them in `DebugEndpoints.swift`. When adding new TCA state or action routes, register them in `DebugServer.swift`.
 
 ## Code Style
 

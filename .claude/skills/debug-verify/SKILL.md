@@ -24,7 +24,7 @@ Check if the debug server is already running:
 curl -s http://localhost:9999/health
 ```
 
-If it responds, skip to Step 3. Otherwise, run `just debug-run` to build the app and launch with the debug server. The recipe waits until `/health` responds before returning.
+If it responds, skip to Step 3. Otherwise, run `just debug-run` to build the app and launch with the debug server. The recipe waits up to 30 seconds for `/health` to respond. If it times out or exits with an error, report the failure rather than proceeding — the app may have crashed on startup or port 9999 may be in use.
 
 ## Step 3: Query relevant endpoints
 
