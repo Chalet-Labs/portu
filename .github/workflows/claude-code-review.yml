@@ -45,7 +45,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/rube-de/cc-skills.git'
           plugins: |
-            ci-review
+            ci-review@rube-cc-skills
           prompt: |
             /ci-review ${{ github.event.pull_request.number }} ${{ steps.flags.outputs.review_flags }}
           claude_args: |
