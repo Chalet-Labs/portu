@@ -4,8 +4,8 @@
 
     struct DebugSettingsTab: View {
         @Environment(AppState.self) private var appState
-        @AppStorage("debugServerEnabled") private var isEnabled = false
-        @AppStorage("debugServerPort") private var port = 9999
+        @AppStorage(DebugMode.enabledKey) private var isEnabled = false
+        @AppStorage(DebugMode.portKey) private var port = Int(DebugMode.defaultPort)
 
         private var isRunning: Bool {
             appState.debugServer != nil
@@ -26,12 +26,12 @@
                         Circle()
                             .fill(isRunning ? .green : .gray)
                             .frame(width: 8, height: 8)
-                        Text(isRunning ? "Running on port \(port)" : "Stopped")
+                        Text(isRunning ? "Running on port \(appState.debugServer?.port ?? DebugMode.defaultPort)" : "Stopped")
                             .foregroundStyle(.secondary)
                     }
                 }
 
-                if isEnabled, !isRunning {
+                if isEnabled != isRunning {
                     Section {
                         Label("Restart the app to apply changes", systemImage: "arrow.clockwise")
                             .foregroundStyle(.secondary)

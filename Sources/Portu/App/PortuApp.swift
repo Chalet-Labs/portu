@@ -59,12 +59,14 @@ struct PortuApp: App {
                     modelContainer: container,
                     store: store,
                     priceService: .live(service: priceService))
-                appState.debugServer = debugServer
+                let state = appState
                 Task { @MainActor in
                     do {
                         try await debugServer.start()
+                        state.debugServer = debugServer
                     } catch {
-                        Logger(subsystem: "com.portu.app", category: "DebugServer")
+                        state.debugServer = nil
+                        Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app", category: "DebugServer")
                             .error("Debug server failed to start: \(error)")
                     }
                 }
