@@ -53,7 +53,7 @@
                             .foregroundStyle(.secondary)
                     }
 
-                    if appState.debugServerStartFailed {
+                    if appState.debugServerStartFailed, isEnabled {
                         Label("Server failed to start — check Console for details", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.orange)
                             .font(.callout)
