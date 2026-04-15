@@ -3,16 +3,9 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
     if: |
       github.event.pull_request.user.login == 'rube-de' ||
       github.event.pull_request.user.login == 'funny-otter'
@@ -34,79 +27,27 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Compute review flags
+        id: flags
+        env:
+          PR_ACTION: ${{ github.event.action }}
+        run: |
+          if [[ "$PR_ACTION" == "synchronize" ]]; then
+            echo "review_flags=--single" >> "$GITHUB_OUTPUT"
+          else
+            echo "review_flags=--agent" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run Claude Code Review
         id: claude-review
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          track_progress: false # ✨ Enables tracking comments
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugin_marketplaces: 'https://github.com/rube-de/cc-skills.git'
           plugins: |
-            code-review@claude-code-plugins
+            ci-review
           prompt: |
-            /code-review:code-review
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
-
-            Perform a comprehensive code review with the following focus areas:
-
-            1. **Code Quality**
-               - Clean code principles and best practices
-               - Proper error handling and edge cases
-               - Code readability and maintainability
-
-            2. **Security**
-               - Check for potential security vulnerabilities
-               - Validate input sanitization
-               - Review authentication/authorization logic
-
-            3. **Performance**
-               - Identify potential performance bottlenecks
-               - Review database queries for efficiency
-               - Check for memory leaks or resource issues
-
-            4. **Testing**
-               - Verify adequate test coverage
-               - Review test quality and edge cases
-               - Check for missing test scenarios
-
-            5. **Documentation**
-               - Ensure code is properly documented
-               - Verify README updates for new features
-               - Check API documentation accuracy
-
-            Note: The PR branch is already checked out in the current working directory.
-
-            Submit all feedback as a single atomic GitHub review using `gh api`.
-            Build ONE `gh api` call that creates the review with all inline comments at once:
-
-            ```
-            gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
-              --method POST \
-              -f event="COMMENT" \
-              -f body="<your overall review summary>" \
-              -f 'comments[0][path]=<file>' \
-              -f 'comments[0][line]=<line_number>' \
-              -f 'comments[0][side]=RIGHT' \
-              -f 'comments[0][body]=<comment text>' \
-              -f 'comments[1][path]=<file>' \
-              -f 'comments[1][line]=<line_number>' \
-              -f 'comments[1][side]=RIGHT' \
-              -f 'comments[1][body]=<comment text>'
-            ```
-
-            Rules:
-            - Increment the array index (comments[0], comments[1], ...) for each inline comment.
-            - `line` is the file line number on the new version of the file. Always use `side=RIGHT`.
-            - IMPORTANT: Never use event "APPROVE" or "REQUEST_CHANGES" — always use "COMMENT".
-            - If you have no inline comments, omit the comments array entirely and just post the body.
-            - Only post GitHub review comments — don't submit review text as messages.
-            - Only post actionable inline comments, don't post confirmations.
-            - Don't repeat correctly addressed items.
-
+            /ci-review ${{ github.event.pull_request.number }} ${{ steps.flags.outputs.review_flags }}
           claude_args: |
-            --allowedTools "Bash(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
-          
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
+            --allowedTools "Read,Grep,Glob,Agent,Bash(gh:*),Bash(jq:*),Bash(wc:*)"
 
