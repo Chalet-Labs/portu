@@ -11,6 +11,13 @@
             appState.debugServer != nil
         }
 
+        private var needsRestart: Bool {
+            let toggleExplicitlySet = UserDefaults.standard.object(forKey: DebugMode.enabledKey) != nil
+            if toggleExplicitlySet, isEnabled != isRunning { return true }
+            if isRunning, let serverPort = appState.debugServer?.port, port != Int(serverPort) { return true }
+            return false
+        }
+
         var body: some View {
             Form {
                 Section("Debug Server") {
@@ -20,6 +27,11 @@
                         TextField("Port", value: $port, format: .number)
                             .frame(width: 80)
                             .multilineTextAlignment(.trailing)
+                            .onChange(of: port) { _, newValue in
+                                if newValue <= 0 || newValue > Int(UInt16.max) {
+                                    port = Int(DebugMode.defaultPort)
+                                }
+                            }
                     }
 
                     HStack(spacing: 6) {
@@ -31,7 +43,7 @@
                     }
                 }
 
-                if isEnabled != isRunning {
+                if needsRestart {
                     Section {
                         Label("Restart the app to apply changes", systemImage: "arrow.clockwise")
                             .foregroundStyle(.secondary)
