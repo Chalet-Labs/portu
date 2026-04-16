@@ -20,6 +20,8 @@ just lint            # Lint all Swift files
 just lint-fix        # Auto-fix lintable violations
 just format          # Format all Swift files
 just clean           # Clean build artifacts
+just debug-run       # Build + launch with debug server
+just debug-stop      # Stop the debug app
 ```
 
 ## Architecture
@@ -61,6 +63,16 @@ The app target (`Sources/Portu/`) imports all three and contains features, app s
 - Run the FULL test suite before considering a behavior complete
 - Read specs from `openspec/changes/` before generating tests
 - Refactor only when tests are GREEN — never refactor and change behavior simultaneously
+
+## Debug Server
+
+A local HTTP debug server (`localhost:9999`) for runtime inspection. `#if DEBUG` guarded.
+
+**When to use:** After implementing features or fixing bugs that change runtime state (SwiftData models, sync, prices, network). Build with `just debug-run`, verify with `/debug-verify`, stop with `just debug-stop`.
+
+Endpoint categories: SwiftData state (accounts, positions, assets, snapshots), TCA state (sync status, prices), actions (trigger sync, invalidate prices), network log. Run `/debug-verify` for dynamic endpoint discovery and verification from source.
+
+When adding new SwiftData models or network log endpoints, add them in `DebugEndpoints.swift`. When adding new TCA state or action routes, register them in `DebugServer.swift`.
 
 ## Code Style
 

@@ -38,6 +38,28 @@ lint-fix:
 format:
     swiftformat .
 
+# Build and launch with debug server on localhost:9999
+debug-run: build
+    #!/bin/bash
+    APP=$(xcodebuild -scheme Portu -configuration Debug -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | head -1 | cut -d '=' -f 2- | sed 's/^[[:space:]]*//')/Portu.app
+    if [ ! -d "$APP" ]; then echo "Could not locate Portu.app at $APP" >&2; exit 1; fi
+    lsof -ti tcp:9999 | xargs kill 2>/dev/null || true; sleep 0.5
+    open -n "$APP" --args --debug-server
+    echo "Waiting for debug server..."
+    attempts=0
+    until curl -s http://localhost:9999/health > /dev/null 2>&1; do
+      sleep 0.5
+      attempts=$((attempts + 1))
+      if [ $attempts -ge 60 ]; then echo "Timed out waiting for debug server after 30s" >&2; exit 1; fi
+    done
+    curl -s http://localhost:9999/health | jq .
+    echo "Debug server ready at http://localhost:9999"
+
+# Stop the running debug app
+debug-stop:
+    lsof -ti tcp:9999 | xargs kill 2>/dev/null || true
+    @echo "Debug app stopped"
+
 # Clean build artifacts
 clean:
     xcodebuild -scheme Portu -skipMacroValidation clean
