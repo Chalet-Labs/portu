@@ -7,8 +7,8 @@ import Testing
 
 @MainActor
 struct SyncEngineTests {
-    /// Use a fresh ModelContext per test — container.mainContext shares thread-local
-    /// state across tests which causes SIGTRAP when multiple containers exist.
+    /// Use a fresh ModelContainer per test — reusing container.mainContext across
+    /// tests causes SIGTRAP due to shared thread-local SwiftData state.
     private func makeModelContext() throws -> ModelContext {
         let schema = Schema([
             Account.self, WalletAddress.self, Position.self,
@@ -177,7 +177,7 @@ struct SyncEngineTests {
     // MARK: - Transactional Isolation (#31)
 
     /// Issue #31: If upsertAsset throws mid-rebuild, existing positions
-    /// must survive — the deferred delete must not have executed.
+    /// must survive — the commit-phase delete must not have executed.
     @Test func `failed rebuild preserves existing positions`() async throws {
         let balances = [
             PositionDTO(
@@ -216,8 +216,49 @@ struct SyncEngineTests {
         let fetched = try #require(accounts.first)
 
         #expect(fetched.positions.count == 1, "Original position must survive failed rebuild")
-        #expect(fetched.positions[0].tokens.first?.asset?.symbol == "OLD")
+        #expect(fetched.positions.first?.tokens.first?.asset?.symbol == "OLD")
         #expect(fetched.lastSyncError != nil, "Error must be recorded")
+
+        // No orphan PositionToken rows from the build phase
+        let allTokens = try freshContext.fetch(FetchDescriptor<PositionToken>())
+        #expect(allTokens.count == 1, "No orphan tokens from staged build phase")
+    }
+
+    /// Boundary case: upsertAsset throws on the very first call. The build
+    /// phase stages nothing, so the commit phase is a no-op and existing
+    /// positions remain intact.
+    @Test func `failed rebuild on first upsert preserves existing positions`() async throws {
+        let balances = [
+            PositionDTO(
+                positionType: .idle, chain: .ethereum,
+                protocolId: nil, protocolName: nil, protocolLogoURL: nil,
+                healthFactor: nil,
+                tokens: [makeTokenDTO(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")])
+        ]
+        let (context, engine) = try makeThrowingContext(balances: balances, throwAfter: 0)
+
+        let oldAsset = Asset(symbol: "OLD", name: "Old Token", category: .other)
+        context.insert(oldAsset)
+        let oldToken = PositionToken(role: .balance, amount: 50, usdValue: 1000, asset: oldAsset)
+        let oldPosition = Position(positionType: .idle, netUSDValue: 1000, tokens: [oldToken])
+        let account = Account(name: "Test Wallet", kind: .wallet, dataSource: .zapper, positions: [oldPosition])
+        context.insert(account)
+        try context.save()
+
+        do {
+            _ = try await engine.sync()
+            Issue.record("Expected SyncError.allAccountsFailed")
+        } catch let error as SyncError {
+            #expect(error == .allAccountsFailed)
+        }
+
+        let freshContext = ModelContext(context.container)
+        let accounts = try freshContext.fetch(FetchDescriptor<Account>())
+        let fetched = try #require(accounts.first)
+
+        #expect(fetched.positions.count == 1)
+        #expect(fetched.positions.first?.tokens.first?.asset?.symbol == "OLD")
+        #expect(fetched.lastSyncError != nil)
     }
 
     @Test func `successful rebuild replaces positions`() async throws {
@@ -357,12 +398,18 @@ private final class MockSecretStore: SecretStore, @unchecked Sendable {
 
 // MARK: - StubProvider
 
-private struct StubProvider: PortfolioDataProvider {
-    var capabilities: ProviderCapabilities {
+/// Actor type to match the `PortfolioDataProvider` actor pattern used by real
+/// providers (ZapperProvider, ExchangeProvider) per the project guidelines.
+private actor StubProvider: PortfolioDataProvider {
+    nonisolated var capabilities: ProviderCapabilities {
         ProviderCapabilities()
     }
 
     let balances: [PositionDTO]
+
+    init(balances: [PositionDTO]) {
+        self.balances = balances
+    }
 
     func fetchBalances(context _: SyncContext) async throws -> [PositionDTO] {
         balances
@@ -373,8 +420,13 @@ private struct StubProvider: PortfolioDataProvider {
 
 /// Test subclass that forces upsertAsset to throw after N successful calls,
 /// simulating a mid-rebuild failure for transactional isolation testing.
+/// Single-use: `upsertCount` is not reset between sync() calls, so create a
+/// fresh instance per test.
 @MainActor
 private class ThrowingSyncEngine: SyncEngine {
+    /// Number of successful `upsertAsset` calls before throwing.
+    /// `throwAfter: 0` throws on the first call; `throwAfter: 1` lets the first
+    /// call succeed and throws on the second, and so on.
     let throwAfter: Int
     private var upsertCount = 0
 
