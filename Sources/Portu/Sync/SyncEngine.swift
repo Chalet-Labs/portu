@@ -4,8 +4,9 @@ import PortuCore
 import PortuNetwork
 import SwiftData
 
+/// Non-final to allow test subclass override of upsertAsset (ThrowingSyncEngine).
 @MainActor
-final class SyncEngine: @unchecked Sendable {
+class SyncEngine: @unchecked Sendable {
     private let modelContext: ModelContext
     private let providerFactory: ProviderFactory
 
@@ -63,12 +64,13 @@ final class SyncEngine: @unchecked Sendable {
         let defi = try await provider.fetchDeFiPositions(context: context)
         let allDTOs = balances + defi
 
-        // Delete stale positions from previous sync
-        for position in account.positions {
-            modelContext.delete(position)
-        }
+        // ── Build phase: stage positions and tokens without inserting them ──
+        // If upsertAsset throws mid-loop, no positions have been deleted or
+        // inserted, so the account's data survives the failed attempt (#31).
+        // (Asset upserts may insert new Assets as a side effect; these are
+        // harmless shared reference data reused by future syncs.)
+        var staged: [(Position, [PositionToken])] = []
 
-        // Map DTOs → SwiftData
         for dto in allDTOs {
             let position = Position(
                 positionType: dto.positionType,
@@ -77,19 +79,18 @@ final class SyncEngine: @unchecked Sendable {
                 protocolName: dto.protocolName,
                 protocolLogoURL: dto.protocolLogoURL,
                 healthFactor: dto.healthFactor,
-                account: account,
                 syncedAt: .now)
 
             var net: Decimal = 0
+            var tokens: [PositionToken] = []
             for tokenDTO in dto.tokens {
                 let asset = try upsertAsset(from: tokenDTO)
                 let token = PositionToken(
                     role: tokenDTO.role,
                     amount: tokenDTO.amount,
                     usdValue: tokenDTO.usdValue,
-                    asset: asset,
-                    position: position)
-                modelContext.insert(token)
+                    asset: asset)
+                tokens.append(token)
 
                 if tokenDTO.role.isPositive {
                     net += tokenDTO.usdValue
@@ -100,7 +101,21 @@ final class SyncEngine: @unchecked Sendable {
             }
 
             position.netUSDValue = net
+            staged.append((position, tokens))
+        }
+
+        // ── Commit phase: all DTOs succeeded — replace positions ──
+        for position in account.positions {
+            modelContext.delete(position)
+        }
+
+        for (position, tokens) in staged {
+            position.account = account
             modelContext.insert(position)
+            for token in tokens {
+                token.position = position
+                modelContext.insert(token)
+            }
         }
 
         account.lastSyncedAt = .now
