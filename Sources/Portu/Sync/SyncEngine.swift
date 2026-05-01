@@ -8,8 +8,9 @@ import SwiftData
 final class SyncEngine: @unchecked Sendable {
     private let modelContext: ModelContext
     private let providerFactory: ProviderFactory
-    /// Test seam: overrides upsertAsset when set; nil in production.
-    var upsertAssetOverride: ((TokenDTO) throws -> Asset)?
+    #if DEBUG
+        var upsertAssetOverride: ((TokenDTO) throws -> Asset)?
+    #endif
 
     init(modelContext: ModelContext, providerFactory: ProviderFactory) {
         self.modelContext = modelContext
@@ -155,7 +156,9 @@ final class SyncEngine: @unchecked Sendable {
 
     /// Internal (not private) — called directly by upsert/dedup tests.
     func upsertAsset(from dto: TokenDTO) throws -> Asset {
-        if let override = upsertAssetOverride { return try override(dto) }
+        #if DEBUG
+            if let override = upsertAssetOverride { return try override(dto) }
+        #endif
         // Tier 1: coinGeckoId
         if let cgId = dto.coinGeckoId, !cgId.isEmpty {
             if let existing = try fetchAsset(coinGeckoId: cgId) {

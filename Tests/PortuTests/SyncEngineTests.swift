@@ -259,6 +259,9 @@ struct SyncEngineTests {
         #expect(fetched.positions.count == 1)
         #expect(fetched.positions.first?.tokens.first?.asset?.symbol == "OLD")
         #expect(fetched.lastSyncError != nil)
+
+        let allTokens = try freshContext.fetch(FetchDescriptor<PositionToken>())
+        #expect(allTokens.count == 1, "No orphan tokens from staged build phase")
     }
 
     @Test func `successful rebuild replaces positions`() async throws {
