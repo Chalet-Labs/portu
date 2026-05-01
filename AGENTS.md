@@ -92,6 +92,7 @@ xcodebuild -project Portu.xcodeproj -scheme Portu -configuration Debug -derivedD
 - Types: `*DTO`, `*Provider`, `*Service`, `*Error`.
 - State: `*State`, `*Status`.
 - Enums use descriptive names, such as `AccountKind`, `ExchangeType`, and `PositionType`.
+- For composite lookup or deduplication keys, prefer a flat `Hashable` struct over nested dictionaries.
 
 ## SwiftData Models
 
