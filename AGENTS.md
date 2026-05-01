@@ -11,6 +11,7 @@ Portu is a native macOS SwiftUI crypto portfolio dashboard. It is local-first, h
 - Regenerate `Portu.xcodeproj` before building when project files may be stale. The repo run script already does this.
 - Prefer `./script/build_and_run.sh --verify` to build, launch, and confirm the `Portu` process is running.
 - Use `./script/build_and_run.sh --logs` or `--telemetry` when runtime logs are needed.
+- Use `./script/build_and_run.sh --debug` to build, open LLDB, and start the app under the debugger.
 
 Common commands:
 

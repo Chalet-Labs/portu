@@ -32,7 +32,7 @@ case "$MODE" in
     open_app
     ;;
   --debug|debug)
-    lldb -- "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+    lldb -o run -- "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
     ;;
   --logs|logs)
     open_app
