@@ -4,12 +4,12 @@ import PortuCore
 import PortuNetwork
 import SwiftData
 
-/// Non-final to allow test subclass override of upsertAsset (ThrowingSyncEngine).
-/// Any subclass must remain @MainActor-isolated to preserve the @unchecked Sendable contract.
 @MainActor
-class SyncEngine: @unchecked Sendable {
+final class SyncEngine: @unchecked Sendable {
     private let modelContext: ModelContext
     private let providerFactory: ProviderFactory
+    /// Test seam: overrides upsertAsset when set; nil in production.
+    var upsertAssetOverride: ((TokenDTO) throws -> Asset)?
 
     init(modelContext: ModelContext, providerFactory: ProviderFactory) {
         self.modelContext = modelContext
@@ -153,8 +153,9 @@ class SyncEngine: @unchecked Sendable {
 
     // MARK: - Asset Upsert (3-tier hierarchy)
 
-    /// Internal (not private) so ThrowingSyncEngine can override it in tests.
+    /// Internal (not private) — called directly by upsert/dedup tests.
     func upsertAsset(from dto: TokenDTO) throws -> Asset {
+        if let override = upsertAssetOverride { return try override(dto) }
         // Tier 1: coinGeckoId
         if let cgId = dto.coinGeckoId, !cgId.isEmpty {
             if let existing = try fetchAsset(coinGeckoId: cgId) {

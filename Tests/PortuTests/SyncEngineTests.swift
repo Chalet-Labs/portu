@@ -336,14 +336,21 @@ struct SyncEngineTests {
 
     private func makeThrowingContext(
         balances: [PositionDTO],
-        throwAfter: Int) throws -> (ModelContext, ThrowingSyncEngine) {
+        throwAfter: Int) throws -> (ModelContext, SyncEngine) {
         let context = try makeModelContext()
         let provider = StubProvider(balances: balances)
         let factory = ProviderFactory(resolver: { _, _ in provider })
-        let engine = ThrowingSyncEngine(
-            modelContext: context,
-            providerFactory: factory,
-            throwAfter: throwAfter)
+        let engine = SyncEngine(modelContext: context, providerFactory: factory)
+        var upsertCount = 0
+        engine.upsertAssetOverride = { dto in
+            upsertCount += 1
+            if upsertCount > throwAfter {
+                throw SyncTestError.forcedUpsertFailure
+            }
+            let asset = Asset(symbol: dto.symbol, name: dto.name, category: dto.category)
+            context.insert(asset)
+            return asset
+        }
         return (context, engine)
     }
 
@@ -413,34 +420,6 @@ private actor StubProvider: PortfolioDataProvider {
 
     func fetchBalances(context _: SyncContext) async throws -> [PositionDTO] {
         balances
-    }
-}
-
-// MARK: - ThrowingSyncEngine
-
-/// Test subclass that forces upsertAsset to throw after N successful calls,
-/// simulating a mid-rebuild failure for transactional isolation testing.
-/// Single-use: `upsertCount` is not reset between sync() calls, so create a
-/// fresh instance per test.
-@MainActor
-private class ThrowingSyncEngine: SyncEngine {
-    /// Number of successful `upsertAsset` calls before throwing.
-    /// `throwAfter: 0` throws on the first call; `throwAfter: 1` lets the first
-    /// call succeed and throws on the second, and so on.
-    let throwAfter: Int
-    private var upsertCount = 0
-
-    init(modelContext: ModelContext, providerFactory: ProviderFactory, throwAfter: Int) {
-        self.throwAfter = throwAfter
-        super.init(modelContext: modelContext, providerFactory: providerFactory)
-    }
-
-    override func upsertAsset(from dto: TokenDTO) throws -> Asset {
-        upsertCount += 1
-        if upsertCount > throwAfter {
-            throw SyncTestError.forcedUpsertFailure
-        }
-        return try super.upsertAsset(from: dto)
     }
 }
 
