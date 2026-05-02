@@ -104,6 +104,9 @@ Models use cascade delete rules and inverse relationships. When adding new model
 
 Never use `#Predicate` with optional chaining through relationships, such as `$0.position?.account?.isActive`. CoreData generates unsupported `TERNARY` SQL and crashes at runtime. Use `@Query` without a filter and filter in Swift instead.
 
+- Avoid redundant SwiftData sort descriptors. If a query filters a field to a single value, do not add a secondary sort on that same field.
+- When deduplicating snapshot-like records, include every field needed for identity in the key, such as `day`, `accountId`, and `assetId`.
+
 ## Formatting
 
 SwiftFormat is used for code formatting and runs automatically via hooks on file edits.
