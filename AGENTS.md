@@ -68,6 +68,7 @@ The app target in `Sources/Portu/` imports all three packages and contains featu
 - Use `@Suite(.serialized)` only when tests share mutable state. Do not add plain `@Suite` without traits.
 - Tests live in each package's `Tests/` directory and in `Tests/PortuTests/`.
 - For behavior changes, run focused tests first, then the full Xcode scheme before calling the work complete.
+- When testing initializer default parameter behavior, call the initializer without those arguments instead of explicitly passing the default values.
 
 Full Xcode scheme test command:
 
