@@ -6,6 +6,8 @@ public actor ZapperProvider: PortfolioDataProvider {
     private let apiKey: String
     private let session: URLSession
     private let baseURL: URL
+    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
     private static let logger = Logger(subsystem: "com.portu.network", category: "ZapperProvider")
 
     nonisolated public var capabilities: ProviderCapabilities {
@@ -18,231 +20,294 @@ public actor ZapperProvider: PortfolioDataProvider {
     public init(
         apiKey: String,
         session: URLSession = .shared,
-        // Zapper API v2 (deprecated). Response may be a raw JSON array or a {"data": [...]} envelope.
-        // See: https://github.com/Zapper-fi/protocol — v2 sunset announced but exact date TBD.
-        baseURL: URL = URL(string: "https://api.zapper.xyz/v2")!) {
+        baseURL: URL = URL(string: "https://public.zapper.xyz/graphql")!) {
         self.apiKey = apiKey
         self.session = session
         self.baseURL = baseURL
     }
 
     public func fetchBalances(context: SyncContext) async throws -> [PositionDTO] {
-        try await fetchForAllAddresses(context: context, fetch: fetchTokenBalances)
-    }
-
-    public func fetchDeFiPositions(context: SyncContext) async throws -> [PositionDTO] {
-        try await fetchForAllAddresses(context: context, fetch: fetchAppPositions)
-    }
-
-    private func fetchForAllAddresses(
-        context: SyncContext,
-        fetch: (String) async throws -> [PositionDTO]) async throws -> [PositionDTO] {
+        let requestContext = try makeRequestContext(from: context)
         var allPositions: [PositionDTO] = []
-        for (address, _) in context.addresses {
-            let positions = try await fetch(address)
-            allPositions.append(contentsOf: positions)
-        }
+        var after: String?
+
+        repeat {
+            let variables = PortfolioVariables(
+                addresses: requestContext.addresses,
+                chainIds: requestContext.chainIds,
+                first: 100,
+                after: after)
+            let response: GraphQLResponse<TokenBalancesData> = try await performGraphQL(
+                query: Self.tokenBalancesQuery,
+                variables: variables)
+            let connection = try response.payload().portfolioV2.tokenBalances.byToken
+            allPositions.append(contentsOf: connection.edges.map {
+                position(from: $0.node)
+            })
+            after = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : nil
+        } while after != nil
+
         return allPositions
     }
 
-    private func fetchTokenBalances(address: String) async throws -> [PositionDTO] {
-        try await parseTokenBalances(data: fetchEndpoint("balances/tokens", address: address))
+    public func fetchDeFiPositions(context: SyncContext) async throws -> [PositionDTO] {
+        let requestContext = try makeRequestContext(from: context)
+        var allPositions: [PositionDTO] = []
+        var after: String?
+
+        repeat {
+            let variables = PortfolioVariables(
+                addresses: requestContext.addresses,
+                chainIds: requestContext.chainIds,
+                first: 100,
+                after: after)
+            let response: GraphQLResponse<AppBalancesData> = try await performGraphQL(
+                query: Self.appBalancesQuery,
+                variables: variables)
+            let connection = try response.payload().portfolioV2.appBalances.byApp
+
+            for edge in connection.edges {
+                var positionEdges = edge.node.positionBalances.edges
+                if edge.node.positionBalances.pageInfo.hasNextPage {
+                    let extraEdges = try await fetchRemainingPositionEdges(
+                        requestContext: requestContext,
+                        appSlug: edge.node.app.slug,
+                        after: edge.node.positionBalances.pageInfo.endCursor)
+                    positionEdges.append(contentsOf: extraEdges)
+                }
+                allPositions.append(contentsOf: positionEdges.compactMap {
+                    position(from: $0.node, appBalance: edge.node)
+                })
+            }
+
+            after = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : nil
+        } while after != nil
+
+        return allPositions
     }
 
-    private func fetchAppPositions(address: String) async throws -> [PositionDTO] {
-        try await parseAppPositions(data: fetchEndpoint("apps/positions", address: address))
-    }
+    private func fetchRemainingPositionEdges(
+        requestContext: ZapperRequestContext,
+        appSlug: String,
+        after initialCursor: String?) async throws -> [AnyPositionBalanceEdge] {
+        var allEdges: [AnyPositionBalanceEdge] = []
+        var after = initialCursor
 
-    private func fetchEndpoint(_ path: String, address: String) async throws -> Data {
-        guard var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false) else {
-            throw ZapperError.invalidResponse
+        while let cursor = after {
+            let variables = AppPositionVariables(
+                addresses: requestContext.addresses,
+                chainIds: requestContext.chainIds,
+                appSlug: appSlug,
+                first: 100,
+                after: cursor)
+            let response: GraphQLResponse<AppBalancesData> = try await performGraphQL(
+                query: Self.appPositionBalancesQuery,
+                variables: variables)
+            guard let appBalance = try response.payload().portfolioV2.appBalances.byApp.edges.first?.node else {
+                return allEdges
+            }
+            let connection = appBalance.positionBalances
+            allEdges.append(contentsOf: connection.edges)
+            after = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : nil
         }
-        components.queryItems = [URLQueryItem(name: "addresses[]", value: address)]
-        guard let url = components.url else {
-            throw ZapperError.invalidResponse
-        }
-        return try await makeRequest(url: url)
+
+        return allEdges
     }
 
-    private func makeRequest(url: URL) async throws -> Data {
-        var request = URLRequest(url: url)
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+    private func makeRequestContext(from context: SyncContext) throws -> ZapperRequestContext {
+        let addresses = context.addresses.map(\.address)
+        let chains = context.addresses.compactMap(\.chain)
+        let uniqueChains = Array(Set(chains))
+        guard !uniqueChains.isEmpty else {
+            return ZapperRequestContext(addresses: addresses, chainIds: nil)
+        }
+
+        var chainIds: [Int] = []
+        for chain in uniqueChains {
+            guard let chainId = Self.chainIds[chain] else {
+                throw ZapperError.unsupportedChain(chain)
+            }
+            chainIds.append(chainId)
+        }
+
+        return ZapperRequestContext(addresses: addresses, chainIds: chainIds.sorted())
+    }
+
+    private func performGraphQL<Data: Decodable>(
+        query: String,
+        variables: some Encodable) async throws -> GraphQLResponse<Data> {
+        var request = URLRequest(url: baseURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(apiKey, forHTTPHeaderField: "x-zapper-api-key")
+        request.httpBody = try encoder.encode(GraphQLRequest(query: query, variables: variables))
+
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw ZapperError.invalidResponse
         }
         switch httpResponse.statusCode {
-        case 200 ... 299: return data
-        case 429: throw ZapperError.rateLimited
-        case 401, 403: throw ZapperError.unauthorized
-        default: throw ZapperError.httpError(statusCode: httpResponse.statusCode)
+        case 200 ... 299:
+            return try decoder.decode(GraphQLResponse<Data>.self, from: data)
+        case 429:
+            throw ZapperError.rateLimited
+        case 401, 403:
+            throw ZapperError.unauthorized
+        default:
+            throw ZapperError.httpError(statusCode: httpResponse.statusCode)
         }
     }
 
-    private func parseTokenBalances(data: Data) throws -> [PositionDTO] {
-        let items = try parseJSONArray(data)
-        guard !items.isEmpty else { return [] }
-        var positions: [PositionDTO] = []
-        var droppedCount = 0
-        var firstDroppedKeys: [String]?
-        for item in items {
-            guard
-                let symbol = item["symbol"] as? String,
-                let balanceUSD = item["balanceUSD"] as? Double,
-                let balance = item["balance"] as? Double
-            else {
-                droppedCount += 1
-                if firstDroppedKeys == nil {
-                    firstDroppedKeys = Array(item.keys).sorted()
-                }
-                continue
-            }
-            let name = item["name"] as? String ?? symbol
-            let chain = parseChain(item)
-            let token = buildTokenDTO(
-                item, role: .balance, symbol: symbol, name: name,
-                amount: Decimal(abs(balance)), usdValue: Decimal(abs(balanceUSD)), chain: chain)
-            positions.append(PositionDTO(
-                positionType: .idle, chain: chain,
-                protocolId: nil, protocolName: nil, protocolLogoURL: nil,
-                healthFactor: nil, tokens: [token]))
-        }
-        if droppedCount > 0 {
-            let keys = firstDroppedKeys.map { $0.joined(separator: ", ") } ?? "none"
-            let total = items.count
-            Self.logger.warning(
-                "parseTokenBalances: dropped \(droppedCount, privacy: .public)/\(total, privacy: .public) items — keys: [\(keys, privacy: .public)]")
-        }
-        if positions.isEmpty {
-            throw ZapperError.schemaChanged(context: "parseTokenBalances: 0/\(items.count) items parsed successfully")
-        }
-        return positions
+    private func position(from node: TokenBalanceNode) -> PositionDTO {
+        let chain = Self.chainsById[node.network.chainId]
+        let token = TokenDTO(
+            role: .balance,
+            symbol: node.symbol,
+            name: node.name,
+            amount: Decimal(abs(node.balance)),
+            usdValue: Decimal(abs(node.balanceUSD)),
+            chain: chain,
+            contractAddress: node.tokenAddress,
+            debankId: nil,
+            coinGeckoId: nil,
+            sourceKey: "zapper:\(node.network.chainId):\(node.tokenAddress)",
+            logoURL: node.imgUrlV2,
+            category: .other,
+            isVerified: node.verified)
+        return PositionDTO(
+            positionType: .idle,
+            chain: chain,
+            protocolId: nil,
+            protocolName: nil,
+            protocolLogoURL: nil,
+            healthFactor: nil,
+            tokens: [token])
     }
 
-    private func parseAppPositions(data: Data) throws -> [PositionDTO] {
-        let items = try parseJSONArray(data)
-        guard !items.isEmpty else { return [] }
-        var positions: [PositionDTO] = []
-        var droppedCount = 0
-        var firstDroppedKeys: [String]?
-        for item in items {
-            guard let appId = item["appId"] as? String else {
-                droppedCount += 1
-                if firstDroppedKeys == nil {
-                    firstDroppedKeys = Array(item.keys).sorted()
-                }
-                continue
+    private func position(from node: AnyPositionBalance, appBalance: AppBalanceNode) -> PositionDTO? {
+        switch node {
+        case let .contract(position):
+            let tokens = position.tokens.map {
+                tokenDTO(
+                    from: $0.token,
+                    role: role(for: $0.metaType),
+                    sourceKey: tokenSourceKey(position.key, token: $0.token, chainId: appBalance.network.chainId),
+                    chain: Self.chainsById[appBalance.network.chainId])
             }
-            let posType: PositionType = switch item["type"] as? String {
-            case "lending": .lending
-            case "liquidity-pool": .liquidityPool
-            case "staking": .staking
-            case "farming": .farming
-            default: .other
-            }
-            let chain = parseChain(item)
-            guard let tokensJSON = item["tokens"] as? [[String: Any]] else {
-                droppedCount += 1
-                if firstDroppedKeys == nil {
-                    firstDroppedKeys = Array(item.keys).sorted()
-                }
-                continue
-            }
-            let tokens = parsePositionTokens(tokensJSON, chain: chain)
-            if !tokensJSON.isEmpty, tokens.isEmpty {
-                droppedCount += 1
-                if firstDroppedKeys == nil {
-                    firstDroppedKeys = Array(item.keys).sorted()
-                }
-                continue
-            }
-            positions.append(PositionDTO(
-                positionType: posType,
-                chain: chain,
-                protocolId: appId,
-                protocolName: item["appName"] as? String,
-                protocolLogoURL: item["appImage"] as? String,
-                healthFactor: item["healthFactor"] as? Double,
-                tokens: tokens))
+            guard !tokens.isEmpty else { return nil }
+            return PositionDTO(
+                positionType: positionType(from: position.groupLabel),
+                chain: Self.chainsById[appBalance.network.chainId],
+                protocolId: appBalance.app.slug,
+                protocolName: appBalance.app.displayName,
+                protocolLogoURL: appBalance.app.imgUrl,
+                healthFactor: nil,
+                tokens: tokens)
+
+        case let .appToken(position):
+            let token = TokenDTO(
+                role: .lpToken,
+                symbol: position.symbol,
+                name: position.symbol,
+                amount: decimal(from: position.balance),
+                usdValue: Decimal(abs(position.balanceUSD)),
+                chain: Self.chainsById[appBalance.network.chainId],
+                contractAddress: position.address,
+                debankId: nil,
+                coinGeckoId: nil,
+                sourceKey: "zapper:\(appBalance.network.chainId):\(position.key ?? position.address)",
+                logoURL: appBalance.app.imgUrl,
+                category: .defi,
+                isVerified: true)
+            return PositionDTO(
+                positionType: .liquidityPool,
+                chain: Self.chainsById[appBalance.network.chainId],
+                protocolId: appBalance.app.slug,
+                protocolName: appBalance.app.displayName,
+                protocolLogoURL: appBalance.app.imgUrl,
+                healthFactor: nil,
+                tokens: [token])
         }
-        if droppedCount > 0 {
-            let keys = firstDroppedKeys.map { $0.joined(separator: ", ") } ?? "none"
-            let total = items.count
-            Self.logger.warning(
-                "parseAppPositions: dropped \(droppedCount, privacy: .public)/\(total, privacy: .public) items — keys: [\(keys, privacy: .public)]")
-        }
-        if positions.isEmpty {
-            throw ZapperError.schemaChanged(context: "parseAppPositions: 0/\(items.count) items parsed successfully")
-        }
-        return positions
     }
 
-    private func parsePositionTokens(_ tokensJSON: [[String: Any]], chain: Chain? = nil) -> [TokenDTO] {
-        var tokens: [TokenDTO] = []
-        var droppedCount = 0
-        var firstDroppedKeys: [String]?
-        for item in tokensJSON {
-            guard
-                let symbol = item["symbol"] as? String,
-                let balance = item["balance"] as? Double,
-                let balanceUSD = item["balanceUSD"] as? Double
-            else {
-                droppedCount += 1
-                if firstDroppedKeys == nil {
-                    firstDroppedKeys = Array(item.keys).sorted()
-                }
-                continue
-            }
-            let role: TokenRole = switch item["type"] as? String {
-            case "supply": .supply
-            case "borrow": .borrow
-            case "reward": .reward
-            case "stake": .stake
-            default: .balance
-            }
-            tokens.append(buildTokenDTO(
-                item, role: role, symbol: symbol, name: item["name"] as? String ?? symbol,
-                amount: Decimal(abs(balance)), usdValue: Decimal(abs(balanceUSD)),
-                chain: parseChain(item) ?? chain))
-        }
-        if droppedCount > 0 {
-            let keys = firstDroppedKeys.map { $0.joined(separator: ", ") } ?? "none"
-            let total = tokensJSON.count
-            Self.logger.warning(
-                "parsePositionTokens: dropped \(droppedCount, privacy: .public)/\(total, privacy: .public) — keys: [\(keys, privacy: .public)]")
-        }
-        return tokens
-    }
-
-    private func parseChain(_ item: [String: Any]) -> Chain? {
-        (item["network"] as? String).flatMap { Chain(rawValue: $0) }
-    }
-
-    // swiftlint:disable:next function_parameter_count
-    private func buildTokenDTO(
-        _ item: [String: Any], role: TokenRole, symbol: String, name: String,
-        amount: Decimal, usdValue: Decimal, chain: Chain?) -> TokenDTO {
+    private func tokenDTO(
+        from token: PositionTokenNode,
+        role: TokenRole,
+        sourceKey: String,
+        chain: Chain?) -> TokenDTO {
         TokenDTO(
-            role: role, symbol: symbol, name: name,
-            amount: amount, usdValue: usdValue,
-            chain: chain, contractAddress: item["address"] as? String,
-            debankId: nil, coinGeckoId: item["coingeckoId"] as? String,
-            sourceKey: (item["address"] as? String).map { "zapper:\($0)" },
-            logoURL: item["imgUrl"] as? String,
-            category: .other, isVerified: item["verified"] as? Bool ?? false)
+            role: role,
+            symbol: token.symbol,
+            name: token.symbol,
+            amount: decimal(from: token.balance),
+            usdValue: Decimal(abs(token.balanceUSD)),
+            chain: chain,
+            contractAddress: token.address,
+            debankId: nil,
+            coinGeckoId: nil,
+            sourceKey: sourceKey,
+            logoURL: nil,
+            category: .defi,
+            isVerified: true)
     }
 
-    private func parseJSONArray(_ data: Data) throws -> [[String: Any]] {
-        let json = try JSONSerialization.jsonObject(with: data)
-        if let envelope = json as? [String: Any], let array = envelope["data"] as? [[String: Any]] {
-            return array
-        }
-        if let array = json as? [[String: Any]] {
-            return array
-        }
-        throw ZapperError.decodingFailed
+    private func tokenSourceKey(_ positionKey: String?, token: PositionTokenNode, chainId: Int) -> String {
+        let key = positionKey ?? token.address
+        return "zapper:\(chainId):\(key):\(token.address):\(token.symbol)"
     }
+
+    private func role(for metaType: String?) -> TokenRole {
+        switch metaType {
+        case "SUPPLIED":
+            .supply
+        case "BORROWED":
+            .borrow
+        case "CLAIMABLE":
+            .reward
+        case "LOCKED", "VESTING":
+            .stake
+        default:
+            .balance
+        }
+    }
+
+    private func positionType(from groupLabel: String?) -> PositionType {
+        let label = groupLabel?.lowercased() ?? ""
+        if label.contains("lend") || label.contains("borrow") {
+            return .lending
+        }
+        if label.contains("stake") {
+            return .staking
+        }
+        if label.contains("farm") {
+            return .farming
+        }
+        if label.contains("pool") || label.contains("liquidity") {
+            return .liquidityPool
+        }
+        return .other
+    }
+
+    private func decimal(from string: String) -> Decimal {
+        Decimal(string: string).map(abs) ?? 0
+    }
+
+    private static let chainIds: [Chain: Int] = [
+        .ethereum: 1,
+        .polygon: 137,
+        .arbitrum: 42161,
+        .optimism: 10,
+        .base: 8453,
+        .bsc: 56,
+        .solana: 1_151_111_081,
+        .bitcoin: 6_172_014,
+        .avalanche: 43114,
+        .monad: 143
+    ]
+
+    private static let chainsById: [Int: Chain] = Dictionary(
+        uniqueKeysWithValues: chainIds.map { ($0.value, $0.key) })
 }
 
 public enum ZapperError: Error, LocalizedError, Sendable {
@@ -252,15 +317,27 @@ public enum ZapperError: Error, LocalizedError, Sendable {
     case httpError(statusCode: Int)
     case decodingFailed
     case schemaChanged(context: String)
+    case graphQLError(String)
+    case unsupportedChain(Chain)
 
     public var errorDescription: String? {
         switch self {
-        case .invalidResponse: "Invalid response from Zapper API"
-        case .rateLimited: "Zapper API rate limit exceeded"
-        case .unauthorized: "Invalid Zapper API key"
-        case let .httpError(code): "Zapper API returned HTTP \(code)"
-        case .decodingFailed: "Failed to parse Zapper API response"
-        case let .schemaChanged(ctx): "Zapper API schema may have changed: \(ctx)"
+        case .invalidResponse:
+            "Invalid response from Zapper API"
+        case .rateLimited:
+            "Zapper API rate limit exceeded"
+        case .unauthorized:
+            "Invalid Zapper API key"
+        case let .httpError(code):
+            "Zapper API returned HTTP \(code)"
+        case .decodingFailed:
+            "Failed to parse Zapper API response"
+        case let .schemaChanged(ctx):
+            "Zapper API schema may have changed: \(ctx)"
+        case let .graphQLError(message):
+            "Zapper GraphQL error: \(message)"
+        case let .unsupportedChain(chain):
+            "Zapper does not support explicit chain filter: \(chain.rawValue)"
         }
     }
 }
