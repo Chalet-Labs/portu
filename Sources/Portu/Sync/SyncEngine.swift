@@ -8,6 +8,9 @@ import SwiftData
 final class SyncEngine: @unchecked Sendable {
     private let modelContext: ModelContext
     private let providerFactory: ProviderFactory
+    #if DEBUG
+        var upsertAssetOverride: ((TokenDTO) throws -> Asset)?
+    #endif
 
     init(modelContext: ModelContext, providerFactory: ProviderFactory) {
         self.modelContext = modelContext
@@ -63,33 +66,30 @@ final class SyncEngine: @unchecked Sendable {
         let defi = try await provider.fetchDeFiPositions(context: context)
         let allDTOs = balances + defi
 
-        // Delete stale positions from previous sync
-        for position in account.positions {
-            modelContext.delete(position)
-        }
+        // ── Build phase: stage rebuild data as value types ──
+        // No @Model objects are constructed here — `Position` and `PositionToken`
+        // would auto-register with the ModelContext as soon as a relationship to
+        // an already-managed object (e.g. the resolved Asset) is set during init.
+        // Staging with plain structs keeps the build phase truly side-effect-free
+        // for Position/PositionToken rows (#31). Asset side effects are bounded:
+        // upsertAsset may insert a new Asset row or run updateAssetMetadata on an
+        // existing one, and the subsequent save() of `lastSyncError` flushes
+        // those mutations. They are self-healing — the 3-tier dedup hierarchy in
+        // upsertAsset prevents duplicate Asset accumulation across repeated
+        // partial failures, and the append-only key backfill never overwrites
+        // existing identity keys.
+        var staged: [StagedPosition] = []
 
-        // Map DTOs → SwiftData
         for dto in allDTOs {
-            let position = Position(
-                positionType: dto.positionType,
-                chain: dto.chain,
-                protocolId: dto.protocolId,
-                protocolName: dto.protocolName,
-                protocolLogoURL: dto.protocolLogoURL,
-                healthFactor: dto.healthFactor,
-                account: account,
-                syncedAt: .now)
-
             var net: Decimal = 0
+            var tokens: [StagedToken] = []
             for tokenDTO in dto.tokens {
                 let asset = try upsertAsset(from: tokenDTO)
-                let token = PositionToken(
+                tokens.append(StagedToken(
                     role: tokenDTO.role,
                     amount: tokenDTO.amount,
                     usdValue: tokenDTO.usdValue,
-                    asset: asset,
-                    position: position)
-                modelContext.insert(token)
+                    asset: asset))
 
                 if tokenDTO.role.isPositive {
                     net += tokenDTO.usdValue
@@ -99,8 +99,52 @@ final class SyncEngine: @unchecked Sendable {
                 // reward: excluded from net
             }
 
-            position.netUSDValue = net
+            staged.append(StagedPosition(
+                positionType: dto.positionType,
+                chain: dto.chain,
+                protocolId: dto.protocolId,
+                protocolName: dto.protocolName,
+                protocolLogoURL: dto.protocolLogoURL,
+                healthFactor: dto.healthFactor,
+                netUSDValue: net,
+                tokens: tokens))
+        }
+
+        // ── Commit phase: all DTOs succeeded — replace positions ──
+        // Note: this still uses the main ModelContext, not a scratch context, so
+        // a throw from save() after the delete loop would leave the account
+        // without positions until the next successful sync. The build-phase
+        // isolation in #31 covers the upsertAsset-throws path; commit-phase
+        // resilience would require a child ModelContext (tracked separately).
+        // Snapshot account.positions before deletion — it's a live SwiftData
+        // relationship array that mutates during cascade deletes.
+        for position in Array(account.positions) {
+            modelContext.delete(position)
+        }
+
+        for entry in staged {
+            let position = Position(
+                positionType: entry.positionType,
+                chain: entry.chain,
+                protocolId: entry.protocolId,
+                protocolName: entry.protocolName,
+                protocolLogoURL: entry.protocolLogoURL,
+                healthFactor: entry.healthFactor,
+                netUSDValue: entry.netUSDValue,
+                syncedAt: .now)
+            // Insert before assigning the inverse relationship so SwiftData has
+            // a managed object on both sides when the inverse hook fires.
             modelContext.insert(position)
+            position.account = account
+            for stagedToken in entry.tokens {
+                let token = PositionToken(
+                    role: stagedToken.role,
+                    amount: stagedToken.amount,
+                    usdValue: stagedToken.usdValue,
+                    asset: stagedToken.asset)
+                modelContext.insert(token)
+                token.position = position
+            }
         }
 
         account.lastSyncedAt = .now
@@ -110,7 +154,11 @@ final class SyncEngine: @unchecked Sendable {
 
     // MARK: - Asset Upsert (3-tier hierarchy)
 
+    /// Internal (not private) — called directly by upsert/dedup tests.
     func upsertAsset(from dto: TokenDTO) throws -> Asset {
+        #if DEBUG
+            if let override = upsertAssetOverride { return try override(dto) }
+        #endif
         // Tier 1: coinGeckoId
         if let cgId = dto.coinGeckoId, !cgId.isEmpty {
             if let existing = try fetchAsset(coinGeckoId: cgId) {
@@ -353,6 +401,30 @@ final class SyncEngine: @unchecked Sendable {
         let descriptor = FetchDescriptor<Asset>()
         return try modelContext.fetch(descriptor).first { $0.sourceKey == sourceKey }
     }
+}
+
+/// Plain-value staging for syncAccount's build phase. Holding @Model instances
+/// (Position/PositionToken) here would cause SwiftData to auto-register them
+/// when their relationships are assigned to already-managed objects, defeating
+/// the build-phase isolation. Pure structs keep the staging side-effect-free.
+private struct StagedPosition {
+    let positionType: PositionType
+    let chain: Chain?
+    let protocolId: String?
+    let protocolName: String?
+    let protocolLogoURL: String?
+    let healthFactor: Double?
+    let netUSDValue: Decimal
+    let tokens: [StagedToken]
+}
+
+private struct StagedToken {
+    let role: TokenRole
+    let amount: Decimal
+    let usdValue: Decimal
+    /// Reference to the already-resolved (managed) Asset. Storing a pointer in
+    /// a value type does not trigger SwiftData tracking.
+    let asset: Asset
 }
 
 private struct AssetSnapshotAccumulator {
