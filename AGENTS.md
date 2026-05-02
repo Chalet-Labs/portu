@@ -94,6 +94,9 @@ xcodebuild -project Portu.xcodeproj -scheme Portu -configuration Debug -derivedD
 - State: `*State`, `*Status`.
 - Enums use descriptive names, such as `AccountKind`, `ExchangeType`, and `PositionType`.
 - For composite lookup or deduplication keys, prefer a flat `Hashable` struct over nested dictionaries.
+- When passing URL-derived paths to `FileManager` APIs that take string paths, use `url.path(percentEncoded: false)`.
+- When displayed percentages must sum to 100%, round each display value first, then add the residual (`1.0 - sum`) to a stable target such as the largest absolute value.
+- For chart data built from grouped dictionaries or other unordered sources, use deterministic multi-key sorting, such as date then category.
 
 ## SwiftData Models
 
