@@ -329,7 +329,7 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     private func decimal(from string: String) throws -> Decimal {
-        guard let value = Decimal(string: string, locale: Locale(identifier: "en_US_POSIX")) else {
+        guard let value = Decimal(string: string, locale: Self.posixLocale) else {
             throw ZapperError.schemaChanged(context: "Invalid decimal balance: \(string)")
         }
         return abs(value)
@@ -341,6 +341,8 @@ public actor ZapperProvider: PortfolioDataProvider {
         }
         return chain
     }
+
+    private static let posixLocale = Locale(identifier: "en_US_POSIX")
 
     private static let chainIds: [Chain: Int] = [
         .ethereum: 1,

@@ -280,17 +280,20 @@ struct GraphQLResponse<Data: Decodable & Sendable>: Decodable {
 }
 
 struct GraphQLError: Decodable {
+    static let authorizationCodes: Set<String> = ["UNAUTHENTICATED", "UNAUTHORIZED", "FORBIDDEN"]
+    static let rateLimitCodes: Set<String> = ["RATE_LIMITED", "THROTTLED", "TOO_MANY_REQUESTS"]
+
     let message: String
     let extensions: GraphQLErrorExtensions?
 
     var isAuthorizationError: Bool {
         guard let code = extensions?.code?.uppercased() else { return false }
-        return ["UNAUTHENTICATED", "UNAUTHORIZED", "FORBIDDEN"].contains(code)
+        return Self.authorizationCodes.contains(code)
     }
 
     var isRateLimitError: Bool {
         guard let code = extensions?.code?.uppercased() else { return false }
-        return ["RATE_LIMITED", "THROTTLED", "TOO_MANY_REQUESTS"].contains(code)
+        return Self.rateLimitCodes.contains(code)
     }
 }
 
