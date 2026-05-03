@@ -3,234 +3,6 @@ import PortuCore
 @testable import PortuNetwork
 import Testing
 
-// MARK: - Mock URL Protocol
-
-final class ZapperMockURLProtocol: URLProtocol, @unchecked Sendable {
-    nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (Data?, Int))?
-    nonisolated(unsafe) static var requests: [URLRequest] = []
-
-    override static func canInit(with _: URLRequest) -> Bool {
-        true
-    }
-
-    override static func canonicalRequest(for request: URLRequest) -> URLRequest {
-        request
-    }
-
-    override func startLoading() {
-        Self.requests.append(request)
-        do {
-            let (data, statusCode) = try Self.requestHandler?(request) ?? (nil, 200)
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: statusCode,
-                httpVersion: nil,
-                headerFields: nil)!
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            if let data {
-                client?.urlProtocol(self, didLoad: data)
-            }
-            client?.urlProtocolDidFinishLoading(self)
-        } catch {
-            client?.urlProtocol(self, didFailWithError: error)
-        }
-    }
-
-    override func stopLoading() {}
-}
-
-// MARK: - Helpers
-
-private func makeMockSession() -> URLSession {
-    let config = URLSessionConfiguration.ephemeral
-    config.protocolClasses = [ZapperMockURLProtocol.self]
-    return URLSession(configuration: config)
-}
-
-private func makeProvider(session: URLSession, baseURL: URL = URL(string: "https://test.local/graphql")!) -> ZapperProvider {
-    ZapperProvider(apiKey: "test-key", session: session, baseURL: baseURL)
-}
-
-private func makeSyncContext(chain: Chain? = nil) -> SyncContext {
-    SyncContext(accountId: UUID(), kind: .wallet, addresses: [("0xabc", chain)], exchangeType: nil)
-}
-
-private func jsonData(_ object: [String: Any]) throws -> Data {
-    try JSONSerialization.data(withJSONObject: object)
-}
-
-private func graphQLBody(from request: URLRequest) throws -> [String: Any] {
-    let body = try requestBody(from: request)
-    let json = try JSONSerialization.jsonObject(with: body)
-    return try #require(json as? [String: Any])
-}
-
-private func graphQLVariables(from request: URLRequest) throws -> [String: Any] {
-    let body = try graphQLBody(from: request)
-    return try #require(body["variables"] as? [String: Any])
-}
-
-private func requestBody(from request: URLRequest) throws -> Data {
-    if let body = request.httpBody {
-        return body
-    }
-    let stream = try #require(request.httpBodyStream)
-    stream.open()
-    defer { stream.close() }
-
-    var data = Data()
-    var buffer = [UInt8](repeating: 0, count: 4096)
-    while stream.hasBytesAvailable {
-        let count = stream.read(&buffer, maxLength: buffer.count)
-        if count < 0 {
-            throw stream.streamError ?? ZapperTestError.unreadableBodyStream
-        }
-        if count == 0 {
-            break
-        }
-        data.append(buffer, count: count)
-    }
-    return data
-}
-
-private enum ZapperTestError: Error {
-    case unreadableBodyStream
-}
-
-private func tokenResponse(
-    symbol: String = "ETH",
-    hasNextPage: Bool = false,
-    endCursor: String? = nil) -> [String: Any] {
-    [
-        "data": [
-            "portfolioV2": [
-                "tokenBalances": [
-                    "byToken": [
-                        "edges": [
-                            [
-                                "node": [
-                                    "tokenAddress": "0xeth",
-                                    "name": "Ethereum",
-                                    "symbol": symbol,
-                                    "balance": 1.5,
-                                    "balanceUSD": 3000.0,
-                                    "verified": true,
-                                    "imgUrlV2": "https://img.example/eth.png",
-                                    "network": ["chainId": 1, "name": "Ethereum"]
-                                ] as [String: Any]
-                            ] as [String: Any]
-                        ],
-                        "pageInfo": [
-                            "hasNextPage": hasNextPage,
-                            "endCursor": endCursor as Any
-                        ]
-                    ]
-                ]
-            ]
-        ]
-    ]
-}
-
-private func appBalancesResponse() -> [String: Any] {
-    [
-        "data": [
-            "portfolioV2": [
-                "appBalances": [
-                    "byApp": [
-                        "edges": [
-                            [
-                                "node": [
-                                    "appId": "aave-v3",
-                                    "balanceUSD": 2500.0,
-                                    "app": appNode(),
-                                    "network": ["chainId": 1, "name": "Ethereum"],
-                                    "positionBalances": [
-                                        "edges": [contractPositionEdge(), appTokenPositionEdge()],
-                                        "pageInfo": ["hasNextPage": false, "endCursor": NSNull()]
-                                    ]
-                                ] as [String: Any]
-                            ] as [String: Any]
-                        ],
-                        "pageInfo": ["hasNextPage": false, "endCursor": NSNull()]
-                    ]
-                ]
-            ]
-        ]
-    ]
-}
-
-private func appNode() -> [String: Any] {
-    [
-        "slug": "aave-v3",
-        "displayName": "Aave V3",
-        "imgUrl": "https://img.example/aave.png"
-    ]
-}
-
-private func contractPositionEdge() -> [String: Any] {
-    [
-        "node": [
-            "__typename": "ContractPositionBalance",
-            "key": "contract-position",
-            "appId": "aave-v3",
-            "groupId": "lending",
-            "groupLabel": "Lending",
-            "balanceUSD": 1500.0,
-            "tokens": [
-                tokenWithMetaType("SUPPLIED", address: "0xeth", balance: "1.0", balanceUSD: 2000.0, symbol: "ETH"),
-                tokenWithMetaType("BORROWED", address: "0xusdc", balance: "500.0", balanceUSD: 500.0, symbol: "USDC"),
-                tokenWithMetaType("CLAIMABLE", address: "0xstk", balance: "3.0", balanceUSD: 30.0, symbol: "stkAAVE")
-            ]
-        ] as [String: Any]
-    ]
-}
-
-private func tokenWithMetaType(
-    _ metaType: String,
-    address: String,
-    balance: String,
-    balanceUSD: Double,
-    symbol: String) -> [String: Any] {
-    [
-        "metaType": metaType,
-        "token": tokenNode(
-            address: address,
-            balance: balance,
-            balanceUSD: balanceUSD,
-            symbol: symbol)
-    ]
-}
-
-private func tokenNode(address: String, balance: String, balanceUSD: Double, symbol: String) -> [String: Any] {
-    [
-        "__typename": "BaseTokenPositionBalance",
-        "address": address,
-        "balance": balance,
-        "balanceUSD": balanceUSD,
-        "symbol": symbol,
-        "decimals": symbol == "USDC" ? 6.0 : 18.0,
-        "network": "ETHEREUM_MAINNET"
-    ]
-}
-
-private func appTokenPositionEdge() -> [String: Any] {
-    [
-        "node": [
-            "__typename": "AppTokenPositionBalance",
-            "address": "0xlp",
-            "balance": "2.0",
-            "balanceUSD": 1000.0,
-            "symbol": "aEthUSDC",
-            "decimals": 18.0,
-            "key": "app-token-position",
-            "appId": "aave-v3",
-            "groupId": "pool",
-            "groupLabel": "Pool",
-            "network": "ETHEREUM_MAINNET"
-        ] as [String: Any]
-    ]
-}
-
 // MARK: - Tests
 
 @Suite(.serialized)
@@ -311,6 +83,53 @@ struct ZapperProviderTests {
     }
 
     @Test
+    func `fetchBalances partitions mixed explicit chain addresses`() async throws {
+        var capturedVariables: [[String: Any]] = []
+        ZapperMockURLProtocol.requestHandler = { request in
+            let variables = try graphQLVariables(from: request)
+            capturedVariables.append(variables)
+            let chainIds = try #require(variables["chainIds"] as? [Int])
+            let chainId = try #require(chainIds.first)
+            return try (
+                jsonData(tokenResponse(symbol: "TOKEN-\(chainId)", tokenAddress: "token-\(chainId)", chainId: chainId)),
+                200)
+        }
+
+        let context = makeSyncContext(addresses: [
+            ("0xabc", .ethereum),
+            ("Sol123", .solana)
+        ])
+        let provider = makeProvider(session: session)
+        let results = try await provider.fetchBalances(context: context)
+
+        #expect(capturedVariables.count == 2)
+        #expect(capturedVariables[0]["addresses"] as? [String] == ["0xabc"])
+        #expect(capturedVariables[0]["chainIds"] as? [Int] == [1])
+        #expect(capturedVariables[1]["addresses"] as? [String] == ["Sol123"])
+        #expect(capturedVariables[1]["chainIds"] as? [Int] == [1_151_111_081])
+        #expect(results.map(\.chain) == [.ethereum, .solana])
+    }
+
+    @Test
+    func `fetchBalances aggregates same explicit chain addresses`() async throws {
+        ZapperMockURLProtocol.requestHandler = { request in
+            let variables = try graphQLVariables(from: request)
+            #expect(variables["addresses"] as? [String] == ["0x1", "0x2"])
+            #expect(variables["chainIds"] as? [Int] == [8453])
+            return try (jsonData(tokenResponse(chainId: 8453)), 200)
+        }
+
+        let context = makeSyncContext(addresses: [
+            ("0x1", .base),
+            ("0x2", .base)
+        ])
+        let provider = makeProvider(session: session)
+        _ = try await provider.fetchBalances(context: context)
+
+        #expect(ZapperMockURLProtocol.requests.count == 1)
+    }
+
+    @Test
     func `graphql errors throw graphQLError`() async throws {
         ZapperMockURLProtocol.requestHandler = { _ in
             try (jsonData(["errors": [["message": "bad query"]]]), 200)
@@ -322,6 +141,43 @@ struct ZapperProviderTests {
             Issue.record("Expected ZapperError.graphQLError")
         } catch let ZapperError.graphQLError(message) {
             #expect(message.contains("bad query"))
+        }
+    }
+
+    @Test
+    func `graphql partial data returns decoded positions`() async throws {
+        ZapperMockURLProtocol.requestHandler = { _ in
+            var response = tokenResponse()
+            response["errors"] = [["message": "Polygon resolver unavailable"]]
+            return try (jsonData(response), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        let results = try await provider.fetchBalances(context: makeSyncContext())
+
+        #expect(results.count == 1)
+        #expect(results[0].tokens.first?.symbol == "ETH")
+    }
+
+    @Test
+    func `graphql auth and rate limit codes map to provider errors`() async throws {
+        let cases: [(String, (ZapperError) -> Bool)] = [
+            ("UNAUTHENTICATED", { if case .unauthorized = $0 { true } else { false } }),
+            ("RATE_LIMITED", { if case .rateLimited = $0 { true } else { false } })
+        ]
+
+        for (code, matches) in cases {
+            ZapperMockURLProtocol.requestHandler = { _ in
+                let response = ["errors": [["message": code, "extensions": ["code": code]]]]
+                return try (jsonData(response), 200)
+            }
+            let provider = makeProvider(session: session)
+            do {
+                _ = try await provider.fetchBalances(context: makeSyncContext())
+                Issue.record("Expected mapped GraphQL error for \(code)")
+            } catch let error as ZapperError {
+                #expect(matches(error))
+            }
         }
     }
 
@@ -405,6 +261,103 @@ struct ZapperProviderTests {
         #expect(token.amount == Decimal(2))
         #expect(token.usdValue == Decimal(1000))
         #expect(token.sourceKey == "zapper:1:app-token-position")
+    }
+
+    @Test
+    func `fetchDeFiPositions paginates nested position balances`() async throws {
+        var callCount = 0
+        ZapperMockURLProtocol.requestHandler = { request in
+            callCount += 1
+            let variables = try graphQLVariables(from: request)
+            if callCount == 1 {
+                #expect(variables["after"] is NSNull)
+                return try (jsonData(appBalancesResponse(
+                    positionEdges: [contractPositionEdge()],
+                    positionHasNextPage: true,
+                    positionEndCursor: "pos-cursor")), 200)
+            }
+            #expect(variables["appSlug"] as? String == "aave-v3")
+            #expect(variables["first"] as? Int == 100)
+            #expect(variables["after"] as? String == "pos-cursor")
+            return try (jsonData(appBalancesResponse(positionEdges: [appTokenPositionEdge()])), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        let results = try await provider.fetchDeFiPositions(context: makeSyncContext())
+
+        #expect(callCount == 2)
+        #expect(results.count == 2)
+        #expect(results.flatMap(\.tokens).map(\.symbol).contains("aEthUSDC"))
+    }
+
+    @Test
+    func `missing app during nested pagination throws schemaChanged`() async throws {
+        var callCount = 0
+        ZapperMockURLProtocol.requestHandler = { _ in
+            callCount += 1
+            if callCount == 1 {
+                return try (jsonData(appBalancesResponse(
+                    positionEdges: [contractPositionEdge()],
+                    positionHasNextPage: true,
+                    positionEndCursor: "pos-cursor")), 200)
+            }
+            return try (jsonData(appBalancesResponse(appEdges: [])), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        do {
+            _ = try await provider.fetchDeFiPositions(context: makeSyncContext())
+            Issue.record("Expected schemaChanged")
+        } catch let ZapperError.schemaChanged(context) {
+            #expect(context.contains("Missing app"))
+        }
+    }
+
+    @Test
+    func `unknown position typename throws schemaChanged`() async throws {
+        let unknownEdge = ["node": ["__typename": "FuturePositionBalance"]]
+        ZapperMockURLProtocol.requestHandler = { _ in
+            try (jsonData(appBalancesResponse(positionEdges: [unknownEdge])), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        do {
+            _ = try await provider.fetchDeFiPositions(context: makeSyncContext())
+            Issue.record("Expected schemaChanged")
+        } catch let ZapperError.schemaChanged(context) {
+            #expect(context.contains("FuturePositionBalance"))
+        }
+    }
+
+    @Test
+    func `invalid decimal balance throws schemaChanged`() async throws {
+        ZapperMockURLProtocol.requestHandler = { _ in
+            try (jsonData(appBalancesResponse(positionEdges: [appTokenPositionEdge(balance: "not-a-decimal")])), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        do {
+            _ = try await provider.fetchDeFiPositions(context: makeSyncContext())
+            Issue.record("Expected schemaChanged")
+        } catch let ZapperError.schemaChanged(context) {
+            #expect(context.contains("Invalid decimal balance"))
+        }
+    }
+
+    @Test
+    func `unknown contract token meta type throws schemaChanged`() async throws {
+        let token = tokenWithMetaType("DEBT", address: "0xdebt", balance: "1", balanceUSD: 1, symbol: "DEBT")
+        ZapperMockURLProtocol.requestHandler = { _ in
+            try (jsonData(appBalancesResponse(positionEdges: [contractPositionEdge(tokens: [token])])), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        do {
+            _ = try await provider.fetchDeFiPositions(context: makeSyncContext())
+            Issue.record("Expected schemaChanged")
+        } catch let ZapperError.schemaChanged(context) {
+            #expect(context.contains("metaType"))
+        }
     }
 
     @Test

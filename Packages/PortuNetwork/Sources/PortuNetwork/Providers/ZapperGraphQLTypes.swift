@@ -191,7 +191,7 @@ struct ZapperRequestContext {
     let chainIds: [Int]?
 }
 
-struct GraphQLRequest<Variables: Encodable>: Encodable {
+struct GraphQLRequest<Variables: Encodable & Sendable>: Encodable {
     let query: String
     let variables: Variables
 }
@@ -253,23 +253,49 @@ struct AppPositionVariables: Encodable {
 
 // MARK: - Response Types
 
-struct GraphQLResponse<Data: Decodable>: Decodable {
+struct GraphQLResponse<Data: Decodable & Sendable>: Decodable {
     let data: Data?
     let errors: [GraphQLError]?
 
     func payload() throws -> Data {
-        if let errors, !errors.isEmpty {
-            throw ZapperError.graphQLError(errors.map(\.message).joined(separator: "; "))
+        if let data {
+            return data
         }
-        guard let data else {
+        guard let errors, !errors.isEmpty else {
             throw ZapperError.decodingFailed
         }
-        return data
+        if errors.contains(where: \.isAuthorizationError) {
+            throw ZapperError.unauthorized
+        }
+        if errors.contains(where: \.isRateLimitError) {
+            throw ZapperError.rateLimited
+        }
+        throw ZapperError.graphQLError(errors.map(\.message).joined(separator: "; "))
+    }
+
+    var partialErrorMessage: String? {
+        guard data != nil, let errors, !errors.isEmpty else { return nil }
+        return errors.map(\.message).joined(separator: "; ")
     }
 }
 
 struct GraphQLError: Decodable {
     let message: String
+    let extensions: GraphQLErrorExtensions?
+
+    var isAuthorizationError: Bool {
+        guard let code = extensions?.code?.uppercased() else { return false }
+        return ["UNAUTHENTICATED", "UNAUTHORIZED", "FORBIDDEN"].contains(code)
+    }
+
+    var isRateLimitError: Bool {
+        guard let code = extensions?.code?.uppercased() else { return false }
+        return ["RATE_LIMITED", "THROTTLED", "TOO_MANY_REQUESTS"].contains(code)
+    }
+}
+
+struct GraphQLErrorExtensions: Decodable {
+    let code: String?
 }
 
 struct TokenBalancesData: Decodable {

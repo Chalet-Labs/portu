@@ -27,7 +27,24 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     public func fetchBalances(context: SyncContext) async throws -> [PositionDTO] {
-        let requestContext = try makeRequestContext(from: context)
+        var allPositions: [PositionDTO] = []
+        for requestContext in try makeRequestContexts(from: context) {
+            try await allPositions.append(contentsOf: fetchBalances(requestContext: requestContext))
+        }
+
+        return allPositions
+    }
+
+    public func fetchDeFiPositions(context: SyncContext) async throws -> [PositionDTO] {
+        var allPositions: [PositionDTO] = []
+        for requestContext in try makeRequestContexts(from: context) {
+            try await allPositions.append(contentsOf: fetchDeFiPositions(requestContext: requestContext))
+        }
+
+        return allPositions
+    }
+
+    private func fetchBalances(requestContext: ZapperRequestContext) async throws -> [PositionDTO] {
         var allPositions: [PositionDTO] = []
         var after: String?
 
@@ -41,17 +58,17 @@ public actor ZapperProvider: PortfolioDataProvider {
                 query: Self.tokenBalancesQuery,
                 variables: variables)
             let connection = try response.payload().portfolioV2.tokenBalances.byToken
-            allPositions.append(contentsOf: connection.edges.map {
-                position(from: $0.node)
+            try allPositions.append(contentsOf: connection.edges.map {
+                try position(from: $0.node)
             })
+
             after = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : nil
         } while after != nil
 
         return allPositions
     }
 
-    public func fetchDeFiPositions(context: SyncContext) async throws -> [PositionDTO] {
-        let requestContext = try makeRequestContext(from: context)
+    private func fetchDeFiPositions(requestContext: ZapperRequestContext) async throws -> [PositionDTO] {
         var allPositions: [PositionDTO] = []
         var after: String?
 
@@ -67,23 +84,32 @@ public actor ZapperProvider: PortfolioDataProvider {
             let connection = try response.payload().portfolioV2.appBalances.byApp
 
             for edge in connection.edges {
-                var positionEdges = edge.node.positionBalances.edges
-                if edge.node.positionBalances.pageInfo.hasNextPage {
-                    let extraEdges = try await fetchRemainingPositionEdges(
-                        requestContext: requestContext,
-                        appSlug: edge.node.app.slug,
-                        after: edge.node.positionBalances.pageInfo.endCursor)
-                    positionEdges.append(contentsOf: extraEdges)
-                }
-                allPositions.append(contentsOf: positionEdges.compactMap {
-                    position(from: $0.node, appBalance: edge.node)
-                })
+                try await allPositions.append(contentsOf: positions(from: edge.node, requestContext: requestContext))
             }
 
             after = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : nil
         } while after != nil
 
         return allPositions
+    }
+
+    private func positions(from appBalance: AppBalanceNode, requestContext: ZapperRequestContext) async throws -> [PositionDTO] {
+        var positionEdges = appBalance.positionBalances.edges
+        if appBalance.positionBalances.pageInfo.hasNextPage {
+            let extraEdges = try await fetchRemainingPositionEdges(
+                requestContext: requestContext,
+                appSlug: appBalance.app.slug,
+                after: appBalance.positionBalances.pageInfo.endCursor)
+            positionEdges.append(contentsOf: extraEdges)
+        }
+
+        var positions: [PositionDTO] = []
+        for edge in positionEdges {
+            if let position = try position(from: edge.node, appBalance: appBalance) {
+                positions.append(position)
+            }
+        }
+        return positions
     }
 
     private func fetchRemainingPositionEdges(
@@ -104,7 +130,7 @@ public actor ZapperProvider: PortfolioDataProvider {
                 query: Self.appPositionBalancesQuery,
                 variables: variables)
             guard let appBalance = try response.payload().portfolioV2.appBalances.byApp.edges.first?.node else {
-                return allEdges
+                throw ZapperError.schemaChanged(context: "Missing app while paginating positions for \(appSlug)")
             }
             let connection = appBalance.positionBalances
             allEdges.append(contentsOf: connection.edges)
@@ -114,28 +140,35 @@ public actor ZapperProvider: PortfolioDataProvider {
         return allEdges
     }
 
-    private func makeRequestContext(from context: SyncContext) throws -> ZapperRequestContext {
-        let addresses = context.addresses.map(\.address)
-        let chains = context.addresses.compactMap(\.chain)
-        let uniqueChains = Array(Set(chains))
-        guard !uniqueChains.isEmpty else {
-            return ZapperRequestContext(addresses: addresses, chainIds: nil)
-        }
+    private func makeRequestContexts(from context: SyncContext) throws -> [ZapperRequestContext] {
+        var unfilteredAddresses: [String] = []
+        var addressesByChainId: [Int: [String]] = [:]
 
-        var chainIds: [Int] = []
-        for chain in uniqueChains {
+        for (address, chain) in context.addresses {
+            guard let chain else {
+                unfilteredAddresses.append(address)
+                continue
+            }
             guard let chainId = Self.chainIds[chain] else {
                 throw ZapperError.unsupportedChain(chain)
             }
-            chainIds.append(chainId)
+            addressesByChainId[chainId, default: []].append(address)
         }
 
-        return ZapperRequestContext(addresses: addresses, chainIds: chainIds.sorted())
+        var contexts: [ZapperRequestContext] = []
+        if !unfilteredAddresses.isEmpty {
+            contexts.append(ZapperRequestContext(addresses: unfilteredAddresses, chainIds: nil))
+        }
+        contexts.append(contentsOf: addressesByChainId.keys.sorted().map {
+            ZapperRequestContext(addresses: addressesByChainId[$0] ?? [], chainIds: [$0])
+        })
+
+        return contexts
     }
 
-    private func performGraphQL<Data: Decodable>(
+    private func performGraphQL<Data: Decodable & Sendable>(
         query: String,
-        variables: some Encodable) async throws -> GraphQLResponse<Data> {
+        variables: some Encodable & Sendable) async throws -> GraphQLResponse<Data> {
         var request = URLRequest(url: baseURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -149,7 +182,11 @@ public actor ZapperProvider: PortfolioDataProvider {
         }
         switch httpResponse.statusCode {
         case 200 ... 299:
-            return try decoder.decode(GraphQLResponse<Data>.self, from: data)
+            let response = try decoder.decode(GraphQLResponse<Data>.self, from: data)
+            if let message = response.partialErrorMessage {
+                Self.logger.warning("Zapper GraphQL returned partial data: \(message, privacy: .public)")
+            }
+            return response
         case 429:
             throw ZapperError.rateLimited
         case 401, 403:
@@ -159,8 +196,8 @@ public actor ZapperProvider: PortfolioDataProvider {
         }
     }
 
-    private func position(from node: TokenBalanceNode) -> PositionDTO {
-        let chain = Self.chainsById[node.network.chainId]
+    private func position(from node: TokenBalanceNode) throws -> PositionDTO {
+        let chain = try chain(for: node.network.chainId)
         let token = TokenDTO(
             role: .balance,
             symbol: node.symbol,
@@ -185,20 +222,21 @@ public actor ZapperProvider: PortfolioDataProvider {
             tokens: [token])
     }
 
-    private func position(from node: AnyPositionBalance, appBalance: AppBalanceNode) -> PositionDTO? {
+    private func position(from node: AnyPositionBalance, appBalance: AppBalanceNode) throws -> PositionDTO? {
+        let chain = try chain(for: appBalance.network.chainId)
         switch node {
         case let .contract(position):
-            let tokens = position.tokens.map {
-                tokenDTO(
+            let tokens = try position.tokens.map {
+                try tokenDTO(
                     from: $0.token,
                     role: role(for: $0.metaType),
                     sourceKey: tokenSourceKey(position.key, token: $0.token, chainId: appBalance.network.chainId),
-                    chain: Self.chainsById[appBalance.network.chainId])
+                    chain: chain)
             }
             guard !tokens.isEmpty else { return nil }
             return PositionDTO(
-                positionType: positionType(from: position.groupLabel),
-                chain: Self.chainsById[appBalance.network.chainId],
+                positionType: positionType(groupId: position.groupId, groupLabel: position.groupLabel),
+                chain: chain,
                 protocolId: appBalance.app.slug,
                 protocolName: appBalance.app.displayName,
                 protocolLogoURL: appBalance.app.imgUrl,
@@ -206,13 +244,13 @@ public actor ZapperProvider: PortfolioDataProvider {
                 tokens: tokens)
 
         case let .appToken(position):
-            let token = TokenDTO(
+            let token = try TokenDTO(
                 role: .lpToken,
                 symbol: position.symbol,
                 name: position.symbol,
                 amount: decimal(from: position.balance),
                 usdValue: Decimal(abs(position.balanceUSD)),
-                chain: Self.chainsById[appBalance.network.chainId],
+                chain: chain,
                 contractAddress: position.address,
                 debankId: nil,
                 coinGeckoId: nil,
@@ -222,7 +260,7 @@ public actor ZapperProvider: PortfolioDataProvider {
                 isVerified: true)
             return PositionDTO(
                 positionType: .liquidityPool,
-                chain: Self.chainsById[appBalance.network.chainId],
+                chain: chain,
                 protocolId: appBalance.app.slug,
                 protocolName: appBalance.app.displayName,
                 protocolLogoURL: appBalance.app.imgUrl,
@@ -235,8 +273,8 @@ public actor ZapperProvider: PortfolioDataProvider {
         from token: PositionTokenNode,
         role: TokenRole,
         sourceKey: String,
-        chain: Chain?) -> TokenDTO {
-        TokenDTO(
+        chain: Chain) throws -> TokenDTO {
+        try TokenDTO(
             role: role,
             symbol: token.symbol,
             name: token.symbol,
@@ -257,23 +295,24 @@ public actor ZapperProvider: PortfolioDataProvider {
         return "zapper:\(chainId):\(key):\(token.address):\(token.symbol)"
     }
 
-    private func role(for metaType: String?) -> TokenRole {
-        switch metaType {
+    private func role(for metaType: String?) throws -> TokenRole {
+        guard let metaType else { return .balance }
+        switch metaType.uppercased() {
         case "SUPPLIED":
-            .supply
+            return .supply
         case "BORROWED":
-            .borrow
+            return .borrow
         case "CLAIMABLE":
-            .reward
+            return .reward
         case "LOCKED", "VESTING":
-            .stake
+            return .stake
         default:
-            .balance
+            throw ZapperError.schemaChanged(context: "Unknown token metaType: \(metaType)")
         }
     }
 
-    private func positionType(from groupLabel: String?) -> PositionType {
-        let label = groupLabel?.lowercased() ?? ""
+    private func positionType(groupId: String?, groupLabel: String?) -> PositionType {
+        let label = (groupId ?? groupLabel)?.lowercased() ?? ""
         if label.contains("lend") || label.contains("borrow") {
             return .lending
         }
@@ -289,8 +328,18 @@ public actor ZapperProvider: PortfolioDataProvider {
         return .other
     }
 
-    private func decimal(from string: String) -> Decimal {
-        Decimal(string: string).map(abs) ?? 0
+    private func decimal(from string: String) throws -> Decimal {
+        guard let value = Decimal(string: string, locale: Locale(identifier: "en_US_POSIX")) else {
+            throw ZapperError.schemaChanged(context: "Invalid decimal balance: \(string)")
+        }
+        return abs(value)
+    }
+
+    private func chain(for chainId: Int) throws -> Chain {
+        guard let chain = Self.chainsById[chainId] else {
+            throw ZapperError.schemaChanged(context: "Unknown Zapper chainId: \(chainId)")
+        }
+        return chain
     }
 
     private static let chainIds: [Chain: Int] = [
