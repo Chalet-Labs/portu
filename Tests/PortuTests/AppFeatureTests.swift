@@ -21,6 +21,47 @@ struct AppFeatureTests {
         }
     }
 
+    @Test func `section selection exits settings route`() async {
+        let store = TestStore(initialState: AppFeature.State(selectedSection: .performance)) {
+            AppFeature()
+        }
+
+        await store.send(.settingsSelected) {
+            $0.isSettingsPresented = true
+        }
+        await store.send(.sectionSelected(.accounts)) {
+            $0.selectedSection = .accounts
+            $0.isSettingsPresented = false
+        }
+        #expect(store.state.detailRoute == .section(.accounts))
+    }
+
+    @Test func `settings route is presented as detail content`() async {
+        let store = TestStore(initialState: AppFeature.State(selectedSection: .accounts)) {
+            AppFeature()
+        }
+
+        #expect(store.state.detailRoute == .section(.accounts))
+        await store.send(.settingsSelected) {
+            $0.isSettingsPresented = true
+        }
+        #expect(store.state.detailRoute == .settings)
+        #expect(store.state.selectedSection == .accounts)
+    }
+
+    @Test func `settings route clears sidebar section selection while preserving selected section`() async {
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        }
+
+        #expect(store.state.sidebarSelection == .overview)
+        await store.send(.settingsSelected) {
+            $0.isSettingsPresented = true
+        }
+        #expect(store.state.sidebarSelection == nil)
+        #expect(store.state.selectedSection == .overview)
+    }
+
     // MARK: - B2: Sync Happy Path
 
     @Test func `sync happy path`() async {
@@ -118,6 +159,45 @@ struct AppFeatureTests {
         }
 
         // Stop polling to clean up the long-running effect
+        await store.send(.stopPricePolling)
+    }
+
+    @Test func `price polling respects configured refresh interval`() async {
+        let testClock = TestClock()
+        let testDate = Date(timeIntervalSince1970: 1_000_000)
+        nonisolated(unsafe) var fetchCount = 0
+
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.priceService.fetchPrices = { _ in
+                fetchCount += 1
+                return PriceUpdate(prices: ["bitcoin": Decimal(fetchCount)], changes24h: [:])
+            }
+            $0.pricePollingSettings.refreshInterval = { .seconds(5) }
+            $0.continuousClock = testClock
+            $0.date = .constant(testDate)
+        }
+
+        await store.send(.startPricePolling(["bitcoin"])) {
+            $0.connectionStatus = .fetching
+        }
+        await store.receive(\.pricesReceived) {
+            $0.prices = ["bitcoin": 1]
+            $0.lastPriceUpdate = testDate
+            $0.connectionStatus = .idle
+        }
+
+        await testClock.advance(by: .seconds(4))
+        #expect(fetchCount == 1)
+
+        await testClock.advance(by: .seconds(1))
+        await store.receive(\.pricesReceived) {
+            $0.prices = ["bitcoin": 2]
+            $0.lastPriceUpdate = testDate
+            $0.connectionStatus = .idle
+        }
+
         await store.send(.stopPricePolling)
     }
 

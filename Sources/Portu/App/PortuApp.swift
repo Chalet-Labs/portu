@@ -83,11 +83,13 @@ struct PortuApp: App {
                 .environment(appState)
         }
         .modelContainer(container)
-
-        Settings {
-            SettingsView()
-                .environment(appState)
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings...") {
+                    store.send(.settingsSelected)
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
         }
-        .modelContainer(container)
     }
 }

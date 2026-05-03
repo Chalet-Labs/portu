@@ -65,6 +65,26 @@ extension DependencyValues {
     }
 }
 
+// MARK: - PricePollingSettingsClient
+
+struct PricePollingSettingsClient {
+    var refreshInterval: @Sendable () -> Duration
+}
+
+extension PricePollingSettingsClient: DependencyKey {
+    static let liveValue = Self(
+        refreshInterval: { PricePollingSettings.refreshInterval() })
+    static let testValue = Self(
+        refreshInterval: { .seconds(PricePollingSettings.defaultRefreshIntervalSeconds) })
+}
+
+extension DependencyValues {
+    var pricePollingSettings: PricePollingSettingsClient {
+        get { self[PricePollingSettingsClient.self] }
+        set { self[PricePollingSettingsClient.self] = newValue }
+    }
+}
+
 // MARK: - AppFeature
 
 @Reducer
@@ -72,6 +92,15 @@ struct AppFeature {
     @ObservableState
     struct State: Equatable {
         var selectedSection: SidebarSection = .overview
+        var isSettingsPresented = false
+        var detailRoute: AppDetailRoute {
+            isSettingsPresented ? .settings : .section(selectedSection)
+        }
+
+        var sidebarSelection: SidebarSection? {
+            isSettingsPresented ? nil : selectedSection
+        }
+
         var syncStatus: SyncStatus = .idle
         var connectionStatus: ConnectionStatus = .idle
         var prices: [String: Decimal] = [:]
@@ -88,6 +117,7 @@ struct AppFeature {
 
     enum Action {
         case sectionSelected(SidebarSection)
+        case settingsSelected
         case syncTapped
         case syncProgressUpdated(Double)
         case syncCompleted(Result<SyncResult, Error>)
@@ -109,6 +139,7 @@ struct AppFeature {
 
     @Dependency(\.syncEngine) var syncEngine
     @Dependency(\.priceService) var priceService
+    @Dependency(\.pricePollingSettings) var pricePollingSettings
     @Dependency(\.continuousClock) var clock
     @Dependency(\.date.now) var now
 
@@ -135,6 +166,11 @@ struct AppFeature {
             switch action {
             case let .sectionSelected(section):
                 state.selectedSection = section
+                state.isSettingsPresented = false
+                return .none
+
+            case .settingsSelected:
+                state.isSettingsPresented = true
                 return .none
 
             case .syncTapped:
@@ -173,7 +209,7 @@ struct AppFeature {
                         } catch {
                             await send(.priceFetchFailed(error))
                         }
-                        try await clock.sleep(for: .seconds(30))
+                        try await clock.sleep(for: pricePollingSettings.refreshInterval())
                     }
                 }
                 .cancellable(id: CancelID.pricePolling, cancelInFlight: true)
@@ -222,6 +258,7 @@ extension AppFeature.Action: Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case let (.sectionSelected(l), .sectionSelected(r)): l == r
+        case (.settingsSelected, .settingsSelected): true
         case (.syncTapped, .syncTapped): true
         case let (.syncProgressUpdated(l), .syncProgressUpdated(r)): l == r
         case let (.syncCompleted(.success(l)), .syncCompleted(.success(r))): l == r
