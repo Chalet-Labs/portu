@@ -182,17 +182,19 @@ extension ZapperProvider {
 
 // MARK: - Request Types
 
-struct ZapperRequestContext {
+// swiftformat:disable redundantSendable
+
+struct ZapperRequestContext: Sendable {
     let addresses: [String]
     let chainIds: [Int]?
 }
 
-struct GraphQLRequest<Variables: Encodable & Sendable>: Encodable {
+struct GraphQLRequest<Variables: Encodable & Sendable>: Encodable, Sendable {
     let query: String
     let variables: Variables
 }
 
-struct PortfolioVariables: Encodable {
+struct PortfolioVariables: Encodable, Sendable {
     let addresses: [String]
     let chainIds: [Int]?
     let first: Int
@@ -218,7 +220,7 @@ struct PortfolioVariables: Encodable {
     }
 }
 
-struct AppPositionVariables: Encodable {
+struct AppPositionVariables: Encodable, Sendable {
     let addresses: [String]
     let chainIds: [Int]?
     let appSlug: String
@@ -249,7 +251,7 @@ struct AppPositionVariables: Encodable {
 
 // MARK: - Response Types
 
-struct GraphQLResponse<Data: Decodable & Sendable>: Decodable {
+struct GraphQLResponse<Data: Decodable & Sendable>: Decodable, Sendable {
     let data: Data?
     let errors: [GraphQLError]?
 
@@ -275,7 +277,7 @@ struct GraphQLResponse<Data: Decodable & Sendable>: Decodable {
     }
 }
 
-struct GraphQLError: Decodable {
+struct GraphQLError: Decodable, Sendable {
     static let authorizationCodes: Set<String> = ["UNAUTHENTICATED", "UNAUTHORIZED", "FORBIDDEN"]
     static let rateLimitCodes: Set<String> = ["RATE_LIMITED", "THROTTLED", "TOO_MANY_REQUESTS"]
 
@@ -293,32 +295,32 @@ struct GraphQLError: Decodable {
     }
 }
 
-struct GraphQLErrorExtensions: Decodable {
+struct GraphQLErrorExtensions: Decodable, Sendable {
     let code: String?
 }
 
-struct TokenBalancesData: Decodable {
+struct TokenBalancesData: Decodable, Sendable {
     let portfolioV2: TokenBalancesPortfolio
 }
 
-struct TokenBalancesPortfolio: Decodable {
+struct TokenBalancesPortfolio: Decodable, Sendable {
     let tokenBalances: TokenBalances
 }
 
-struct TokenBalances: Decodable {
+struct TokenBalances: Decodable, Sendable {
     let byToken: TokenBalanceConnection
 }
 
-struct TokenBalanceConnection: Decodable {
+struct TokenBalanceConnection: Decodable, Sendable {
     let edges: [TokenBalanceEdge]
     let pageInfo: PageInfo
 }
 
-struct TokenBalanceEdge: Decodable {
+struct TokenBalanceEdge: Decodable, Sendable {
     let node: TokenBalanceNode
 }
 
-struct TokenBalanceNode: Decodable {
+struct TokenBalanceNode: Decodable, Sendable {
     let tokenAddress: String
     let name: String
     let symbol: String
@@ -329,28 +331,28 @@ struct TokenBalanceNode: Decodable {
     let network: NetworkObject
 }
 
-struct AppBalancesData: Decodable {
+struct AppBalancesData: Decodable, Sendable {
     let portfolioV2: AppBalancesPortfolio
 }
 
-struct AppBalancesPortfolio: Decodable {
+struct AppBalancesPortfolio: Decodable, Sendable {
     let appBalances: AppBalances
 }
 
-struct AppBalances: Decodable {
+struct AppBalances: Decodable, Sendable {
     let byApp: AppBalanceConnection
 }
 
-struct AppBalanceConnection: Decodable {
+struct AppBalanceConnection: Decodable, Sendable {
     let edges: [AppBalanceEdge]
     let pageInfo: PageInfo
 }
 
-struct AppBalanceEdge: Decodable {
+struct AppBalanceEdge: Decodable, Sendable {
     let node: AppBalanceNode
 }
 
-struct AppBalanceNode: Decodable {
+struct AppBalanceNode: Decodable, Sendable {
     let appId: String
     let balanceUSD: Double
     let app: ZapperApp
@@ -358,22 +360,22 @@ struct AppBalanceNode: Decodable {
     let positionBalances: AnyPositionBalanceConnection
 }
 
-struct ZapperApp: Decodable {
+struct ZapperApp: Decodable, Sendable {
     let slug: String
     let displayName: String
     let imgUrl: String?
 }
 
-struct AnyPositionBalanceConnection: Decodable {
+struct AnyPositionBalanceConnection: Decodable, Sendable {
     let edges: [AnyPositionBalanceEdge]
     let pageInfo: PageInfo
 }
 
-struct AnyPositionBalanceEdge: Decodable {
+struct AnyPositionBalanceEdge: Decodable, Sendable {
     let node: AnyPositionBalance
 }
 
-enum AnyPositionBalance: Decodable {
+enum AnyPositionBalance: Decodable, Sendable {
     case contract(ContractPositionBalance)
     case appToken(AppTokenPositionBalance)
 
@@ -395,7 +397,7 @@ enum AnyPositionBalance: Decodable {
     }
 }
 
-struct ContractPositionBalance: Decodable {
+struct ContractPositionBalance: Decodable, Sendable {
     let key: String?
     let appId: String
     let groupId: String?
@@ -404,12 +406,12 @@ struct ContractPositionBalance: Decodable {
     let tokens: [TokenWithMetaType]
 }
 
-struct TokenWithMetaType: Decodable {
+struct TokenWithMetaType: Decodable, Sendable {
     let metaType: String?
     let token: PositionTokenNode
 }
 
-struct PositionTokenNode: Decodable {
+struct PositionTokenNode: Decodable, Sendable {
     let address: String
     let network: String
     let balance: String
@@ -417,7 +419,7 @@ struct PositionTokenNode: Decodable {
     let symbol: String
 }
 
-struct AppTokenPositionBalance: Decodable {
+struct AppTokenPositionBalance: Decodable, Sendable {
     let address: String
     let balance: String
     let balanceUSD: Double
@@ -429,12 +431,14 @@ struct AppTokenPositionBalance: Decodable {
     let network: String
 }
 
-struct NetworkObject: Decodable {
+struct NetworkObject: Decodable, Sendable {
     let chainId: Int
     let name: String
 }
 
-struct PageInfo: Decodable {
+struct PageInfo: Decodable, Sendable {
     let hasNextPage: Bool
     let endCursor: String?
 }
+
+// swiftformat:enable redundantSendable

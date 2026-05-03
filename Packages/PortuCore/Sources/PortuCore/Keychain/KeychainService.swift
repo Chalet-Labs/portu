@@ -28,8 +28,10 @@ public struct KeychainService: SecretStore {
             return nil
         }
 
-        try set(key: key, value: legacyValue)
-        deleteLegacy(key: key)
+        do {
+            try set(key: key, value: legacyValue)
+            deleteLegacy(key: key)
+        } catch {}
         return legacyValue
     }
 
