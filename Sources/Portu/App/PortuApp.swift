@@ -83,11 +83,5 @@ struct PortuApp: App {
                 .environment(appState)
         }
         .modelContainer(container)
-
-        Settings {
-            SettingsView()
-                .environment(appState)
-        }
-        .modelContainer(container)
     }
 }

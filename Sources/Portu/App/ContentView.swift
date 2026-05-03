@@ -7,6 +7,11 @@ struct ContentView: View {
     let store: StoreOf<AppFeature>
 
     var body: some View {
+        mainDashboard
+            .frame(minWidth: 900, minHeight: 600)
+    }
+
+    private var mainDashboard: some View {
         VStack(spacing: 0) {
             NavigationSplitView {
                 SidebarView(store: store)
@@ -18,12 +23,21 @@ struct ContentView: View {
             }
             StatusBarView(store: store)
         }
-        .frame(minWidth: 900, minHeight: 600)
     }
 
     @ViewBuilder
     private var detailView: some View {
-        switch store.selectedSection {
+        switch store.detailRoute {
+        case let .section(section):
+            sectionView(section)
+        case .settings:
+            SettingsView()
+        }
+    }
+
+    @ViewBuilder
+    private func sectionView(_ section: SidebarSection) -> some View {
+        switch section {
         case .overview:
             OverviewView(store: store)
         case .exposure:

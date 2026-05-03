@@ -6,6 +6,7 @@
         @Environment(AppState.self) private var appState
         @AppStorage(DebugMode.enabledKey) private var isEnabled = false
         @AppStorage(DebugMode.portKey) private var port = Int(DebugMode.defaultPort)
+        @FocusState private var portFieldFocused: Bool
 
         private var isRunning: Bool {
             appState.debugServer != nil
@@ -26,58 +27,163 @@
         }
 
         var body: some View {
-            Form {
-                Section("Debug Server") {
-                    Toggle("Enable Debug Server", isOn: $isEnabled)
+            SettingsPage(tab: .debug, badge: .debugOnly) {
+                VStack(alignment: .leading, spacing: 24) {
+                    SettingsSectionCard(
+                        title: "Debug Server",
+                        subtitle: "Enable, configure, and inspect the local debug server.") {
+                            VStack(spacing: 0) {
+                                debugToggleRow
 
-                    if launchArgActive, isRunning {
-                        Text("Enabled via \(DebugMode.launchArgument) launch argument")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
-                    }
+                                SettingsDivider()
+                                    .padding(.vertical, 14)
 
-                    LabeledContent("Port") {
-                        TextField("Port", value: $port, format: .number)
-                            .frame(width: 80)
-                            .multilineTextAlignment(.trailing)
-                            .onChange(of: port) { _, newValue in
-                                if newValue <= 0 || newValue > Int(UInt16.max) {
-                                    port = Int(DebugMode.defaultPort)
+                                portRow
+
+                                SettingsDivider()
+                                    .padding(.vertical, 14)
+
+                                statusRow
+                            }
+                        }
+
+                    SettingsSectionCard(
+                        title: "Conditional Notices",
+                        subtitle: "Shown only when the matching debug state is active.") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                if launchArgActive, isRunning {
+                                    SettingsInlineNotice(
+                                        title: "Enabled via \(DebugMode.launchArgument) launch argument",
+                                        message: nil,
+                                        style: .action)
+                                }
+
+                                if needsRestart {
+                                    SettingsInlineNotice(
+                                        title: "Restart the app to apply changes",
+                                        message: nil,
+                                        style: .action)
+                                }
+
+                                if appState.debugServerStartFailed, isEnabled || launchArgActive {
+                                    SettingsInlineNotice(
+                                        title: "Server failed to start",
+                                        message: "Check Console for details.",
+                                        style: .error)
+                                }
+
+                                if !launchArgActive, !needsRestart, !appState.debugServerStartFailed {
+                                    Text("No active debug notices.")
+                                        .font(.callout)
+                                        .foregroundStyle(SettingsDesign.secondaryText)
+                                        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                                 }
                             }
-                    }
+                        }
 
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(isRunning ? .green : .gray)
-                            .frame(width: 8, height: 8)
-                        Text(isRunning ? "Running on port \(appState.debugServer?.port ?? DebugMode.defaultPort)" : "Stopped")
-                            .foregroundStyle(.secondary)
-                    }
+                    SettingsSectionCard(
+                        title: "Launch Argument",
+                        subtitle: "Enable the server without using the toggle.") {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text(DebugMode.launchArgument)
+                                    .font(.system(size: 16, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(Color.white)
+                                    .padding(.horizontal, 16)
+                                    .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(Color(red: 0.040, green: 0.060, blue: 0.100)))
 
-                    if appState.debugServerStartFailed, isEnabled || launchArgActive {
-                        Label("Server failed to start — check Console for details", systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
-                            .font(.callout)
-                    }
-                }
-
-                if needsRestart {
-                    Section {
-                        Label("Restart the app to apply changes", systemImage: "arrow.clockwise")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
-                    }
-                }
-
-                Section("Launch Argument") {
-                    Text("Pass `--debug-server` to enable without the toggle.")
-                        .foregroundStyle(.secondary)
-                        .font(.callout)
+                                Text("When active and running, Portu shows that the debug server was enabled via launch argument.")
+                                    .font(.footnote)
+                                    .foregroundStyle(SettingsDesign.secondaryText)
+                            }
+                        }
                 }
             }
-            .formStyle(.grouped)
-            .navigationTitle("Debug")
+        }
+
+        private var debugToggleRow: some View {
+            HStack(alignment: .center, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Enable Debug Server")
+                        .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
+                        .foregroundStyle(SettingsDesign.primaryText)
+                    Text("Toggles the local debug server preference.")
+                        .font(.footnote)
+                        .foregroundStyle(SettingsDesign.secondaryText)
+                }
+
+                Spacer(minLength: 18)
+
+                Toggle("Enable Debug Server", isOn: $isEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+        }
+
+        private var portRow: some View {
+            HStack(alignment: .center, spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Port")
+                        .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
+                        .foregroundStyle(SettingsDesign.primaryText)
+                    Text("Default port: \(DebugMode.defaultPort)")
+                        .font(.footnote)
+                        .foregroundStyle(SettingsDesign.secondaryText)
+                }
+
+                Spacer(minLength: 18)
+
+                TextField("Port", value: $port, format: .number)
+                    .textFieldStyle(.plain)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(SettingsDesign.primaryText)
+                    .multilineTextAlignment(.trailing)
+                    .focused($portFieldFocused)
+                    .settingsInputFrame(height: SettingsMetrics.compactInputHeight)
+                    .frame(width: 96)
+                    .onAppear {
+                        Task { @MainActor in
+                            portFieldFocused = false
+                        }
+                    }
+                    .onChange(of: port) { _, newValue in
+                        if newValue <= 0 || newValue > Int(UInt16.max) {
+                            port = Int(DebugMode.defaultPort)
+                        }
+                    }
+            }
+        }
+
+        private var statusRow: some View {
+            HStack(spacing: 12) {
+                Text("Status")
+                    .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
+                    .foregroundStyle(SettingsDesign.primaryText)
+
+                Circle()
+                    .fill(isRunning ? Color.green : Color(red: 0.590, green: 0.650, blue: 0.740))
+                    .frame(width: 10, height: 10)
+
+                Text(isRunning ? "Running" : "Stopped")
+                    .font(.body)
+                    .foregroundStyle(SettingsDesign.secondaryText)
+
+                Spacer(minLength: 18)
+
+                Text("Running on port \(appState.debugServer?.port ?? DebugMode.defaultPort)")
+                    .font(.footnote)
+                    .foregroundStyle(SettingsDesign.secondaryText)
+                    .padding(.horizontal, 14)
+                    .frame(height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(SettingsDesign.subtleCardBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(SettingsDesign.separator, lineWidth: 1))
+            }
         }
     }
 

@@ -21,6 +21,47 @@ struct AppFeatureTests {
         }
     }
 
+    @Test func `section selection exits settings route`() async {
+        let store = TestStore(initialState: AppFeature.State(selectedSection: .performance)) {
+            AppFeature()
+        }
+
+        await store.send(.settingsSelected) {
+            $0.isSettingsPresented = true
+        }
+        await store.send(.sectionSelected(.accounts)) {
+            $0.selectedSection = .accounts
+            $0.isSettingsPresented = false
+        }
+        #expect(store.state.detailRoute == .section(.accounts))
+    }
+
+    @Test func `settings route is presented as detail content`() async {
+        let store = TestStore(initialState: AppFeature.State(selectedSection: .accounts)) {
+            AppFeature()
+        }
+
+        #expect(store.state.detailRoute == .section(.accounts))
+        await store.send(.settingsSelected) {
+            $0.isSettingsPresented = true
+        }
+        #expect(store.state.detailRoute == .settings)
+        #expect(store.state.selectedSection == .accounts)
+    }
+
+    @Test func `settings route clears sidebar section selection while preserving selected section`() async {
+        let store = TestStore(initialState: AppFeature.State(selectedSection: .overview)) {
+            AppFeature()
+        }
+
+        #expect(store.state.sidebarSelection == .overview)
+        await store.send(.settingsSelected) {
+            $0.isSettingsPresented = true
+        }
+        #expect(store.state.sidebarSelection == nil)
+        #expect(store.state.selectedSection == .overview)
+    }
+
     // MARK: - B2: Sync Happy Path
 
     @Test func `sync happy path`() async {
