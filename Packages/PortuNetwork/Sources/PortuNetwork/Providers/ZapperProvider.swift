@@ -267,7 +267,7 @@ public actor ZapperProvider: PortfolioDataProvider {
                 category: .defi,
                 isVerified: true)
             return PositionDTO(
-                positionType: .liquidityPool,
+                positionType: positionType(groupId: position.groupId, groupLabel: position.groupLabel),
                 chain: chain,
                 protocolId: appBalance.app.slug,
                 protocolName: appBalance.app.displayName,
@@ -324,7 +324,7 @@ public actor ZapperProvider: PortfolioDataProvider {
         if label.contains("lend") || label.contains("borrow") {
             return .lending
         }
-        if label.contains("stake") {
+        if label.contains("stak") {
             return .staking
         }
         if label.contains("farm") {

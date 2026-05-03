@@ -307,6 +307,22 @@ struct ZapperProviderTests {
     }
 
     @Test
+    func `fetchDeFiPositions classifies app token position by group label`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        ZapperMockURLProtocol.requestHandler = { _ in
+            try (jsonData(appBalancesResponse(
+                positionEdges: [appTokenPositionEdge(groupId: "locked", groupLabel: "Staking")])), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        let results = try await provider.fetchDeFiPositions(context: makeSyncContext())
+        let position = try #require(results.first)
+
+        #expect(position.positionType == .staking)
+        #expect(position.tokens.first?.role == .lpToken)
+    }
+
+    @Test
     func `fetchDeFiPositions paginates nested position balances`() async throws {
         var callCount = 0
         defer { ZapperMockURLProtocol.reset() }
@@ -443,7 +459,10 @@ struct ZapperProviderTests {
             #expect(context.contains("metaType"))
         }
     }
+}
 
+@Suite(.serialized)
+struct ZapperProviderLiveTests {
     @Test
     func `live smoke fetches balances and defi positions when explicitly enabled`() async throws {
         let env = ProcessInfo.processInfo.environment

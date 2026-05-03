@@ -244,7 +244,10 @@ func tokenNode(address: String, balance: String, balanceUSD: Double, symbol: Str
     ]
 }
 
-func appTokenPositionEdge(balance: String = "2.0") -> [String: Any] {
+func appTokenPositionEdge(
+    balance: String = "2.0",
+    groupId: String = "pool",
+    groupLabel: String = "Pool") -> [String: Any] {
     [
         "node": [
             "__typename": "AppTokenPositionBalance",
@@ -254,8 +257,8 @@ func appTokenPositionEdge(balance: String = "2.0") -> [String: Any] {
             "symbol": "aEthUSDC",
             "key": "app-token-position",
             "appId": "aave-v3",
-            "groupId": "pool",
-            "groupLabel": "Pool",
+            "groupId": groupId,
+            "groupLabel": groupLabel,
             "network": "ETHEREUM_MAINNET"
         ] as [String: Any]
     ]
