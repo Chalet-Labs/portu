@@ -251,11 +251,11 @@ struct AppPositionVariables: Encodable, Sendable {
 
 // MARK: - Response Types
 
-struct GraphQLResponse<Data: Decodable & Sendable>: Decodable, Sendable {
-    let data: Data?
+struct GraphQLResponse<Payload: Decodable & Sendable>: Decodable, Sendable {
+    let data: Payload?
     let errors: [GraphQLError]?
 
-    func payload() throws -> Data {
+    func payload() throws -> Payload {
         if let data {
             return data
         }

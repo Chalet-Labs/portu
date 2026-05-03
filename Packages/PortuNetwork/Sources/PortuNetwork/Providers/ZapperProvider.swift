@@ -174,9 +174,9 @@ public actor ZapperProvider: PortfolioDataProvider {
         return contexts
     }
 
-    private func performGraphQL<Data: Decodable & Sendable>(
+    private func performGraphQL<Payload: Decodable & Sendable>(
         query: String,
-        variables: some Encodable & Sendable) async throws -> GraphQLResponse<Data> {
+        variables: some Encodable & Sendable) async throws -> GraphQLResponse<Payload> {
         var request = URLRequest(url: baseURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -190,7 +190,7 @@ public actor ZapperProvider: PortfolioDataProvider {
         }
         switch httpResponse.statusCode {
         case 200 ... 299:
-            let response = try decoder.decode(GraphQLResponse<Data>.self, from: data)
+            let response = try decoder.decode(GraphQLResponse<Payload>.self, from: data)
             if let message = response.partialErrorMessage {
                 Self.logger.warning("Zapper GraphQL returned partial data: \(message, privacy: .public)")
             }
