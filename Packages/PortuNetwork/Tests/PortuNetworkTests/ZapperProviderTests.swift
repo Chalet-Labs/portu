@@ -10,12 +10,12 @@ struct ZapperProviderTests {
     let session = makeMockSession()
 
     init() {
-        ZapperMockURLProtocol.requestHandler = nil
-        ZapperMockURLProtocol.requests = []
+        ZapperMockURLProtocol.reset()
     }
 
     @Test
     func `fetchBalances sends GraphQL POST with API key and variables`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { request in
             #expect(request.url?.absoluteString == "https://test.local/graphql")
             #expect(request.httpMethod == "POST")
@@ -39,6 +39,7 @@ struct ZapperProviderTests {
 
     @Test
     func `fetchBalances decodes token balances into idle positions`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in
             try (jsonData(tokenResponse(symbol: "ETH")), 200)
         }
@@ -64,6 +65,7 @@ struct ZapperProviderTests {
     @Test
     func `fetchBalances paginates token balances until final page`() async throws {
         var callCount = 0
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { request in
             callCount += 1
             let variables = try graphQLVariables(from: request)
@@ -83,8 +85,25 @@ struct ZapperProviderTests {
     }
 
     @Test
+    func `fetchBalances throws when next page cursor is missing`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        ZapperMockURLProtocol.requestHandler = { _ in
+            try (jsonData(tokenResponse(hasNextPage: true, endCursor: nil)), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        do {
+            _ = try await provider.fetchBalances(context: makeSyncContext())
+            Issue.record("Expected schemaChanged")
+        } catch let ZapperError.schemaChanged(context) {
+            #expect(context.contains("token balances"))
+        }
+    }
+
+    @Test
     func `fetchBalances partitions mixed explicit chain addresses`() async throws {
         var capturedVariables: [[String: Any]] = []
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { request in
             let variables = try graphQLVariables(from: request)
             capturedVariables.append(variables)
@@ -112,6 +131,7 @@ struct ZapperProviderTests {
 
     @Test
     func `fetchBalances aggregates same explicit chain addresses`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { request in
             let variables = try graphQLVariables(from: request)
             #expect(variables["addresses"] as? [String] == ["0x1", "0x2"])
@@ -131,6 +151,7 @@ struct ZapperProviderTests {
 
     @Test
     func `graphql errors throw graphQLError`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in
             try (jsonData(["errors": [["message": "bad query"]]]), 200)
         }
@@ -146,6 +167,7 @@ struct ZapperProviderTests {
 
     @Test
     func `graphql partial data returns decoded positions`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in
             var response = tokenResponse()
             response["errors"] = [["message": "Polygon resolver unavailable"]]
@@ -167,6 +189,7 @@ struct ZapperProviderTests {
         ]
 
         for (code, matches) in cases {
+            defer { ZapperMockURLProtocol.reset() }
             ZapperMockURLProtocol.requestHandler = { _ in
                 let response = ["errors": [["message": code, "extensions": ["code": code]]]]
                 return try (jsonData(response), 200)
@@ -191,6 +214,7 @@ struct ZapperProviderTests {
         ]
 
         for (statusCode, matches) in cases {
+            defer { ZapperMockURLProtocol.reset() }
             ZapperMockURLProtocol.requestHandler = { _ in (nil, statusCode) }
             let provider = makeProvider(session: session)
             do {
@@ -204,6 +228,7 @@ struct ZapperProviderTests {
 
     @Test
     func `explicit chain filter sends matching chain id`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { request in
             let variables = try graphQLVariables(from: request)
             #expect(variables["chainIds"] as? [Int] == [42161])
@@ -216,6 +241,7 @@ struct ZapperProviderTests {
 
     @Test
     func `unsupported explicit chain throws unsupportedChain`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
         let provider = makeProvider(session: session)
         do {
             _ = try await provider.fetchBalances(context: makeSyncContext(chain: .katana))
@@ -228,6 +254,7 @@ struct ZapperProviderTests {
 
     @Test
     func `fetchDeFiPositions maps contract tokens by meta type`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in
             try (jsonData(appBalancesResponse()), 200)
         }
@@ -245,7 +272,23 @@ struct ZapperProviderTests {
     }
 
     @Test
+    func `fetchDeFiPositions prefers group label for position type`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        ZapperMockURLProtocol.requestHandler = { _ in
+            try (jsonData(appBalancesResponse(
+                positionEdges: [contractPositionEdge(groupId: "deposit", groupLabel: "Lending")])), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        let results = try await provider.fetchDeFiPositions(context: makeSyncContext())
+        let position = try #require(results.first)
+
+        #expect(position.positionType == .lending)
+    }
+
+    @Test
     func `fetchDeFiPositions maps app token position to lp token`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in
             try (jsonData(appBalancesResponse()), 200)
         }
@@ -266,6 +309,7 @@ struct ZapperProviderTests {
     @Test
     func `fetchDeFiPositions paginates nested position balances`() async throws {
         var callCount = 0
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { request in
             callCount += 1
             let variables = try graphQLVariables(from: request)
@@ -277,6 +321,7 @@ struct ZapperProviderTests {
                     positionEndCursor: "pos-cursor")), 200)
             }
             #expect(variables["appSlug"] as? String == "aave-v3")
+            #expect(variables["chainIds"] as? [Int] == [1])
             #expect(variables["first"] as? Int == 100)
             #expect(variables["after"] as? String == "pos-cursor")
             return try (jsonData(appBalancesResponse(positionEdges: [appTokenPositionEdge()])), 200)
@@ -291,8 +336,44 @@ struct ZapperProviderTests {
     }
 
     @Test
+    func `fetchDeFiPositions throws when app page cursor is missing`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        ZapperMockURLProtocol.requestHandler = { _ in
+            try (jsonData(appBalancesResponse(appHasNextPage: true, appEndCursor: nil)), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        do {
+            _ = try await provider.fetchDeFiPositions(context: makeSyncContext())
+            Issue.record("Expected schemaChanged")
+        } catch let ZapperError.schemaChanged(context) {
+            #expect(context.contains("app balances"))
+        }
+    }
+
+    @Test
+    func `fetchDeFiPositions throws when nested position cursor is missing`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        ZapperMockURLProtocol.requestHandler = { _ in
+            try (jsonData(appBalancesResponse(
+                positionEdges: [contractPositionEdge()],
+                positionHasNextPage: true,
+                positionEndCursor: nil)), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        do {
+            _ = try await provider.fetchDeFiPositions(context: makeSyncContext())
+            Issue.record("Expected schemaChanged")
+        } catch let ZapperError.schemaChanged(context) {
+            #expect(context.contains("positions for aave-v3"))
+        }
+    }
+
+    @Test
     func `missing app during nested pagination throws schemaChanged`() async throws {
         var callCount = 0
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in
             callCount += 1
             if callCount == 1 {
@@ -316,6 +397,7 @@ struct ZapperProviderTests {
     @Test
     func `unknown position typename throws schemaChanged`() async throws {
         let unknownEdge = ["node": ["__typename": "FuturePositionBalance"]]
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in
             try (jsonData(appBalancesResponse(positionEdges: [unknownEdge])), 200)
         }
@@ -331,6 +413,7 @@ struct ZapperProviderTests {
 
     @Test
     func `invalid decimal balance throws schemaChanged`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in
             try (jsonData(appBalancesResponse(positionEdges: [appTokenPositionEdge(balance: "not-a-decimal")])), 200)
         }
@@ -347,6 +430,7 @@ struct ZapperProviderTests {
     @Test
     func `unknown contract token meta type throws schemaChanged`() async throws {
         let token = tokenWithMetaType("DEBT", address: "0xdebt", balance: "1", balanceUSD: 1, symbol: "DEBT")
+        defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in
             try (jsonData(appBalancesResponse(positionEdges: [contractPositionEdge(tokens: [token])])), 200)
         }

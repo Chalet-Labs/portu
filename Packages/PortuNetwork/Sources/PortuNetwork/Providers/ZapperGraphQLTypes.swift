@@ -70,7 +70,6 @@ extension ZapperProvider {
                             balance
                             balanceUSD
                             symbol
-                            decimals
                           }
                         }
                       }
@@ -79,7 +78,6 @@ extension ZapperProvider {
                         balance
                         balanceUSD
                         symbol
-                        decimals
                         key
                         appId
                         groupId
@@ -148,7 +146,6 @@ extension ZapperProvider {
                             balance
                             balanceUSD
                             symbol
-                            decimals
                           }
                         }
                       }
@@ -157,7 +154,6 @@ extension ZapperProvider {
                         balance
                         balanceUSD
                         symbol
-                        decimals
                         key
                         appId
                         groupId
@@ -419,7 +415,6 @@ struct PositionTokenNode: Decodable {
     let balance: String
     let balanceUSD: Double
     let symbol: String
-    let decimals: Double
 }
 
 struct AppTokenPositionBalance: Decodable {
@@ -427,7 +422,6 @@ struct AppTokenPositionBalance: Decodable {
     let balance: String
     let balanceUSD: Double
     let symbol: String
-    let decimals: Double
     let key: String?
     let appId: String
     let groupId: String?

@@ -7,6 +7,11 @@ final class ZapperMockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (Data?, Int))?
     nonisolated(unsafe) static var requests: [URLRequest] = []
 
+    static func reset() {
+        requestHandler = nil
+        requests = []
+    }
+
     override static func canInit(with _: URLRequest) -> Bool {
         true
     }
@@ -137,6 +142,8 @@ func appBalancesResponse(
     positionEdges: [[String: Any]] = [contractPositionEdge(), appTokenPositionEdge()],
     positionHasNextPage: Bool = false,
     positionEndCursor: String? = nil,
+    appHasNextPage: Bool = false,
+    appEndCursor: String? = nil,
     appEdges: [[String: Any]]? = nil) -> [String: Any] {
     [
         "data": [
@@ -149,7 +156,10 @@ func appBalancesResponse(
                                 positionHasNextPage: positionHasNextPage,
                                 positionEndCursor: positionEndCursor)
                         ],
-                        "pageInfo": ["hasNextPage": false, "endCursor": NSNull()]
+                        "pageInfo": [
+                            "hasNextPage": appHasNextPage,
+                            "endCursor": appEndCursor.map { $0 as Any } ?? NSNull()
+                        ]
                     ]
                 ]
             ]
@@ -186,14 +196,17 @@ func appNode() -> [String: Any] {
     ]
 }
 
-func contractPositionEdge(tokens: [[String: Any]]? = nil) -> [String: Any] {
+func contractPositionEdge(
+    groupId: String? = "lending",
+    groupLabel: String? = "Lending",
+    tokens: [[String: Any]]? = nil) -> [String: Any] {
     [
         "node": [
             "__typename": "ContractPositionBalance",
             "key": "contract-position",
             "appId": "aave-v3",
-            "groupId": "lending",
-            "groupLabel": "Lending",
+            "groupId": groupId.map { $0 as Any } ?? NSNull(),
+            "groupLabel": groupLabel.map { $0 as Any } ?? NSNull(),
             "balanceUSD": 1500.0,
             "tokens": tokens ?? [
                 tokenWithMetaType("SUPPLIED", address: "0xeth", balance: "1.0", balanceUSD: 2000.0, symbol: "ETH"),
@@ -227,7 +240,6 @@ func tokenNode(address: String, balance: String, balanceUSD: Double, symbol: Str
         "balance": balance,
         "balanceUSD": balanceUSD,
         "symbol": symbol,
-        "decimals": symbol == "USDC" ? 6.0 : 18.0,
         "network": "ETHEREUM_MAINNET"
     ]
 }
@@ -240,7 +252,6 @@ func appTokenPositionEdge(balance: String = "2.0") -> [String: Any] {
             "balance": balance,
             "balanceUSD": 1000.0,
             "symbol": "aEthUSDC",
-            "decimals": 18.0,
             "key": "app-token-position",
             "appId": "aave-v3",
             "groupId": "pool",

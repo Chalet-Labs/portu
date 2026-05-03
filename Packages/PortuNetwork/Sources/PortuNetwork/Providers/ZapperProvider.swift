@@ -62,7 +62,7 @@ public actor ZapperProvider: PortfolioDataProvider {
                 try position(from: $0.node)
             })
 
-            after = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : nil
+            after = try nextCursor(from: connection.pageInfo, context: "token balances")
         } while after != nil
 
         return allPositions
@@ -87,7 +87,7 @@ public actor ZapperProvider: PortfolioDataProvider {
                 try await allPositions.append(contentsOf: positions(from: edge.node, requestContext: requestContext))
             }
 
-            after = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : nil
+            after = try nextCursor(from: connection.pageInfo, context: "app balances")
         } while after != nil
 
         return allPositions
@@ -96,10 +96,14 @@ public actor ZapperProvider: PortfolioDataProvider {
     private func positions(from appBalance: AppBalanceNode, requestContext: ZapperRequestContext) async throws -> [PositionDTO] {
         var positionEdges = appBalance.positionBalances.edges
         if appBalance.positionBalances.pageInfo.hasNextPage {
+            let after = try nextCursor(
+                from: appBalance.positionBalances.pageInfo,
+                context: "positions for \(appBalance.app.slug)")
             let extraEdges = try await fetchRemainingPositionEdges(
                 requestContext: requestContext,
                 appSlug: appBalance.app.slug,
-                after: appBalance.positionBalances.pageInfo.endCursor)
+                chainId: appBalance.network.chainId,
+                after: after)
             positionEdges.append(contentsOf: extraEdges)
         }
 
@@ -115,6 +119,7 @@ public actor ZapperProvider: PortfolioDataProvider {
     private func fetchRemainingPositionEdges(
         requestContext: ZapperRequestContext,
         appSlug: String,
+        chainId: Int,
         after initialCursor: String?) async throws -> [AnyPositionBalanceEdge] {
         var allEdges: [AnyPositionBalanceEdge] = []
         var after = initialCursor
@@ -122,7 +127,7 @@ public actor ZapperProvider: PortfolioDataProvider {
         while let cursor = after {
             let variables = AppPositionVariables(
                 addresses: requestContext.addresses,
-                chainIds: requestContext.chainIds,
+                chainIds: [chainId],
                 appSlug: appSlug,
                 first: 100,
                 after: cursor)
@@ -132,9 +137,12 @@ public actor ZapperProvider: PortfolioDataProvider {
             guard let appBalance = try response.payload().portfolioV2.appBalances.byApp.edges.first?.node else {
                 throw ZapperError.schemaChanged(context: "Missing app while paginating positions for \(appSlug)")
             }
+            guard appBalance.network.chainId == chainId else {
+                throw ZapperError.schemaChanged(context: "Mismatched chain while paginating positions for \(appSlug)")
+            }
             let connection = appBalance.positionBalances
             allEdges.append(contentsOf: connection.edges)
-            after = connection.pageInfo.hasNextPage ? connection.pageInfo.endCursor : nil
+            after = try nextCursor(from: connection.pageInfo, context: "positions for \(appSlug)")
         }
 
         return allEdges
@@ -312,7 +320,7 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     private func positionType(groupId: String?, groupLabel: String?) -> PositionType {
-        let label = (groupId ?? groupLabel)?.lowercased() ?? ""
+        let label = (groupLabel ?? groupId)?.lowercased() ?? ""
         if label.contains("lend") || label.contains("borrow") {
             return .lending
         }
@@ -326,6 +334,16 @@ public actor ZapperProvider: PortfolioDataProvider {
             return .liquidityPool
         }
         return .other
+    }
+
+    private func nextCursor(from pageInfo: PageInfo, context: String) throws -> String? {
+        guard pageInfo.hasNextPage else {
+            return nil
+        }
+        guard let endCursor = pageInfo.endCursor else {
+            throw ZapperError.schemaChanged(context: "Missing pagination cursor for \(context)")
+        }
+        return endCursor
     }
 
     private func decimal(from string: String) throws -> Decimal {
