@@ -312,12 +312,12 @@ struct TokenBalances: Decodable, Sendable {
 }
 
 struct TokenBalanceConnection: Decodable, Sendable {
-    let edges: [TokenBalanceEdge]
+    let edges: [TokenBalanceEdge?]?
     let pageInfo: PageInfo
 }
 
 struct TokenBalanceEdge: Decodable, Sendable {
-    let node: TokenBalanceNode
+    let node: TokenBalanceNode?
 }
 
 struct TokenBalanceNode: Decodable, Sendable {
@@ -344,12 +344,12 @@ struct AppBalances: Decodable, Sendable {
 }
 
 struct AppBalanceConnection: Decodable, Sendable {
-    let edges: [AppBalanceEdge]
+    let edges: [AppBalanceEdge?]?
     let pageInfo: PageInfo
 }
 
 struct AppBalanceEdge: Decodable, Sendable {
-    let node: AppBalanceNode
+    let node: AppBalanceNode?
 }
 
 struct AppBalanceNode: Decodable, Sendable {
@@ -367,12 +367,12 @@ struct ZapperApp: Decodable, Sendable {
 }
 
 struct AnyPositionBalanceConnection: Decodable, Sendable {
-    let edges: [AnyPositionBalanceEdge]
+    let edges: [AnyPositionBalanceEdge?]?
     let pageInfo: PageInfo
 }
 
 struct AnyPositionBalanceEdge: Decodable, Sendable {
-    let node: AnyPositionBalance
+    let node: AnyPositionBalance?
 }
 
 enum AnyPositionBalance: Decodable, Sendable {
@@ -403,12 +403,12 @@ struct ContractPositionBalance: Decodable, Sendable {
     let groupId: String?
     let groupLabel: String?
     let balanceUSD: Double
-    let tokens: [TokenWithMetaType]
+    let tokens: [TokenWithMetaType?]?
 }
 
 struct TokenWithMetaType: Decodable, Sendable {
     let metaType: String?
-    let token: PositionTokenNode
+    let token: PositionTokenNode?
 }
 
 struct PositionTokenNode: Decodable, Sendable {

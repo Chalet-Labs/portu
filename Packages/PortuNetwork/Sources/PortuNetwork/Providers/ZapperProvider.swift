@@ -58,8 +58,8 @@ public actor ZapperProvider: PortfolioDataProvider {
                 query: Self.tokenBalancesQuery,
                 variables: variables)
             let connection = try response.payload().portfolioV2.tokenBalances.byToken
-            try allPositions.append(contentsOf: connection.edges.map {
-                try position(from: $0.node)
+            try allPositions.append(contentsOf: (connection.edges ?? []).compactMap(\.?.node).map {
+                try position(from: $0)
             })
 
             after = try nextCursor(from: connection.pageInfo, context: "token balances")
@@ -83,8 +83,8 @@ public actor ZapperProvider: PortfolioDataProvider {
                 variables: variables)
             let connection = try response.payload().portfolioV2.appBalances.byApp
 
-            for edge in connection.edges {
-                try await allPositions.append(contentsOf: positions(from: edge.node, requestContext: requestContext))
+            for appBalance in (connection.edges ?? []).compactMap(\.?.node) {
+                try await allPositions.append(contentsOf: positions(from: appBalance, requestContext: requestContext))
             }
 
             after = try nextCursor(from: connection.pageInfo, context: "app balances")
@@ -94,34 +94,34 @@ public actor ZapperProvider: PortfolioDataProvider {
     }
 
     private func positions(from appBalance: AppBalanceNode, requestContext: ZapperRequestContext) async throws -> [PositionDTO] {
-        var positionEdges = appBalance.positionBalances.edges
+        var positionNodes = (appBalance.positionBalances.edges ?? []).compactMap(\.?.node)
         if appBalance.positionBalances.pageInfo.hasNextPage {
             let after = try nextCursor(
                 from: appBalance.positionBalances.pageInfo,
                 context: "positions for \(appBalance.app.slug)")
-            let extraEdges = try await fetchRemainingPositionEdges(
+            let extraNodes = try await fetchRemainingPositionNodes(
                 requestContext: requestContext,
                 appSlug: appBalance.app.slug,
                 chainId: appBalance.network.chainId,
                 after: after)
-            positionEdges.append(contentsOf: extraEdges)
+            positionNodes.append(contentsOf: extraNodes)
         }
 
         var positions: [PositionDTO] = []
-        for edge in positionEdges {
-            if let position = try position(from: edge.node, appBalance: appBalance) {
+        for node in positionNodes {
+            if let position = try position(from: node, appBalance: appBalance) {
                 positions.append(position)
             }
         }
         return positions
     }
 
-    private func fetchRemainingPositionEdges(
+    private func fetchRemainingPositionNodes(
         requestContext: ZapperRequestContext,
         appSlug: String,
         chainId: Int,
-        after initialCursor: String?) async throws -> [AnyPositionBalanceEdge] {
-        var allEdges: [AnyPositionBalanceEdge] = []
+        after initialCursor: String?) async throws -> [AnyPositionBalance] {
+        var allNodes: [AnyPositionBalance] = []
         var after = initialCursor
 
         while let cursor = after {
@@ -134,18 +134,18 @@ public actor ZapperProvider: PortfolioDataProvider {
             let response: GraphQLResponse<AppBalancesData> = try await performGraphQL(
                 query: Self.appPositionBalancesQuery,
                 variables: variables)
-            guard let appBalance = try response.payload().portfolioV2.appBalances.byApp.edges.first?.node else {
+            guard let appBalance = try response.payload().portfolioV2.appBalances.byApp.edges?.compactMap(\.?.node).first else {
                 throw ZapperError.schemaChanged(context: "Missing app while paginating positions for \(appSlug)")
             }
             guard appBalance.network.chainId == chainId else {
                 throw ZapperError.schemaChanged(context: "Mismatched chain while paginating positions for \(appSlug)")
             }
             let connection = appBalance.positionBalances
-            allEdges.append(contentsOf: connection.edges)
+            allNodes.append(contentsOf: (connection.edges ?? []).compactMap(\.?.node))
             after = try nextCursor(from: connection.pageInfo, context: "positions for \(appSlug)")
         }
 
-        return allEdges
+        return allNodes
     }
 
     private func makeRequestContexts(from context: SyncContext) throws -> [ZapperRequestContext] {
@@ -234,12 +234,16 @@ public actor ZapperProvider: PortfolioDataProvider {
         let chain = try chain(for: appBalance.network.chainId)
         switch node {
         case let .contract(position):
-            let tokens = try position.tokens.map {
-                try tokenDTO(
-                    from: $0.token,
-                    role: role(for: $0.metaType),
-                    sourceKey: tokenSourceKey(position.key, token: $0.token, chainId: appBalance.network.chainId),
-                    chain: chain)
+            var tokens: [TokenDTO] = []
+            for tokenWithMetaType in position.tokens ?? [] {
+                guard let tokenWithMetaType, let token = tokenWithMetaType.token else {
+                    continue
+                }
+                try tokens.append(tokenDTO(
+                    from: token,
+                    role: role(for: tokenWithMetaType.metaType),
+                    sourceKey: tokenSourceKey(position.key, token: token, chainId: appBalance.network.chainId),
+                    chain: chain))
             }
             guard !tokens.isEmpty else { return nil }
             return PositionDTO(

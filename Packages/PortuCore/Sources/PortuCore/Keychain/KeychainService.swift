@@ -24,13 +24,13 @@ public struct KeychainService: SecretStore {
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]) { _, new in new }
-        guard let legacyValue = try string(matching: legacyQuery, isLegacyFallback: true) else {
+        guard let legacyValue = try string(matching: legacyQuery) else {
             return nil
         }
 
         do {
             try set(key: key, value: legacyValue)
-            deleteLegacy(key: key)
+            try deleteLegacy(key: key)
         } catch {}
         return legacyValue
     }
@@ -45,22 +45,24 @@ public struct KeychainService: SecretStore {
         // Add-first upsert: attempt add, then update on duplicate
         let addStatus = SecItemAdd(
             baseQuery.merging([
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
                 kSecValueData as String: data
             ]) { _, new in new } as CFDictionary,
             nil)
 
         switch addStatus {
         case errSecSuccess:
-            deleteLegacy(key: key)
+            try? deleteLegacy(key: key)
         case errSecDuplicateItem:
             let updateStatus = SecItemUpdate(
                 baseQuery as CFDictionary,
                 [
+                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
                     kSecValueData as String: data
                 ] as CFDictionary)
             switch updateStatus {
             case errSecSuccess:
-                deleteLegacy(key: key)
+                try? deleteLegacy(key: key)
             case errSecInteractionNotAllowed: throw .interactionNotAllowed
             default: throw .unexpectedStatus(updateStatus)
             }
@@ -72,8 +74,25 @@ public struct KeychainService: SecretStore {
     }
 
     public func delete(key: KeychainKey) throws(KeychainError) {
-        try delete(matching: baseQuery(for: key))
-        deleteLegacy(key: key)
+        var firstError: KeychainError?
+
+        do {
+            try delete(matching: baseQuery(for: key))
+        } catch {
+            firstError = error
+        }
+
+        do {
+            try deleteLegacy(key: key)
+        } catch {
+            if firstError == nil {
+                firstError = error
+            }
+        }
+
+        if let firstError {
+            throw firstError
+        }
     }
 
     private func baseQuery(for key: KeychainKey) -> [String: Any] {
@@ -90,7 +109,7 @@ public struct KeychainService: SecretStore {
         ]) { _, new in new }
     }
 
-    private func string(matching query: [String: Any], isLegacyFallback: Bool = false) throws(KeychainError) -> String? {
+    private func string(matching query: [String: Any]) throws(KeychainError) -> String? {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
@@ -106,20 +125,14 @@ public struct KeychainService: SecretStore {
         case errSecItemNotFound:
             return nil
         case errSecInteractionNotAllowed:
-            if isLegacyFallback {
-                return nil
-            }
             throw .interactionNotAllowed
         default:
-            if isLegacyFallback {
-                return nil
-            }
             throw .unexpectedStatus(status)
         }
     }
 
-    private func deleteLegacy(key: KeychainKey) {
-        _ = SecItemDelete(legacyBaseQuery(for: key) as CFDictionary)
+    private func deleteLegacy(key: KeychainKey) throws(KeychainError) {
+        try delete(matching: legacyBaseQuery(for: key))
     }
 
     private func delete(matching query: [String: Any]) throws(KeychainError) {

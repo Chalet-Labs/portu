@@ -107,25 +107,15 @@ func tokenResponse(
     tokenAddress: String = "0xeth",
     chainId: Int = 1,
     hasNextPage: Bool = false,
-    endCursor: String? = nil) -> [String: Any] {
+    endCursor: String? = nil,
+    edges: [Any]? = nil) -> [String: Any] {
     [
         "data": [
             "portfolioV2": [
                 "tokenBalances": [
                     "byToken": [
-                        "edges": [
-                            [
-                                "node": [
-                                    "tokenAddress": tokenAddress,
-                                    "name": "Ethereum",
-                                    "symbol": symbol,
-                                    "balance": 1.5,
-                                    "balanceUSD": 3000.0,
-                                    "verified": true,
-                                    "imgUrlV2": "https://img.example/eth.png",
-                                    "network": ["chainId": chainId, "name": "Ethereum"]
-                                ] as [String: Any]
-                            ] as [String: Any]
+                        "edges": edges ?? [
+                            tokenBalanceEdge(symbol: symbol, tokenAddress: tokenAddress, chainId: chainId)
                         ],
                         "pageInfo": [
                             "hasNextPage": hasNextPage,
@@ -138,13 +128,31 @@ func tokenResponse(
     ]
 }
 
+func tokenBalanceEdge(
+    symbol: String = "ETH",
+    tokenAddress: String = "0xeth",
+    chainId: Int = 1) -> [String: Any] {
+    [
+        "node": [
+            "tokenAddress": tokenAddress,
+            "name": "Ethereum",
+            "symbol": symbol,
+            "balance": 1.5,
+            "balanceUSD": 3000.0,
+            "verified": true,
+            "imgUrlV2": "https://img.example/eth.png",
+            "network": ["chainId": chainId, "name": "Ethereum"]
+        ] as [String: Any]
+    ]
+}
+
 func appBalancesResponse(
-    positionEdges: [[String: Any]] = [contractPositionEdge(), appTokenPositionEdge()],
+    positionEdges: [Any] = [contractPositionEdge(), appTokenPositionEdge()],
     positionHasNextPage: Bool = false,
     positionEndCursor: String? = nil,
     appHasNextPage: Bool = false,
     appEndCursor: String? = nil,
-    appEdges: [[String: Any]]? = nil) -> [String: Any] {
+    appEdges: [Any]? = nil) -> [String: Any] {
     [
         "data": [
             "portfolioV2": [
@@ -168,7 +176,7 @@ func appBalancesResponse(
 }
 
 func appBalanceEdge(
-    positionEdges: [[String: Any]],
+    positionEdges: [Any],
     positionHasNextPage: Bool = false,
     positionEndCursor: String? = nil) -> [String: Any] {
     [
@@ -199,7 +207,7 @@ func appNode() -> [String: Any] {
 func contractPositionEdge(
     groupId: String? = "lending",
     groupLabel: String? = "Lending",
-    tokens: [[String: Any]]? = nil) -> [String: Any] {
+    tokens: [Any]? = nil) -> [String: Any] {
     [
         "node": [
             "__typename": "ContractPositionBalance",
