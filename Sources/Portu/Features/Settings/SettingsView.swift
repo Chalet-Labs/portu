@@ -77,7 +77,6 @@ struct SettingsView: View {
         HStack(spacing: 0) {
             SettingsSidebar(
                 tabs: filteredTabs,
-                allTabs: tabs,
                 selectedTab: $selectedTab,
                 searchText: $searchText)
 
@@ -133,7 +132,6 @@ struct SettingsView: View {
 
 private struct SettingsSidebar: View {
     let tabs: [SettingsTab]
-    let allTabs: [SettingsTab]
     @Binding var selectedTab: SettingsTab
     @Binding var searchText: String
 
@@ -166,18 +164,6 @@ private struct SettingsSidebar: View {
             }
 
             Spacer(minLength: 24)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Current tabs")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(SettingsDesign.primaryText)
-                Text(allTabs.map(\.title).joined(separator: " · "))
-                    .font(.footnote)
-                    .foregroundStyle(SettingsDesign.secondaryText)
-                    .lineLimit(2)
-            }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 16)
         }
         .padding(.top, topPadding)
         .padding(.horizontal, 16)
@@ -231,10 +217,11 @@ private struct SettingsSearchField: View {
                         .foregroundStyle(SettingsDesign.secondaryText)
                 }
 
-                TextField("", text: $text)
+                TextField("Search", text: $text, prompt: Text(""))
                     .textFieldStyle(.plain)
                     .font(.footnote)
                     .foregroundStyle(SettingsDesign.primaryText)
+                    .accessibilityLabel("Search")
             }
         }
         .padding(.horizontal, 12)
@@ -271,7 +258,8 @@ private struct SettingsSidebarRow: View {
 }
 
 private struct GeneralSettingsTab: View {
-    @AppStorage("refreshInterval") private var refreshInterval = 30.0
+    @AppStorage(PricePollingSettings.refreshIntervalKey)
+    private var refreshInterval = PricePollingSettings.defaultRefreshIntervalSeconds
 
     var body: some View {
         SettingsPage(tab: .general) {

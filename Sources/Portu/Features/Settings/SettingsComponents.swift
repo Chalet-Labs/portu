@@ -185,7 +185,8 @@ struct SettingsStatusBadge: View {
         Text(badge.title)
             .font(.footnote.weight(.bold))
             .foregroundStyle(foreground)
-            .frame(width: 132, height: 30)
+            .padding(.horizontal, 16)
+            .frame(minWidth: 100, minHeight: 30)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(background))
@@ -203,6 +204,102 @@ struct SettingsStatusBadge: View {
         case .success: SettingsDesign.successBadgeText
         case .warning: SettingsDesign.warningBadgeText
         }
+    }
+}
+
+struct SettingsInlineNotice: View {
+    enum Style {
+        case error
+        case action
+    }
+
+    let title: String
+    let message: String?
+    let style: Style
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: message == nil ? 0 : 6) {
+            Text(title)
+                .font(.footnote.weight(.bold))
+            if let message {
+                Text(message)
+                    .font(.footnote)
+            }
+        }
+        .foregroundStyle(foreground)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: message == nil ? 38 : 56, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(background))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(stroke, lineWidth: 1))
+    }
+
+    private var background: Color {
+        switch style {
+        case .error: Color(red: 1.0, green: 0.970, blue: 0.925)
+        case .action: Color(red: 0.910, green: 0.930, blue: 1.0)
+        }
+    }
+
+    private var stroke: Color {
+        switch style {
+        case .error: Color(red: 0.980, green: 0.590, blue: 0.235)
+        case .action: Color(red: 0.600, green: 0.690, blue: 1.0)
+        }
+    }
+
+    private var foreground: Color {
+        switch style {
+        case .error: Color(red: 0.640, green: 0.160, blue: 0.050)
+        case .action: Color(red: 0.245, green: 0.180, blue: 0.780)
+        }
+    }
+}
+
+extension View {
+    func settingsInputFrame(height: CGFloat) -> some View {
+        padding(.horizontal, 12)
+            .frame(height: height)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(SettingsDesign.subtleCardBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(SettingsDesign.cardStroke, lineWidth: 1))
+    }
+
+    func settingsMenuFrame(height: CGFloat) -> some View {
+        padding(.horizontal, 12)
+            .frame(height: height)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(SettingsDesign.subtleCardBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(SettingsDesign.cardStroke, lineWidth: 1))
+    }
+
+    func settingsIconButton(color: Color) -> some View {
+        foregroundStyle(color)
+            .frame(width: 42, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(color.opacity(0.10)))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(color.opacity(0.25), lineWidth: 1))
+    }
+
+    func settingsPrimaryButton(isDisabled: Bool) -> some View {
+        foregroundStyle(isDisabled ? SettingsDesign.secondaryText : Color.white)
+            .frame(width: 64, height: SettingsMetrics.compactControlHeight)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isDisabled ? Color(red: 0.800, green: 0.830, blue: 0.880) : SettingsDesign.accentBlue))
     }
 }
 

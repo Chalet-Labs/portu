@@ -6,7 +6,6 @@
         @Environment(AppState.self) private var appState
         @AppStorage(DebugMode.enabledKey) private var isEnabled = false
         @AppStorage(DebugMode.portKey) private var port = Int(DebugMode.defaultPort)
-        @FocusState private var portFieldFocused: Bool
 
         private var isRunning: Bool {
             appState.debugServer != nil
@@ -140,14 +139,8 @@
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(SettingsDesign.primaryText)
                     .multilineTextAlignment(.trailing)
-                    .focused($portFieldFocused)
                     .settingsInputFrame(height: SettingsMetrics.compactInputHeight)
                     .frame(width: 96)
-                    .onAppear {
-                        Task { @MainActor in
-                            portFieldFocused = false
-                        }
-                    }
                     .onChange(of: port) { _, newValue in
                         if newValue <= 0 || newValue > Int(UInt16.max) {
                             port = Int(DebugMode.defaultPort)
@@ -172,17 +165,19 @@
 
                 Spacer(minLength: 18)
 
-                Text("Running on port \(appState.debugServer?.port ?? DebugMode.defaultPort)")
-                    .font(.footnote)
-                    .foregroundStyle(SettingsDesign.secondaryText)
-                    .padding(.horizontal, 14)
-                    .frame(height: 32)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(SettingsDesign.subtleCardBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(SettingsDesign.separator, lineWidth: 1))
+                if let debugServer = appState.debugServer {
+                    Text("Running on port \(debugServer.port)")
+                        .font(.footnote)
+                        .foregroundStyle(SettingsDesign.secondaryText)
+                        .padding(.horizontal, 14)
+                        .frame(height: 32)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(SettingsDesign.subtleCardBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(SettingsDesign.separator, lineWidth: 1))
+                }
             }
         }
     }

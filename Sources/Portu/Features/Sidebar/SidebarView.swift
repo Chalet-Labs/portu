@@ -39,7 +39,9 @@ private struct SidebarNavigationSection: View {
                 SidebarNavigationRow(item: item)
             }
         } header: {
-            Text(section.title ?? "")
+            if let title = section.title {
+                Text(title)
+            }
         }
         .disabled(section.isDisabled)
     }

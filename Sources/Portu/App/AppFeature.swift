@@ -65,6 +65,26 @@ extension DependencyValues {
     }
 }
 
+// MARK: - PricePollingSettingsClient
+
+struct PricePollingSettingsClient {
+    var refreshInterval: @Sendable () -> Duration
+}
+
+extension PricePollingSettingsClient: DependencyKey {
+    static let liveValue = Self(
+        refreshInterval: { PricePollingSettings.refreshInterval() })
+    static let testValue = Self(
+        refreshInterval: { .seconds(PricePollingSettings.defaultRefreshIntervalSeconds) })
+}
+
+extension DependencyValues {
+    var pricePollingSettings: PricePollingSettingsClient {
+        get { self[PricePollingSettingsClient.self] }
+        set { self[PricePollingSettingsClient.self] = newValue }
+    }
+}
+
 // MARK: - AppFeature
 
 @Reducer
@@ -119,6 +139,7 @@ struct AppFeature {
 
     @Dependency(\.syncEngine) var syncEngine
     @Dependency(\.priceService) var priceService
+    @Dependency(\.pricePollingSettings) var pricePollingSettings
     @Dependency(\.continuousClock) var clock
     @Dependency(\.date.now) var now
 
@@ -188,7 +209,7 @@ struct AppFeature {
                         } catch {
                             await send(.priceFetchFailed(error))
                         }
-                        try await clock.sleep(for: .seconds(30))
+                        try await clock.sleep(for: pricePollingSettings.refreshInterval())
                     }
                 }
                 .cancellable(id: CancelID.pricePolling, cancelInFlight: true)

@@ -1,3 +1,4 @@
+import Foundation
 @testable import Portu
 import Testing
 
@@ -28,7 +29,26 @@ struct SettingsTabTests {
         #expect(SettingsMetrics.showsBackNavigation == false)
     }
 
-    @Test func `api key input fields show entered text`() {
-        #expect(APIKeysSettingsLayout.inputMode == .visibleText)
+    @Test func `api key inputs default secure and reveal only by explicit action`() {
+        #expect(APIKeysSettingsLayout.inputMode(isVisible: false) == .secureText)
+        #expect(APIKeysSettingsLayout.inputMode(isVisible: true) == .visibleText)
+    }
+
+    @Test func `price polling settings use shared defaults key and allowed values`() {
+        let defaults = cleanDefaults()
+
+        #expect(PricePollingSettings.refreshIntervalKey == "refreshInterval")
+        #expect(PricePollingSettings.refreshIntervalSeconds(defaults: defaults) == 30)
+
+        defaults.set(60.0, forKey: PricePollingSettings.refreshIntervalKey)
+        #expect(PricePollingSettings.refreshIntervalSeconds(defaults: defaults) == 60)
+
+        defaults.set(7.0, forKey: PricePollingSettings.refreshIntervalKey)
+        #expect(PricePollingSettings.refreshIntervalSeconds(defaults: defaults) == 30)
+    }
+
+    private func cleanDefaults() -> UserDefaults {
+        let suite = "com.portu.test.SettingsTab.\(UUID().uuidString)"
+        return UserDefaults(suiteName: suite)!
     }
 }

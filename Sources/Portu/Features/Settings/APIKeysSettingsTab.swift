@@ -6,14 +6,61 @@ enum APIKeyInputMode: Equatable {
     case secureText
 }
 
+private enum APIKeyFieldID: Hashable {
+    case zapper
+    case debank
+    case coingecko
+}
+
+private struct APIKeyFieldDescriptor {
+    let id: APIKeyFieldID
+    let title: String
+    let glyph: String
+    let foreground: Color
+    let background: Color
+    let hint: String?
+}
+
+private extension APIKeyFieldDescriptor {
+    static let zapper = Self(
+        id: .zapper,
+        title: "Zapper",
+        glyph: "Z",
+        foreground: SettingsDesign.accentBlue,
+        background: SettingsDesign.blueGlyphBackground,
+        hint: nil)
+
+    static let debank = Self(
+        id: .debank,
+        title: "DeBank",
+        glyph: "D",
+        foreground: SettingsDesign.warningOrange,
+        background: SettingsDesign.orangeGlyphBackground,
+        hint: nil)
+
+    static let coingecko = Self(
+        id: .coingecko,
+        title: "CoinGecko",
+        glyph: "C",
+        foreground: Color(red: 0.015, green: 0.520, blue: 0.275),
+        background: Color(red: 0.885, green: 0.985, blue: 0.930),
+        hint: "Optional. Provides higher rate limits.")
+}
+
 enum APIKeysSettingsLayout {
-    static let inputMode: APIKeyInputMode = .visibleText
+    static let defaultInputMode: APIKeyInputMode = .secureText
+
+    static func inputMode(isVisible: Bool) -> APIKeyInputMode {
+        isVisible ? .visibleText : defaultInputMode
+    }
 }
 
 struct APIKeysSettingsTab: View {
     @State private var viewModel = APIKeysViewModel()
     @State private var newRPCChain: Chain = .ethereum
     @State private var newRPCURL = ""
+    @State private var visibleAPIKeyFields: Set<APIKeyFieldID> = []
+    @State private var hasPendingSave = false
     @State private var saveTask: Task<Void, Never>?
 
     var body: some View {
@@ -24,32 +71,22 @@ struct APIKeysSettingsTab: View {
                     subtitle: "Secrets are stored locally in macOS Keychain.") {
                         VStack(spacing: 0) {
                             apiKeyField(
-                                title: "Zapper",
-                                glyph: "Z",
-                                foreground: SettingsDesign.accentBlue,
-                                background: SettingsDesign.blueGlyphBackground,
+                                .zapper,
                                 text: $viewModel.zapperAPIKey)
 
                             SettingsDivider()
                                 .padding(.vertical, 8)
 
                             apiKeyField(
-                                title: "DeBank",
-                                glyph: "D",
-                                foreground: SettingsDesign.warningOrange,
-                                background: SettingsDesign.orangeGlyphBackground,
+                                .debank,
                                 text: $viewModel.debankAPIKey)
 
                             SettingsDivider()
                                 .padding(.vertical, 8)
 
                             apiKeyField(
-                                title: "CoinGecko",
-                                glyph: "C",
-                                foreground: Color(red: 0.015, green: 0.520, blue: 0.275),
-                                background: Color(red: 0.885, green: 0.985, blue: 0.930),
-                                text: $viewModel.coingeckoAPIKey,
-                                hint: "Optional. Provides higher rate limits.")
+                                .coingecko,
+                                text: $viewModel.coingeckoAPIKey)
                         }
                     }
 
@@ -74,28 +111,25 @@ struct APIKeysSettingsTab: View {
         .onChange(of: viewModel.zapperAPIKey) { _, _ in debounceSave() }
         .onChange(of: viewModel.debankAPIKey) { _, _ in debounceSave() }
         .onChange(of: viewModel.coingeckoAPIKey) { _, _ in debounceSave() }
+        .onDisappear { flushPendingSave() }
     }
 
     private func apiKeyField(
-        title: String,
-        glyph: String,
-        foreground: Color,
-        background: Color,
-        text: Binding<String>,
-        hint: String? = nil) -> some View {
+        _ descriptor: APIKeyFieldDescriptor,
+        text: Binding<String>) -> some View {
         HStack(alignment: .top, spacing: 14) {
             SettingsLetterTile(
-                glyph: glyph,
-                foreground: foreground,
-                background: background)
+                glyph: descriptor.glyph,
+                foreground: descriptor.foreground,
+                background: descriptor.background)
                 .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                Text(descriptor.title)
                     .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
                     .foregroundStyle(SettingsDesign.primaryText)
 
-                if let hint {
+                if let hint = descriptor.hint {
                     Text(hint)
                         .font(.caption)
                         .foregroundStyle(SettingsDesign.secondaryText)
@@ -103,17 +137,35 @@ struct APIKeysSettingsTab: View {
             }
             .frame(width: 190, alignment: .leading)
 
-            apiKeyInput(text: text)
-                .textFieldStyle(.plain)
-                .font(.footnote)
-                .foregroundStyle(SettingsDesign.primaryText)
-                .settingsInputFrame(height: SettingsMetrics.compactInputHeight)
+            let isVisible = visibleAPIKeyFields.contains(descriptor.id)
+
+            HStack(spacing: 8) {
+                apiKeyInput(
+                    text: text,
+                    mode: APIKeysSettingsLayout.inputMode(isVisible: isVisible))
+                    .textFieldStyle(.plain)
+                    .font(.footnote)
+                    .foregroundStyle(SettingsDesign.primaryText)
+                    .frame(maxWidth: .infinity)
+
+                Button {
+                    toggleVisibility(for: descriptor.id)
+                } label: {
+                    Image(systemName: isVisible ? "eye.slash" : "eye")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(SettingsDesign.secondaryText)
+                .frame(width: 28, height: 28)
+                .accessibilityLabel(isVisible ? "Hide \(descriptor.title) API key" : "Show \(descriptor.title) API key")
+            }
+            .settingsInputFrame(height: SettingsMetrics.compactInputHeight)
         }
     }
 
     @ViewBuilder
-    private func apiKeyInput(text: Binding<String>) -> some View {
-        switch APIKeysSettingsLayout.inputMode {
+    private func apiKeyInput(text: Binding<String>, mode: APIKeyInputMode) -> some View {
+        switch mode {
         case .visibleText:
             TextField("Enter API key", text: text)
         case .secureText:
@@ -258,109 +310,30 @@ struct APIKeysSettingsTab: View {
         Chain.allCases.filter { viewModel.rpcEndpoints[$0] == nil }
     }
 
+    private func toggleVisibility(for field: APIKeyFieldID) {
+        if visibleAPIKeyFields.contains(field) {
+            visibleAPIKeyFields.remove(field)
+        } else {
+            visibleAPIKeyFields.insert(field)
+        }
+    }
+
     private func debounceSave() {
         guard !viewModel.isLoading else { return }
+        hasPendingSave = true
         saveTask?.cancel()
-        saveTask = Task {
+        saveTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
             viewModel.save()
-        }
-    }
-}
-
-struct SettingsInlineNotice: View {
-    enum Style {
-        case error
-        case action
-    }
-
-    let title: String
-    let message: String?
-    let style: Style
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: message == nil ? 0 : 6) {
-            Text(title)
-                .font(.footnote.weight(.bold))
-            if let message {
-                Text(message)
-                    .font(.footnote)
-            }
-        }
-        .foregroundStyle(foreground)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, minHeight: message == nil ? 38 : 56, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(background))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(stroke, lineWidth: 1))
-    }
-
-    private var background: Color {
-        switch style {
-        case .error: Color(red: 1.0, green: 0.970, blue: 0.925)
-        case .action: Color(red: 0.910, green: 0.930, blue: 1.0)
+            hasPendingSave = false
         }
     }
 
-    private var stroke: Color {
-        switch style {
-        case .error: Color(red: 0.980, green: 0.590, blue: 0.235)
-        case .action: Color(red: 0.600, green: 0.690, blue: 1.0)
-        }
-    }
-
-    private var foreground: Color {
-        switch style {
-        case .error: Color(red: 0.640, green: 0.160, blue: 0.050)
-        case .action: Color(red: 0.245, green: 0.180, blue: 0.780)
-        }
-    }
-}
-
-extension View {
-    func settingsInputFrame(height: CGFloat) -> some View {
-        padding(.horizontal, 12)
-            .frame(height: height)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(SettingsDesign.subtleCardBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(SettingsDesign.cardStroke, lineWidth: 1))
-    }
-
-    func settingsMenuFrame(height: CGFloat) -> some View {
-        padding(.horizontal, 12)
-            .frame(height: height)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(SettingsDesign.subtleCardBackground))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(SettingsDesign.cardStroke, lineWidth: 1))
-    }
-
-    func settingsIconButton(color: Color) -> some View {
-        foregroundStyle(color)
-            .frame(width: 42, height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(color.opacity(0.10)))
-            .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(color.opacity(0.25), lineWidth: 1))
-    }
-
-    func settingsPrimaryButton(isDisabled: Bool) -> some View {
-        foregroundStyle(isDisabled ? SettingsDesign.secondaryText : Color.white)
-            .frame(width: 64, height: SettingsMetrics.compactControlHeight)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isDisabled ? Color(red: 0.800, green: 0.830, blue: 0.880) : SettingsDesign.accentBlue))
+    private func flushPendingSave() {
+        saveTask?.cancel()
+        guard hasPendingSave, !viewModel.isLoading else { return }
+        viewModel.save()
+        hasPendingSave = false
     }
 }
