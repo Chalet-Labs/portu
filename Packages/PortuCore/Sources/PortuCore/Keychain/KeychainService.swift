@@ -11,15 +11,105 @@ public struct KeychainService: SecretStore {
     }
 
     public func get(key: KeychainKey) throws(KeychainError) -> String? {
-        let query: [String: Any] = [
+        let query = baseQuery(for: key).merging([
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]) { _, new in new }
+
+        if let value = try string(matching: query) {
+            return value
+        }
+
+        let legacyQuery = legacyBaseQuery(for: key).merging([
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]) { _, new in new }
+        guard let legacyValue = try string(matching: legacyQuery) else {
+            return nil
+        }
+
+        do {
+            try set(key: key, value: legacyValue)
+            try deleteLegacy(key: key)
+        } catch {}
+        return legacyValue
+    }
+
+    public func set(key: KeychainKey, value: String) throws(KeychainError) {
+        guard let data = value.data(using: .utf8) else {
+            throw .encodingFailed
+        }
+
+        let baseQuery = baseQuery(for: key)
+
+        // Add-first upsert: attempt add, then update on duplicate
+        let addStatus = SecItemAdd(
+            baseQuery.merging([
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                kSecValueData as String: data
+            ]) { _, new in new } as CFDictionary,
+            nil)
+
+        switch addStatus {
+        case errSecSuccess:
+            try? deleteLegacy(key: key)
+        case errSecDuplicateItem:
+            let updateStatus = SecItemUpdate(
+                baseQuery as CFDictionary,
+                [
+                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+                    kSecValueData as String: data
+                ] as CFDictionary)
+            switch updateStatus {
+            case errSecSuccess:
+                try? deleteLegacy(key: key)
+            case errSecInteractionNotAllowed: throw .interactionNotAllowed
+            default: throw .unexpectedStatus(updateStatus)
+            }
+        case errSecInteractionNotAllowed:
+            throw .interactionNotAllowed
+        default:
+            throw .unexpectedStatus(addStatus)
+        }
+    }
+
+    public func delete(key: KeychainKey) throws(KeychainError) {
+        var firstError: KeychainError?
+
+        do {
+            try delete(matching: baseQuery(for: key))
+        } catch {
+            firstError = error
+        }
+
+        do {
+            try deleteLegacy(key: key)
+        } catch {
+            if firstError == nil {
+                firstError = error
+            }
+        }
+
+        if let firstError {
+            throw firstError
+        }
+    }
+
+    private func baseQuery(for key: KeychainKey) -> [String: Any] {
+        [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawKey,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecUseDataProtectionKeychain as String: true
+            kSecAttrAccount as String: key.rawKey
         ]
+    }
 
+    private func legacyBaseQuery(for key: KeychainKey) -> [String: Any] {
+        baseQuery(for: key).merging([
+            kSecUseDataProtectionKeychain as String: true
+        ]) { _, new in new }
+    }
+
+    private func string(matching query: [String: Any]) throws(KeychainError) -> String? {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
 
@@ -41,57 +131,11 @@ public struct KeychainService: SecretStore {
         }
     }
 
-    public func set(key: KeychainKey, value: String) throws(KeychainError) {
-        guard let data = value.data(using: .utf8) else {
-            throw .encodingFailed
-        }
-
-        let baseQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawKey,
-            kSecUseDataProtectionKeychain as String: true
-        ]
-        let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-
-        // Add-first upsert: attempt add, then update on duplicate
-        let addStatus = SecItemAdd(
-            baseQuery.merging([
-                kSecAttrAccessible as String: accessibility,
-                kSecValueData as String: data
-            ]) { _, new in new } as CFDictionary,
-            nil)
-
-        switch addStatus {
-        case errSecSuccess:
-            return
-        case errSecDuplicateItem:
-            let updateStatus = SecItemUpdate(
-                baseQuery as CFDictionary,
-                [
-                    kSecValueData as String: data,
-                    kSecAttrAccessible as String: accessibility
-                ] as CFDictionary)
-            switch updateStatus {
-            case errSecSuccess: break
-            case errSecInteractionNotAllowed: throw .interactionNotAllowed
-            default: throw .unexpectedStatus(updateStatus)
-            }
-        case errSecInteractionNotAllowed:
-            throw .interactionNotAllowed
-        default:
-            throw .unexpectedStatus(addStatus)
-        }
+    private func deleteLegacy(key: KeychainKey) throws(KeychainError) {
+        try delete(matching: legacyBaseQuery(for: key))
     }
 
-    public func delete(key: KeychainKey) throws(KeychainError) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawKey,
-            kSecUseDataProtectionKeychain as String: true
-        ]
-
+    private func delete(matching query: [String: Any]) throws(KeychainError) {
         let status = SecItemDelete(query as CFDictionary)
         switch status {
         case errSecSuccess, errSecItemNotFound: break
