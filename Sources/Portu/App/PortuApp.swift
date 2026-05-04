@@ -82,6 +82,10 @@ struct PortuApp: App {
             ContentView(store: store)
                 .environment(appState)
         }
+        .defaultWindowPlacement { _, context in
+            let launchSize = MainWindowPlacement.launchSize(for: context.defaultDisplay.visibleRect.size)
+            return WindowPlacement(size: launchSize)
+        }
         .modelContainer(container)
         .commands {
             CommandGroup(replacing: .appSettings) {
