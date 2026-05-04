@@ -97,6 +97,8 @@ struct AddAccountSheet: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(AddAccountAccessibility.closeButtonLabel)
+            .accessibilityHint("Closes the add account sheet.")
         }
         .padding(.horizontal, 20)
         .frame(height: 58)
@@ -273,6 +275,9 @@ struct AddAccountSheet: View {
                 ForEach(ExchangeType.allCases, id: \.self) { type in
                     Button(type.addAccountTitle) {
                         exchangeType = type
+                        exchangePassphrase = AddAccountExchangeSecrets.passphraseAfterSelecting(
+                            type,
+                            currentPassphrase: exchangePassphrase)
                     }
                 }
             }
@@ -396,8 +401,8 @@ struct AddAccountSheet: View {
         do {
             try keychain.set(key: .exchangeAPIKey(accountId), value: exchangeAPIKey)
             try keychain.set(key: .exchangeAPISecret(accountId), value: exchangeAPISecret)
-            if !exchangePassphrase.isEmpty {
-                try keychain.set(key: .exchangePassphrase(accountId), value: exchangePassphrase)
+            if let passphrase = AddAccountExchangeSecrets.persistedPassphrase(exchangePassphrase, for: exchangeType) {
+                try keychain.set(key: .exchangePassphrase(accountId), value: passphrase)
             }
         } catch {
             deleteExchangeCredentials(accountId, keychain: keychain)
@@ -429,5 +434,25 @@ struct AddAccountSheet: View {
         try? keychain.delete(key: .exchangeAPIKey(accountId))
         try? keychain.delete(key: .exchangeAPISecret(accountId))
         try? keychain.delete(key: .exchangePassphrase(accountId))
+    }
+}
+
+enum AddAccountAccessibility {
+    static let closeButtonLabel = "Close"
+}
+
+enum AddAccountExchangeSecrets {
+    static func persistedPassphrase(_ passphrase: String, for exchangeType: ExchangeType) -> String? {
+        guard exchangeType == .coinbase, !passphrase.isEmpty else {
+            return nil
+        }
+
+        return passphrase
+    }
+
+    static func passphraseAfterSelecting(
+        _ exchangeType: ExchangeType,
+        currentPassphrase: String) -> String {
+        exchangeType == .coinbase ? currentPassphrase : ""
     }
 }
