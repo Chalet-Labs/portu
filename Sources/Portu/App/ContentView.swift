@@ -18,6 +18,7 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 SidebarView(store: store)
                     .frame(width: PortuTheme.dashboardSidebarWidth)
+                    .environment(\.colorScheme, .dark)
 
                 Rectangle()
                     .fill(PortuTheme.dashboardStroke)
@@ -25,9 +26,9 @@ struct ContentView: View {
 
                 NavigationStack(path: $assetNavigationPath) {
                     detailView
-                        .dashboardPage()
                         .navigationDestination(for: UUID.self) { assetId in
                             AssetDetailView(assetId: assetId, store: store)
+                                .dashboardPage()
                         }
                 }
                 .onChange(of: store.detailRoute) { _, _ in
@@ -36,9 +37,9 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             StatusBarView(store: store)
+                .environment(\.colorScheme, .dark)
         }
         .background(PortuTheme.dashboardBackground)
-        .environment(\.colorScheme, .dark)
     }
 
     @ViewBuilder
@@ -46,6 +47,7 @@ struct ContentView: View {
         switch store.detailRoute {
         case let .section(section):
             sectionView(section)
+                .dashboardPage()
         case .settings:
             SettingsView()
                 .environment(\.colorScheme, .light)

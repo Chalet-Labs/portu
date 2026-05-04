@@ -28,11 +28,10 @@ struct PositionGroupView: View {
                         .foregroundStyle(hf < 1.2 ? .red : hf < 1.5 ? .orange : .green)
                 }
 
-                // Net value (signed) — computed from live prices to match token rows
-                let headerTotal = position.tokens.reduce(Decimal.zero) { sum, token in
-                    let value = tokenValue(token)
-                    return token.role.isBorrow ? sum - value : sum + value
-                }
+                // Net value (signed), computed from live prices to match token rows.
+                let headerTotal = PositionGroupValue.headerTotal(
+                    for: position.tokens,
+                    livePrices: appState.prices)
                 Text(headerTotal, format: .currency(code: "USD"))
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(PortuTheme.changeColor(for: headerTotal))
@@ -67,5 +66,15 @@ struct PositionGroupView: View {
 
     private func tokenValue(_ token: PositionToken) -> Decimal {
         token.resolvedUSDValue(prices: appState.prices)
+    }
+}
+
+enum PositionGroupValue {
+    static func headerTotal(
+        for tokens: [PositionToken],
+        livePrices: [String: Decimal]) -> Decimal {
+        tokens.reduce(Decimal.zero) { total, token in
+            total + AssetValueFormatter.signedValue(for: token, livePrices: livePrices)
+        }
     }
 }

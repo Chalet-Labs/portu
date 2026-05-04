@@ -126,10 +126,13 @@ struct AddAccountSupportPanel: View {
 
 struct AddAccountSupportChip: View {
     struct Model: Identifiable {
-        let id = UUID()
         let title: String
         let systemImage: String?
         let tint: Color
+
+        var id: String {
+            "\(title)|\(systemImage ?? "")"
+        }
     }
 
     let model: Model
