@@ -1,5 +1,5 @@
-// Sources/Portu/Features/Accounts/AddAccountSheet.swift
 import PortuCore
+import PortuUI
 import SwiftData
 import SwiftUI
 
@@ -7,7 +7,7 @@ struct AddAccountSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    @State private var selectedTab = 0
+    @State private var selectedTab: AddAccountTab = .chain
 
     // Chain account fields
     @State private var chainName = ""
@@ -29,32 +29,47 @@ struct AddAccountSheet: View {
     @State private var exchangeAPISecret = ""
     @State private var exchangePassphrase = ""
     @State private var exchangeGroup = ""
+    @State private var exchangeNotes = ""
     @State private var keychainError: String?
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("Add Account")
-                .font(.headline)
-                .padding()
+            header
 
-            TabView(selection: $selectedTab) {
-                chainAccountTab.tabItem { Label("Chain", systemImage: "link") }.tag(0)
-                manualAccountTab.tabItem { Label("Manual", systemImage: "tray") }.tag(1)
-                exchangeAccountTab.tabItem { Label("Exchange", systemImage: "building.columns") }.tag(2)
-            }
-            .frame(height: 350)
+            Divider()
+                .overlay(PortuTheme.dashboardStroke)
 
-            HStack {
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Add") { saveAccount() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!canSave)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    AddAccountTabSelector(selection: $selectedTab)
+
+                    Group {
+                        switch selectedTab {
+                        case .chain:
+                            chainAccountTab
+                        case .manual:
+                            manualAccountTab
+                        case .exchange:
+                            exchangeAccountTab
+                        }
+                    }
+                    .animation(.snappy(duration: 0.18), value: selectedTab)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
             }
-            .padding()
+            .scrollIndicators(.automatic)
+
+            footer
         }
-        .frame(width: 500, height: 480)
+        .frame(width: 780, height: 580)
+        .background(PortuTheme.dashboardPanelBackground)
+        .foregroundStyle(PortuTheme.dashboardText)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
+        .environment(\.colorScheme, .dark)
         .alert("Keychain Error", isPresented: Binding(
             get: { keychainError != nil },
             set: { if !$0 { keychainError = nil } })) {
@@ -64,82 +79,261 @@ struct AddAccountSheet: View {
         }
     }
 
+    private var header: some View {
+        HStack(spacing: 12) {
+            Text("Add new account")
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(PortuTheme.dashboardText)
+
+            Spacer()
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .frame(height: 58)
+    }
+
     // MARK: - Chain Account Tab
 
     private var chainAccountTab: some View {
-        Form {
-            TextField("Name", text: $chainName)
-            TextField("Wallet Address", text: $chainAddress)
-                .font(.system(.body, design: .monospaced))
+        VStack(alignment: .leading, spacing: 12) {
+            AddAccountSupportPanel(
+                title: "CHAINS WE SUPPORT:",
+                chips: [
+                    .init(title: "Ethereum & L2s", systemImage: "diamond.fill", tint: .purple),
+                    .init(title: "Solana", systemImage: "circle.hexagongrid.fill", tint: .green),
+                    .init(title: "Bitcoin", systemImage: "bitcoinsign.circle.fill", tint: .orange),
+                    .init(title: "Base", systemImage: "b.circle.fill", tint: .blue),
+                    .init(title: "Polygon", systemImage: "hexagon.fill", tint: .purple),
+                    .init(title: "+ 6 more...", systemImage: nil, tint: PortuTheme.dashboardSecondaryText)
+                ],
+                searchPlaceholder: "Search chain to test support",
+                linkTitle: "See full list")
 
-            Picker("Chain Type", selection: $isEVM) {
-                Text("Ethereum & L2s (EVM)").tag(true)
-                Text("Specific Chain").tag(false)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    AddAccountTextField(
+                        title: "Account Address",
+                        placeholder: "Paste wallet address",
+                        text: $chainAddress,
+                        isRequired: true,
+                        isMonospaced: true)
+
+                    chainTypePicker
+                }
+
+                AddAccountTextField(
+                    title: "Account Name",
+                    placeholder: "Account Name",
+                    text: $chainName,
+                    isRequired: true)
+
+                HStack(alignment: .top, spacing: 10) {
+                    AddAccountTextField(
+                        title: "Description",
+                        placeholder: "Descriptive text",
+                        text: $chainNotes)
+
+                    AddAccountTextField(
+                        title: "Account group",
+                        placeholder: "Select a group",
+                        text: $chainGroup)
+                }
+
+                InlineSourceNote(text: "Data source: Zapper API")
             }
+        }
+    }
 
-            if !isEVM {
-                Picker("Chain", selection: $specificChain) {
-                    Text("Solana").tag(Chain.solana)
-                    Text("Bitcoin").tag(Chain.bitcoin)
+    private var chainTypePicker: some View {
+        AddAccountMenuField(
+            title: "Account Type",
+            value: isEVM ? "Ethereum & L2s (EVM)" : specificChain.addAccountTitle,
+            isRequired: true) {
+                Button("Ethereum & L2s (EVM)") {
+                    isEVM = true
+                }
+
+                Divider()
+
+                ForEach([Chain.solana, .bitcoin], id: \.self) { chain in
+                    Button(chain.addAccountTitle) {
+                        specificChain = chain
+                        isEVM = false
+                    }
                 }
             }
-
-            TextField("Group (optional)", text: $chainGroup)
-            TextField("Notes (optional)", text: $chainNotes)
-
-            Text("Data source: Zapper API")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .formStyle(.grouped)
     }
 
     // MARK: - Manual Account Tab
 
     private var manualAccountTab: some View {
-        Form {
-            TextField("Name", text: $manualName)
-            TextField("Group (optional)", text: $manualGroup)
-            TextField("Notes (optional)", text: $manualNotes)
+        VStack(alignment: .leading, spacing: 12) {
+            AddAccountManualInfoPanel()
 
-            Text("Add positions manually after creating the account.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
+                AddAccountTextField(
+                    title: "Account Name",
+                    placeholder: "Account Name",
+                    text: $manualName,
+                    isRequired: true)
+
+                HStack(alignment: .top, spacing: 10) {
+                    AddAccountTextField(
+                        title: "Description",
+                        placeholder: "Descriptive text",
+                        text: $manualNotes)
+
+                    AddAccountTextField(
+                        title: "Account group",
+                        placeholder: "Select a group",
+                        text: $manualGroup)
+                }
+            }
         }
-        .formStyle(.grouped)
     }
 
     // MARK: - Exchange Account Tab
 
     private var exchangeAccountTab: some View {
-        Form {
-            TextField("Account Name", text: $exchangeName)
-            Picker("Exchange", selection: $exchangeType) {
-                ForEach(ExchangeType.allCases, id: \.self) { type in
-                    Text(type.rawValue.capitalized).tag(type)
+        VStack(alignment: .leading, spacing: 12) {
+            AddAccountSupportPanel(
+                title: "EXCHANGES WE SUPPORT:",
+                chips: [
+                    .init(title: "Kraken", systemImage: "k.circle.fill", tint: .purple),
+                    .init(title: "Coinbase", systemImage: "c.circle.fill", tint: .blue),
+                    .init(title: "Binance", systemImage: "diamond.circle.fill", tint: .yellow)
+                ],
+                searchPlaceholder: nil,
+                linkTitle: "See full list")
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    exchangePicker
+
+                    AddAccountTextField(
+                        title: "Name",
+                        placeholder: "Account Name",
+                        text: $exchangeName,
+                        isRequired: true)
+                }
+
+                AddAccountKeepInMindPanel()
+
+                HStack(alignment: .top, spacing: 10) {
+                    AddAccountSecureField(
+                        title: "API Key",
+                        placeholder: "API Key",
+                        text: $exchangeAPIKey,
+                        isRequired: true)
+
+                    AddAccountSecureField(
+                        title: "Private Key",
+                        placeholder: "Private Key",
+                        text: $exchangeAPISecret,
+                        isRequired: true)
+                }
+
+                if exchangeType == .coinbase {
+                    AddAccountSecureField(
+                        title: "Passphrase",
+                        placeholder: "Passphrase",
+                        text: $exchangePassphrase)
+                }
+
+                HStack(alignment: .top, spacing: 10) {
+                    AddAccountTextField(
+                        title: "Description",
+                        placeholder: "Descriptive text",
+                        text: $exchangeNotes)
+
+                    AddAccountTextField(
+                        title: "Account group",
+                        placeholder: "Select a group",
+                        text: $exchangeGroup)
                 }
             }
-
-            SecureField("API Key", text: $exchangeAPIKey)
-            SecureField("API Secret", text: $exchangeAPISecret)
-            if exchangeType == .coinbase {
-                SecureField("Passphrase", text: $exchangePassphrase)
-            }
-
-            TextField("Group (optional)", text: $exchangeGroup)
-
-            Text("Use read-only API keys for security.")
-                .font(.caption)
-                .foregroundStyle(.orange)
         }
-        .formStyle(.grouped)
+    }
+
+    private var exchangePicker: some View {
+        AddAccountMenuField(
+            title: "Exchange",
+            value: exchangeType.addAccountTitle,
+            isRequired: true) {
+                ForEach(ExchangeType.allCases, id: \.self) { type in
+                    Button(type.addAccountTitle) {
+                        exchangeType = type
+                    }
+                }
+            }
+    }
+
+    private var footer: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .overlay(PortuTheme.dashboardStroke)
+
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Cancel")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(PortuTheme.dashboardText)
+                        .padding(.horizontal, 14)
+                        .frame(height: 34)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(PortuTheme.dashboardMutedPanelBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button {
+                    saveAccount()
+                } label: {
+                    Text("Add Account")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(canSave ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
+                        .padding(.horizontal, 18)
+                        .frame(height: 34)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(canSave ? PortuTheme.dashboardGoldMuted : PortuTheme.dashboardMutedPanelBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(canSave ? PortuTheme.dashboardMutedStroke : PortuTheme.dashboardStroke, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSave)
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 54)
+            .background(PortuTheme.dashboardPanelBackground)
+        }
     }
 
     // MARK: - Save
 
     private var canSave: Bool {
         AccountsFeature.canSave(
-            tab: selectedTab,
+            tab: selectedTab.rawValue,
             chainName: chainName,
             chainAddress: chainAddress,
             manualName: manualName,
@@ -150,10 +344,9 @@ struct AddAccountSheet: View {
 
     private func saveAccount() {
         switch selectedTab {
-        case 0: saveChainAccount()
-        case 1: saveManualAccount()
-        case 2: saveExchangeAccount()
-        default: break
+        case .chain: saveChainAccount()
+        case .manual: saveManualAccount()
+        case .exchange: saveExchangeAccount()
         }
         dismiss()
     }
@@ -190,7 +383,8 @@ struct AddAccountSheet: View {
             kind: .exchange,
             exchangeType: exchangeType,
             dataSource: .exchange,
-            group: exchangeGroup.isEmpty ? nil : exchangeGroup)
+            group: exchangeGroup.isEmpty ? nil : exchangeGroup,
+            notes: exchangeNotes.isEmpty ? nil : exchangeNotes)
         modelContext.insert(account)
         try? modelContext.save()
 

@@ -59,7 +59,7 @@ struct OverviewSummaryCards: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: PortuTheme.dashboardContentSpacing) {
             summaryCard(title: "Idle", items: idleBreakdown)
             summaryCard(title: "Deployed", items: deployedBreakdown)
             summaryCard(title: "Futures", items: []) // Future work
@@ -69,27 +69,32 @@ struct OverviewSummaryCards: View {
     private func summaryCard(title: String, items: [(String, Decimal)]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.headline)
+                .font(DashboardStyle.sectionTitleFont)
+                .foregroundStyle(PortuTheme.dashboardText)
             let total = items.reduce(Decimal.zero) { $0 + $1.1 }
             Text(total, format: .currency(code: "USD"))
-                .font(.title3.weight(.semibold))
+                .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                .foregroundStyle(PortuTheme.dashboardText)
 
             if items.isEmpty {
                 Text("Coming soon")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(PortuTheme.dashboardTertiaryText)
             } else {
                 ForEach(items, id: \.0) { label, value in
                     HStack {
-                        Text(label).font(.caption).foregroundStyle(.secondary)
+                        Text(label)
+                            .font(.caption)
+                            .foregroundStyle(PortuTheme.dashboardSecondaryText)
                         Spacer()
-                        Text(value, format: .currency(code: "USD")).font(.caption)
+                        Text(value, format: .currency(code: "USD"))
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(PortuTheme.dashboardText)
                     }
                 }
             }
         }
-        .padding()
-        .background(.quaternary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
+        .dashboardCard()
     }
 }

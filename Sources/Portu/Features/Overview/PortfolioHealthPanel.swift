@@ -38,7 +38,8 @@ struct PortfolioHealthPanel: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Portfolio Health")
-                    .font(.headline)
+                    .font(DashboardStyle.sectionTitleFont)
+                    .foregroundStyle(PortuTheme.dashboardText)
                 Spacer()
                 riskBadge
             }
@@ -57,7 +58,7 @@ struct PortfolioHealthPanel: View {
                 }
                 .buttonStyle(.plain)
                 .font(.caption)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(PortuTheme.dashboardGold)
             }
         }
     }
@@ -84,8 +85,11 @@ struct PortfolioHealthPanel: View {
 
     private func metricItem(_ label: String, _ value: String) -> some View {
         VStack(spacing: 2) {
-            Text(value).fontWeight(.medium)
-            Text(label).foregroundStyle(.secondary)
+            Text(value)
+                .fontWeight(.semibold)
+                .foregroundStyle(PortuTheme.dashboardText)
+            Text(label)
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
         }
     }
 
@@ -98,6 +102,7 @@ struct PortfolioHealthPanel: View {
                         .font(.caption2)
                     Text("\(risk.symbol) is \(risk.percentage.formatted(.percent.precision(.fractionLength(0)))) of portfolio")
                         .font(.caption)
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 }
             }
         }
@@ -109,16 +114,17 @@ struct PortfolioHealthPanel: View {
                 HStack {
                     Text(weight.symbol)
                         .font(.caption.weight(.medium))
+                        .foregroundStyle(PortuTheme.dashboardText)
                         .frame(width: 50, alignment: .leading)
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.accentColor.opacity(0.3))
+                            .fill(PortuTheme.dashboardGoldMuted)
                             .frame(width: max(4, geo.size.width * CGFloat(truncating: weight.percentage as NSDecimalNumber)))
                     }
                     .frame(height: 8)
                     Text(weight.percentage.formatted(.percent.precision(.fractionLength(1))))
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
                         .frame(width: 40, alignment: .trailing)
                 }
             }

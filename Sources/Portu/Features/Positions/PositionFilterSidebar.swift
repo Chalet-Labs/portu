@@ -1,5 +1,6 @@
 // Sources/Portu/Features/Positions/PositionFilterSidebar.swift
 import PortuCore
+import PortuUI
 import SwiftUI
 
 struct PositionFilterSidebar: View {
@@ -37,36 +38,44 @@ struct PositionFilterSidebar: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Filter")
-                    .font(.headline)
+                    .font(DashboardStyle.sectionTitleFont)
+                    .foregroundStyle(PortuTheme.dashboardText)
 
-                // Type filter
-                Section("Position Type") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Position Type")
+                        .font(DashboardStyle.labelFont)
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     ForEach(typeFilters, id: \.1) { type, label, total in
                         Button {
                             selectedType = type
                         } label: {
                             HStack {
                                 Text(label)
-                                    .foregroundStyle(selectedType == type ? .primary : .secondary)
+                                    .foregroundStyle(selectedType == type ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                                 Spacer()
                                 Text(total, format: .currency(code: "USD"))
                                     .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(PortuTheme.dashboardTertiaryText)
                             }
+                            .padding(.vertical, 3)
                         }
                         .buttonStyle(.plain)
                     }
                 }
 
-                Divider()
+                Rectangle()
+                    .fill(PortuTheme.dashboardStroke)
+                    .frame(height: 1)
 
-                // Protocol filter (uses protocolId to match AllPositionsView filtering)
-                Section("Protocol") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Protocol")
+                        .font(DashboardStyle.labelFont)
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     Button {
                         selectedProtocol = .all
                     } label: {
                         Text("All Protocols")
-                            .foregroundStyle(selectedProtocol == .all ? .primary : .secondary)
+                            .foregroundStyle(selectedProtocol == .all ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                     }
                     .buttonStyle(.plain)
 
@@ -77,18 +86,25 @@ struct PositionFilterSidebar: View {
                         } label: {
                             HStack {
                                 Text(filter.name)
-                                    .foregroundStyle(selectedProtocol == filterValue ? .primary : .secondary)
+                                    .foregroundStyle(selectedProtocol == filterValue ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                                 Spacer()
                                 Text(filter.value, format: .currency(code: "USD"))
                                     .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(PortuTheme.dashboardTertiaryText)
                             }
+                            .padding(.vertical, 3)
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
             .padding()
+        }
+        .background(PortuTheme.dashboardPanelBackground)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(PortuTheme.dashboardStroke)
+                .frame(width: 1)
         }
     }
 }

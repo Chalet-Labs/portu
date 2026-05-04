@@ -23,13 +23,25 @@ struct OverviewPositionTabs: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Picker("Tab", selection: $selectedTab) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 20) {
                 ForEach(OverviewTab.allCases, id: \.self) { tab in
-                    Text(tab.rawValue).tag(tab)
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        Text(tab.rawValue)
+                            .font(.system(size: 14, weight: selectedTab == tab ? .semibold : .regular))
+                            .foregroundStyle(selectedTab == tab ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
+                            .padding(.vertical, 4)
+                            .overlay(alignment: .bottom) {
+                                Rectangle()
+                                    .fill(selectedTab == tab ? PortuTheme.dashboardGold : .clear)
+                                    .frame(height: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .pickerStyle(.segmented)
 
             switch selectedTab {
             case .keyChanges:
@@ -81,32 +93,56 @@ struct OverviewPositionTabs: View {
     // MARK: - Token table (flat rows)
 
     private func tokenTable(tokens: [(PositionToken, Position)]) -> some View {
+        Group {
+            if tokens.isEmpty {
+                ContentUnavailableView("No assets in this view", systemImage: "tablecells")
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .frame(minHeight: 220)
+                    .frame(maxWidth: .infinity)
+                    .background(PortuTheme.dashboardPanelBackground)
+            } else {
+                tokenRowsTable(tokens: tokens)
+            }
+        }
+    }
+
+    private func tokenRowsTable(tokens: [(PositionToken, Position)]) -> some View {
         Table(of: TokenRowData.self) {
             TableColumn("Asset") { row in
                 Text(row.symbol).fontWeight(.medium)
+                    .foregroundStyle(PortuTheme.dashboardText)
             }
             .width(min: 60, ideal: 80)
 
             TableColumn("Network / Account") { row in
                 VStack(alignment: .leading) {
-                    if let chain = row.chain { Text(chain.rawValue.capitalized).font(.caption) }
-                    Text(row.accountName).font(.caption2).foregroundStyle(.secondary)
+                    if let chain = row.chain {
+                        Text(chain.rawValue.capitalized)
+                            .font(.caption)
+                            .foregroundStyle(PortuTheme.dashboardText)
+                    }
+                    Text(row.accountName)
+                        .font(.caption2)
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 }
             }
             .width(min: 80, ideal: 120)
 
             TableColumn("Amount") { row in
                 Text(row.amount, format: .number.precision(.fractionLength(2 ... 6)))
+                    .font(DashboardStyle.monoTableFont)
             }
             .width(min: 80, ideal: 100)
 
             TableColumn("Price") { row in
                 Text(row.price, format: .currency(code: "USD"))
+                    .font(DashboardStyle.monoTableFont)
             }
             .width(min: 60, ideal: 80)
 
             TableColumn("Value") { row in
                 Text(row.value, format: .currency(code: "USD"))
+                    .font(DashboardStyle.monoTableFont)
             }
             .width(min: 80, ideal: 100)
         } rows: {
@@ -114,6 +150,8 @@ struct OverviewPositionTabs: View {
                 TableRow(row)
             }
         }
+        .dashboardTable()
+        .frame(minHeight: 260)
     }
 
     // MARK: - Borrowing view (grouped by protocol)
@@ -128,13 +166,13 @@ struct OverviewPositionTabs: View {
                 "No Borrowing",
                 systemImage: "arrow.down.circle",
                 description: Text("No active borrow positions"))
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
         } else {
             ForEach(borrowPositions, id: \.id) { pos in
                 VStack(alignment: .leading, spacing: 4) {
-                    // Section header
                     HStack {
                         Text(pos.protocolName ?? "Unknown Protocol")
-                            .font(.headline)
+                            .font(DashboardStyle.sectionTitleFont)
                         if let chain = pos.chain {
                             CapsuleBadge(chain.rawValue.capitalized)
                         }
@@ -158,12 +196,10 @@ struct OverviewPositionTabs: View {
                             Text(tokenValue(token), format: .currency(code: "USD"))
                                 .frame(width: 100, alignment: .trailing)
                         }
-                        .font(.body)
+                        .font(DashboardStyle.tableFont)
                     }
                 }
-                .padding()
-                .background(.quaternary.opacity(0.3))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
             }
         }
     }

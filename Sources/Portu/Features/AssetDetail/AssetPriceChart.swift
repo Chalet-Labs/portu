@@ -1,6 +1,7 @@
 import Charts
 import ComposableArchitecture
 import PortuCore
+import PortuUI
 import SwiftData
 import SwiftUI
 
@@ -54,6 +55,7 @@ struct AssetPriceChart: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 250)
+                    .dashboardControl()
 
                 Spacer()
 
@@ -66,6 +68,7 @@ struct AssetPriceChart: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 250)
+                    .dashboardControl()
             }
 
             switch store.assetDetail.chartMode {
@@ -87,11 +90,13 @@ struct AssetPriceChart: View {
                 ContentUnavailableView(
                     "Price History", systemImage: "chart.line.uptrend.xyaxis",
                     description: Text("Historical price chart — requires CoinGecko market_chart API integration"))
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 250)
             } else {
                 ContentUnavailableView(
                     "No Price Data", systemImage: "chart.line.uptrend.xyaxis",
                     description: Text("Asset has no CoinGecko ID for price history"))
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 250)
             }
         }
@@ -105,6 +110,7 @@ struct AssetPriceChart: View {
                 ContentUnavailableView(
                     "No Value Data", systemImage: "chart.line.uptrend.xyaxis",
                     description: Text("Sync your accounts to see value history"))
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 250)
             } else {
                 let isBorrowOnly = aggregated.allSatisfy { $0.grossUSD == 0 && $0.borrowUSD > 0 }
@@ -115,7 +121,7 @@ struct AssetPriceChart: View {
                         LineMark(
                             x: .value("Date", point.date),
                             y: .value("Value", net))
-                            .foregroundStyle(net < 0 ? .red : Color.accentColor)
+                            .foregroundStyle(net < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardGold)
 
                         AreaMark(
                             x: .value("Date", point.date),
@@ -137,7 +143,7 @@ struct AssetPriceChart: View {
                 if isBorrowOnly {
                     Text("Debt history — this asset is only borrowed")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(PortuTheme.dashboardGold)
                 }
             }
         }
@@ -151,13 +157,14 @@ struct AssetPriceChart: View {
                 ContentUnavailableView(
                     "No Amount Data", systemImage: "chart.line.uptrend.xyaxis",
                     description: Text("Sync your accounts to see amount history"))
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 250)
             } else {
                 Chart {
                     ForEach(aggregated) { point in
                         let net = point.grossAmount - point.borrowAmount
                         LineMark(x: .value("Date", point.date), y: .value("Amount", net))
-                            .foregroundStyle(net < 0 ? .red : Color.accentColor)
+                            .foregroundStyle(net < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardGold)
                     }
                 }
                 .frame(height: 250)

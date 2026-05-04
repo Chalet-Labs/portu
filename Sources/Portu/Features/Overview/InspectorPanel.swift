@@ -1,5 +1,6 @@
 // Sources/Portu/Features/Overview/InspectorPanel.swift
 import ComposableArchitecture
+import PortuUI
 import SwiftUI
 
 struct InspectorPanel: View {
@@ -7,14 +8,26 @@ struct InspectorPanel: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 18) {
                 TopAssetsDonut(store: store)
-                Divider()
+                inspectorDivider
                 PortfolioHealthPanel(store: store)
-                Divider()
+                inspectorDivider
                 PriceWatchlist()
             }
-            .padding()
+            .padding(18)
         }
+        .background(PortuTheme.dashboardPanelBackground)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(PortuTheme.dashboardStroke)
+                .frame(width: 1)
+        }
+    }
+
+    private var inspectorDivider: some View {
+        Rectangle()
+            .fill(PortuTheme.dashboardStroke)
+            .frame(height: 1)
     }
 }

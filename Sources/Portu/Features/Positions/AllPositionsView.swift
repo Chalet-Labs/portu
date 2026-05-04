@@ -1,5 +1,6 @@
 // Sources/Portu/Features/Positions/AllPositionsView.swift
 import PortuCore
+import PortuUI
 import SwiftData
 import SwiftUI
 
@@ -30,9 +31,17 @@ struct AllPositionsView: View {
 
     var body: some View {
         HSplitView {
-            // Main content
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
+                LazyVStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
+                    DashboardPageHeader("All Positions") {
+                        Button {
+                            showAddSheet = true
+                        } label: {
+                            Label("Add Position", systemImage: "plus")
+                        }
+                        .dashboardControl()
+                    }
+
                     ForEach(groupedByType, id: \.0) { type, positions in
                         Section {
                             ForEach(positions, id: \.id) { pos in
@@ -41,38 +50,33 @@ struct AllPositionsView: View {
                         } header: {
                             HStack {
                                 Text(typeSectionTitle(type))
-                                    .font(.title3.weight(.semibold))
+                                    .font(DashboardStyle.sectionTitleFont)
+                                    .foregroundStyle(PortuTheme.dashboardText)
                                 Spacer()
                                 let total = positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
                                 Text(total, format: .currency(code: "USD"))
-                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 13, design: .monospaced))
+                                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
                             }
-                            .padding(.horizontal)
+                            .padding(.top, 4)
                         }
                     }
                 }
-                .padding()
+                .padding(DashboardStyle.pagePadding)
             }
             .frame(minWidth: 500)
-            .toolbar {
-                ToolbarItem {
-                    Button("Add Position", systemImage: "plus") {
-                        showAddSheet = true
-                    }
-                }
-            }
             .sheet(isPresented: $showAddSheet) {
                 AddPositionSheet()
+                    .environment(\.colorScheme, .dark)
             }
 
-            // Filter sidebar
             PositionFilterSidebar(
                 positions: positions,
                 selectedType: $filterType,
                 selectedProtocol: $filterProtocol)
                 .frame(minWidth: 200, idealWidth: 250, maxWidth: 300)
         }
-        .navigationTitle("All Positions")
+        .dashboardPage()
     }
 
     private func typeSectionTitle(_ type: PositionType) -> String {

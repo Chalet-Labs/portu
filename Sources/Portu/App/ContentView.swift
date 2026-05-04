@@ -1,10 +1,12 @@
 import ComposableArchitecture
 import PortuCore
+import PortuUI
 import SwiftData
 import SwiftUI
 
 struct ContentView: View {
     let store: StoreOf<AppFeature>
+    @State private var assetNavigationPath = NavigationPath()
 
     var body: some View {
         mainDashboard
@@ -15,14 +17,27 @@ struct ContentView: View {
         VStack(spacing: 0) {
             NavigationSplitView {
                 SidebarView(store: store)
+                    .navigationSplitViewColumnWidth(
+                        min: PortuTheme.dashboardSidebarWidth,
+                        ideal: PortuTheme.dashboardSidebarWidth,
+                        max: PortuTheme.dashboardSidebarWidth)
             } detail: {
-                detailView
-                    .navigationDestination(for: UUID.self) { assetId in
-                        AssetDetailView(assetId: assetId, store: store)
-                    }
+                NavigationStack(path: $assetNavigationPath) {
+                    detailView
+                        .dashboardPage()
+                        .navigationDestination(for: UUID.self) { assetId in
+                            AssetDetailView(assetId: assetId, store: store)
+                        }
+                }
+                .onChange(of: store.detailRoute) { _, _ in
+                    assetNavigationPath = NavigationPath()
+                }
             }
+            .toolbar(.hidden, for: .windowToolbar)
             StatusBarView(store: store)
         }
+        .background(PortuTheme.dashboardBackground)
+        .environment(\.colorScheme, .dark)
     }
 
     @ViewBuilder
@@ -32,6 +47,7 @@ struct ContentView: View {
             sectionView(section)
         case .settings:
             SettingsView()
+                .environment(\.colorScheme, .light)
         }
     }
 
