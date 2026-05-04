@@ -44,33 +44,30 @@ struct AccountsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
+            DashboardPageHeader("Accounts")
             toolbar
             accountTable
+                .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
         }
-        .navigationTitle("Accounts")
+        .padding(DashboardStyle.pagePadding)
+        .dashboardPage()
         .sheet(isPresented: Binding(
             get: { store.accounts.showAddSheet },
             set: { store.send(.accounts(.addSheetPresented($0))) })) {
                 AddAccountSheet()
+                    .environment(\.colorScheme, .dark)
         }
     }
 
     // MARK: - Toolbar
 
     private var toolbar: some View {
-        HStack {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                TextField("Search accounts...", text: Binding(
-                    get: { store.accounts.searchText },
-                    set: { store.send(.accounts(.searchTextChanged($0))) }))
-                    .textFieldStyle(.plain)
-            }
-            .padding(6)
-            .background(.quaternary.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .frame(width: 200)
+        HStack(spacing: 10) {
+            DashboardSearchField(placeholder: "Search accounts...", text: Binding(
+                get: { store.accounts.searchText },
+                set: { store.send(.accounts(.searchTextChanged($0))) }))
+                .frame(width: 220)
 
             Picker("Group", selection: Binding(
                 get: { store.accounts.filterGroup },
@@ -81,22 +78,28 @@ struct AccountsView: View {
                     }
                 }
                 .frame(width: 150)
+                .dashboardControl()
 
             Toggle("Show Inactive", isOn: Binding(
                 get: { store.accounts.showInactive },
                 set: { _ in store.send(.accounts(.showInactiveToggled)) }))
+                .font(.caption)
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                .dashboardControl()
 
             Spacer()
 
             Button("Bulk Import") {}
                 .disabled(true)
                 .help("Coming soon")
+                .dashboardControl()
 
             Button("Add Account", systemImage: "plus") {
                 store.send(.accounts(.addSheetPresented(true)))
             }
+            .dashboardControl()
         }
-        .padding()
+        .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
     }
 
     // MARK: - Table
@@ -110,7 +113,7 @@ struct AccountsView: View {
                         .frame(width: 8, height: 8)
                     Text(row.name)
                         .fontWeight(.medium)
-                        .foregroundStyle(row.isActive ? .primary : .secondary)
+                        .foregroundStyle(row.isActive ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                 }
             }
             .width(min: 100, ideal: 150)
@@ -121,7 +124,7 @@ struct AccountsView: View {
             TableColumn("Address") { row in
                 Text(row.address)
                     .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
             }
             .width(min: 100, ideal: 160)
 
@@ -133,16 +136,18 @@ struct AccountsView: View {
             TableColumn("USD Balance", value: \.balance) { row in
                 VStack(alignment: .trailing) {
                     Text(row.balance, format: .currency(code: "USD"))
+                        .font(DashboardStyle.monoTableFont)
                     if let error = row.lastSyncError {
                         Text(error)
                             .font(.caption2)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(PortuTheme.dashboardWarning)
                             .lineLimit(1)
                     }
                 }
             }
             .width(min: 80, ideal: 120)
         }
+        .dashboardTable()
         .contextMenu(forSelectionType: AccountRowData.ID.self) { selection in
             if let id = selection.first, let account = accounts.first(where: { $0.id == id }) {
                 Button(account.isActive ? "Deactivate" : "Activate") {

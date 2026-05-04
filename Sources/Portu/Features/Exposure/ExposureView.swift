@@ -27,7 +27,9 @@ struct ExposureView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
+                DashboardPageHeader("Portfolio Exposure")
+
                 HStack(spacing: 12) {
                     summaryCard("Spot Total", value: summary.totalSpot)
                     summaryCard("Derivatives", value: 0, subtitle: "Coming soon")
@@ -42,23 +44,26 @@ struct ExposureView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(width: 250)
+                    .dashboardControl()
 
                 if store.exposure.showByAsset {
                     assetTable
+                        .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
                 } else {
                     categoryTable
+                        .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
                 }
             }
-            .padding()
+            .padding(DashboardStyle.pagePadding)
         }
-        .navigationTitle("Exposure")
+        .dashboardPage()
     }
 
     // MARK: - Tables
 
     private var categoryTable: some View {
         Table(byCategory) {
-            TableColumn("Category") { row in Text(row.name).fontWeight(.medium) }
+            TableColumn("Category") { row in Text(row.name).fontWeight(.medium).foregroundStyle(PortuTheme.dashboardText) }
                 .width(min: 100, ideal: 140)
             TableColumn("Spot Assets") { row in currencyCell(row.spotAssets) }
                 .width(min: 80, ideal: 120)
@@ -66,19 +71,22 @@ struct ExposureView: View {
                 .width(min: 80, ideal: 120)
             TableColumn("Spot Net") { row in signedCell(row.spotNet) }
                 .width(min: 80, ideal: 120)
-            TableColumn("Derivatives") { _ in Text("\u{2014}").foregroundStyle(.tertiary) }
+            TableColumn("Derivatives") { _ in Text("\u{2014}").foregroundStyle(PortuTheme.dashboardTertiaryText) }
                 .width(min: 60, ideal: 80)
             TableColumn("Net Exposure") { row in currencyCell(row.netExposure).fontWeight(.medium) }
                 .width(min: 80, ideal: 120)
         }
+        .dashboardTable()
     }
 
     private var assetTable: some View {
         Table(byAsset) {
-            TableColumn("Asset") { row in Text(row.symbol).fontWeight(.medium) }
+            TableColumn("Asset") { row in Text(row.symbol).fontWeight(.medium).foregroundStyle(PortuTheme.dashboardText) }
                 .width(min: 60, ideal: 80)
             TableColumn("Category") { row in
-                Text(row.category.rawValue.capitalized).font(.caption)
+                Text(row.category.rawValue.capitalized)
+                    .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
             }
             .width(min: 80, ideal: 100)
             TableColumn("Spot Assets") { row in currencyCell(row.spotAssets) }
@@ -86,34 +94,39 @@ struct ExposureView: View {
             TableColumn("Spot Net") { row in signedCell(row.spotNet) }
             TableColumn("Net Exposure") { row in currencyCell(row.netExposure).fontWeight(.medium) }
         }
+        .dashboardTable()
     }
 
     private func currencyCell(_ value: Decimal) -> Text {
         Text(value, format: .currency(code: "USD"))
+            .font(DashboardStyle.monoTableFont)
     }
 
     private func liabilityCell(_ value: Decimal) -> some View {
-        currencyCell(value).foregroundStyle(value > 0 ? .red : .secondary)
+        currencyCell(value).foregroundStyle(value > 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSecondaryText)
     }
 
     private func signedCell(_ value: Decimal) -> some View {
-        currencyCell(value).foregroundStyle(value < 0 ? .red : .primary)
+        currencyCell(value).foregroundStyle(value < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardText)
     }
 
     // MARK: - Helpers
 
     private func summaryCard(_ title: String, value: Decimal, subtitle: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(title)
+                .font(DashboardStyle.labelFont)
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
             Text(value, format: .currency(code: "USD"))
-                .font(.title3.weight(.semibold))
+                .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                .foregroundStyle(PortuTheme.dashboardText)
             if let subtitle {
-                Text(subtitle).font(.caption2).foregroundStyle(.tertiary)
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(PortuTheme.dashboardTertiaryText)
             }
         }
-        .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .dashboardCard()
     }
 }

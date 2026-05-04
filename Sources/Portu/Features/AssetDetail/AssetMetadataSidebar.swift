@@ -8,7 +8,6 @@ struct AssetMetadataSidebar: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                // Logo
                 if let logoURL = asset.logoURL, let url = URL(string: logoURL) {
                     AsyncImage(url: url) { image in
                         image.resizable().scaledToFit()
@@ -21,40 +20,47 @@ struct AssetMetadataSidebar: View {
                     .clipShape(Circle())
                 }
 
-                // Name and symbol
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(asset.name).font(.title3.weight(.semibold))
-                    Text(asset.symbol).font(.body).foregroundStyle(.secondary)
+                    Text(asset.name)
+                        .font(DashboardStyle.sectionTitleFont)
+                        .foregroundStyle(PortuTheme.dashboardText)
+                    Text(asset.symbol)
+                        .font(.caption)
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 }
 
-                Divider()
+                Rectangle().fill(PortuTheme.dashboardStroke).frame(height: 1)
 
-                // Category
                 LabeledContent("Category") {
                     CapsuleBadge(asset.category.rawValue.capitalized)
                 }
 
-                // Verification
                 LabeledContent("Verified") {
                     Image(systemName: asset.isVerified ? "checkmark.seal.fill" : "xmark.seal")
-                        .foregroundStyle(asset.isVerified ? .green : .secondary)
+                        .foregroundStyle(asset.isVerified ? PortuTheme.dashboardSuccess : PortuTheme.dashboardSecondaryText)
                 }
 
-                // CoinGecko ID
                 if let cgId = asset.coinGeckoId {
                     LabeledContent("CoinGecko") {
-                        Text(cgId).font(.caption).foregroundStyle(.secondary)
+                        Text(cgId).font(.caption).foregroundStyle(PortuTheme.dashboardSecondaryText)
                     }
                 }
 
-                Divider()
+                Rectangle().fill(PortuTheme.dashboardStroke).frame(height: 1)
 
-                // Explorer links note
                 Text("Explorer links are per-position (varies by network), not per-asset.")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(PortuTheme.dashboardTertiaryText)
             }
             .padding()
+        }
+        .font(.caption)
+        .foregroundStyle(PortuTheme.dashboardSecondaryText)
+        .background(PortuTheme.dashboardPanelBackground)
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(PortuTheme.dashboardStroke)
+                .frame(width: 1)
         }
     }
 }

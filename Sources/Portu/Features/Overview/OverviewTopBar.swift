@@ -8,8 +8,6 @@ struct OverviewTopBar: View {
     @Environment(AppState.self) private var appState
     @Query private var positions: [Position]
 
-    let onSync: () -> Void
-
     /// Only positions from active accounts
     private var activePositions: [Position] {
         positions.filter { $0.account?.isActive == true }
@@ -49,44 +47,38 @@ struct OverviewTopBar: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
-            // Total value
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Portfolio Value")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Portfolio value")
+                    .font(DashboardStyle.labelFont)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 Text(totalValue, format: .currency(code: "USD"))
-                    .font(.system(.title, design: .rounded, weight: .semibold))
+                    .font(DashboardStyle.heroValueFont)
+                    .foregroundStyle(PortuTheme.dashboardText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
             }
 
-            // 24h change
-            VStack(alignment: .leading, spacing: 2) {
-                Text("24h Change")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {
-                    Image(systemName: change24h >= 0 ? "arrow.up.right" : "arrow.down.right")
-                        .foregroundStyle(PortuTheme.changeColor(for: change24h))
                     Text(change24h, format: .currency(code: "USD"))
-                        .foregroundStyle(PortuTheme.changeColor(for: change24h))
-                    Text("(\(changePct, format: .percent.precision(.fractionLength(2))))")
-                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("$ change 24h")
+                        .foregroundStyle(PortuTheme.dashboardTertiaryText)
                 }
-                .font(.headline)
-            }
+                .foregroundStyle(PortuTheme.changeColor(for: change24h))
 
-            Spacer()
-
-            // Last synced + Sync button
-            if case .syncing = appState.syncStatus {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Button(action: onSync) {
-                    Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+                HStack(spacing: 4) {
+                    Image(systemName: changePct >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                        .font(.caption2)
+                    Text(changePct, format: .percent.precision(.fractionLength(2)))
+                    Spacer()
+                    Text("% change 24h")
+                        .foregroundStyle(PortuTheme.dashboardTertiaryText)
                 }
+                .foregroundStyle(PortuTheme.changeColor(for: changePct))
             }
+            .font(.system(size: 13, weight: .medium, design: .monospaced))
         }
-        .padding()
     }
 }

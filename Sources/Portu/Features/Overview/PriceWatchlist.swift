@@ -23,18 +23,21 @@ struct PriceWatchlist: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Prices")
-                .font(.headline)
+                .font(DashboardStyle.sectionTitleFont)
+                .foregroundStyle(PortuTheme.dashboardText)
 
             ForEach(watchlistAssets, id: \.id) { asset in
                 HStack {
                     Text(asset.symbol)
-                        .fontWeight(.medium)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(PortuTheme.dashboardText)
                     Spacer()
 
                     if let cgId = asset.coinGeckoId, let price = appState.prices[cgId] {
                         VStack(alignment: .trailing) {
                             Text(price, format: .currency(code: "USD"))
-                                .font(.body)
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(PortuTheme.dashboardText)
                             if let change = appState.priceChanges24h[cgId] {
                                 HStack(spacing: 2) {
                                     Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
@@ -45,10 +48,13 @@ struct PriceWatchlist: View {
                             }
                         }
                     } else {
-                        Text("\u{2014}").foregroundStyle(.tertiary)
+                        Text("\u{2014}")
+                            .foregroundStyle(PortuTheme.dashboardTertiaryText)
                     }
                 }
-                Divider()
+                Rectangle()
+                    .fill(PortuTheme.dashboardStroke)
+                    .frame(height: 1)
             }
         }
     }

@@ -1,6 +1,7 @@
 import Charts
 import ComposableArchitecture
 import PortuCore
+import PortuUI
 import SwiftData
 import SwiftUI
 
@@ -43,7 +44,8 @@ struct AssetsChartMode: View {
                 ContentUnavailableView(
                     "No Asset Data", systemImage: "chart.bar.xaxis",
                     description: Text("Sync to see asset category breakdown"))
-                    .frame(height: 300)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .frame(height: 320)
             } else {
                 Chart(chartData) { point in
                     AreaMark(
@@ -55,8 +57,7 @@ struct AssetsChartMode: View {
                 .chartYAxis {
                     AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))
                 }
-                .frame(height: 300)
-                .padding()
+                .frame(height: 320)
             }
 
             HStack(spacing: 8) {
@@ -70,14 +71,14 @@ struct AssetsChartMode: View {
                             .padding(.vertical, 4)
                             .background(
                                 store.performance.disabledCategories.contains(cat)
-                                    ? AnyShapeStyle(.quaternary)
-                                    : AnyShapeStyle(Color.accentColor.opacity(0.2)))
+                                    ? AnyShapeStyle(PortuTheme.dashboardMutedPanelBackground)
+                                    : AnyShapeStyle(PortuTheme.dashboardGoldMuted))
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .foregroundStyle(PortuTheme.dashboardText)
                 }
             }
-            .padding(.horizontal)
         }
     }
 }

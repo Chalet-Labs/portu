@@ -1,12 +1,15 @@
 // Sources/Portu/Features/AllAssets/AllAssetsView.swift
 import ComposableArchitecture
+import PortuUI
 import SwiftUI
 
 struct AllAssetsView: View {
     let store: StoreOf<AppFeature>
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
+            DashboardPageHeader("All Assets")
+
             Picker("Tab", selection: Binding(
                 get: { store.allAssets.selectedTab },
                 set: { store.send(.allAssets(.tabSelected($0))) })) {
@@ -15,16 +18,24 @@ struct AllAssetsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .padding()
+                .frame(width: 360)
+                .dashboardControl()
 
             switch store.allAssets.selectedTab {
             case .assets: AssetsTab(store: store)
-            case .nfts: nftPlaceholder
-            case .platforms: PlatformsTab()
-            case .networks: NetworksTab()
+            case .nfts:
+                nftPlaceholder
+                    .dashboardCard()
+            case .platforms:
+                PlatformsTab()
+                    .dashboardCard()
+            case .networks:
+                NetworksTab()
+                    .dashboardCard()
             }
         }
-        .navigationTitle("All Assets")
+        .padding(DashboardStyle.pagePadding)
+        .dashboardPage()
     }
 
     private var nftPlaceholder: some View {
@@ -32,5 +43,6 @@ struct AllAssetsView: View {
             "NFT Tracking",
             systemImage: "photo.artframe",
             description: Text("NFT tracking coming soon"))
+            .foregroundStyle(PortuTheme.dashboardSecondaryText)
     }
 }

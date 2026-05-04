@@ -11,9 +11,13 @@ public struct CapsuleBadge: View {
     public var body: some View {
         Text(text)
             .font(.caption)
+            .foregroundStyle(PortuTheme.dashboardText)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(.quaternary)
+            .background(PortuTheme.dashboardMutedPanelBackground)
+            .overlay(
+                Capsule()
+                    .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
             .clipShape(Capsule())
     }
 }

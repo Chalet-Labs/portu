@@ -2,6 +2,7 @@
 import Charts
 import ComposableArchitecture
 import PortuCore
+import PortuUI
 import SwiftData
 import SwiftUI
 
@@ -54,21 +55,25 @@ struct TopAssetsDonut: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Top Assets")
-                    .font(.headline)
+                    .font(DashboardStyle.sectionTitleFont)
+                    .foregroundStyle(PortuTheme.dashboardText)
                 Spacer()
                 Picker("Group", selection: $groupByCategory) {
                     Text("Category").tag(true)
                     Text("Asset").tag(false)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 160)
+                .frame(width: 136)
+                .dashboardControl()
             }
 
             if slices.isEmpty {
-                Text("No data").foregroundStyle(.secondary)
+                Text("No data")
+                    .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
             } else {
                 Chart(slices) { slice in
                     SectorMark(
@@ -79,18 +84,22 @@ struct TopAssetsDonut: View {
                         .annotation(position: .overlay) {
                             Text(slice.label)
                                 .font(.caption2)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(PortuTheme.dashboardText)
                         }
                 }
-                .frame(height: 180)
+                .frame(height: 168)
 
                 // Legend
                 ForEach(slices) { slice in
                     HStack(spacing: 6) {
                         Circle().fill(slice.color).frame(width: 8, height: 8)
-                        Text(slice.label).font(.caption)
+                        Text(slice.label)
+                            .font(.caption)
+                            .foregroundStyle(PortuTheme.dashboardText)
                         Spacer()
-                        Text(slice.value, format: .currency(code: "USD")).font(.caption)
+                        Text(slice.value, format: .currency(code: "USD"))
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     }
                 }
             }
@@ -99,6 +108,8 @@ struct TopAssetsDonut: View {
                 store.send(.sectionSelected(.allAssets))
             }
             .font(.caption)
+            .foregroundStyle(PortuTheme.dashboardGold)
+            .buttonStyle(.plain)
         }
     }
 
@@ -107,7 +118,16 @@ struct TopAssetsDonut: View {
     }
 
     private func chartColor(index: Int) -> Color {
-        let colors: [Color] = [.blue, .orange, .green, .purple, .pink, .yellow, .cyan, .red]
+        let colors: [Color] = [
+            Color(red: 0.360, green: 0.610, blue: 0.700),
+            Color(red: 0.930, green: 0.800, blue: 0.280),
+            Color(red: 0.400, green: 0.800, blue: 0.730),
+            Color(red: 0.760, green: 0.300, blue: 0.250),
+            Color(red: 0.830, green: 0.600, blue: 0.230),
+            Color(red: 0.900, green: 0.900, blue: 0.840),
+            Color(red: 0.480, green: 0.420, blue: 0.720),
+            Color(red: 0.650, green: 0.450, blue: 0.320)
+        ]
         return colors[index % colors.count]
     }
 }

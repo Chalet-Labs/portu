@@ -1,6 +1,7 @@
 import Charts
 import ComposableArchitecture
 import PortuCore
+import PortuUI
 import SwiftData
 import SwiftUI
 
@@ -31,33 +32,35 @@ struct PnLChartMode: View {
                 ContentUnavailableView(
                     "Insufficient Data", systemImage: "chart.bar",
                     description: Text("Need at least 2 days of data for PnL"))
-                    .frame(height: 300)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .frame(height: 320)
             } else {
                 Chart(bars) { bar in
                     BarMark(
                         x: .value("Date", bar.date, unit: .day),
                         y: .value("PnL", bar.pnl))
-                        .foregroundStyle(bar.pnl >= 0 ? Color.green : Color.red)
+                        .foregroundStyle(bar.pnl >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
 
                     if store.performance.showCumulative {
                         LineMark(
                             x: .value("Date", bar.date, unit: .day),
                             y: .value("Cumulative", bar.cumulative))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(PortuTheme.dashboardGold)
                             .lineStyle(StrokeStyle(lineWidth: 2))
                     }
                 }
                 .chartYAxis {
                     AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))
                 }
-                .frame(height: 300)
-                .padding()
+                .frame(height: 320)
             }
 
             Toggle("Show Cumulative", isOn: Binding(
                 get: { store.performance.showCumulative },
                 set: { _ in store.send(.performance(.showCumulativeToggled)) }))
-                .padding(.horizontal)
+                .font(.caption)
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                .dashboardControl()
         }
     }
 }

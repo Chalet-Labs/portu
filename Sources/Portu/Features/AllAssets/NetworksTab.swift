@@ -1,5 +1,6 @@
 // Sources/Portu/Features/AllAssets/NetworksTab.swift
 import PortuCore
+import PortuUI
 import SwiftData
 import SwiftUI
 
@@ -67,14 +68,17 @@ struct NetworksTab: View {
 
     var body: some View {
         Table(rows) {
-            TableColumn("Network") { row in Text(row.name).fontWeight(.medium) }
+            TableColumn("Network") { row in Text(row.name).fontWeight(.medium).foregroundStyle(PortuTheme.dashboardText) }
             TableColumn("Share %") { row in
                 Text(row.sharePercent, format: .percent.precision(.fractionLength(1)))
+                    .font(DashboardStyle.monoTableFont)
             }
             TableColumn("# Positions") { row in Text("\(row.positionCount)") }
             TableColumn("USD Balance") { row in
                 Text(row.usdBalance, format: .currency(code: "USD"))
+                    .font(DashboardStyle.monoTableFont)
             }
         }
+        .dashboardTable()
     }
 }

@@ -1,4 +1,5 @@
 import PortuCore
+import PortuUI
 import SwiftData
 import SwiftUI
 
@@ -24,31 +25,37 @@ struct PerformanceBottomPanel: View {
     var body: some View {
         HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Asset Categories").font(.headline)
+                Text("Asset categories")
+                    .font(DashboardStyle.sectionTitleFont)
+                    .foregroundStyle(PortuTheme.dashboardText)
                 ForEach(categoryChanges) { change in
                     HStack {
                         Text(change.name).frame(width: 100, alignment: .leading)
                         Text(change.startValue, format: .currency(code: "USD")).frame(width: 100)
-                        Text("\u{2192}").foregroundStyle(.secondary)
+                        Text("\u{2192}").foregroundStyle(PortuTheme.dashboardSecondaryText)
                         Text(change.endValue, format: .currency(code: "USD")).frame(width: 100)
                         Text(change.percentChange, format: .percent.precision(.fractionLength(1)))
-                            .foregroundStyle(change.percentChange >= 0 ? .green : .red)
+                            .foregroundStyle(change.percentChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
                             .frame(width: 60)
                     }
                     .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 }
             }
 
-            Divider()
+            Rectangle()
+                .fill(PortuTheme.dashboardStroke)
+                .frame(width: 1)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Asset Prices").font(.headline)
+                Text("Asset prices")
+                    .font(DashboardStyle.sectionTitleFont)
+                    .foregroundStyle(PortuTheme.dashboardText)
                 Text("Top assets with period price change")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
             }
         }
-        .padding()
-        .frame(height: 200)
+        .frame(minHeight: 180, alignment: .topLeading)
     }
 }

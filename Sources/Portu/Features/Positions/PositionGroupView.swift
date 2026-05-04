@@ -8,13 +8,12 @@ struct PositionGroupView: View {
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // Header: protocol name, chain, health factor
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 if let name = position.protocolName {
-                    Text(name).font(.headline)
+                    Text(name).font(DashboardStyle.sectionTitleFont)
                 } else {
-                    Text(position.positionType.rawValue.capitalized).font(.headline)
+                    Text(position.positionType.rawValue.capitalized).font(DashboardStyle.sectionTitleFont)
                 }
 
                 if let chain = position.chain {
@@ -29,17 +28,15 @@ struct PositionGroupView: View {
                         .foregroundStyle(hf < 1.2 ? .red : hf < 1.5 ? .orange : .green)
                 }
 
-                // Net value (signed) — computed from live prices to match token rows
-                let headerTotal = position.tokens.reduce(Decimal.zero) { sum, token in
-                    let value = tokenValue(token)
-                    return token.role.isBorrow ? sum - value : sum + value
-                }
+                // Net value (signed), computed from live prices to match token rows.
+                let headerTotal = PositionGroupValue.headerTotal(
+                    for: position.tokens,
+                    livePrices: appState.prices)
                 Text(headerTotal, format: .currency(code: "USD"))
-                    .font(.headline)
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(PortuTheme.changeColor(for: headerTotal))
             }
 
-            // Token rows
             ForEach(position.tokens, id: \.id) { token in
                 HStack {
                     Text(token.role.displayLabel)
@@ -47,26 +44,37 @@ struct PositionGroupView: View {
                         .foregroundStyle(token.role.displayColor)
 
                     Text(token.asset?.symbol ?? "???")
-                        .fontWeight(.medium)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(PortuTheme.dashboardText)
 
                     Spacer()
 
                     Text(token.amount, format: .number.precision(.fractionLength(2 ... 6)))
-                        .foregroundStyle(.secondary)
+                        .font(DashboardStyle.monoTableFont)
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
 
-                    // Always positive display
                     let value = tokenValue(token)
                     Text(value, format: .currency(code: "USD"))
+                        .font(DashboardStyle.monoTableFont)
+                        .foregroundStyle(PortuTheme.dashboardText)
                         .frame(width: 100, alignment: .trailing)
                 }
             }
         }
-        .padding()
-        .background(.quaternary.opacity(0.3))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .dashboardCard(horizontalPadding: 12, verticalPadding: 10)
     }
 
     private func tokenValue(_ token: PositionToken) -> Decimal {
         token.resolvedUSDValue(prices: appState.prices)
+    }
+}
+
+enum PositionGroupValue {
+    static func headerTotal(
+        for tokens: [PositionToken],
+        livePrices: [String: Decimal]) -> Decimal {
+        tokens.reduce(Decimal.zero) { total, token in
+            total + AssetValueFormatter.signedValue(for: token, livePrices: livePrices)
+        }
     }
 }

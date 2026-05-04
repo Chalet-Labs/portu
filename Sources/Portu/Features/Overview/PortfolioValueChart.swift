@@ -1,6 +1,7 @@
 // Sources/Portu/Features/Overview/PortfolioValueChart.swift
 import Charts
 import PortuCore
+import PortuUI
 import SwiftData
 import SwiftUI
 
@@ -16,8 +17,7 @@ struct PortfolioValueChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Time range picker
+        VStack(alignment: .leading, spacing: 10) {
             Picker("Range", selection: $selectedRange) {
                 ForEach([ChartTimeRange.oneWeek, .oneMonth, .threeMonths, .oneYear, .ytd], id: \.self) { range in
                     Text(range.rawValue).tag(range)
@@ -25,13 +25,15 @@ struct PortfolioValueChart: View {
             }
             .pickerStyle(.segmented)
             .frame(maxWidth: 300)
+            .dashboardControl()
 
             if filteredSnapshots.isEmpty {
                 ContentUnavailableView(
                     "No Data",
                     systemImage: "chart.line.uptrend.xyaxis",
                     description: Text("Sync your accounts to see portfolio history"))
-                    .frame(height: 200)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .frame(height: 190)
             } else {
                 Chart(filteredSnapshots, id: \.id) { snapshot in
                     AreaMark(
@@ -46,21 +48,23 @@ struct PortfolioValueChart: View {
                     LineMark(
                         x: .value("Date", snapshot.timestamp),
                         y: .value("Value", snapshot.totalValue))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(PortuTheme.dashboardGold)
 
-                    // Partial snapshot indicator
                     if snapshot.isPartial {
                         PointMark(
                             x: .value("Date", snapshot.timestamp),
                             y: .value("Value", snapshot.totalValue))
                             .symbolSize(20)
-                            .foregroundStyle(.orange.opacity(0.6))
+                            .foregroundStyle(PortuTheme.dashboardWarning.opacity(0.8))
                     }
                 }
                 .chartYAxis {
                     AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))
                 }
-                .frame(height: 250)
+                .chartXAxis {
+                    AxisMarks()
+                }
+                .frame(height: 190)
             }
         }
     }
