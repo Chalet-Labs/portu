@@ -8,6 +8,7 @@ import Testing
 
 @MainActor
 struct ViewRenderSmokeTests {
+    private static let maxRetainedWindows = 16
     private static var retainedWindows: [NSWindow] = []
 
     @Test(arguments: [
@@ -253,10 +254,15 @@ struct ViewRenderSmokeTests {
             styleMask: [.borderless],
             backing: .buffered,
             defer: false)
+
         window.contentView = hostingView
         window.layoutIfNeeded()
         hostingView.layoutSubtreeIfNeeded()
         hostingView.displayIfNeeded()
+
         Self.retainedWindows.append(window)
+        if Self.retainedWindows.count > Self.maxRetainedWindows {
+            Self.retainedWindows.removeFirst(Self.retainedWindows.count - Self.maxRetainedWindows)
+        }
     }
 }

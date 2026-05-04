@@ -61,7 +61,6 @@ struct OverviewTopBar: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {
-                    Text(change24h < 0 ? "-" : "+")
                     Text(change24h, format: .currency(code: "USD"))
                     Spacer()
                     Text("$ change 24h")

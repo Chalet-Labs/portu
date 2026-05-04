@@ -51,12 +51,13 @@ struct AddAccountTabSelector: View {
 }
 
 struct AddAccountSupportPanel: View {
+    @Environment(\.openURL) private var openURL
+
     let title: String
     let chips: [AddAccountSupportChip.Model]
     let searchPlaceholder: String?
     let linkTitle: String
-
-    @State private var supportSearch = ""
+    var linkURL: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -73,7 +74,11 @@ struct AddAccountSupportPanel: View {
 
                 Spacer(minLength: 8)
 
-                Button {} label: {
+                Button {
+                    if let linkURL {
+                        openURL(linkURL)
+                    }
+                } label: {
                     HStack(spacing: 5) {
                         Text(linkTitle)
                         Image(systemName: "arrow.up.forward.square")
@@ -83,6 +88,8 @@ struct AddAccountSupportPanel: View {
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 }
                 .buttonStyle(.plain)
+                .disabled(linkURL == nil)
+                .help(linkURL == nil ? "Support documentation link is not configured yet." : "Open support documentation")
             }
 
             if let searchPlaceholder {
@@ -91,10 +98,10 @@ struct AddAccountSupportPanel: View {
                         .font(.system(size: 13))
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
 
-                    TextField("", text: $supportSearch, prompt: Text(searchPlaceholder))
-                        .textFieldStyle(.plain)
+                    Text(searchPlaceholder)
                         .font(.system(size: 13))
-                        .foregroundStyle(PortuTheme.dashboardText)
+                        .foregroundStyle(PortuTheme.dashboardTertiaryText)
+                    Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 30)
@@ -104,6 +111,7 @@ struct AddAccountSupportPanel: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
+                .help("Live support lookup is not available yet.")
             }
         }
         .padding(8)
@@ -205,7 +213,7 @@ struct AddAccountKeepInMindPanel: View {
             AddAccountInfoRow(
                 icon: "exclamationmark.circle",
                 iconColor: PortuTheme.dashboardGold,
-                text: "If needed, whitelist: 34.79.28.87")
+                text: "If your exchange supports IP restrictions, follow the current setup guide before enabling them.")
             AddAccountInfoRow(
                 icon: "info.circle",
                 iconColor: PortuTheme.dashboardGold,

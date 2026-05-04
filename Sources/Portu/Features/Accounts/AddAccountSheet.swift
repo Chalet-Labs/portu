@@ -30,7 +30,7 @@ struct AddAccountSheet: View {
     @State private var exchangePassphrase = ""
     @State private var exchangeGroup = ""
     @State private var exchangeNotes = ""
-    @State private var keychainError: String?
+    @State private var saveError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,12 +70,12 @@ struct AddAccountSheet: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
         .environment(\.colorScheme, .dark)
-        .alert("Keychain Error", isPresented: Binding(
-            get: { keychainError != nil },
-            set: { if !$0 { keychainError = nil } })) {
-                Button("OK") { keychainError = nil }
+        .alert("Unable to Add Account", isPresented: Binding(
+            get: { saveError != nil },
+            set: { if !$0 { saveError = nil } })) {
+                Button("OK") { saveError = nil }
         } message: {
-            Text(keychainError ?? "")
+            Text(saveError ?? "")
         }
     }
 
@@ -343,15 +343,21 @@ struct AddAccountSheet: View {
     }
 
     private func saveAccount() {
-        switch selectedTab {
-        case .chain: saveChainAccount()
-        case .manual: saveManualAccount()
-        case .exchange: saveExchangeAccount()
+        let didSave: Bool = switch selectedTab {
+        case .chain:
+            saveChainAccount()
+        case .manual:
+            saveManualAccount()
+        case .exchange:
+            saveExchangeAccount()
         }
-        dismiss()
+
+        if didSave {
+            dismiss()
+        }
     }
 
-    private func saveChainAccount() {
+    private func saveChainAccount() -> Bool {
         let account = Account(
             name: chainName,
             kind: .wallet,
@@ -362,43 +368,66 @@ struct AddAccountSheet: View {
         let addr = WalletAddress(chain: chain, address: chainAddress, account: account)
         account.addresses = [addr]
 
-        modelContext.insert(account)
-        try? modelContext.save()
+        return insertAndSave(account)
     }
 
-    private func saveManualAccount() {
+    private func saveManualAccount() -> Bool {
         let account = Account(
             name: manualName,
             kind: .manual,
             dataSource: .manual,
             group: manualGroup.isEmpty ? nil : manualGroup,
             notes: manualNotes.isEmpty ? nil : manualNotes)
-        modelContext.insert(account)
-        try? modelContext.save()
+        return insertAndSave(account)
     }
 
-    private func saveExchangeAccount() {
+    private func saveExchangeAccount() -> Bool {
+        let accountId = UUID()
         let account = Account(
+            id: accountId,
             name: exchangeName,
             kind: .exchange,
             exchangeType: exchangeType,
             dataSource: .exchange,
             group: exchangeGroup.isEmpty ? nil : exchangeGroup,
             notes: exchangeNotes.isEmpty ? nil : exchangeNotes)
-        modelContext.insert(account)
-        try? modelContext.save()
 
-        // Store credentials in Keychain
         let keychain = KeychainService()
-        let id = account.id
         do {
-            try keychain.set(key: .exchangeAPIKey(id), value: exchangeAPIKey)
-            try keychain.set(key: .exchangeAPISecret(id), value: exchangeAPISecret)
+            try keychain.set(key: .exchangeAPIKey(accountId), value: exchangeAPIKey)
+            try keychain.set(key: .exchangeAPISecret(accountId), value: exchangeAPISecret)
             if !exchangePassphrase.isEmpty {
-                try keychain.set(key: .exchangePassphrase(id), value: exchangePassphrase)
+                try keychain.set(key: .exchangePassphrase(accountId), value: exchangePassphrase)
             }
         } catch {
-            keychainError = "Failed to save credentials: \(error.localizedDescription)"
+            deleteExchangeCredentials(accountId, keychain: keychain)
+            saveError = "Failed to save credentials: \(error.localizedDescription)"
+            return false
         }
+
+        if insertAndSave(account) {
+            return true
+        }
+
+        deleteExchangeCredentials(accountId, keychain: keychain)
+        return false
+    }
+
+    private func insertAndSave(_ account: Account) -> Bool {
+        modelContext.insert(account)
+        do {
+            try modelContext.save()
+            return true
+        } catch {
+            modelContext.delete(account)
+            saveError = "Failed to save account: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    private func deleteExchangeCredentials(_ accountId: UUID, keychain: KeychainService) {
+        try? keychain.delete(key: .exchangeAPIKey(accountId))
+        try? keychain.delete(key: .exchangeAPISecret(accountId))
+        try? keychain.delete(key: .exchangePassphrase(accountId))
     }
 }

@@ -15,9 +15,15 @@ struct OverviewView: View {
                 VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
                     DashboardPageHeader("Overview") {
                         HStack(spacing: 10) {
-                            Text("Updated \(store.lastPriceUpdate ?? .now, format: .relative(presentation: .named))")
-                                .font(.caption)
-                                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                            if let lastPriceUpdate = store.lastPriceUpdate {
+                                Text("Updated \(lastPriceUpdate, format: .relative(presentation: .named))")
+                                    .font(.caption)
+                                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                            } else {
+                                Text("Not updated yet")
+                                    .font(.caption)
+                                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                            }
 
                             if case .syncing = appState.syncStatus {
                                 ProgressView()

@@ -57,6 +57,7 @@ struct PositionGroupView: View {
                     let value = tokenValue(token)
                     Text(value, format: .currency(code: "USD"))
                         .font(DashboardStyle.monoTableFont)
+                        .foregroundStyle(PortuTheme.dashboardText)
                         .frame(width: 100, alignment: .trailing)
                 }
             }
