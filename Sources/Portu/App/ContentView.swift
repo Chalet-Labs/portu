@@ -33,7 +33,6 @@ struct ContentView: View {
                     assetNavigationPath = NavigationPath()
                 }
             }
-            .toolbar(.hidden, for: .windowToolbar)
             StatusBarView(store: store)
         }
         .background(PortuTheme.dashboardBackground)
