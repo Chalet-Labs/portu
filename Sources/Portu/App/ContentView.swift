@@ -15,13 +15,14 @@ struct ContentView: View {
 
     private var mainDashboard: some View {
         VStack(spacing: 0) {
-            NavigationSplitView {
+            HStack(spacing: 0) {
                 SidebarView(store: store)
-                    .navigationSplitViewColumnWidth(
-                        min: PortuTheme.dashboardSidebarWidth,
-                        ideal: PortuTheme.dashboardSidebarWidth,
-                        max: PortuTheme.dashboardSidebarWidth)
-            } detail: {
+                    .frame(width: PortuTheme.dashboardSidebarWidth)
+
+                Rectangle()
+                    .fill(PortuTheme.dashboardStroke)
+                    .frame(width: 1)
+
                 NavigationStack(path: $assetNavigationPath) {
                     detailView
                         .dashboardPage()
@@ -32,6 +33,7 @@ struct ContentView: View {
                 .onChange(of: store.detailRoute) { _, _ in
                     assetNavigationPath = NavigationPath()
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             StatusBarView(store: store)
         }
