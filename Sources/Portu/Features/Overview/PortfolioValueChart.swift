@@ -9,31 +9,20 @@ struct PortfolioValueChart: View {
     @Query(sort: \PortfolioSnapshot.timestamp)
     private var snapshots: [PortfolioSnapshot]
 
-    @State private var selectedRange: ChartTimeRange = .oneMonth
-
     private var filteredSnapshots: [PortfolioSnapshot] {
-        let start = selectedRange.startDate
+        let start = ChartTimeRange.oneMonth.startDate
         return snapshots.filter { $0.timestamp >= start }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Picker("Range", selection: $selectedRange) {
-                ForEach([ChartTimeRange.oneWeek, .oneMonth, .threeMonths, .oneYear, .ytd], id: \.self) { range in
-                    Text(range.rawValue).tag(range)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 300)
-            .dashboardControl()
-
+        VStack(alignment: .leading, spacing: 0) {
             if filteredSnapshots.isEmpty {
                 ContentUnavailableView(
                     "No Data",
                     systemImage: "chart.line.uptrend.xyaxis",
                     description: Text("Sync your accounts to see portfolio history"))
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    .frame(height: 190)
+                    .frame(height: 172)
             } else {
                 Chart(filteredSnapshots, id: \.id) { snapshot in
                     AreaMark(
@@ -64,7 +53,7 @@ struct PortfolioValueChart: View {
                 .chartXAxis {
                     AxisMarks()
                 }
-                .frame(height: 190)
+                .frame(height: 172)
             }
         }
     }

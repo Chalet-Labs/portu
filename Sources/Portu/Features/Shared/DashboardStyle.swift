@@ -35,10 +35,12 @@ struct DashboardPageHeader<Actions: View>: View {
                 Text(title)
                     .font(DashboardStyle.pageTitleFont)
                     .foregroundStyle(PortuTheme.dashboardText)
+                    .lineLimit(1)
                 if let subtitle {
                     Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                        .lineLimit(1)
                 }
             }
 

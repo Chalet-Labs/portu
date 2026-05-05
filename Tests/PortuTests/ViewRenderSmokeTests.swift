@@ -34,6 +34,22 @@ struct ViewRenderSmokeTests {
         render(view)
     }
 
+    @Test(arguments: OverviewRenderSize.allCases)
+    func `overview renders at supported dashboard sizes`(_ renderSize: OverviewRenderSize) throws {
+        let container = try makeContainer()
+        let store = makeStore(section: .overview)
+        let appState = AppState()
+        appState.bridge(from: store)
+        let size = renderSize.size
+
+        let view = ContentView(store: store)
+            .modelContainer(container)
+            .environment(appState)
+            .frame(width: size.width, height: size.height)
+
+        render(view, size: size)
+    }
+
     @Test(arguments: AssetTab.allCases)
     func `all assets tabs render without crashing`(_ tab: AssetTab) throws {
         let container = try makeContainer()
@@ -101,6 +117,8 @@ struct ViewRenderSmokeTests {
             $0.syncEngine.sync = { SyncResult(failedAccounts: []) }
             $0.priceService.fetchPrices = { _ in PriceUpdate(prices: [:], changes24h: [:]) }
             $0.priceService.invalidateCache = {}
+            $0.continuousClock = TestClock()
+            $0.date = .constant(Date(timeIntervalSince1970: 1_000_000))
         }
     }
 
@@ -246,9 +264,11 @@ struct ViewRenderSmokeTests {
         let batch = UUID(uuidString: "00000000-0000-0000-0000-0000000000B1")!
     }
 
-    private func render(_ view: some View) {
+    private func render(
+        _ view: some View,
+        size: CGSize = CGSize(width: 1400, height: 900)) {
         let hostingView = NSHostingView(rootView: view)
-        hostingView.frame = CGRect(x: 0, y: 0, width: 1400, height: 900)
+        hostingView.frame = CGRect(origin: .zero, size: size)
 
         let window = NSWindow(
             contentRect: hostingView.frame,
@@ -264,6 +284,18 @@ struct ViewRenderSmokeTests {
         Self.retainedWindows.append(window)
         if Self.retainedWindows.count > Self.maxRetainedWindows {
             Self.retainedWindows.removeFirst(Self.retainedWindows.count - Self.maxRetainedWindows)
+        }
+    }
+
+    enum OverviewRenderSize: CaseIterable {
+        case large
+        case compact
+
+        var size: CGSize {
+            switch self {
+            case .large: CGSize(width: 1400, height: 900)
+            case .compact: CGSize(width: 900, height: 600)
+            }
         }
     }
 }

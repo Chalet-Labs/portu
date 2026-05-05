@@ -47,24 +47,21 @@ struct OverviewTopBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Portfolio value")
-                    .font(DashboardStyle.labelFont)
-                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                Text(totalValue, format: .currency(code: "USD"))
-                    .font(DashboardStyle.heroValueFont)
-                    .foregroundStyle(PortuTheme.dashboardText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.65)
-            }
+        VStack(alignment: .leading, spacing: 18) {
+            Text(totalValue, format: .currency(code: "USD").precision(.fractionLength(0)))
+                .font(DashboardStyle.heroValueFont)
+                .foregroundStyle(PortuTheme.dashboardText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {
                     Text(change24h, format: .currency(code: "USD"))
+                        .lineLimit(1)
                     Spacer()
                     Text("$ change 24h")
                         .foregroundStyle(PortuTheme.dashboardTertiaryText)
+                        .lineLimit(1)
                 }
                 .foregroundStyle(PortuTheme.changeColor(for: change24h))
 
@@ -72,9 +69,11 @@ struct OverviewTopBar: View {
                     Image(systemName: changePct >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
                         .font(.caption2)
                     Text(changePct, format: .percent.precision(.fractionLength(2)))
+                        .lineLimit(1)
                     Spacer()
                     Text("% change 24h")
                         .foregroundStyle(PortuTheme.dashboardTertiaryText)
+                        .lineLimit(1)
                 }
                 .foregroundStyle(PortuTheme.changeColor(for: changePct))
             }

@@ -5,13 +5,12 @@ import SwiftUI
 
 struct InspectorPanel: View {
     let store: StoreOf<AppFeature>
+    var showsLeadingDivider = true
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 TopAssetsDonut(store: store)
-                inspectorDivider
-                PortfolioHealthPanel(store: store)
                 inspectorDivider
                 PriceWatchlist()
             }
@@ -19,9 +18,11 @@ struct InspectorPanel: View {
         }
         .background(PortuTheme.dashboardPanelBackground)
         .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(PortuTheme.dashboardStroke)
-                .frame(width: 1)
+            if showsLeadingDivider {
+                Rectangle()
+                    .fill(PortuTheme.dashboardStroke)
+                    .frame(width: 1)
+            }
         }
     }
 
