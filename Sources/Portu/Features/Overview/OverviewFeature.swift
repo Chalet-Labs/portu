@@ -284,15 +284,19 @@ enum OverviewFeature {
         let watchlistSet = Set(watchlist)
 
         var rows: [OverviewPriceRowData] = []
-        var seen: Set<String> = []
+        var seenRowIDs: Set<String> = []
+        var portfolioCoinGeckoIDs: Set<String> = []
 
         for aggregate in sortedAssetAggregates(from: tokens, prices: prices).prefix(max(portfolioLimit, 0)) {
             let coinGeckoId = OverviewWatchlistStore.normalizedID(aggregate.coinGeckoId)
-            let rowID = coinGeckoId ?? aggregate.assetId.uuidString
-            guard !seen.contains(rowID) else {
+            let rowID = aggregate.assetId.uuidString
+            guard !seenRowIDs.contains(rowID) else {
                 continue
             }
-            seen.insert(rowID)
+            seenRowIDs.insert(rowID)
+            if let coinGeckoId {
+                portfolioCoinGeckoIDs.insert(coinGeckoId)
+            }
             rows.append(OverviewPriceRowData(
                 id: rowID,
                 assetId: aggregate.assetId,
@@ -304,8 +308,8 @@ enum OverviewFeature {
                 isWatchlisted: coinGeckoId.map { watchlistSet.contains($0) } ?? false))
         }
 
-        for coinGeckoId in watchlist where !seen.contains(coinGeckoId) {
-            seen.insert(coinGeckoId)
+        for coinGeckoId in watchlist where !portfolioCoinGeckoIDs.contains(coinGeckoId) && !seenRowIDs.contains(coinGeckoId) {
+            seenRowIDs.insert(coinGeckoId)
             if let asset = assetsByCoinGeckoId[coinGeckoId] {
                 rows.append(OverviewPriceRowData(
                     id: coinGeckoId,

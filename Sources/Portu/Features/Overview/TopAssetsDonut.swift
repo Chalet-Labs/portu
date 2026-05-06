@@ -34,7 +34,7 @@ struct TopAssetsDonut: View {
                 modeButton(.category)
                 Spacer()
 
-                Button("See all ->") {
+                Button(TopAssetsDonutText.seeAllButtonTitle) {
                     store.send(.sectionSelected(.allAssets))
                 }
                 .font(.caption.weight(.medium))
@@ -118,6 +118,10 @@ struct TopAssetsDonut: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+enum TopAssetsDonutText {
+    static let seeAllButtonTitle = "See all →"
 }
 
 private enum TopAssetMode {

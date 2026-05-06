@@ -39,7 +39,7 @@ struct OverviewView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                         InspectorPanel(store: store)
-                            .frame(width: PortuTheme.dashboardInspectorWidth + 22)
+                            .frame(width: PortuTheme.dashboardInspectorWidth + OverviewLayout.inspectorRailWidthAdjustment)
                     }
                 } else {
                     compactScrollColumn
@@ -134,6 +134,10 @@ struct OverviewView: View {
                 .dashboardCard(horizontalPadding: 0, verticalPadding: 0)
         }
     }
+}
+
+enum OverviewLayout {
+    static let inspectorRailWidthAdjustment: CGFloat = 22
 }
 
 enum OverviewSyncButtonStyleMetrics {

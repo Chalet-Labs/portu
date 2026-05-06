@@ -142,11 +142,33 @@ struct OverviewFeatureTests {
             portfolioLimit: 1)
 
         let row = try #require(rows.first)
-        #expect(row.id == "bitcoin")
+        #expect(row.id == btc.uuidString)
         #expect(row.coinGeckoId == "bitcoin")
         #expect(row.price == 70000)
         #expect(row.change24h == 0.04)
         #expect(row.isWatchlisted)
+    }
+
+    @Test func `price rows keep distinct portfolio assets with the same coin gecko id`() {
+        let aave = UUID()
+        let bridgedAave = UUID()
+        let tokens = [
+            token(assetId: aave, symbol: "AAVE", coinGeckoId: "aave", amount: 2, usdValue: 100),
+            token(assetId: bridgedAave, symbol: "AAVE.e", coinGeckoId: "AAVE", amount: 1, usdValue: 90)
+        ]
+
+        let rows = OverviewFeature.priceRows(
+            tokens: tokens,
+            assets: [],
+            prices: ["aave": 100],
+            changes24h: ["aave": 0.02],
+            watchlistIDs: ["aave"],
+            portfolioLimit: 10)
+
+        #expect(rows.map(\.id) == [aave.uuidString, bridgedAave.uuidString])
+        #expect(rows.map(\.assetId) == [aave, bridgedAave])
+        #expect(rows.map(\.coinGeckoId) == ["aave", "aave"])
+        #expect(rows.map(\.isWatchlisted) == [true, true])
     }
 
     @Test func `price rows keep orphaned watchlist ids removable`() throws {
@@ -313,6 +335,12 @@ struct OverviewFeatureTests {
     @Test func `summary card empty text distinguishes futures placeholder`() {
         #expect(OverviewSummaryCardText.emptyState(for: "Futures") == "Coming soon")
         #expect(OverviewSummaryCardText.emptyState(for: "Deployed") == "No deployed positions")
+    }
+
+    @Test func `overview labels describe merged rows and named layout constants`() {
+        #expect(PriceWatchlistText.priceHeaderTitle == "Portfolio + Watchlist")
+        #expect(TopAssetsDonutText.seeAllButtonTitle == "See all →")
+        #expect(OverviewLayout.inspectorRailWidthAdjustment == 22)
     }
 
     private func token(

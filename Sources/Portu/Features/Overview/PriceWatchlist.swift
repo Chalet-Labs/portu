@@ -167,7 +167,7 @@ struct PriceWatchlist: View {
 
     private var priceHeader: some View {
         HStack(spacing: 6) {
-            Text("Top Portfolio Assets")
+            Text(PriceWatchlistText.priceHeaderTitle)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("Price")
                 .frame(width: 104, alignment: .trailing)
@@ -195,6 +195,10 @@ struct PriceWatchlist: View {
         watchlistRaw = OverviewWatchlistStore.encode(
             OverviewWatchlistStore.remove(coinGeckoId, from: watchlistIDs))
     }
+}
+
+enum PriceWatchlistText {
+    static let priceHeaderTitle = "Portfolio + Watchlist"
 }
 
 private struct PriceCountdownText: View {
