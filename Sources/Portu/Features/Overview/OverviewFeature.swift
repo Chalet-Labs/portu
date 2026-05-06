@@ -43,6 +43,7 @@ struct OverviewPriceRowData: Equatable, Identifiable {
 
 enum OverviewPriceDisplay {
     static let assetLabelMaxLength = 6
+    private static let priceLocale = Locale(identifier: "en_US_POSIX")
 
     static func assetLabel(_ symbol: String) -> String {
         let trimmed = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -54,21 +55,31 @@ enum OverviewPriceDisplay {
     }
 
     private static func formattedNumber(_ price: Decimal) -> String {
-        let number = NSDecimalNumber(decimal: price)
-        let absoluteValue = abs(number.doubleValue)
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = maximumFractionDigits(for: absoluteValue)
-        return formatter.string(from: number) ?? number.stringValue
+        let number = NSDecimalNumber(decimal: price).doubleValue
+        return number.formatted(.number
+            .locale(priceLocale)
+            .grouping(.automatic)
+            .precision(.fractionLength(0 ... maximumFractionDigits(for: abs(number)))))
     }
 
     private static func maximumFractionDigits(for absoluteValue: Double) -> Int {
         if absoluteValue >= 1000 { return 0 }
         if absoluteValue >= 1 { return 4 }
-        return 5
+        if absoluteValue >= 0.0001 { return 6 }
+        return 8
+    }
+}
+
+enum OverviewPriceCountdown {
+    static func secondsRemaining(
+        lastPriceUpdate: Date?,
+        refreshInterval: TimeInterval,
+        now: Date) -> Int {
+        let fallback = max(0, Int(refreshInterval.rounded(.up)))
+        guard let lastPriceUpdate else { return fallback }
+
+        let nextUpdate = lastPriceUpdate.addingTimeInterval(refreshInterval)
+        return max(0, Int(ceil(nextUpdate.timeIntervalSince(now))))
     }
 }
 
@@ -120,7 +131,7 @@ enum OverviewWatchlistStore {
         return result
     }
 
-    private static func normalize(_ id: String) -> String {
+    static func normalize(_ id: String) -> String {
         id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
@@ -168,7 +179,7 @@ enum OverviewFeature {
             values[token.category, default: 0] += resolvedValue(for: token, prices: prices)
         }
 
-        let inputs = values
+        let sortedValues = values
             .filter { $0.value > 0 }
             .sorted {
                 if $0.value == $1.value {
@@ -176,12 +187,38 @@ enum OverviewFeature {
                 }
                 return $0.value > $1.value
             }
+
+        let visibleCount = max(limit, 0)
+        var inputs = sortedValues
             .prefix(max(limit, 0))
             .map { category, value in
                 SliceInput(id: category.rawValue, label: category.rawValue.capitalized, value: value)
             }
 
-        return makeSlices(from: Array(inputs))
+        let otherValue = sortedValues.dropFirst(visibleCount).reduce(Decimal.zero) { $0 + $1.value }
+        if otherValue > 0 {
+            inputs.append(SliceInput(id: "other", label: "other", value: otherValue))
+        }
+
+        return makeSlices(from: inputs)
+    }
+
+    static func assetCandidatesByCoinGeckoId(
+        from assets: [OverviewAssetCandidate]) -> [String: OverviewAssetCandidate] {
+        var candidates: [String: OverviewAssetCandidate] = [:]
+
+        for asset in assets {
+            let coinGeckoId = OverviewWatchlistStore.normalize(asset.coinGeckoId)
+            guard !coinGeckoId.isEmpty else { continue }
+
+            if let existing = candidates[coinGeckoId] {
+                candidates[coinGeckoId] = preferredAssetCandidate(asset, over: existing) ? asset : existing
+            } else {
+                candidates[coinGeckoId] = asset
+            }
+        }
+
+        return candidates
     }
 
     static func priceRows(
@@ -191,20 +228,24 @@ enum OverviewFeature {
         changes24h: [String: Decimal],
         watchlistIDs: [String],
         portfolioLimit: Int = 10) -> [OverviewPriceRowData] {
+        priceRows(
+            tokens: tokens,
+            assetsByCoinGeckoId: assetCandidatesByCoinGeckoId(from: assets),
+            prices: prices,
+            changes24h: changes24h,
+            watchlistIDs: watchlistIDs,
+            portfolioLimit: portfolioLimit)
+    }
+
+    static func priceRows(
+        tokens: [TokenEntry],
+        assetsByCoinGeckoId: [String: OverviewAssetCandidate],
+        prices: [String: Decimal],
+        changes24h: [String: Decimal],
+        watchlistIDs: [String],
+        portfolioLimit: Int = 10) -> [OverviewPriceRowData] {
         let watchlist = OverviewWatchlistStore.normalizedUniqueIDs(watchlistIDs)
         let watchlistSet = Set(watchlist)
-        let candidatesByCoinGeckoId = Dictionary(
-            grouping: assets,
-            by: { $0.coinGeckoId.lowercased() })
-            .compactMapValues { candidates in
-                candidates.min {
-                    if $0.symbol == $1.symbol {
-                        $0.name < $1.name
-                    } else {
-                        $0.symbol < $1.symbol
-                    }
-                }
-            }
 
         var rows: [OverviewPriceRowData] = []
         var seen: Set<String> = []
@@ -228,7 +269,7 @@ enum OverviewFeature {
         }
 
         for coinGeckoId in watchlist where !seen.contains(coinGeckoId) {
-            guard let asset = candidatesByCoinGeckoId[coinGeckoId] else { continue }
+            guard let asset = assetsByCoinGeckoId[coinGeckoId] else { continue }
             seen.insert(coinGeckoId)
             rows.append(OverviewPriceRowData(
                 id: coinGeckoId,
@@ -247,11 +288,13 @@ enum OverviewFeature {
     static func pricePollingIDs(
         tokens: [TokenEntry],
         watchlistIDs: [String]) -> [String] {
-        var ids = sortedAssetAggregates(from: tokens, prices: [:])
-            .compactMap { $0.coinGeckoId?.lowercased() }
+        var ids = tokens.compactMap { token -> String? in
+            guard token.role.isPositive, token.amount > 0 else { return nil }
+            return token.coinGeckoId
+        }
 
         ids.append(contentsOf: watchlistIDs)
-        return OverviewWatchlistStore.normalizedUniqueIDs(ids)
+        return OverviewWatchlistStore.normalizedUniqueIDs(ids).sorted()
     }
 
     private struct SliceInput {
@@ -302,6 +345,15 @@ enum OverviewFeature {
                 }
                 return $0.value > $1.value
             }
+    }
+
+    private static func preferredAssetCandidate(
+        _ candidate: OverviewAssetCandidate,
+        over existing: OverviewAssetCandidate) -> Bool {
+        if candidate.symbol == existing.symbol {
+            return candidate.name < existing.name
+        }
+        return candidate.symbol < existing.symbol
     }
 
     private static func resolvedValue(

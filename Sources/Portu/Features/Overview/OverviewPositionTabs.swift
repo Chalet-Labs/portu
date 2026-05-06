@@ -86,17 +86,21 @@ struct OverviewPositionTabs: View {
     private var keyChangeTokens: [(PositionToken, Position)] {
         allActiveTokens
             .filter(\.0.role.isPositive)
-            .filter { tokenChange24h($0.0) != 0 }
+            .compactMap { token, position -> TokenChangeCandidate? in
+                let change = tokenChange24h(token)
+                guard change != 0 else { return nil }
+                return TokenChangeCandidate(token: token, position: position, change: change)
+            }
             .sorted {
-                let lhs = abs(tokenChange24h($0.0))
-                let rhs = abs(tokenChange24h($1.0))
+                let lhs = abs($0.change)
+                let rhs = abs($1.change)
                 if lhs == rhs {
-                    return ($0.0.asset?.symbol ?? "") < ($1.0.asset?.symbol ?? "")
+                    return ($0.token.asset?.symbol ?? "") < ($1.token.asset?.symbol ?? "")
                 }
                 return lhs > rhs
             }
             .prefix(20)
-            .map { ($0.0, $0.1) }
+            .map { ($0.token, $0.position) }
     }
 
     private var idleStableTokens: [(PositionToken, Position)] {
@@ -216,6 +220,12 @@ private struct OverviewPositionGroupData: Identifiable {
     let tokens: [PositionToken]
 }
 
+private struct TokenChangeCandidate {
+    let token: PositionToken
+    let position: Position
+    let change: Decimal
+}
+
 private struct OverviewPositionGroupCard: View {
     let group: OverviewPositionGroupData
     let price: (PositionToken) -> Decimal
@@ -293,9 +303,9 @@ private struct OverviewPositionGroupCard: View {
                 .frame(width: 250, alignment: .leading)
             Text("Asset")
                 .frame(width: 90, alignment: .leading)
-            Text("Asset Price (24h)")
+            Text("Price / 24h")
                 .frame(width: 140, alignment: .trailing)
-            Text("Asset Amount (24h)")
+            Text("Amount")
                 .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .font(.system(size: 11))

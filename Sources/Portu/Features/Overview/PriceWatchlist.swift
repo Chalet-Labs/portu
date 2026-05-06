@@ -10,7 +10,6 @@ struct PriceWatchlist: View {
     @Query private var tokens: [PositionToken]
     @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
     @State private var searchText = ""
-    @State private var secondsRemaining = Int(PricePollingSettings.defaultRefreshIntervalSeconds)
 
     private var tokenEntries: [TokenEntry] {
         TokenEntry.fromActiveTokens(tokens)
@@ -20,6 +19,10 @@ struct PriceWatchlist: View {
         OverviewAssetCandidate.fromAssets(assets)
     }
 
+    private var assetCandidatesByCoinGeckoId: [String: OverviewAssetCandidate] {
+        OverviewFeature.assetCandidatesByCoinGeckoId(from: assetCandidates)
+    }
+
     private var watchlistIDs: [String] {
         OverviewWatchlistStore.decode(watchlistRaw)
     }
@@ -27,7 +30,7 @@ struct PriceWatchlist: View {
     private var rows: [OverviewPriceRowData] {
         OverviewFeature.priceRows(
             tokens: tokenEntries,
-            assets: assetCandidates,
+            assetsByCoinGeckoId: assetCandidatesByCoinGeckoId,
             prices: appState.prices,
             changes24h: appState.priceChanges24h,
             watchlistIDs: watchlistIDs)
@@ -40,7 +43,9 @@ struct PriceWatchlist: View {
 
         return assetCandidates
             .filter { asset in
-                !existing.contains(asset.coinGeckoId)
+                let coinGeckoId = OverviewWatchlistStore.normalize(asset.coinGeckoId)
+                return !existing.contains(coinGeckoId)
+                    && !coinGeckoId.isEmpty
                     && (asset.symbol.localizedCaseInsensitiveContains(query)
                         || asset.name.localizedCaseInsensitiveContains(query)
                         || asset.coinGeckoId.localizedCaseInsensitiveContains(query))
@@ -67,10 +72,9 @@ struct PriceWatchlist: View {
                 Spacer()
             }
 
-            Text("Updating in \(secondsRemaining)s")
-                .font(.caption)
-                .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                .lineLimit(1)
+            PriceCountdownText(
+                lastPriceUpdate: appState.lastPriceUpdate,
+                refreshInterval: PricePollingSettings.refreshIntervalSeconds())
 
             watchlistSearchField
 
@@ -99,19 +103,6 @@ struct PriceWatchlist: View {
                             .fill(PortuTheme.dashboardStroke.opacity(0.75))
                             .frame(height: 1)
                     }
-                }
-            }
-        }
-        .task(id: appState.lastPriceUpdate) {
-            resetCountdown()
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(for: .seconds(1))
-                } catch {
-                    return
-                }
-                if secondsRemaining > 0 {
-                    secondsRemaining -= 1
                 }
             }
         }
@@ -221,9 +212,26 @@ struct PriceWatchlist: View {
         watchlistRaw = OverviewWatchlistStore.encode(
             OverviewWatchlistStore.remove(coinGeckoId, from: watchlistIDs))
     }
+}
 
-    private func resetCountdown() {
-        secondsRemaining = Int(PricePollingSettings.refreshIntervalSeconds())
+private struct PriceCountdownText: View {
+    let lastPriceUpdate: Date?
+    let refreshInterval: TimeInterval
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text("Updating in \(secondsRemaining(at: context.date))s")
+                .font(.caption)
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                .lineLimit(1)
+        }
+    }
+
+    private func secondsRemaining(at date: Date) -> Int {
+        OverviewPriceCountdown.secondsRemaining(
+            lastPriceUpdate: lastPriceUpdate,
+            refreshInterval: refreshInterval,
+            now: date)
     }
 }
 

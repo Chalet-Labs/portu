@@ -44,6 +44,25 @@ struct OverviewFeatureTests {
         #expect(slices.first?.displayPercent == 67)
     }
 
+    @Test func `category slices preserve omitted values in other bucket`() throws {
+        let tokens = [
+            token(symbol: "MAJOR", category: .major, amount: 1, usdValue: 80),
+            token(symbol: "STABLE", category: .stablecoin, amount: 1, usdValue: 70),
+            token(symbol: "DEFI", category: .defi, amount: 1, usdValue: 60),
+            token(symbol: "MEME", category: .meme, amount: 1, usdValue: 50),
+            token(symbol: "PRIV", category: .privacy, amount: 1, usdValue: 40),
+            token(symbol: "FIAT", category: .fiat, amount: 1, usdValue: 30),
+            token(symbol: "GOV", category: .governance, amount: 1, usdValue: 20),
+            token(symbol: "OTHER", category: .other, amount: 1, usdValue: 10)
+        ]
+
+        let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
+
+        #expect(slices.map(\.label) == ["Major", "Stablecoin", "Defi", "Meme", "Privacy", "Fiat", "other"])
+        #expect(try #require(slices.last).value == 30)
+        #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
+    }
+
     @Test func `price rows merge top portfolio assets with watchlist ids`() {
         let btc = UUID()
         let eth = UUID()
@@ -95,14 +114,51 @@ struct OverviewFeatureTests {
         #expect(row.coinGeckoId == nil)
     }
 
+    @Test func `asset candidates are pre grouped by normalized coin gecko id`() throws {
+        let preferred = asset(symbol: "AAVE", coinGeckoId: " aave ")
+        let later = asset(symbol: "ZAAVE", coinGeckoId: "AAVE")
+
+        let grouped = OverviewFeature.assetCandidatesByCoinGeckoId(from: [later, preferred])
+
+        #expect(grouped.keys.sorted() == ["aave"])
+        #expect(try #require(grouped["aave"]) == preferred)
+    }
+
     @Test func `price display uses compact dollar prefix and trims asset labels`() throws {
         #expect(OverviewPriceDisplay.assetLabel("wrappedsteth") == "wrappe")
         #expect(OverviewPriceDisplay.assetLabel("BTC") == "BTC")
 
-        let price = try OverviewPriceDisplay.price(#require(Decimal(string: "2866.478")))
+        let price = try OverviewPriceDisplay.price(#require(Decimal(
+            string: "2866.478",
+            locale: Locale(identifier: "en_US_POSIX"))))
         #expect(price.hasPrefix("$ "))
         #expect(!price.contains("US$"))
         #expect(!price.contains("US $"))
+    }
+
+    @Test func `price display keeps precision for very small assets`() throws {
+        let price = try OverviewPriceDisplay.price(#require(Decimal(
+            string: "0.00000012",
+            locale: Locale(identifier: "en_US_POSIX"))))
+
+        #expect(price == "$ 0.00000012")
+    }
+
+    @Test func `price countdown derives remaining seconds from last update`() {
+        let lastUpdate = Date(timeIntervalSince1970: 100)
+
+        #expect(OverviewPriceCountdown.secondsRemaining(
+            lastPriceUpdate: lastUpdate,
+            refreshInterval: 60,
+            now: Date(timeIntervalSince1970: 112.2)) == 48)
+        #expect(OverviewPriceCountdown.secondsRemaining(
+            lastPriceUpdate: lastUpdate,
+            refreshInterval: 60,
+            now: Date(timeIntervalSince1970: 170)) == 0)
+        #expect(OverviewPriceCountdown.secondsRemaining(
+            lastPriceUpdate: nil,
+            refreshInterval: 60,
+            now: lastUpdate) == 60)
     }
 
     @Test func `overview sync button uses compact reference metrics`() {
@@ -126,18 +182,19 @@ struct OverviewFeatureTests {
         #expect(removed == ["ethereum"])
     }
 
-    @Test func `price polling ids combine active portfolio and watchlist ids`() {
+    @Test func `price polling ids combine active portfolio and watchlist ids in stable order`() {
         let tokens = [
             token(symbol: "ETH", coinGeckoId: "ethereum", amount: 1, usdValue: 3000),
             token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 1, usdValue: 70000),
-            token(symbol: "ETH", coinGeckoId: "ethereum", amount: 2, usdValue: 6000)
+            token(symbol: "ETH", coinGeckoId: "ethereum", amount: 2, usdValue: 6000),
+            token(symbol: "ZERO", coinGeckoId: "zero-token", amount: 10, usdValue: 0)
         ]
 
         let ids = OverviewFeature.pricePollingIDs(
             tokens: tokens,
-            watchlistIDs: ["solana", "bitcoin", "monero"])
+            watchlistIDs: ["solana", " Bitcoin ", "monero"])
 
-        #expect(ids == ["bitcoin", "ethereum", "solana", "monero"])
+        #expect(ids == ["bitcoin", "ethereum", "monero", "solana", "zero-token"])
     }
 
     private func token(
