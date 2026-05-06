@@ -37,27 +37,10 @@ struct PriceWatchlist: View {
     }
 
     private var matchingAssets: [OverviewAssetCandidate] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return [] }
-        let existing = Set(watchlistIDs)
-
-        return assetCandidates
-            .filter { asset in
-                let coinGeckoId = OverviewWatchlistStore.normalize(asset.coinGeckoId)
-                return !existing.contains(coinGeckoId)
-                    && !coinGeckoId.isEmpty
-                    && (asset.symbol.localizedCaseInsensitiveContains(query)
-                        || asset.name.localizedCaseInsensitiveContains(query)
-                        || asset.coinGeckoId.localizedCaseInsensitiveContains(query))
-            }
-            .sorted {
-                if $0.symbol == $1.symbol {
-                    return $0.name < $1.name
-                }
-                return $0.symbol < $1.symbol
-            }
-            .prefix(5)
-            .map(\.self)
+        OverviewFeature.watchlistSuggestions(
+            assets: assetCandidates,
+            watchlistIDs: watchlistIDs,
+            query: searchText)
     }
 
     var body: some View {

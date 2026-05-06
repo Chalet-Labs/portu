@@ -74,7 +74,7 @@ struct OverviewSummaryCards: View {
                 .lineLimit(1)
 
             if items.isEmpty {
-                Text("No deployed positions")
+                Text(OverviewSummaryCardText.emptyState(for: title))
                     .font(.caption)
                     .foregroundStyle(PortuTheme.dashboardTertiaryText)
                     .lineLimit(1)
@@ -99,5 +99,11 @@ struct OverviewSummaryCards: View {
         }
         .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
         .dashboardCard()
+    }
+}
+
+enum OverviewSummaryCardText {
+    static func emptyState(for title: String) -> String {
+        title == "Futures" ? "Coming soon" : "No deployed positions"
     }
 }

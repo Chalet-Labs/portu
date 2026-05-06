@@ -114,14 +114,11 @@ struct OverviewPositionTabs: View {
     }
 
     private func tokenChange24h(_ token: PositionToken) -> Decimal {
-        guard
-            let coinGeckoId = token.asset?.coinGeckoId,
-            let price = appState.prices[coinGeckoId],
-            let changePercent = appState.priceChanges24h[coinGeckoId]
-        else {
-            return 0
-        }
-        return token.amount * price * changePercent
+        OverviewPositionPricing.change24h(
+            coinGeckoId: token.asset?.coinGeckoId,
+            amount: token.amount,
+            prices: appState.prices,
+            changes24h: appState.priceChanges24h)
     }
 
     // MARK: - Position cards
@@ -204,13 +201,19 @@ struct OverviewPositionTabs: View {
     // MARK: - Helpers
 
     private func price(_ token: PositionToken) -> Decimal {
-        token.asset?.coinGeckoId.flatMap { appState.prices[$0] }
-            ?? (token.amount > 0 ? token.usdValue / token.amount : 0)
+        OverviewPositionPricing.price(
+            coinGeckoId: token.asset?.coinGeckoId,
+            amount: token.amount,
+            usdValue: token.usdValue,
+            prices: appState.prices)
     }
 
     private func tokenValue(_ token: PositionToken) -> Decimal {
-        token.asset?.coinGeckoId.flatMap { appState.prices[$0] }.map { token.amount * $0 }
-            ?? token.usdValue
+        OverviewPositionPricing.tokenValue(
+            coinGeckoId: token.asset?.coinGeckoId,
+            amount: token.amount,
+            usdValue: token.usdValue,
+            prices: appState.prices)
     }
 }
 
@@ -359,7 +362,7 @@ private struct OverviewPositionTokenRow: View {
 
                 Text(change24h, format: .currency(code: "USD").precision(.fractionLength(0)))
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(change24h >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
+                    .foregroundStyle(OverviewPositionChangeTone.tone(for: token.role, change: change24h).color)
                     .lineLimit(1)
             }
             .frame(width: 140, alignment: .trailing)

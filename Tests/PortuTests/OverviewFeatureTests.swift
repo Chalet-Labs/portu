@@ -25,9 +25,24 @@ struct OverviewFeatureTests {
             limit: 3)
 
         #expect(slices.map(\.label) == ["BTC", "ETH", "SOL", "other"])
+        #expect(slices.map(\.id) == [btc.uuidString, eth.uuidString, sol.uuidString, "asset-residual"])
         #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
         #expect(try #require(slices.first).value == 105_000)
         #expect(try #require(slices.last).value == 7000)
+    }
+
+    @Test func `top asset slices keep asset stable ids when coin gecko ids collide`() {
+        let aave = UUID()
+        let bridgedAave = UUID()
+        let tokens = [
+            token(assetId: aave, symbol: "AAVE", coinGeckoId: "aave", amount: 1, usdValue: 100),
+            token(assetId: bridgedAave, symbol: "AAVE.e", coinGeckoId: "aave", amount: 1, usdValue: 90)
+        ]
+
+        let slices = OverviewFeature.topAssetSlices(from: tokens, prices: [:], limit: 2)
+
+        #expect(slices.map(\.id) == [aave.uuidString, bridgedAave.uuidString])
+        #expect(Set(slices.map(\.id)).count == slices.count)
     }
 
     @Test func `category slices round display percentages to exactly one hundred`() {
@@ -63,6 +78,25 @@ struct OverviewFeatureTests {
         #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
     }
 
+    @Test func `category residual bucket does not collide with visible other category`() {
+        let tokens = [
+            token(symbol: "OTHER", category: .other, amount: 1, usdValue: 90),
+            token(symbol: "MAJOR", category: .major, amount: 1, usdValue: 80),
+            token(symbol: "STABLE", category: .stablecoin, amount: 1, usdValue: 70),
+            token(symbol: "DEFI", category: .defi, amount: 1, usdValue: 60),
+            token(symbol: "MEME", category: .meme, amount: 1, usdValue: 50),
+            token(symbol: "PRIV", category: .privacy, amount: 1, usdValue: 40),
+            token(symbol: "GOV", category: .governance, amount: 1, usdValue: 30)
+        ]
+
+        let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
+
+        #expect(slices.map(\.id).contains("other"))
+        #expect(slices.map(\.id).contains("category-residual"))
+        #expect(Set(slices.map(\.id)).count == slices.count)
+        #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
+    }
+
     @Test func `price rows merge top portfolio assets with watchlist ids`() {
         let btc = UUID()
         let eth = UUID()
@@ -91,6 +125,47 @@ struct OverviewFeatureTests {
         #expect(rows[0].isWatchlisted)
         #expect(!rows[1].isWatchlisted)
         #expect(rows[2].change24h == 0.02)
+    }
+
+    @Test func `price rows normalize portfolio coin gecko ids for lookups and watchlist state`() throws {
+        let btc = UUID()
+        let tokens = [
+            token(assetId: btc, symbol: "BTC", coinGeckoId: " Bitcoin ", amount: 0.5, usdValue: 10)
+        ]
+
+        let rows = OverviewFeature.priceRows(
+            tokens: tokens,
+            assets: [],
+            prices: ["bitcoin": 70000],
+            changes24h: ["bitcoin": 0.04],
+            watchlistIDs: ["bitcoin"],
+            portfolioLimit: 1)
+
+        let row = try #require(rows.first)
+        #expect(row.id == "bitcoin")
+        #expect(row.coinGeckoId == "bitcoin")
+        #expect(row.price == 70000)
+        #expect(row.change24h == 0.04)
+        #expect(row.isWatchlisted)
+    }
+
+    @Test func `price rows keep orphaned watchlist ids removable`() throws {
+        let rows = OverviewFeature.priceRows(
+            tokens: [],
+            assets: [],
+            prices: ["ghost-token": 1.23],
+            changes24h: ["ghost-token": -0.05],
+            watchlistIDs: ["ghost-token"],
+            portfolioLimit: 10)
+
+        let row = try #require(rows.first)
+        #expect(row.id == "ghost-token")
+        #expect(row.assetId == nil)
+        #expect(row.symbol == "ghost-token")
+        #expect(row.coinGeckoId == "ghost-token")
+        #expect(row.price == 1.23)
+        #expect(row.change24h == -0.05)
+        #expect(row.isWatchlisted)
     }
 
     @Test func `price rows include top portfolio assets without coin gecko ids`() throws {
@@ -122,6 +197,19 @@ struct OverviewFeatureTests {
 
         #expect(grouped.keys.sorted() == ["aave"])
         #expect(try #require(grouped["aave"]) == preferred)
+    }
+
+    @Test func `watchlist suggestions are deduplicated by normalized coin gecko id`() {
+        let preferred = asset(symbol: "AAVE", coinGeckoId: " aave ")
+        let duplicate = asset(symbol: "ZAAVE", coinGeckoId: "AAVE")
+        let sol = asset(symbol: "SOL", coinGeckoId: "solana")
+
+        let suggestions = OverviewFeature.watchlistSuggestions(
+            assets: [duplicate, sol, preferred],
+            watchlistIDs: ["solana"],
+            query: "aave")
+
+        #expect(suggestions == [preferred])
     }
 
     @Test func `price display uses compact dollar prefix and trims asset labels`() throws {
@@ -195,6 +283,36 @@ struct OverviewFeatureTests {
             watchlistIDs: ["solana", " Bitcoin ", "monero"])
 
         #expect(ids == ["bitcoin", "ethereum", "monero", "solana", "zero-token"])
+    }
+
+    @Test func `position pricing normalizes coin gecko ids`() {
+        #expect(OverviewPositionPricing.price(
+            coinGeckoId: " Ethereum ",
+            amount: 2,
+            usdValue: 10,
+            prices: ["ethereum": 3000]) == 3000)
+        #expect(OverviewPositionPricing.tokenValue(
+            coinGeckoId: " Ethereum ",
+            amount: 2,
+            usdValue: 10,
+            prices: ["ethereum": 3000]) == 6000)
+        #expect(OverviewPositionPricing.change24h(
+            coinGeckoId: " Ethereum ",
+            amount: 2,
+            prices: ["ethereum": 3000],
+            changes24h: ["ethereum": 0.05]) == 300)
+    }
+
+    @Test func `borrow change tone treats increasing liabilities as unfavorable`() {
+        #expect(OverviewPositionChangeTone.tone(for: .borrow, change: 10) == .unfavorable)
+        #expect(OverviewPositionChangeTone.tone(for: .borrow, change: -10) == .favorable)
+        #expect(OverviewPositionChangeTone.tone(for: .balance, change: 10) == .favorable)
+        #expect(OverviewPositionChangeTone.tone(for: .balance, change: -10) == .unfavorable)
+    }
+
+    @Test func `summary card empty text distinguishes futures placeholder`() {
+        #expect(OverviewSummaryCardText.emptyState(for: "Futures") == "Coming soon")
+        #expect(OverviewSummaryCardText.emptyState(for: "Deployed") == "No deployed positions")
     }
 
     private func token(

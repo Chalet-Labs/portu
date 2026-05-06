@@ -131,12 +131,21 @@ enum OverviewWatchlistStore {
         return result
     }
 
+    static func normalizedID(_ id: String?) -> String? {
+        guard let id else { return nil }
+        let normalized = normalize(id)
+        return normalized.isEmpty ? nil : normalized
+    }
+
     static func normalize(_ id: String) -> String {
         id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
 
 enum OverviewFeature {
+    private static let assetResidualSliceID = "asset-residual"
+    private static let categoryResidualSliceID = "category-residual"
+
     private struct AssetAggregate {
         let assetId: UUID
         var symbol: String
@@ -159,12 +168,12 @@ enum OverviewFeature {
         let aggregates = sortedAssetAggregates(from: tokens, prices: prices)
         let visibleCount = max(limit, 0)
         var sliceInputs = aggregates.prefix(visibleCount).map {
-            SliceInput(id: $0.coinGeckoId ?? $0.assetId.uuidString, label: $0.symbol, value: $0.value)
+            SliceInput(id: $0.assetId.uuidString, label: $0.symbol, value: $0.value)
         }
 
         let otherValue = aggregates.dropFirst(visibleCount).reduce(Decimal.zero) { $0 + $1.value }
         if otherValue > 0 {
-            sliceInputs.append(SliceInput(id: "other", label: "other", value: otherValue))
+            sliceInputs.append(SliceInput(id: assetResidualSliceID, label: "other", value: otherValue))
         }
 
         return makeSlices(from: sliceInputs)
@@ -190,14 +199,14 @@ enum OverviewFeature {
 
         let visibleCount = max(limit, 0)
         var inputs = sortedValues
-            .prefix(max(limit, 0))
+            .prefix(visibleCount)
             .map { category, value in
                 SliceInput(id: category.rawValue, label: category.rawValue.capitalized, value: value)
             }
 
         let otherValue = sortedValues.dropFirst(visibleCount).reduce(Decimal.zero) { $0 + $1.value }
         if otherValue > 0 {
-            inputs.append(SliceInput(id: "other", label: "other", value: otherValue))
+            inputs.append(SliceInput(id: categoryResidualSliceID, label: "other", value: otherValue))
         }
 
         return makeSlices(from: inputs)
@@ -208,8 +217,7 @@ enum OverviewFeature {
         var candidates: [String: OverviewAssetCandidate] = [:]
 
         for asset in assets {
-            let coinGeckoId = OverviewWatchlistStore.normalize(asset.coinGeckoId)
-            guard !coinGeckoId.isEmpty else { continue }
+            guard let coinGeckoId = OverviewWatchlistStore.normalizedID(asset.coinGeckoId) else { continue }
 
             if let existing = candidates[coinGeckoId] {
                 candidates[coinGeckoId] = preferredAssetCandidate(asset, over: existing) ? asset : existing
@@ -219,6 +227,34 @@ enum OverviewFeature {
         }
 
         return candidates
+    }
+
+    static func watchlistSuggestions(
+        assets: [OverviewAssetCandidate],
+        watchlistIDs: [String],
+        query: String,
+        limit: Int = 5) -> [OverviewAssetCandidate] {
+        let searchQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !searchQuery.isEmpty else { return [] }
+
+        let existing = Set(OverviewWatchlistStore.normalizedUniqueIDs(watchlistIDs))
+        return assetCandidatesByCoinGeckoId(from: assets)
+            .filter { coinGeckoId, asset in
+                !existing.contains(coinGeckoId)
+                    && (asset.symbol.localizedCaseInsensitiveContains(searchQuery)
+                        || asset.name.localizedCaseInsensitiveContains(searchQuery)
+                        || coinGeckoId.localizedCaseInsensitiveContains(searchQuery)
+                        || asset.coinGeckoId.localizedCaseInsensitiveContains(searchQuery))
+            }
+            .map(\.value)
+            .sorted {
+                if $0.symbol == $1.symbol {
+                    return $0.name < $1.name
+                }
+                return $0.symbol < $1.symbol
+            }
+            .prefix(max(limit, 0))
+            .map(\.self)
     }
 
     static func priceRows(
@@ -251,12 +287,12 @@ enum OverviewFeature {
         var seen: Set<String> = []
 
         for aggregate in sortedAssetAggregates(from: tokens, prices: prices).prefix(max(portfolioLimit, 0)) {
-            let rowID = aggregate.coinGeckoId?.lowercased() ?? aggregate.assetId.uuidString
+            let coinGeckoId = OverviewWatchlistStore.normalizedID(aggregate.coinGeckoId)
+            let rowID = coinGeckoId ?? aggregate.assetId.uuidString
             guard !seen.contains(rowID) else {
                 continue
             }
             seen.insert(rowID)
-            let coinGeckoId = aggregate.coinGeckoId?.lowercased()
             rows.append(OverviewPriceRowData(
                 id: rowID,
                 assetId: aggregate.assetId,
@@ -269,17 +305,28 @@ enum OverviewFeature {
         }
 
         for coinGeckoId in watchlist where !seen.contains(coinGeckoId) {
-            guard let asset = assetsByCoinGeckoId[coinGeckoId] else { continue }
             seen.insert(coinGeckoId)
-            rows.append(OverviewPriceRowData(
-                id: coinGeckoId,
-                assetId: asset.id,
-                symbol: asset.symbol,
-                name: asset.name,
-                coinGeckoId: coinGeckoId,
-                price: prices[coinGeckoId],
-                change24h: changes24h[coinGeckoId],
-                isWatchlisted: true))
+            if let asset = assetsByCoinGeckoId[coinGeckoId] {
+                rows.append(OverviewPriceRowData(
+                    id: coinGeckoId,
+                    assetId: asset.id,
+                    symbol: asset.symbol,
+                    name: asset.name,
+                    coinGeckoId: coinGeckoId,
+                    price: prices[coinGeckoId],
+                    change24h: changes24h[coinGeckoId],
+                    isWatchlisted: true))
+            } else {
+                rows.append(OverviewPriceRowData(
+                    id: coinGeckoId,
+                    assetId: nil,
+                    symbol: coinGeckoId,
+                    name: coinGeckoId,
+                    coinGeckoId: coinGeckoId,
+                    price: prices[coinGeckoId],
+                    change24h: changes24h[coinGeckoId],
+                    isWatchlisted: true))
+            }
         }
 
         return rows
@@ -326,10 +373,10 @@ enum OverviewFeature {
                 symbol: token.symbol,
                 name: token.name,
                 category: token.category,
-                coinGeckoId: token.coinGeckoId,
+                coinGeckoId: OverviewWatchlistStore.normalizedID(token.coinGeckoId),
                 value: 0,
                 amount: 0)
-            aggregate.coinGeckoId = aggregate.coinGeckoId ?? token.coinGeckoId
+            aggregate.coinGeckoId = aggregate.coinGeckoId ?? OverviewWatchlistStore.normalizedID(token.coinGeckoId)
             aggregate.value += resolvedValue(for: token, prices: prices)
             if token.amount > 0 {
                 aggregate.amount += token.amount
@@ -341,7 +388,17 @@ enum OverviewFeature {
             .filter { $0.value > 0 }
             .sorted {
                 if $0.value == $1.value {
-                    return $0.symbol.localizedStandardCompare($1.symbol) == .orderedAscending
+                    let symbolOrder = $0.symbol.localizedStandardCompare($1.symbol)
+                    if symbolOrder != .orderedSame {
+                        return symbolOrder == .orderedAscending
+                    }
+
+                    let nameOrder = $0.name.localizedStandardCompare($1.name)
+                    if nameOrder != .orderedSame {
+                        return nameOrder == .orderedAscending
+                    }
+
+                    return $0.assetId.uuidString < $1.assetId.uuidString
                 }
                 return $0.value > $1.value
             }
@@ -359,7 +416,7 @@ enum OverviewFeature {
     private static func resolvedValue(
         for token: TokenEntry,
         prices: [String: Decimal]) -> Decimal {
-        if let coinGeckoId = token.coinGeckoId?.lowercased(), let price = prices[coinGeckoId] {
+        if let coinGeckoId = OverviewWatchlistStore.normalizedID(token.coinGeckoId), let price = prices[coinGeckoId] {
             return token.amount * price
         }
         return token.usdValue
