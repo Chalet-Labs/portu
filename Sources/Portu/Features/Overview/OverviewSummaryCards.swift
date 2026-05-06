@@ -30,7 +30,7 @@ struct OverviewSummaryCards: View {
         return [
             ("Stablecoins & Fiat", stablesFiat),
             ("Majors", majors),
-            ("Tokens & Memes", tokens)
+            ("Tokens & Memecoins", tokens)
         ]
     }
 
@@ -71,30 +71,39 @@ struct OverviewSummaryCards: View {
             Text(title)
                 .font(DashboardStyle.sectionTitleFont)
                 .foregroundStyle(PortuTheme.dashboardText)
-            let total = items.reduce(Decimal.zero) { $0 + $1.1 }
-            Text(total, format: .currency(code: "USD"))
-                .font(.system(size: 18, weight: .semibold, design: .monospaced))
-                .foregroundStyle(PortuTheme.dashboardText)
+                .lineLimit(1)
 
             if items.isEmpty {
-                Text("Coming soon")
+                Text(OverviewSummaryCardText.emptyState(for: title))
                     .font(.caption)
                     .foregroundStyle(PortuTheme.dashboardTertiaryText)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             } else {
                 ForEach(items, id: \.0) { label, value in
-                    HStack {
+                    HStack(spacing: 8) {
                         Text(label)
                             .font(.caption)
                             .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         Spacer()
                         Text(value, format: .currency(code: "USD"))
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(PortuTheme.dashboardText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
         .dashboardCard()
+    }
+}
+
+enum OverviewSummaryCardText {
+    static func emptyState(for title: String) -> String {
+        title == "Futures" ? "Coming soon" : "No deployed positions"
     }
 }

@@ -123,7 +123,7 @@ struct AppStateBridgeTests {
         #expect(appState.priceChanges24h == ["bitcoin": 2.5])
     }
 
-    @Test func `bridge propagates sync status changes`() async {
+    @Test func `bridge propagates sync status changes`() async throws {
         let syncCompleted = AsyncStream<Void>.makeStream()
         let store = Store(initialState: AppFeature.State()) {
             AppFeature()
@@ -144,18 +144,25 @@ struct AppStateBridgeTests {
 
         // Start sync — store status changes to .syncing
         store.send(.syncTapped)
-        await Task.yield()
 
         // Continuous observation should propagate this
-        #expect(appState.syncStatus == .syncing(progress: 0))
+        try await waitForSyncStatus(.syncing(progress: 0), in: appState)
 
         // Clean up: complete the sync and wait for the in-flight effect
         syncCompleted.continuation.finish()
 
-        for _ in 0 ..< 100 where appState.syncStatus != .idle {
-            await Task.yield()
+        try await waitForSyncStatus(.idle, in: appState)
+    }
+
+    private func waitForSyncStatus(
+        _ expectedStatus: SyncStatus,
+        in appState: AppState,
+        timeout: Duration = .seconds(2)) async throws {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while appState.syncStatus != expectedStatus, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
         }
 
-        #expect(appState.syncStatus == .idle)
+        #expect(appState.syncStatus == expectedStatus)
     }
 }

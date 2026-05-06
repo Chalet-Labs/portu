@@ -11,110 +11,80 @@ struct TopAssetsDonut: View {
     @Environment(AppState.self) private var appState
     @Query private var tokens: [PositionToken]
 
-    @State private var groupByCategory = true
+    @State private var selectedMode: TopAssetMode = .assets
 
     /// Only tokens from active accounts
-    private var activeTokens: [PositionToken] {
-        tokens.filter { $0.position?.account?.isActive == true }
+    private var tokenEntries: [TokenEntry] {
+        TokenEntry.fromActiveTokens(tokens)
     }
 
-    private struct SliceData: Identifiable {
-        let id = UUID()
-        let label: String
-        let value: Decimal
-        let color: Color
-    }
-
-    private var slices: [SliceData] {
-        if groupByCategory {
-            var byCategory: [AssetCategory: Decimal] = [:]
-            for token in activeTokens where token.role.isPositive {
-                byCategory[token.asset?.category ?? .other, default: 0] += tokenUSDValue(token)
-            }
-            return buildSlices(from: byCategory) { $0.rawValue.capitalized }
-        } else {
-            var byAsset: [String: Decimal] = [:]
-            for token in activeTokens where token.role.isPositive {
-                byAsset[token.asset?.symbol ?? "???", default: 0] += tokenUSDValue(token)
-            }
-            return buildSlices(from: byAsset) { $0 }
+    private var slices: [OverviewAssetSlice] {
+        switch selectedMode {
+        case .assets:
+            OverviewFeature.topAssetSlices(from: tokenEntries, prices: appState.prices, limit: 5)
+        case .category:
+            OverviewFeature.categorySlices(from: tokenEntries, prices: appState.prices, limit: 6)
         }
     }
 
-    private func buildSlices<K: Hashable>(
-        from aggregated: [K: Decimal],
-        label: (K) -> String) -> [SliceData] {
-        aggregated
-            .sorted { $0.value > $1.value }
-            .prefix(8)
-            .enumerated()
-            .map { SliceData(
-                label: label($0.element.key),
-                value: $0.element.value,
-                color: chartColor(index: $0.offset)) }
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Top Assets")
-                    .font(DashboardStyle.sectionTitleFont)
-                    .foregroundStyle(PortuTheme.dashboardText)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline, spacing: 18) {
+                modeButton(.assets)
+                modeButton(.category)
                 Spacer()
-                Picker("Group", selection: $groupByCategory) {
-                    Text("Category").tag(true)
-                    Text("Asset").tag(false)
+
+                Button(TopAssetsDonutText.seeAllButtonTitle) {
+                    store.send(.sectionSelected(.allAssets))
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 136)
-                .dashboardControl()
+                .font(.caption.weight(.medium))
+                .foregroundStyle(PortuTheme.dashboardGold)
+                .lineLimit(1)
+                .buttonStyle(.plain)
             }
 
             if slices.isEmpty {
                 Text("No data")
                     .font(.caption)
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, minHeight: 180, alignment: .center)
             } else {
-                Chart(slices) { slice in
-                    SectorMark(
-                        angle: .value("Value", slice.value),
-                        innerRadius: .ratio(0.5),
-                        angularInset: 1)
-                        .foregroundStyle(slice.color)
-                        .annotation(position: .overlay) {
-                            Text(slice.label)
-                                .font(.caption2)
-                                .foregroundStyle(PortuTheme.dashboardText)
-                        }
-                }
-                .frame(height: 168)
-
-                // Legend
-                ForEach(slices) { slice in
-                    HStack(spacing: 6) {
-                        Circle().fill(slice.color).frame(width: 8, height: 8)
-                        Text(slice.label)
-                            .font(.caption)
-                            .foregroundStyle(PortuTheme.dashboardText)
-                        Spacer()
-                        Text(slice.value, format: .currency(code: "USD"))
-                            .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                HStack(alignment: .center, spacing: 16) {
+                    Chart(slices) { slice in
+                        SectorMark(
+                            angle: .value("Value", slice.value),
+                            innerRadius: .ratio(0.58),
+                            angularInset: 1.4)
+                            .foregroundStyle(chartColor(index: slice.colorIndex))
                     }
+                    .chartLegend(.hidden)
+                    .frame(width: 162, height: 162)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(slices) { slice in
+                            HStack(spacing: 7) {
+                                Circle()
+                                    .fill(chartColor(index: slice.colorIndex))
+                                    .frame(width: 7, height: 7)
+
+                                Text(slice.label)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(PortuTheme.dashboardText)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+
+                                Text("\(slice.displayPercent)%")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-
-            Button("See all \u{2192}") {
-                store.send(.sectionSelected(.allAssets))
-            }
-            .font(.caption)
-            .foregroundStyle(PortuTheme.dashboardGold)
-            .buttonStyle(.plain)
         }
-    }
-
-    private func tokenUSDValue(_ token: PositionToken) -> Decimal {
-        token.resolvedUSDValue(prices: appState.prices)
     }
 
     private func chartColor(index: Int) -> Color {
@@ -129,5 +99,39 @@ struct TopAssetsDonut: View {
             Color(red: 0.650, green: 0.450, blue: 0.320)
         ]
         return colors[index % colors.count]
+    }
+
+    private func modeButton(_ mode: TopAssetMode) -> some View {
+        Button {
+            selectedMode = mode
+        } label: {
+            Text(mode.title)
+                .font(.system(size: 14, weight: selectedMode == mode ? .semibold : .regular))
+                .foregroundStyle(selectedMode == mode ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
+                .lineLimit(1)
+                .padding(.bottom, 4)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(selectedMode == mode ? PortuTheme.dashboardGold : .clear)
+                        .frame(height: 1)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+enum TopAssetsDonutText {
+    static let seeAllButtonTitle = "See all →"
+}
+
+private enum TopAssetMode {
+    case assets
+    case category
+
+    var title: String {
+        switch self {
+        case .assets: "Top Assets"
+        case .category: "By Category"
+        }
     }
 }
