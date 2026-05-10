@@ -40,18 +40,11 @@ struct ExposureView: View {
     }
 
     var body: some View {
-        let entries = tokenEntries
-        let overrides = overrideSnapshots
-        let settings = dashboardSettings
-        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: entries,
+        let data = ExposureFeature.computeDashboardData(
+            tokens: tokenEntries,
             prices: store.prices,
-            overrides: overrides,
-            settings: settings)
-        let categoryRows = ExposureFeature.computeCategoryExposure(tokens: eligible, prices: store.prices)
-        let assetRows = ExposureFeature.computeAssetExposure(tokens: eligible, prices: store.prices)
-        let summary = ExposureFeature.computeSummary(from: categoryRows)
-        let pollingIDs = ExposureFeature.pricePollingIDs(tokens: entries, overrides: overrides)
+            overrides: overrideSnapshots,
+            settings: dashboardSettings)
 
         return GeometryReader { proxy in
             let isCompact = proxy.size.width < ExposureLayout.compactWidth
@@ -60,22 +53,22 @@ struct ExposureView: View {
                 VStack(alignment: .leading, spacing: ExposureLayout.sectionSpacing) {
                     pageHeader
 
-                    ExposureSummaryGrid(summary: summary, isCompact: isCompact)
+                    ExposureSummaryGrid(summary: data.summary, isCompact: isCompact)
 
-                    ExposureCategoryTable(rows: categoryRows)
+                    ExposureCategoryTable(rows: data.categoryRows)
 
-                    ExposureAssetTable(rows: assetRows)
+                    ExposureAssetTable(rows: data.assetRows)
                 }
                 .padding(DashboardStyle.pagePadding)
             }
             .background(PortuTheme.dashboardBackground)
         }
         .dashboardPage()
-        .task(id: pollingIDs) {
-            if pollingIDs.isEmpty {
+        .task(id: data.pollingIDs) {
+            if data.pollingIDs.isEmpty {
                 store.send(.stopPricePolling)
             } else {
-                store.send(.startPricePolling(pollingIDs))
+                store.send(.startPricePolling(data.pollingIDs))
             }
         }
         .onDisappear {

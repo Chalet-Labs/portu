@@ -176,12 +176,24 @@ enum TokenSettingsFeature {
         overrides: [TokenPricingOverrideSnapshot],
         settings: TokenDashboardSettings = .defaults) -> [TokenEntry] {
         let overrideMap = overridesByAssetId(overrides)
-        return tokens.compactMap { token in
+        return dashboardEligibleTokens(
+            tokens: tokens,
+            prices: prices,
+            overrideMap: overrideMap,
+            settings: settings)
+    }
+
+    static func dashboardEligibleTokens(
+        tokens: [TokenEntry],
+        prices: [String: Decimal],
+        overrideMap: [UUID: TokenPricingOverrideSnapshot],
+        settings: TokenDashboardSettings = .defaults) -> [TokenEntry] {
+        tokens.compactMap { token in
             let override = overrideMap[token.assetId]
             guard isDashboardEligible(token: token, prices: prices, override: override, settings: settings) else {
                 return nil
             }
-            return dashboardToken(from: token, override: override)
+            return dashboardAdjustedToken(from: token, override: override)
         }
     }
 
@@ -270,13 +282,13 @@ enum TokenSettingsFeature {
     }
 
     private static func aggregateTokens(_ tokens: [TokenEntry]) -> [TokenEntry] {
-        var aggregates: [UUID: TokenAggregate] = [:]
+        var aggregates: [UUID: TokenSettingsAggregate] = [:]
         for token in tokens {
             if var aggregate = aggregates[token.assetId] {
                 aggregate.add(token)
                 aggregates[token.assetId] = aggregate
             } else {
-                aggregates[token.assetId] = TokenAggregate(token)
+                aggregates[token.assetId] = TokenSettingsAggregate(token)
             }
         }
         return aggregates.values.map { aggregate in
@@ -400,7 +412,7 @@ enum TokenSettingsFeature {
         return lhs.value > rhs.value
     }
 
-    private static func dashboardToken(
+    static func dashboardAdjustedToken(
         from token: TokenEntry,
         override: TokenPricingOverrideSnapshot?) -> TokenEntry {
         if let manualPrice = sanitizedManualPrice(override?.manualPriceUSD) {
@@ -451,47 +463,5 @@ enum TokenSettingsFeature {
 
     private static func absolute(_ value: Decimal) -> Decimal {
         value < 0 ? -value : value
-    }
-
-    private struct TokenAggregate {
-        var base: TokenEntry
-        var coinGeckoId: String?
-        var logoURL: String?
-        var positiveAmount: Decimal = 0
-        var borrowAmount: Decimal = 0
-        var positiveUSDValue: Decimal = 0
-        var borrowUSDValue: Decimal = 0
-
-        var netAmount: Decimal {
-            positiveAmount - borrowAmount
-        }
-
-        var netUSDValue: Decimal {
-            positiveUSDValue - borrowUSDValue
-        }
-
-        init(_ token: TokenEntry) {
-            self.base = token
-            self.coinGeckoId = token.coinGeckoId
-            self.logoURL = token.logoURL
-            add(token)
-        }
-
-        mutating func add(_ token: TokenEntry) {
-            if coinGeckoId == nil {
-                coinGeckoId = token.coinGeckoId
-            }
-            if logoURL == nil {
-                logoURL = token.logoURL
-            }
-
-            if token.role.isBorrow {
-                borrowAmount += token.amount
-                borrowUSDValue += token.usdValue
-            } else {
-                positiveAmount += token.amount
-                positiveUSDValue += token.usdValue
-            }
-        }
     }
 }

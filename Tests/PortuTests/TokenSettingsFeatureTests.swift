@@ -38,6 +38,25 @@ struct TokenSettingsFeatureTests {
         #expect(eligible.map(\.symbol) == ["MANUAL", "PINNED"])
     }
 
+    @Test func `dashboard eligibility accepts a prebuilt override map`() {
+        let manual = token(symbol: "MANUAL", amount: 2, usdValue: 0)
+        let hidden = token(symbol: "HIDDEN", coinGeckoId: "hidden", amount: 1, usdValue: 10)
+        let overrides = [
+            TokenPricingOverrideSnapshot(assetId: manual.assetId, manualPriceUSD: decimal("1.25")),
+            TokenPricingOverrideSnapshot(assetId: hidden.assetId, isIgnored: true)
+        ]
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+
+        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
+            tokens: [manual, hidden],
+            prices: ["hidden": 10],
+            overrideMap: overrideMap,
+            settings: .defaults)
+
+        #expect(eligible.map(\.symbol) == ["MANUAL"])
+        #expect(eligible.first?.usdValue == decimal("2.50"))
+    }
+
     @Test func `manual price wins over live price and coin gecko override is applied`() throws {
         let mapped = token(symbol: "MAP", coinGeckoId: "old-map", amount: 2, usdValue: 0)
         let overrides = [
@@ -202,6 +221,25 @@ struct TokenSettingsFeatureTests {
         #expect(row.amount == 8)
         #expect(row.price == 3000)
         #expect(row.value == 24000)
+    }
+
+    @Test func `override draft changes when override fields change with the same id`() {
+        let id = UUID()
+        let assetId = UUID()
+        let first = TokenPricingOverrideSnapshot(
+            id: id,
+            assetId: assetId,
+            manualPriceUSD: 1,
+            coinGeckoIdOverride: "old",
+            notes: "first")
+        let second = TokenPricingOverrideSnapshot(
+            id: id,
+            assetId: assetId,
+            manualPriceUSD: 2,
+            coinGeckoIdOverride: "new",
+            notes: "second")
+
+        #expect(TokenSettingsOverrideDraft(override: first) != TokenSettingsOverrideDraft(override: second))
     }
 
     private func token(

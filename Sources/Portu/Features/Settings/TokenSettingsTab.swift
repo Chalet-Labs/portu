@@ -30,6 +30,8 @@ struct TokenSettingsTab: View {
     @State private var saveError: String?
 
     var body: some View {
+        let result = makeResult()
+
         SettingsPage(tab: .tokens, badge: .autoSave) {
             VStack(alignment: .leading, spacing: 24) {
                 SettingsSectionCard(
@@ -42,8 +44,8 @@ struct TokenSettingsTab: View {
                     title: "Token Overrides",
                     subtitle: "Search active tokens and save manual pricing, visibility, or category rules.") {
                         VStack(alignment: .leading, spacing: 14) {
-                            filterControls
-                            tokenTable
+                            filterControls(result: result)
+                            tokenTable(result: result)
                         }
                     }
 
@@ -83,7 +85,7 @@ struct TokenSettingsTab: View {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
     }
 
-    private var result: TokenSettingsResult {
+    private func makeResult() -> TokenSettingsResult {
         TokenSettingsFeature.rows(
             tokens: tokenEntries,
             prices: appState.prices,
@@ -128,7 +130,7 @@ struct TokenSettingsTab: View {
         }
     }
 
-    private var filterControls: some View {
+    private func filterControls(result: TokenSettingsResult) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 HStack(spacing: 8) {
@@ -154,7 +156,7 @@ struct TokenSettingsTab: View {
     }
 
     @ViewBuilder
-    private var tokenTable: some View {
+    private func tokenTable(result: TokenSettingsResult) -> some View {
         if result.rows.isEmpty {
             SettingsInlineNotice(
                 title: "No matching tokens",

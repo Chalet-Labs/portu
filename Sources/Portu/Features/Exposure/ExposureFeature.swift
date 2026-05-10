@@ -73,6 +73,13 @@ struct ExposureSummary: Equatable {
     let netExposure: Decimal
 }
 
+struct ExposureDashboardData: Equatable {
+    let categoryRows: [CategoryExposure]
+    let assetRows: [AssetExposure]
+    let summary: ExposureSummary
+    let pollingIDs: [String]
+}
+
 enum ExposureFeature {
     static func resolveTokenUSDValue(
         amount: Decimal,
@@ -180,6 +187,107 @@ enum ExposureFeature {
             prices: prices)
     }
 
+    static func computeDashboardData(
+        tokens: [TokenEntry],
+        prices: [String: Decimal],
+        overrides: [TokenPricingOverrideSnapshot],
+        settings: TokenDashboardSettings = .defaults) -> ExposureDashboardData {
+        computeDashboardData(
+            tokens: tokens,
+            prices: prices,
+            overrideMap: TokenSettingsFeature.overridesByAssetId(overrides),
+            settings: settings)
+    }
+
+    static func computeDashboardData(
+        tokens: [TokenEntry],
+        prices: [String: Decimal],
+        overrideMap: [UUID: TokenPricingOverrideSnapshot],
+        settings: TokenDashboardSettings = .defaults) -> ExposureDashboardData {
+        var categoryBuckets: [PortfolioCategorySnapshot: (assets: Decimal, borrows: Decimal)] = [:]
+        var assetMap: [UUID: AssetAggregate] = [:]
+        var pollingIDs: Set<String> = []
+
+        for token in tokens {
+            let override = overrideMap[token.assetId]
+            if
+                token.amount > 0,
+                token.role.isPositive || token.role.isBorrow,
+                let coinGeckoId = TokenSettingsFeature.resolvedCoinGeckoID(token: token, override: override) {
+                pollingIDs.insert(coinGeckoId)
+            }
+
+            guard
+                TokenSettingsFeature.isDashboardEligible(
+                    token: token,
+                    prices: prices,
+                    override: override,
+                    settings: settings)
+            else { continue }
+
+            let dashboardToken = TokenSettingsFeature.dashboardAdjustedToken(from: token, override: override)
+            let value = resolveTokenUSDValue(
+                amount: dashboardToken.amount,
+                coinGeckoId: dashboardToken.coinGeckoId,
+                usdValue: dashboardToken.usdValue,
+                prices: prices)
+
+            var categoryEntry = categoryBuckets[dashboardToken.portfolioCategory] ?? (0, 0)
+            var assetEntry = assetMap[dashboardToken.assetId] ?? AssetAggregate(
+                symbol: dashboardToken.symbol,
+                category: dashboardToken.category,
+                portfolioCategory: dashboardToken.portfolioCategory,
+                logoURL: dashboardToken.logoURL,
+                assets: 0,
+                borrows: 0)
+            assetEntry.logoURL = assetEntry.logoURL ?? dashboardToken.logoURL
+
+            if dashboardToken.role.isPositive {
+                categoryEntry.assets += value
+                assetEntry.assets += value
+            } else if dashboardToken.role.isBorrow {
+                categoryEntry.borrows += value
+                assetEntry.borrows += value
+            }
+
+            categoryBuckets[dashboardToken.portfolioCategory] = categoryEntry
+            assetMap[dashboardToken.assetId] = assetEntry
+        }
+
+        let totalSpot = categoryBuckets.values.reduce(Decimal.zero) { $0 + $1.assets }
+        let categoryRows = categoryBuckets.compactMap { bucket, exposure in
+            guard exposure.assets > 0 || exposure.borrows > 0 else { return nil }
+            return CategoryExposure(
+                id: bucket.id.uuidString,
+                name: bucket.name,
+                semanticRole: bucket.semanticRole,
+                spotAssets: exposure.assets,
+                liabilities: exposure.borrows,
+                shareOfSpot: shareOfSpot(netExposure: exposure.assets - exposure.borrows, totalSpot: totalSpot))
+        }
+        .sorted(by: sortExposureRows)
+
+        let assetRows = assetMap.map { id, entry in
+            AssetExposure(
+                id: id,
+                symbol: entry.symbol,
+                category: entry.category,
+                portfolioCategory: entry.portfolioCategory,
+                spotAssets: entry.assets,
+                liabilities: entry.borrows,
+                logoURL: entry.logoURL,
+                shareOfSpot: shareOfSpot(netExposure: entry.assets - entry.borrows, totalSpot: totalSpot))
+        }
+        .sorted(by: sortAssetRows)
+
+        let summary = computeSummary(from: categoryRows)
+        return ExposureDashboardData(
+            categoryRows: categoryRows,
+            assetRows: assetRows,
+            summary: summary,
+            pollingIDs: Array(pollingIDs).sorted())
+    }
+
     static func computeSummary(from categories: [CategoryExposure]) -> ExposureSummary {
         ExposureSummary(
             totalSpot: categories.reduce(0) { $0 + $1.spotAssets },
@@ -192,7 +300,14 @@ enum ExposureFeature {
     static func pricePollingIDs(
         tokens: [TokenEntry],
         overrides: [TokenPricingOverrideSnapshot]) -> [String] {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        pricePollingIDs(
+            tokens: tokens,
+            overrideMap: TokenSettingsFeature.overridesByAssetId(overrides))
+    }
+
+    static func pricePollingIDs(
+        tokens: [TokenEntry],
+        overrideMap: [UUID: TokenPricingOverrideSnapshot]) -> [String] {
         let ids = tokens.compactMap { token -> String? in
             guard token.amount > 0, token.role.isPositive || token.role.isBorrow else { return nil }
             return TokenSettingsFeature.resolvedCoinGeckoID(

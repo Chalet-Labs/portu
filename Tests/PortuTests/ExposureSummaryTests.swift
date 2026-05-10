@@ -115,6 +115,30 @@ struct ExposureTokenValueTests {
         #expect(ids == ["new-map"])
     }
 
+    @Test func `dashboard data reuses overrides for rows summary and polling ids`() throws {
+        let btc = makeToken(symbol: "BTC", coinGeckoId: "bitcoin", category: .major, usdValue: 100)
+        let ignored = makeToken(symbol: "IGNORED", coinGeckoId: "ignored", category: .defi, usdValue: 40)
+        let manual = makeToken(symbol: "MANUAL", category: .meme, amount: 2, usdValue: 0)
+        let mapped = makeToken(symbol: "MAP", coinGeckoId: "old-map", category: .privacy, usdValue: 3)
+
+        let data = ExposureFeature.computeDashboardData(
+            tokens: [btc, ignored, manual, mapped],
+            prices: ["bitcoin": 100, "new-map": 4],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true),
+                TokenPricingOverrideSnapshot(assetId: manual.assetId, manualPriceUSD: 2),
+                TokenPricingOverrideSnapshot(assetId: mapped.assetId, coinGeckoIdOverride: " New-Map ")
+            ],
+            settings: .defaults)
+
+        #expect(data.assetRows.map(\.symbol) == ["BTC", "MANUAL", "MAP"])
+        #expect(data.categoryRows.map(\.name) == ["BTC", "Meme", "Privacy"])
+        #expect(try #require(data.assetRows.first { $0.symbol == "MANUAL" }).spotAssets == 4)
+        #expect(try #require(data.assetRows.first { $0.symbol == "MAP" }).spotAssets == 4)
+        #expect(data.summary.totalSpot == 108)
+        #expect(data.pollingIDs == ["bitcoin", "ignored", "new-map"])
+    }
+
     private func makeToken(
         assetId: UUID = UUID(),
         symbol: String,

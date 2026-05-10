@@ -2,6 +2,18 @@ import Foundation
 import PortuCore
 import SwiftUI
 
+struct TokenSettingsOverrideDraft: Equatable {
+    var manualPriceText: String
+    var coinGeckoIdText: String
+    var notes: String
+
+    init(override: TokenPricingOverrideSnapshot?) {
+        self.manualPriceText = TokenSettingsFormat.optionalNumber(override?.manualPriceUSD)
+        self.coinGeckoIdText = override?.coinGeckoIdOverride ?? ""
+        self.notes = override?.notes ?? ""
+    }
+}
+
 struct TokenSettingsRowView: View {
     let row: TokenSettingsRow
     let categories: [PortfolioCategory]
@@ -30,9 +42,10 @@ struct TokenSettingsRowView: View {
         self.setIgnored = setIgnored
         self.setAlwaysShow = setAlwaysShow
         self.resetOverride = resetOverride
-        _manualPriceText = State(initialValue: TokenSettingsFormat.optionalNumber(row.override?.manualPriceUSD))
-        _coinGeckoIdText = State(initialValue: row.override?.coinGeckoIdOverride ?? "")
-        _notes = State(initialValue: row.override?.notes ?? "")
+        let draft = TokenSettingsOverrideDraft(override: row.override)
+        _manualPriceText = State(initialValue: draft.manualPriceText)
+        _coinGeckoIdText = State(initialValue: draft.coinGeckoIdText)
+        _notes = State(initialValue: draft.notes)
     }
 
     var body: some View {
@@ -57,10 +70,11 @@ struct TokenSettingsRowView: View {
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(SettingsDesign.cardStroke, lineWidth: 1))
-        .onChange(of: row.override?.id) { _, _ in
-            manualPriceText = TokenSettingsFormat.optionalNumber(row.override?.manualPriceUSD)
-            coinGeckoIdText = row.override?.coinGeckoIdOverride ?? ""
-            notes = row.override?.notes ?? ""
+        .onChange(of: row.override) { _, override in
+            let draft = TokenSettingsOverrideDraft(override: override)
+            manualPriceText = draft.manualPriceText
+            coinGeckoIdText = draft.coinGeckoIdText
+            notes = draft.notes
         }
     }
 
