@@ -89,7 +89,6 @@ struct PerformanceFeature {
         var selectedAccountId: UUID?
         var selectedRange: ChartTimeRange = .oneMonth
         var chartMode: PerformanceChartMode = .value
-        var disabledCategories: Set<AssetCategory> = []
         var disabledPortfolioCategoryIDs: Set<String> = []
         var showCumulative: Bool = false
     }
@@ -98,7 +97,6 @@ struct PerformanceFeature {
         case accountSelected(UUID?)
         case timeRangeChanged(ChartTimeRange)
         case chartModeChanged(PerformanceChartMode)
-        case categoryToggled(AssetCategory)
         case portfolioCategoryToggled(String)
         case showCumulativeToggled
     }
@@ -116,14 +114,6 @@ struct PerformanceFeature {
 
             case let .chartModeChanged(mode):
                 state.chartMode = mode
-                return .none
-
-            case let .categoryToggled(category):
-                if state.disabledCategories.contains(category) {
-                    state.disabledCategories.remove(category)
-                } else {
-                    state.disabledCategories.insert(category)
-                }
                 return .none
 
             case let .portfolioCategoryToggled(id):

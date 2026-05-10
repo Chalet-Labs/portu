@@ -59,22 +59,6 @@ struct PerformanceFeatureTests {
 
     // MARK: - Category Toggle
 
-    @Test func `category toggle adds and removes`() async {
-        let store = TestStore(initialState: PerformanceFeature.State()) {
-            PerformanceFeature()
-        }
-
-        await store.send(.categoryToggled(.stablecoin)) {
-            $0.disabledCategories = [.stablecoin]
-        }
-        await store.send(.categoryToggled(.major)) {
-            $0.disabledCategories = [.stablecoin, .major]
-        }
-        await store.send(.categoryToggled(.stablecoin)) {
-            $0.disabledCategories = [.major]
-        }
-    }
-
     @Test func `portfolio category toggle adds and removes`() async {
         let store = TestStore(initialState: PerformanceFeature.State()) {
             PerformanceFeature()
