@@ -221,10 +221,13 @@ enum OverviewFeature {
         let sortedValues = values
             .filter { $0.value > 0 }
             .sorted {
-                if $0.value == $1.value {
-                    return $0.key.name.localizedStandardCompare($1.key.name) == .orderedAscending
+                if $0.value != $1.value { return $0.value > $1.value }
+                if $0.key.sortOrder != $1.key.sortOrder {
+                    return $0.key.sortOrder < $1.key.sortOrder
                 }
-                return $0.value > $1.value
+                let nameOrder = $0.key.name.localizedStandardCompare($1.key.name)
+                if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+                return $0.key.id.uuidString < $1.key.id.uuidString
             }
 
         let visibleCount = max(limit, 0)

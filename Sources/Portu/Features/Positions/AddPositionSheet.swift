@@ -187,6 +187,20 @@ enum ManualPositionCategoryRules {
         symbol: String,
         categoryId: UUID,
         in modelContext: ModelContext) throws {
+        try upsertGlobalRule(
+            symbol: symbol,
+            categoryId: categoryId,
+            in: modelContext) {
+                try modelContext.save()
+            }
+    }
+
+    @MainActor
+    static func upsertGlobalRule(
+        symbol: String,
+        categoryId: UUID,
+        in modelContext: ModelContext,
+        save: () throws -> Void) throws {
         try PortfolioCategorySeeder.seedIfNeeded(in: modelContext)
 
         let normalizedSymbol = PortfolioCategoryDefaults.normalizeSymbol(symbol)
@@ -199,15 +213,59 @@ enum ManualPositionCategoryRules {
         let ruleDescriptor = FetchDescriptor<CategorySymbolRule>(
             predicate: #Predicate { $0.normalizedSymbol == normalizedSymbol })
         let existingRules = try modelContext.fetch(ruleDescriptor)
+        let previousRules = existingRules.map(SymbolRuleSnapshot.init)
+        let insertedRule: CategorySymbolRule?
         if let firstRule = existingRules.first {
             firstRule.category = category
             for duplicateRule in existingRules.dropFirst() {
                 modelContext.delete(duplicateRule)
             }
+            insertedRule = nil
         } else {
-            modelContext.insert(CategorySymbolRule(
+            let rule = CategorySymbolRule(
                 normalizedSymbol: normalizedSymbol,
-                category: category))
+                category: category)
+            modelContext.insert(rule)
+            insertedRule = rule
+        }
+
+        do {
+            try save()
+        } catch {
+            if let insertedRule {
+                modelContext.delete(insertedRule)
+            } else {
+                if let firstRule = existingRules.first, let firstSnapshot = previousRules.first {
+                    firstSnapshot.restore(firstRule)
+                }
+                for snapshot in previousRules.dropFirst() {
+                    modelContext.insert(snapshot.makeRule())
+                }
+            }
+            throw error
+        }
+    }
+
+    private struct SymbolRuleSnapshot {
+        let id: UUID
+        let normalizedSymbol: String
+        let category: PortfolioCategory?
+
+        init(_ rule: CategorySymbolRule) {
+            self.id = rule.id
+            self.normalizedSymbol = rule.normalizedSymbol
+            self.category = rule.category
+        }
+
+        func restore(_ rule: CategorySymbolRule) {
+            rule.category = category
+        }
+
+        func makeRule() -> CategorySymbolRule {
+            CategorySymbolRule(
+                id: id,
+                normalizedSymbol: normalizedSymbol,
+                category: category)
         }
     }
 }

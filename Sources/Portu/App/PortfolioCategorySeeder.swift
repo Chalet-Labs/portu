@@ -30,6 +30,15 @@ enum PortfolioCategorySeeder {
             didChange = true
         }
 
+        let defaultCategoriesByID = Dictionary(uniqueKeysWithValues: PortfolioCategoryDefaults.categorySnapshots.map { ($0.id, $0) })
+        for category in categories {
+            guard let defaultCategory = defaultCategoriesByID[category.id], defaultCategory.isSystemRequired else { continue }
+            if !category.isSystemRequired {
+                category.isSystemRequired = true
+                didChange = true
+            }
+        }
+
         if shouldSeedDefaultRules {
             let categoriesByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
             for snapshot in PortfolioCategoryDefaults.symbolRuleSnapshots {

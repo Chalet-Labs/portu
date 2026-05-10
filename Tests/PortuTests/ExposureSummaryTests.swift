@@ -143,6 +143,20 @@ struct ExposureTokenValueTests {
         #expect(data.pollingIDs == ["bitcoin", "new-map"])
     }
 
+    @Test func `dashboard data polls resolvable unpriced holdings for recovery without showing rows`() {
+        let unpriced = makeToken(symbol: "UNPRICED", coinGeckoId: "recoverable", category: .other, amount: 1, usdValue: 0)
+
+        let data = ExposureFeature.computeDashboardData(
+            tokens: [unpriced],
+            prices: [:],
+            overrides: [],
+            settings: .defaults)
+
+        #expect(data.assetRows.isEmpty)
+        #expect(data.categoryRows.isEmpty)
+        #expect(data.pollingIDs == ["recoverable"])
+    }
+
     private func makeToken(
         assetId: UUID = UUID(),
         symbol: String,

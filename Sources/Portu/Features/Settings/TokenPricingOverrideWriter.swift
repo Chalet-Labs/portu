@@ -26,10 +26,14 @@ enum TokenPricingOverrideWriter {
         save: () throws -> Void,
         update: (TokenPricingOverride) -> Void) throws {
         let override: TokenPricingOverride
-        let previous: Snapshot?
-        if let existing = overrides.first(where: { $0.assetId == assetId }) {
+        let previous: [Snapshot]?
+        let existingOverrides = overrides.filter { $0.assetId == assetId }
+        if let existing = existingOverrides.first {
             override = existing
-            previous = Snapshot(existing)
+            previous = existingOverrides.map(Snapshot.init)
+            for duplicate in existingOverrides.dropFirst() {
+                modelContext.delete(duplicate)
+            }
         } else {
             override = TokenPricingOverride(assetId: assetId)
             modelContext.insert(override)
@@ -42,7 +46,10 @@ enum TokenPricingOverrideWriter {
             try save()
         } catch {
             if let previous {
-                previous.restore(override)
+                previous.first?.restore(override)
+                for snapshot in previous.dropFirst() {
+                    modelContext.insert(snapshot.makeOverride())
+                }
             } else {
                 modelContext.delete(override)
             }

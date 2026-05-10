@@ -72,7 +72,7 @@ public enum PortfolioCategoryDefaults {
             name: "Stablecoins",
             sortOrder: 7,
             semanticRole: .stablecoin,
-            isSystemRequired: false),
+            isSystemRequired: true),
         fallbackCategory
     ]
 

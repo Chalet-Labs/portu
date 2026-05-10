@@ -273,6 +273,64 @@ struct TokenSettingsFeatureTests {
     }
 
     @MainActor
+    @Test func `override upsert collapses duplicate overrides for an asset`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let assetId = UUID()
+        let canonical = TokenPricingOverride(assetId: assetId, manualPriceUSD: 1, notes: "canonical")
+        let duplicate = TokenPricingOverride(assetId: assetId, manualPriceUSD: 2, notes: "duplicate")
+        context.insert(canonical)
+        context.insert(duplicate)
+
+        try TokenPricingOverrideWriter.upsert(
+            assetId: assetId,
+            overrides: [canonical, duplicate],
+            in: context) {
+                // Avoid SwiftData's uniqueness save path here; the writer behavior under test is the in-context collapse.
+            } update: { override in
+                override.manualPriceUSD = 3
+                override.notes = "updated"
+            }
+
+        let overrides = try context.fetch(FetchDescriptor<TokenPricingOverride>())
+            .filter { $0.assetId == assetId }
+        #expect(overrides.count == 1)
+        #expect(overrides.first?.manualPriceUSD == 3)
+        #expect(overrides.first?.notes == "updated")
+    }
+
+    @MainActor
+    @Test func `override upsert restores duplicate overrides when save fails`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let assetId = UUID()
+        let canonical = TokenPricingOverride(assetId: assetId, manualPriceUSD: 1, notes: "canonical")
+        let duplicate = TokenPricingOverride(assetId: assetId, manualPriceUSD: 2, notes: "duplicate")
+        context.insert(canonical)
+        context.insert(duplicate)
+
+        do {
+            try TokenPricingOverrideWriter.upsert(
+                assetId: assetId,
+                overrides: [canonical, duplicate],
+                in: context) {
+                    throw TestSaveError.expected
+                } update: { override in
+                    override.manualPriceUSD = 3
+                    override.notes = "updated"
+                }
+            Issue.record("Expected duplicate override save failure to be rethrown.")
+        } catch {
+            let overrides = try context.fetch(FetchDescriptor<TokenPricingOverride>())
+                .filter { $0.assetId == assetId }
+                .sorted { $0.notes < $1.notes }
+            #expect(overrides.count == 2)
+            #expect(overrides.map(\.manualPriceUSD) == [1, 2])
+            #expect(overrides.map(\.notes) == ["canonical", "duplicate"])
+        }
+    }
+
+    @MainActor
     @Test func `override remove restores override without discarding unrelated edits`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext

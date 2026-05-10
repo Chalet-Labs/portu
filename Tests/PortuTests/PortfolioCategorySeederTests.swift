@@ -117,6 +117,23 @@ struct PortfolioCategorySeederTests {
         #expect(rules.map(\.normalizedSymbol).sorted() == PortfolioCategoryDefaults.symbolRuleSnapshots.map(\.symbol).sorted())
     }
 
+    @Test func `seeding marks existing default stablecoin category as system required`() throws {
+        let fixture = try makeFixture()
+        let context = fixture.context
+        let stablecoins = PortfolioCategory(
+            id: PortfolioCategoryDefaults.stablecoinsCategoryID,
+            name: "Stablecoins",
+            sortOrder: 7,
+            semanticRole: .stablecoin,
+            isSystemRequired: false)
+        context.insert(stablecoins)
+        try context.save()
+
+        try PortfolioCategorySeeder.seedIfNeeded(in: context)
+
+        #expect(stablecoins.isSystemRequired)
+    }
+
     @Test func `seeding skips save when defaults already exist`() throws {
         let fixture = try makeFixture()
         let context = fixture.context

@@ -292,20 +292,13 @@ private struct CategoryRuleEditor: View {
     }
 
     private func deleteCategory() {
-        guard !category.isSystemRequired else { return }
-        let reassignment = fallbackCategory
-        let originalAssignments = categoryRules.map { ($0, $0.category) }
-        for rule in categoryRules {
-            rule.category = reassignment
-        }
-        modelContext.delete(category)
         do {
-            try modelContext.save()
+            try PortfolioCategoryWriter.delete(
+                category,
+                fallbackCategory: fallbackCategory,
+                rules: categoryRules,
+                in: modelContext)
         } catch {
-            for (rule, original) in originalAssignments {
-                rule.category = original
-            }
-            modelContext.insert(category)
             categorySettingsLogger.error("Failed to delete category: \(String(describing: error), privacy: .public)")
             onSaveError(error.localizedDescription)
         }

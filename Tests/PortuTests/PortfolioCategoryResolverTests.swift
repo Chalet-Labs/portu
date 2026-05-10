@@ -81,6 +81,14 @@ struct PortfolioCategoryResolverTests {
         #expect(resolver.isStablecoin(symbol: "ETH", legacyCategory: .stablecoin) == false)
     }
 
+    @Test func `default stablecoin category is system required`() throws {
+        let stablecoins = try #require(PortfolioCategoryDefaults.categorySnapshots.first {
+            $0.id == PortfolioCategoryDefaults.stablecoinsCategoryID
+        })
+
+        #expect(stablecoins.isSystemRequired)
+    }
+
     @Test func `resolver synthesizes fallback when fallback category is missing`() throws {
         let category = try PortfolioCategorySnapshot(
             id: #require(UUID(uuidString: "CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC")),

@@ -214,6 +214,17 @@ enum ExposureFeature {
 
         for token in tokens {
             let override = overrideMap[token.assetId]
+            let dashboardToken = TokenSettingsFeature.dashboardAdjustedToken(from: token, override: override)
+            if
+                let coinGeckoId = dashboardPollingCoinGeckoID(
+                    token: token,
+                    dashboardToken: dashboardToken,
+                    prices: prices,
+                    override: override,
+                    settings: settings) {
+                pollingIDs.insert(coinGeckoId)
+            }
+
             guard
                 TokenSettingsFeature.isDashboardEligible(
                     token: token,
@@ -221,14 +232,6 @@ enum ExposureFeature {
                     override: override,
                     settings: settings)
             else { continue }
-
-            let dashboardToken = TokenSettingsFeature.dashboardAdjustedToken(from: token, override: override)
-            if
-                dashboardToken.amount > 0,
-                dashboardToken.role.isPositive || dashboardToken.role.isBorrow,
-                let coinGeckoId = dashboardToken.coinGeckoId {
-                pollingIDs.insert(coinGeckoId)
-            }
 
             let value = resolveTokenUSDValue(
                 amount: dashboardToken.amount,
@@ -290,6 +293,36 @@ enum ExposureFeature {
             assetRows: assetRows,
             summary: summary,
             pollingIDs: Array(pollingIDs).sorted())
+    }
+
+    private static func dashboardPollingCoinGeckoID(
+        token: TokenEntry,
+        dashboardToken: TokenEntry,
+        prices: [String: Decimal],
+        override: TokenPricingOverrideSnapshot?,
+        settings: TokenDashboardSettings) -> String? {
+        guard dashboardToken.amount > 0 else { return nil }
+        guard dashboardToken.role.isPositive || dashboardToken.role.isBorrow else { return nil }
+        guard let coinGeckoId = dashboardToken.coinGeckoId else { return nil }
+
+        if
+            TokenSettingsFeature.isDashboardEligible(
+                token: token,
+                prices: prices,
+                override: override,
+                settings: settings) {
+            return coinGeckoId
+        }
+
+        guard override?.isIgnored != true else { return nil }
+        guard
+            TokenSettingsFeature.resolvedValue(
+                token: token,
+                prices: prices,
+                override: override) == nil
+        else { return nil }
+
+        return coinGeckoId
     }
 
     static func computeSummary(from categories: [CategoryExposure]) -> ExposureSummary {

@@ -85,6 +85,49 @@ struct OverviewReviewFollowUpTests {
         #expect(deployed.map(\.1) == [0, 15, 0])
     }
 
+    @Test func `category slices use stable ids when equal value category names collide`() throws {
+        let laterID = try #require(UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB"))
+        let earlierID = try #require(UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"))
+        let laterCategory = PortfolioCategorySnapshot(
+            id: laterID,
+            name: "Duplicate",
+            sortOrder: 0,
+            semanticRole: .normal,
+            isSystemRequired: false)
+        let earlierCategory = PortfolioCategorySnapshot(
+            id: earlierID,
+            name: "Duplicate",
+            sortOrder: 0,
+            semanticRole: .normal,
+            isSystemRequired: false)
+        let tokens = [
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "LATER",
+                name: "LATER",
+                category: .other,
+                portfolioCategory: laterCategory,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 1,
+                usdValue: 10),
+            TokenEntry(
+                assetId: UUID(),
+                symbol: "EARLIER",
+                name: "EARLIER",
+                category: .other,
+                portfolioCategory: earlierCategory,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 1,
+                usdValue: 10)
+        ]
+
+        let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 2)
+
+        #expect(slices.map(\.id) == [earlierID.uuidString, laterID.uuidString])
+    }
+
     private func token(
         assetId: UUID = UUID(),
         symbol: String,

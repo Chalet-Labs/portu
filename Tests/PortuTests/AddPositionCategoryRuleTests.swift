@@ -37,6 +37,29 @@ struct AddPositionCategoryRuleTests {
         #expect(rules.first?.category?.id == PortfolioCategoryDefaults.memeCategoryID)
     }
 
+    @Test func `manual asset category rule restores previous category when save fails`() throws {
+        let fixture = try makeFixture()
+        let context = fixture.context
+
+        try ManualPositionCategoryRules.upsertGlobalRule(
+            symbol: "aave",
+            categoryId: PortfolioCategoryDefaults.defiCategoryID,
+            in: context)
+        let rule = try #require(try fetchRules(context).first { $0.normalizedSymbol == "AAVE" })
+
+        do {
+            try ManualPositionCategoryRules.upsertGlobalRule(
+                symbol: "AAVE",
+                categoryId: PortfolioCategoryDefaults.memeCategoryID,
+                in: context) {
+                    throw TestSaveError.expected
+                }
+            Issue.record("Expected global rule save failure to be rethrown.")
+        } catch {
+            #expect(rule.category?.id == PortfolioCategoryDefaults.defiCategoryID)
+        }
+    }
+
     @Test func `manual asset legacy category avoids default major bucket`() {
         #expect(ManualPositionCategoryRules.legacyCategory(for: PortfolioCategoryDefaults.categorySnapshots[0]) == .other)
         #expect(ManualPositionCategoryRules.legacyCategory(for: PortfolioCategoryDefaults.categorySnapshots[3]) == .defi)
@@ -55,5 +78,9 @@ struct AddPositionCategoryRuleTests {
     private struct Fixture {
         let container: ModelContainer
         let context: ModelContext
+    }
+
+    private enum TestSaveError: Error {
+        case expected
     }
 }

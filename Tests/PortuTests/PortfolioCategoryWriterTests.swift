@@ -41,6 +41,29 @@ struct PortfolioCategoryWriterTests {
         }
     }
 
+    @Test func `deleting category requires a fallback category for rule reassignment`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let category = PortfolioCategory(name: "Custom", sortOrder: 0)
+        let rule = CategorySymbolRule(normalizedSymbol: "AAVE", category: category)
+        context.insert(category)
+        context.insert(rule)
+        try context.save()
+
+        do {
+            try PortfolioCategoryWriter.delete(
+                category,
+                fallbackCategory: nil,
+                rules: [rule],
+                in: context)
+            Issue.record("Expected deleting without fallback category to throw.")
+        } catch {
+            #expect(rule.category?.id == category.id)
+            let categories = try context.fetch(FetchDescriptor<PortfolioCategory>())
+            #expect(categories.contains { $0.id == category.id })
+        }
+    }
+
     private enum TestSaveError: Error {
         case expected
     }
