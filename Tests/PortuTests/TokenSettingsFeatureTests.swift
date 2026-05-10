@@ -265,10 +265,13 @@ struct TokenSettingsFeatureTests {
                     existing.manualPriceUSD = 42
                 }
             Issue.record("Expected override upsert to rethrow the save failure.")
-        } catch {
+        } catch let error as TestSaveError {
+            #expect(error == .expected)
             let fetched = try #require(try context.fetch(FetchDescriptor<TokenPricingOverride>()).first)
             #expect(fetched.manualPriceUSD == 1)
             #expect(category.name == "Unsaved edit")
+        } catch {
+            Issue.record("Unexpected error: \(error)")
         }
     }
 
@@ -320,13 +323,16 @@ struct TokenSettingsFeatureTests {
                     override.notes = "updated"
                 }
             Issue.record("Expected duplicate override save failure to be rethrown.")
-        } catch {
+        } catch let error as TestSaveError {
+            #expect(error == .expected)
             let overrides = try context.fetch(FetchDescriptor<TokenPricingOverride>())
                 .filter { $0.assetId == assetId }
                 .sorted { $0.notes < $1.notes }
             #expect(overrides.count == 2)
             #expect(overrides.map(\.manualPriceUSD) == [1, 2])
             #expect(overrides.map(\.notes) == ["canonical", "duplicate"])
+        } catch {
+            Issue.record("Unexpected error: \(error)")
         }
     }
 
@@ -350,11 +356,14 @@ struct TokenSettingsFeatureTests {
                     throw TestSaveError.expected
                 }
             Issue.record("Expected override remove to rethrow the save failure.")
-        } catch {
+        } catch let error as TestSaveError {
+            #expect(error == .expected)
             let fetched = try #require(try context.fetch(FetchDescriptor<TokenPricingOverride>()).first)
             #expect(fetched.assetId == assetId)
             #expect(fetched.manualPriceUSD == 1)
             #expect(category.name == "Unsaved edit")
+        } catch {
+            Issue.record("Unexpected error: \(error)")
         }
     }
 
@@ -387,7 +396,7 @@ struct TokenSettingsFeatureTests {
         UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index)) ?? UUID()
     }
 
-    private enum TestSaveError: Error {
+    private enum TestSaveError: Error, Equatable {
         case expected
     }
 }
