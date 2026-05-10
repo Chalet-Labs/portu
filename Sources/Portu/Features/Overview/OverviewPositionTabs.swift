@@ -158,11 +158,12 @@ struct OverviewPositionTabs: View {
     }
 
     private func tokenChange24h(_ token: PositionToken) -> Decimal {
-        OverviewPositionPricing.change24h(
-            coinGeckoId: token.asset?.coinGeckoId,
-            amount: token.amount,
+        guard let entry = tokenEntry(for: token) else { return 0 }
+        return OverviewPositionPricing.change24h(
+            token: entry,
             prices: appState.prices,
-            changes24h: appState.priceChanges24h)
+            changes24h: appState.priceChanges24h,
+            override: overrideMap[entry.assetId])
     }
 
     // MARK: - Position cards
@@ -273,18 +274,18 @@ struct OverviewPositionTabs: View {
     }
 
     private func price(_ token: PositionToken) -> Decimal {
-        OverviewPositionPricing.price(
-            coinGeckoId: token.asset?.coinGeckoId,
-            amount: token.amount,
-            usdValue: token.usdValue,
-            prices: appState.prices)
+        guard let entry = tokenEntry(for: token) else { return 0 }
+        return OverviewPositionPricing.price(
+            token: entry,
+            prices: appState.prices,
+            override: overrideMap[entry.assetId])
     }
 
     private func tokenValue(_ token: PositionToken) -> Decimal {
-        OverviewPositionPricing.tokenValue(
-            coinGeckoId: token.asset?.coinGeckoId,
-            amount: token.amount,
-            usdValue: token.usdValue,
-            prices: appState.prices)
+        guard let entry = tokenEntry(for: token) else { return 0 }
+        return OverviewPositionPricing.tokenValue(
+            token: entry,
+            prices: appState.prices,
+            override: overrideMap[entry.assetId])
     }
 }

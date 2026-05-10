@@ -187,8 +187,22 @@ struct PerformancePnLTests {
 
 struct PerformanceCategoryChangeTests {
     @MainActor
-    @Test func `category snapshot entry uses snapshotted category identity`() {
-        let categoryID = "custom-category"
+    @Test func `category snapshot entry resolves through supplied resolver`() {
+        let categoryID = UUID()
+        let category = PortfolioCategorySnapshot(
+            id: categoryID,
+            name: "Custom ETH",
+            sortOrder: 0,
+            semanticRole: .normal,
+            isSystemRequired: false)
+        let resolver = PortfolioCategoryResolver(
+            categories: [category, PortfolioCategoryDefaults.fallbackCategory],
+            rules: [
+                CategorySymbolRuleSnapshot(
+                    id: UUID(),
+                    symbol: "ETH",
+                    categoryId: categoryID)
+            ])
         let snapshot = AssetSnapshot(
             syncBatchId: UUID(),
             timestamp: Date(),
@@ -196,15 +210,15 @@ struct PerformanceCategoryChangeTests {
             assetId: UUID(),
             symbol: "ETH",
             category: .major,
-            portfolioCategoryID: categoryID,
-            portfolioCategoryName: "Custom Category",
+            portfolioCategoryID: PortfolioCategoryDefaults.ethCategoryID.uuidString,
+            portfolioCategoryName: "Frozen ETH",
             amount: 1,
             usdValue: 100)
 
-        let entry = CategorySnapshotEntry(snapshot: snapshot)
+        let entry = CategorySnapshotEntry(snapshot: snapshot, categoryResolver: resolver)
 
-        #expect(entry.categoryID == categoryID)
-        #expect(entry.categoryName == "Custom Category")
+        #expect(entry.categoryID == categoryID.uuidString)
+        #expect(entry.categoryName == "Custom ETH")
     }
 
     @MainActor
@@ -280,7 +294,7 @@ struct PerformanceCategoryChangeTests {
         let chartPoints = PerformanceFeature.aggregateCategorySnapshots(entries: entries)
         let changes = PerformanceFeature.computeCategoryChanges(entries: entries)
 
-        #expect(Set(chartPoints.map(\.category)) == ["ETH"])
+        #expect(Set(chartPoints.map(\.categoryName)) == ["ETH"])
         #expect(changes.first?.name == "ETH")
         #expect(changes.first?.percentChange == Decimal(string: "0.2")!)
     }
@@ -334,6 +348,39 @@ struct PerformanceCategoryChangeTests {
 
         #expect(changes.count == 2)
         #expect(Set(changes.map(\.id)) == [firstCategoryID, secondCategoryID])
+    }
+
+    @Test func `category chart points retain ids when names collide`() throws {
+        let cal = Calendar.current
+        let day = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
+        let acct = UUID()
+        let firstCategoryID = "11111111-1111-1111-1111-111111111111"
+        let secondCategoryID = "22222222-2222-2222-2222-222222222222"
+
+        let entries: [CategorySnapshotEntry] = [
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: UUID(),
+                timestamp: day,
+                category: .other,
+                categoryID: firstCategoryID,
+                categoryName: "Custom",
+                usdValue: 100),
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: UUID(),
+                timestamp: day,
+                category: .defi,
+                categoryID: secondCategoryID,
+                categoryName: "Custom",
+                usdValue: 200)
+        ]
+
+        let points = PerformanceFeature.aggregateCategorySnapshots(entries: entries)
+
+        #expect(points.count == 2)
+        #expect(Set(points.map(\.categoryID)) == [firstCategoryID, secondCategoryID])
+        #expect(Set(points.map(\.categoryName)) == ["Custom"])
     }
 
     @Test func `omits categories with zero on both days`() throws {

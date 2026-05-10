@@ -55,8 +55,10 @@ struct CategorySnapshotEntry: Equatable {
     }
 
     @MainActor
-    init(snapshot: AssetSnapshot) {
-        let resolved = PortfolioCategoryResolver.defaults.resolve(
+    init(
+        snapshot: AssetSnapshot,
+        categoryResolver: PortfolioCategoryResolver = .defaults) {
+        let resolved = categoryResolver.resolve(
             symbol: snapshot.symbol,
             legacyCategory: snapshot.category)
         self.init(
@@ -64,8 +66,8 @@ struct CategorySnapshotEntry: Equatable {
             assetId: snapshot.assetId,
             timestamp: snapshot.timestamp,
             category: snapshot.category,
-            categoryID: snapshot.portfolioCategoryID ?? resolved.id.uuidString,
-            categoryName: snapshot.portfolioCategoryName ?? resolved.name,
+            categoryID: resolved.id.uuidString,
+            categoryName: resolved.name,
             usdValue: snapshot.usdValue)
     }
 }
@@ -73,7 +75,8 @@ struct CategorySnapshotEntry: Equatable {
 /// Aggregated category chart data point (one per day per category).
 struct CategoryChartPoint: Equatable {
     let date: Date
-    let category: String
+    let categoryID: String
+    let categoryName: String
     let value: Decimal
 }
 
@@ -214,12 +217,17 @@ struct PerformanceFeature {
         return grouped.flatMap { date, categories in
             categories.map {
                 CategoryChartPoint(
-                    date: date, category: $0.value.name, value: $0.value.value)
+                    date: date,
+                    categoryID: $0.key,
+                    categoryName: $0.value.name,
+                    value: $0.value.value)
             }
         }
         .sorted {
             if $0.date != $1.date { return $0.date < $1.date }
-            return $0.category < $1.category
+            let nameOrder = $0.categoryName.localizedStandardCompare($1.categoryName)
+            if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+            return $0.categoryID < $1.categoryID
         }
     }
 

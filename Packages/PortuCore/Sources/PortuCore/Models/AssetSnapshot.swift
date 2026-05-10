@@ -11,9 +11,11 @@ public final class AssetSnapshot: Timestamped {
     public var accountId: UUID
     public var assetId: UUID
 
-    /// Denormalized for display — survives Asset changes
+    /// Denormalized asset metadata — survives Asset changes.
     public var symbol: String
     public var category: AssetCategory
+    /// Legacy compatibility fields. Current portfolio category display is resolved
+    /// from the live app-wide category rules at render time.
     public var portfolioCategoryID: String?
     public var portfolioCategoryName: String?
 

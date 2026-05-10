@@ -31,18 +31,19 @@ struct AssetsChartMode: View {
     private struct ChartPoint: Identifiable {
         let id = UUID()
         let date: Date
-        let category: String
+        let categoryID: String
+        let categoryName: String
         let value: Decimal
     }
 
     private var chartData: [ChartPoint] {
         let entries: [CategorySnapshotEntry] = filtered.compactMap { snapshot in
-            let entry = CategorySnapshotEntry(snapshot: snapshot)
+            let entry = CategorySnapshotEntry(snapshot: snapshot, categoryResolver: categoryResolver)
             guard !store.performance.disabledPortfolioCategoryIDs.contains(entry.categoryID) else { return nil }
             return entry
         }
         return PerformanceFeature.aggregateCategorySnapshots(entries: entries)
-            .map { ChartPoint(date: $0.date, category: $0.category, value: $0.value) }
+            .map { ChartPoint(date: $0.date, categoryID: $0.categoryID, categoryName: $0.categoryName, value: $0.value) }
     }
 
     var body: some View {
@@ -59,7 +60,7 @@ struct AssetsChartMode: View {
                         x: .value("Date", point.date),
                         y: .value("Value", point.value),
                         stacking: .standard)
-                        .foregroundStyle(by: .value("Category", point.category))
+                        .foregroundStyle(by: .value("Category", point.categoryID))
                 }
                 .chartYAxis {
                     AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))

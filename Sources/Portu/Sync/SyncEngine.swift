@@ -235,15 +235,13 @@ final class SyncEngine: @unchecked Sendable {
         let allPositions = try modelContext.fetch(allPositionsDescriptor)
             .filter { $0.account?.isActive == true }
         let activeAccounts = try fetchAllActiveAccounts()
-        let categoryResolver = try fetchPortfolioCategoryResolver()
 
         createPortfolioSnapshot(batchId: batchId, timestamp: batchTimestamp, positions: allPositions, isPartial: isPartial)
         createAccountSnapshots(batchId: batchId, timestamp: batchTimestamp, accounts: activeAccounts)
         createAssetSnapshots(
             batchId: batchId,
             timestamp: batchTimestamp,
-            positions: allPositions,
-            categoryResolver: categoryResolver)
+            positions: allPositions)
 
         pruneSnapshots()
         try modelContext.save()
@@ -302,8 +300,7 @@ final class SyncEngine: @unchecked Sendable {
     private func createAssetSnapshots(
         batchId: UUID,
         timestamp: Date,
-        positions: [Position],
-        categoryResolver: PortfolioCategoryResolver) {
+        positions: [Position]) {
         var accumulators: [String: AssetSnapshotAccumulator] = [:]
 
         for pos in positions {
@@ -316,14 +313,11 @@ final class SyncEngine: @unchecked Sendable {
                 let key = "\(accountId):\(asset.id)"
 
                 if accumulators[key] == nil {
-                    let portfolioCategory = categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category)
                     accumulators[key] = AssetSnapshotAccumulator(
                         accountId: accountId,
                         assetId: asset.id,
                         symbol: asset.symbol,
-                        category: asset.category,
-                        portfolioCategoryID: portfolioCategory.id.uuidString,
-                        portfolioCategoryName: portfolioCategory.name)
+                        category: asset.category)
                 }
 
                 if token.role.isBorrow {
@@ -341,8 +335,6 @@ final class SyncEngine: @unchecked Sendable {
                 syncBatchId: batchId, timestamp: timestamp,
                 accountId: acc.accountId, assetId: acc.assetId,
                 symbol: acc.symbol, category: acc.category,
-                portfolioCategoryID: acc.portfolioCategoryID,
-                portfolioCategoryName: acc.portfolioCategoryName,
                 amount: acc.grossAmount, usdValue: acc.grossUsdValue,
                 borrowAmount: acc.borrowAmount, borrowUsdValue: acc.borrowUsdValue)
             modelContext.insert(snap)
@@ -401,12 +393,6 @@ final class SyncEngine: @unchecked Sendable {
         return try modelContext.fetch(descriptor)
     }
 
-    private func fetchPortfolioCategoryResolver() throws -> PortfolioCategoryResolver {
-        let categories = try modelContext.fetch(FetchDescriptor<PortfolioCategory>())
-        let rules = try modelContext.fetch(FetchDescriptor<CategorySymbolRule>())
-        return PortfolioCategoryResolver.live(categories: categories, rules: rules)
-    }
-
     private func fetchAsset(coinGeckoId: String) throws -> Asset? {
         let descriptor = FetchDescriptor<Asset>()
         return try modelContext.fetch(descriptor).first { $0.coinGeckoId == coinGeckoId }
@@ -452,8 +438,6 @@ private struct AssetSnapshotAccumulator {
     var assetId: UUID
     var symbol: String
     var category: AssetCategory
-    var portfolioCategoryID: String
-    var portfolioCategoryName: String
     var grossAmount: Decimal = 0
     var grossUsdValue: Decimal = 0
     var borrowAmount: Decimal = 0

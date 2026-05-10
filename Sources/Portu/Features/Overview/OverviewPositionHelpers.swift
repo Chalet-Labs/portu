@@ -21,6 +21,20 @@ enum OverviewPositionPricing {
             ?? usdValue
     }
 
+    static func price(
+        token: TokenEntry,
+        prices: [String: Decimal],
+        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        TokenSettingsFeature.resolvedPrice(token: token, prices: prices, override: override) ?? 0
+    }
+
+    static func tokenValue(
+        token: TokenEntry,
+        prices: [String: Decimal],
+        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        TokenSettingsFeature.resolvedValue(token: token, prices: prices, override: override) ?? 0
+    }
+
     static func change24h(
         coinGeckoId: String?,
         amount: Decimal,
@@ -34,6 +48,21 @@ enum OverviewPositionPricing {
             return 0
         }
         return amount * price * changePercent
+    }
+
+    static func change24h(
+        token: TokenEntry,
+        prices: [String: Decimal],
+        changes24h: [String: Decimal],
+        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        if let manualPrice = override?.manualPriceUSD, manualPrice > 0 {
+            return 0
+        }
+        return change24h(
+            coinGeckoId: TokenSettingsFeature.resolvedCoinGeckoID(token: token, override: override),
+            amount: token.amount,
+            prices: prices,
+            changes24h: changes24h)
     }
 
     private static func normalizedPrice(

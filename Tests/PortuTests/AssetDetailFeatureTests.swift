@@ -438,8 +438,8 @@ struct AssetsChartAggregationTests {
 
         let points = PerformanceFeature.aggregateCategorySnapshots(entries: entries)
 
-        let major = points.first { $0.category == "Major" }
-        let defi = points.first { $0.category == "Defi" }
+        let major = points.first(where: { $0.categoryName == "Major" })
+        let defi = points.first(where: { $0.categoryName == "Defi" })
         #expect(major?.value == 5000)
         #expect(defi?.value == 2000)
     }
