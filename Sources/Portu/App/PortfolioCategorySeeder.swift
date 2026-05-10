@@ -6,6 +6,7 @@ import SwiftData
 enum PortfolioCategorySeeder {
     static func seedIfNeeded(in context: ModelContext) throws {
         var categories = try context.fetch(FetchDescriptor<PortfolioCategory>())
+        let shouldSeedDefaultRules = categories.isEmpty
         if categories.isEmpty {
             categories = PortfolioCategoryDefaults.categorySnapshots.map { snapshot in
                 PortfolioCategory(
@@ -20,16 +21,15 @@ enum PortfolioCategorySeeder {
             }
         }
 
-        let rules = try context.fetch(FetchDescriptor<CategorySymbolRule>())
-        let existingSymbols = Set(rules.map { PortfolioCategoryDefaults.normalizeSymbol($0.normalizedSymbol) })
-        let categoriesByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
-        for snapshot in PortfolioCategoryDefaults.symbolRuleSnapshots {
-            guard !existingSymbols.contains(snapshot.symbol) else { continue }
-            guard let category = categoriesByID[snapshot.categoryId] else { continue }
-            context.insert(CategorySymbolRule(
-                id: snapshot.id,
-                normalizedSymbol: snapshot.symbol,
-                category: category))
+        if shouldSeedDefaultRules {
+            let categoriesByID = Dictionary(uniqueKeysWithValues: categories.map { ($0.id, $0) })
+            for snapshot in PortfolioCategoryDefaults.symbolRuleSnapshots {
+                guard let category = categoriesByID[snapshot.categoryId] else { continue }
+                context.insert(CategorySymbolRule(
+                    id: snapshot.id,
+                    normalizedSymbol: snapshot.symbol,
+                    category: category))
+            }
         }
 
         try context.save()

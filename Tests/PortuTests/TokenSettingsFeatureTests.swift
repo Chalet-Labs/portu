@@ -171,6 +171,39 @@ struct TokenSettingsFeatureTests {
         #expect(row.portfolioCategory == category)
     }
 
+    @Test func `settings rows net positive and borrow tokens for the same asset`() throws {
+        let assetId = uuid(999)
+        let supplied = token(
+            assetId: assetId,
+            symbol: "ETH",
+            coinGeckoId: "ethereum",
+            role: .supply,
+            amount: 10,
+            usdValue: 30000)
+        let borrowed = token(
+            assetId: assetId,
+            symbol: "ETH",
+            coinGeckoId: "ethereum",
+            role: .borrow,
+            amount: 2,
+            usdValue: 6000)
+
+        let result = TokenSettingsFeature.rows(
+            tokens: [supplied, borrowed],
+            prices: ["ethereum": 3000],
+            overrides: [],
+            settings: .defaults,
+            filter: .all,
+            searchText: "",
+            limit: 100)
+
+        let row = try #require(result.rows.first)
+        #expect(result.rows.count == 1)
+        #expect(row.amount == 8)
+        #expect(row.price == 3000)
+        #expect(row.value == 24000)
+    }
+
     private func token(
         assetId: UUID = UUID(),
         symbol: String,

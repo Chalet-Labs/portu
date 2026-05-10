@@ -48,7 +48,22 @@ struct PortfolioCategorySeederTests {
         #expect(edited.sortOrder == 42)
     }
 
-    @Test func `seeding backfills missing default rules without overriding existing symbol assignments`() throws {
+    @Test func `seeding preserves removed default symbol rules`() throws {
+        let fixture = try makeFixture()
+        let context = fixture.context
+
+        try PortfolioCategorySeeder.seedIfNeeded(in: context)
+        let ethRule = try #require(try fetchRules(context).first { $0.normalizedSymbol == "ETH" })
+        context.delete(ethRule)
+        try context.save()
+
+        try PortfolioCategorySeeder.seedIfNeeded(in: context)
+
+        let rules = try fetchRules(context)
+        #expect(rules.contains { $0.normalizedSymbol == "ETH" } == false)
+    }
+
+    @Test func `seeding preserves existing symbol assignments when categories already exist`() throws {
         let fixture = try makeFixture()
         let context = fixture.context
         let categories = PortfolioCategoryDefaults.categorySnapshots.map { snapshot in
@@ -75,8 +90,7 @@ struct PortfolioCategorySeederTests {
         try PortfolioCategorySeeder.seedIfNeeded(in: context)
 
         let rules = try fetchRules(context)
-        let stableSymbols = Set(["USDT", "DAI", "PYUSD"])
-        #expect(stableSymbols.isSubset(of: Set(rules.map(\.normalizedSymbol))))
+        #expect(Set(rules.map(\.normalizedSymbol)) == ["ETH", "USDC"])
         #expect(rules.count(where: { $0.normalizedSymbol == "USDC" }) == 1)
         #expect(rules.first { $0.normalizedSymbol == "USDC" }?.category?.id == PortfolioCategoryDefaults.btcCategoryID)
     }

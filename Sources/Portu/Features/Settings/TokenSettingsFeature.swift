@@ -256,7 +256,7 @@ enum TokenSettingsFeature {
             let price = prices[coinGeckoId] {
             return price
         }
-        guard token.amount > 0, token.usdValue > 0 else { return nil }
+        guard token.amount != 0, token.usdValue != 0 else { return nil }
         return token.usdValue / token.amount
     }
 
@@ -264,26 +264,29 @@ enum TokenSettingsFeature {
         token: TokenEntry,
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?) -> Decimal? {
-        guard token.amount > 0 else { return nil }
+        guard token.amount != 0 else { return nil }
         guard let price = resolvedPrice(token: token, prices: prices, override: override) else { return nil }
         return token.amount * price
     }
 
     private static func aggregateTokens(_ tokens: [TokenEntry]) -> [TokenEntry] {
-        var aggregates: [UUID: TokenEntry] = [:]
+        var aggregates: [UUID: TokenAggregate] = [:]
         for token in tokens {
-            if let existing = aggregates[token.assetId] {
-                aggregates[token.assetId] = tokenEntry(
-                    from: existing,
-                    coinGeckoId: existing.coinGeckoId ?? token.coinGeckoId,
-                    amount: existing.amount + token.amount,
-                    usdValue: existing.usdValue + token.usdValue,
-                    logoURL: existing.logoURL ?? token.logoURL)
+            if var aggregate = aggregates[token.assetId] {
+                aggregate.add(token)
+                aggregates[token.assetId] = aggregate
             } else {
-                aggregates[token.assetId] = token
+                aggregates[token.assetId] = TokenAggregate(token)
             }
         }
-        return Array(aggregates.values)
+        return aggregates.values.map { aggregate in
+            tokenEntry(
+                from: aggregate.base,
+                coinGeckoId: aggregate.coinGeckoId,
+                amount: aggregate.netAmount,
+                usdValue: aggregate.netUSDValue,
+                logoURL: aggregate.logoURL)
+        }
     }
 
     private static func makeRow(
@@ -326,7 +329,7 @@ enum TokenSettingsFeature {
             prices[coinGeckoId] != nil {
             return .live
         }
-        if token.amount > 0, token.usdValue > 0 {
+        if token.amount != 0, token.usdValue != 0 {
             return .syncTime
         }
         return .unpriced
@@ -448,5 +451,47 @@ enum TokenSettingsFeature {
 
     private static func absolute(_ value: Decimal) -> Decimal {
         value < 0 ? -value : value
+    }
+
+    private struct TokenAggregate {
+        var base: TokenEntry
+        var coinGeckoId: String?
+        var logoURL: String?
+        var positiveAmount: Decimal = 0
+        var borrowAmount: Decimal = 0
+        var positiveUSDValue: Decimal = 0
+        var borrowUSDValue: Decimal = 0
+
+        var netAmount: Decimal {
+            positiveAmount - borrowAmount
+        }
+
+        var netUSDValue: Decimal {
+            positiveUSDValue - borrowUSDValue
+        }
+
+        init(_ token: TokenEntry) {
+            self.base = token
+            self.coinGeckoId = token.coinGeckoId
+            self.logoURL = token.logoURL
+            add(token)
+        }
+
+        mutating func add(_ token: TokenEntry) {
+            if coinGeckoId == nil {
+                coinGeckoId = token.coinGeckoId
+            }
+            if logoURL == nil {
+                logoURL = token.logoURL
+            }
+
+            if token.role.isBorrow {
+                borrowAmount += token.amount
+                borrowUSDValue += token.usdValue
+            } else {
+                positiveAmount += token.amount
+                positiveUSDValue += token.usdValue
+            }
+        }
     }
 }

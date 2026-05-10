@@ -246,6 +246,57 @@ struct PerformanceCategoryChangeTests {
         #expect(changes.first?.percentChange == Decimal(string: "0.2")!)
     }
 
+    @Test func `uses category ids as stable identity when names collide`() throws {
+        let cal = Calendar.current
+        let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
+        let day2 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 12)))
+        let acct = UUID()
+        let firstAsset = UUID()
+        let secondAsset = UUID()
+        let firstCategoryID = "11111111-1111-1111-1111-111111111111"
+        let secondCategoryID = "22222222-2222-2222-2222-222222222222"
+
+        let entries: [CategorySnapshotEntry] = [
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: firstAsset,
+                timestamp: day1,
+                category: .other,
+                categoryID: firstCategoryID,
+                categoryName: "Custom",
+                usdValue: 100),
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: firstAsset,
+                timestamp: day2,
+                category: .other,
+                categoryID: firstCategoryID,
+                categoryName: "Custom",
+                usdValue: 120),
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: secondAsset,
+                timestamp: day1,
+                category: .defi,
+                categoryID: secondCategoryID,
+                categoryName: "Custom",
+                usdValue: 200),
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: secondAsset,
+                timestamp: day2,
+                category: .defi,
+                categoryID: secondCategoryID,
+                categoryName: "Custom",
+                usdValue: 240)
+        ]
+
+        let changes = PerformanceFeature.computeCategoryChanges(entries: entries)
+
+        #expect(changes.count == 2)
+        #expect(Set(changes.map(\.id)) == [firstCategoryID, secondCategoryID])
+    }
+
     @Test func `omits categories with zero on both days`() throws {
         let cal = Calendar.current
         let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))

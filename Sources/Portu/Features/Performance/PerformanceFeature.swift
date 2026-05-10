@@ -20,10 +20,7 @@ struct PnLBar: Identifiable, Equatable {
 
 /// Category change data for the bottom panel.
 struct CategoryChange: Identifiable, Equatable {
-    var id: String {
-        name
-    }
-
+    let id: String
     let name: String
     let startValue: Decimal
     let endValue: Decimal
@@ -240,6 +237,7 @@ struct PerformanceFeature {
             guard start > 0 || end > 0 else { return nil }
             let change = start > 0 ? (end - start) / start : 0
             return CategoryChange(
+                id: id,
                 name: namesByID[id] ?? id,
                 startValue: start,
                 endValue: end,
