@@ -207,6 +207,24 @@ struct PerformanceCategoryChangeTests {
         #expect(entry.categoryName == "Custom Category")
     }
 
+    @MainActor
+    @Test func `category snapshot entry maps legacy known symbols to default portfolio category IDs`() {
+        let snapshot = AssetSnapshot(
+            syncBatchId: UUID(),
+            timestamp: Date(),
+            accountId: UUID(),
+            assetId: UUID(),
+            symbol: "ETH",
+            category: .major,
+            amount: 1,
+            usdValue: 2000)
+
+        let entry = CategorySnapshotEntry(snapshot: snapshot)
+
+        #expect(entry.categoryID == PortfolioCategoryDefaults.ethCategoryID.uuidString)
+        #expect(entry.categoryName == "ETH")
+    }
+
     @Test func `computes start end and percent change`() throws {
         let cal = Calendar.current
         let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))

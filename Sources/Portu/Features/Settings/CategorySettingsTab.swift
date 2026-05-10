@@ -106,15 +106,19 @@ private struct CategoryRuleEditor: View {
     let onSaveError: (String) -> Void
 
     @State private var newSymbol = ""
+    @State private var categoryNameDraft = ""
+    @FocusState private var isCategoryNameFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
-                    TextField("Category", text: $category.name)
+                    TextField("Category", text: $categoryNameDraft)
                         .textFieldStyle(.plain)
                         .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
                         .foregroundStyle(SettingsDesign.primaryText)
+                        .focused($isCategoryNameFocused)
+                        .onSubmit(saveCategoryName)
 
                     Text(subtitle)
                         .font(.footnote)
@@ -178,6 +182,19 @@ private struct CategoryRuleEditor: View {
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(SettingsDesign.cardStroke, lineWidth: 1))
+        .onAppear {
+            categoryNameDraft = category.name
+        }
+        .onChange(of: category.name) { _, name in
+            if !isCategoryNameFocused {
+                categoryNameDraft = name
+            }
+        }
+        .onChange(of: isCategoryNameFocused) { _, isFocused in
+            if !isFocused {
+                saveCategoryName()
+            }
+        }
     }
 
     private var subtitle: String {
@@ -216,6 +233,17 @@ private struct CategoryRuleEditor: View {
     private var fallbackCategory: PortfolioCategory? {
         categories.first { $0.semanticRole == .fallback }
             ?? categories.first { $0.id == PortfolioCategoryDefaults.fallbackCategoryID }
+    }
+
+    private func saveCategoryName() {
+        do {
+            try PortfolioCategoryWriter.rename(category, to: categoryNameDraft, in: modelContext)
+            categoryNameDraft = category.name
+        } catch {
+            categoryNameDraft = category.name
+            categorySettingsLogger.error("Failed to rename category: \(String(describing: error), privacy: .public)")
+            onSaveError(error.localizedDescription)
+        }
     }
 
     private func addSymbol() {

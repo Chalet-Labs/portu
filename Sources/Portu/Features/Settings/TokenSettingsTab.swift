@@ -233,19 +233,17 @@ struct TokenSettingsTab: View {
         }
     }
 
-    private func resetOverride(assetId: UUID) {
-        let removed = overrides.filter { $0.assetId == assetId }
-        for override in removed {
-            modelContext.delete(override)
-        }
+    private func resetOverride(assetId: UUID) -> Bool {
         do {
-            try modelContext.save()
+            try TokenPricingOverrideWriter.remove(
+                assetId: assetId,
+                overrides: overrides,
+                in: modelContext)
+            return true
         } catch {
-            for override in removed {
-                modelContext.insert(override)
-            }
             tokenSettingsLogger.error("Failed to reset override for \(assetId, privacy: .public): \(String(describing: error), privacy: .public)")
             saveError = error.localizedDescription
+            return false
         }
     }
 

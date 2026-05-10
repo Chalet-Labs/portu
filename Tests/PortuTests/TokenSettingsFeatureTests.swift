@@ -244,13 +244,16 @@ struct TokenSettingsFeatureTests {
     }
 
     @MainActor
-    @Test func `override upsert rolls back existing override when save fails`() throws {
+    @Test func `override upsert rolls back existing override without discarding unrelated edits`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
         let assetId = UUID()
         let override = TokenPricingOverride(assetId: assetId, manualPriceUSD: 1)
+        let category = PortfolioCategory(name: "Original", sortOrder: 0)
         context.insert(override)
+        context.insert(category)
         try context.save()
+        category.name = "Unsaved edit"
 
         do {
             try TokenPricingOverrideWriter.upsert(
@@ -265,6 +268,35 @@ struct TokenSettingsFeatureTests {
         } catch {
             let fetched = try #require(try context.fetch(FetchDescriptor<TokenPricingOverride>()).first)
             #expect(fetched.manualPriceUSD == 1)
+            #expect(category.name == "Unsaved edit")
+        }
+    }
+
+    @MainActor
+    @Test func `override remove restores override without discarding unrelated edits`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let assetId = UUID()
+        let override = TokenPricingOverride(assetId: assetId, manualPriceUSD: 1)
+        let category = PortfolioCategory(name: "Original", sortOrder: 0)
+        context.insert(override)
+        context.insert(category)
+        try context.save()
+        category.name = "Unsaved edit"
+
+        do {
+            try TokenPricingOverrideWriter.remove(
+                assetId: assetId,
+                overrides: [override],
+                in: context) {
+                    throw TestSaveError.expected
+                }
+            Issue.record("Expected override remove to rethrow the save failure.")
+        } catch {
+            let fetched = try #require(try context.fetch(FetchDescriptor<TokenPricingOverride>()).first)
+            #expect(fetched.assetId == assetId)
+            #expect(fetched.manualPriceUSD == 1)
+            #expect(category.name == "Unsaved edit")
         }
     }
 

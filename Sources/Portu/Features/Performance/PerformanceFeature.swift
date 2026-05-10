@@ -56,13 +56,16 @@ struct CategorySnapshotEntry: Equatable {
 
     @MainActor
     init(snapshot: AssetSnapshot) {
+        let resolved = PortfolioCategoryResolver.defaults.resolve(
+            symbol: snapshot.symbol,
+            legacyCategory: snapshot.category)
         self.init(
             accountId: snapshot.accountId,
             assetId: snapshot.assetId,
             timestamp: snapshot.timestamp,
             category: snapshot.category,
-            categoryID: snapshot.portfolioCategoryID,
-            categoryName: snapshot.portfolioCategoryName,
+            categoryID: snapshot.portfolioCategoryID ?? resolved.id.uuidString,
+            categoryName: snapshot.portfolioCategoryName ?? resolved.name,
             usdValue: snapshot.usdValue)
     }
 }

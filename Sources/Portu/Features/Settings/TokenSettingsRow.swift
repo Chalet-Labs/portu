@@ -21,7 +21,7 @@ struct TokenSettingsRowView: View {
     let assignCategory: (String, UUID) -> Void
     let setIgnored: (UUID, Bool) -> Void
     let setAlwaysShow: (UUID, Bool) -> Void
-    let resetOverride: (UUID) -> Void
+    let resetOverride: (UUID) -> Bool
 
     @State private var manualPriceText: String
     @State private var coinGeckoIdText: String
@@ -34,7 +34,7 @@ struct TokenSettingsRowView: View {
         assignCategory: @escaping (String, UUID) -> Void,
         setIgnored: @escaping (UUID, Bool) -> Void,
         setAlwaysShow: @escaping (UUID, Bool) -> Void,
-        resetOverride: @escaping (UUID) -> Void) {
+        resetOverride: @escaping (UUID) -> Bool) {
         self.row = row
         self.categories = categories
         self.saveOverride = saveOverride
@@ -160,10 +160,15 @@ struct TokenSettingsRowView: View {
                 .settingsPrimaryButton(isDisabled: false)
 
                 Button("Reset") {
-                    resetOverride(row.assetId)
-                    manualPriceText = ""
-                    coinGeckoIdText = ""
-                    notes = ""
+                    if resetOverride(row.assetId) {
+                        manualPriceText = ""
+                        coinGeckoIdText = ""
+                        notes = ""
+                    } else {
+                        manualPriceText = TokenSettingsFormat.optionalNumber(row.override?.manualPriceUSD)
+                        coinGeckoIdText = row.override?.coinGeckoIdOverride ?? ""
+                        notes = row.override?.notes ?? ""
+                    }
                 }
                 .buttonStyle(.plain)
                 .settingsIconButton(color: SettingsDesign.warningOrange)
