@@ -4,6 +4,10 @@ import PortuCore
 import Testing
 
 struct ExposureSummaryTests {
+    @Test func `asset count pill label describes asset rows`() {
+        #expect(ExposureLabels.assetCountPillTitle == "Assets")
+    }
+
     @Test func `computes totals from category exposures`() {
         let categories = [
             CategoryExposure(id: "major", name: "Major", spotAssets: 90000, liabilities: 9000),

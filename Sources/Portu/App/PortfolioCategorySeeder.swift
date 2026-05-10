@@ -5,8 +5,16 @@ import SwiftData
 @MainActor
 enum PortfolioCategorySeeder {
     static func seedIfNeeded(in context: ModelContext) throws {
+        try seedIfNeeded(in: context) {
+            try context.save()
+        }
+    }
+
+    static func seedIfNeeded(in context: ModelContext, save: () throws -> Void) throws {
+        var didChange = false
         var categories = try context.fetch(FetchDescriptor<PortfolioCategory>())
-        let shouldSeedDefaultRules = categories.isEmpty
+        let rules = try context.fetch(FetchDescriptor<CategorySymbolRule>())
+        let shouldSeedDefaultRules = rules.isEmpty
         if categories.isEmpty {
             categories = PortfolioCategoryDefaults.categorySnapshots.map { snapshot in
                 PortfolioCategory(
@@ -19,6 +27,7 @@ enum PortfolioCategorySeeder {
             for category in categories {
                 context.insert(category)
             }
+            didChange = true
         }
 
         if shouldSeedDefaultRules {
@@ -29,9 +38,12 @@ enum PortfolioCategorySeeder {
                     id: snapshot.id,
                     normalizedSymbol: snapshot.symbol,
                     category: category))
+                didChange = true
             }
         }
 
-        try context.save()
+        if didChange {
+            try save()
+        }
     }
 }

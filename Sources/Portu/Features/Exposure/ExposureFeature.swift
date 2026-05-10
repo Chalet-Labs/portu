@@ -80,6 +80,10 @@ struct ExposureDashboardData: Equatable {
     let pollingIDs: [String]
 }
 
+enum ExposureLabels {
+    static let assetCountPillTitle = "Assets"
+}
+
 enum ExposureFeature {
     static func resolveTokenUSDValue(
         amount: Decimal,

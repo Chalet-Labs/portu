@@ -56,6 +56,28 @@ struct CategorySymbolRuleWriterTests {
         #expect(rules.first?.category?.id == newCategory.id)
     }
 
+    @Test func `removing symbol rule restores it when save fails`() throws {
+        let fixture = try makeFixture()
+        let category = try PortfolioCategory(
+            id: #require(UUID(uuidString: "DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD")),
+            name: "ETH",
+            sortOrder: 0)
+        let rule = CategorySymbolRule(normalizedSymbol: "ETH", category: category)
+        fixture.context.insert(category)
+        fixture.context.insert(rule)
+        try fixture.context.save()
+
+        do {
+            try CategorySymbolRuleWriter.remove(rule, in: fixture.context) {
+                throw TestSaveError.expected
+            }
+            Issue.record("Expected removing the rule to rethrow the save failure.")
+        } catch {
+            let rules = try fetchRules(fixture.context)
+            #expect(rules.contains { $0.id == rule.id && $0.normalizedSymbol == "ETH" })
+        }
+    }
+
     private func makeFixture() throws -> Fixture {
         let container = try ModelContainerFactory().makeInMemory()
         return Fixture(container: container, context: container.mainContext)
@@ -68,5 +90,9 @@ struct CategorySymbolRuleWriterTests {
     private struct Fixture {
         let container: ModelContainer
         let context: ModelContext
+    }
+
+    private enum TestSaveError: Error {
+        case expected
     }
 }

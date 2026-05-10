@@ -228,7 +228,7 @@ private struct ExposureAssetTable: View {
                 ExposureAssetRow(row: row, index: index)
             }
         } trailing: {
-            ExposureCountPill(title: "Category", count: rows.count)
+            ExposureCountPill(title: ExposureLabels.assetCountPillTitle, count: rows.count)
         }
     }
 }

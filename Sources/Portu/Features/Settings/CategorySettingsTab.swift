@@ -243,9 +243,8 @@ private struct CategoryRuleEditor: View {
     }
 
     private func remove(_ rule: CategorySymbolRule) {
-        modelContext.delete(rule)
         do {
-            try modelContext.save()
+            try CategorySymbolRuleWriter.remove(rule, in: modelContext)
         } catch {
             categorySettingsLogger.error("Failed to remove symbol rule: \(String(describing: error), privacy: .public)")
             onSaveError(error.localizedDescription)

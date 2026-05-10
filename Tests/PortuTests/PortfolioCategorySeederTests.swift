@@ -95,6 +95,38 @@ struct PortfolioCategorySeederTests {
         #expect(rules.first { $0.normalizedSymbol == "USDC" }?.category?.id == PortfolioCategoryDefaults.btcCategoryID)
     }
 
+    @Test func `seeding inserts default symbol rules when categories already exist without rules`() throws {
+        let fixture = try makeFixture()
+        let context = fixture.context
+        let categories = PortfolioCategoryDefaults.categorySnapshots.map { snapshot in
+            PortfolioCategory(
+                id: snapshot.id,
+                name: snapshot.name,
+                sortOrder: snapshot.sortOrder,
+                semanticRole: snapshot.semanticRole,
+                isSystemRequired: snapshot.isSystemRequired)
+        }
+        for category in categories {
+            context.insert(category)
+        }
+        try context.save()
+
+        try PortfolioCategorySeeder.seedIfNeeded(in: context)
+
+        let rules = try fetchRules(context)
+        #expect(rules.map(\.normalizedSymbol).sorted() == PortfolioCategoryDefaults.symbolRuleSnapshots.map(\.symbol).sorted())
+    }
+
+    @Test func `seeding skips save when defaults already exist`() throws {
+        let fixture = try makeFixture()
+        let context = fixture.context
+        try PortfolioCategorySeeder.seedIfNeeded(in: context)
+
+        try PortfolioCategorySeeder.seedIfNeeded(in: context) {
+            throw TestSaveError.expected
+        }
+    }
+
     private func makeFixture() throws -> Fixture {
         let container = try ModelContainerFactory().makeInMemory()
         return Fixture(container: container, context: container.mainContext)
@@ -111,5 +143,9 @@ struct PortfolioCategorySeederTests {
     private struct Fixture {
         let container: ModelContainer
         let context: ModelContext
+    }
+
+    private enum TestSaveError: Error {
+        case expected
     }
 }
