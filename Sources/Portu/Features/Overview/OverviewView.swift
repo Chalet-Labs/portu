@@ -11,6 +11,12 @@ struct OverviewView: View {
     @Query private var allTokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
     @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
 
     private var tokenEntries: [TokenEntry] {
         TokenEntry.fromActiveTokens(allTokens)
@@ -23,12 +29,21 @@ struct OverviewView: View {
     private var pricePollingIDs: [String] {
         OverviewFeature.pricePollingIDs(
             tokens: tokenEntries,
+            prices: appState.prices,
             watchlistIDs: watchlistIDs,
-            overrides: overrideSnapshots)
+            overrides: overrideSnapshots,
+            settings: dashboardSettings)
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var dashboardSettings: TokenDashboardSettings {
+        TokenDashboardSettings(
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust)
     }
 
     var body: some View {

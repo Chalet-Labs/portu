@@ -310,7 +310,7 @@ struct OverviewFeatureTests {
         #expect(removed == ["ethereum"])
     }
 
-    @Test func `price polling ids combine active portfolio and watchlist ids in stable order`() {
+    @Test func `price polling ids combine eligible portfolio and watchlist ids in stable order`() {
         let tokens = [
             token(symbol: "ETH", coinGeckoId: "ethereum", amount: 1, usdValue: 3000),
             token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 1, usdValue: 70000),
@@ -322,10 +322,28 @@ struct OverviewFeatureTests {
 
         let ids = OverviewFeature.pricePollingIDs(
             tokens: tokens,
+            prices: ["ethereum": 3000, "bitcoin": 70000, "borrow-token": 10],
             watchlistIDs: ["solana", " Bitcoin ", "monero"],
             overrides: [])
 
-        #expect(ids == ["bitcoin", "borrow-token", "ethereum", "monero", "solana", "zero-token"])
+        #expect(ids == ["bitcoin", "borrow-token", "ethereum", "monero", "solana"])
+    }
+
+    @Test func `price polling ids exclude ignored dust and unpriced portfolio tokens`() throws {
+        let visible = token(symbol: "VISIBLE", coinGeckoId: "visible", amount: 1, usdValue: 2)
+        let ignored = token(symbol: "IGNORED", coinGeckoId: "ignored", amount: 1, usdValue: 10)
+        let dust = try token(symbol: "DUST", coinGeckoId: "dust", amount: 1, usdValue: #require(Decimal(string: "0.25")))
+        let unpriced = token(symbol: "UNPRICED", coinGeckoId: "unpriced", amount: 1, usdValue: 0)
+
+        let ids = try OverviewFeature.pricePollingIDs(
+            tokens: [visible, ignored, dust, unpriced],
+            prices: ["visible": 2, "ignored": 10, "dust": #require(Decimal(string: "0.25"))],
+            watchlistIDs: ["bitcoin"],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true)
+            ])
+
+        #expect(ids == ["bitcoin", "visible"])
     }
 
     @Test func `price polling ids use token pricing overrides`() {
@@ -333,12 +351,26 @@ struct OverviewFeatureTests {
 
         let ids = OverviewFeature.pricePollingIDs(
             tokens: [mapped],
+            prices: ["new-map": 10],
             watchlistIDs: [],
             overrides: [
                 TokenPricingOverrideSnapshot(assetId: mapped.assetId, coinGeckoIdOverride: " New-Map ")
             ])
 
         #expect(ids == ["new-map"])
+    }
+
+    @Test func `overview position visibility excludes ignored dashboard tokens`() {
+        let hidden = token(symbol: "HIDDEN", coinGeckoId: "hidden", amount: 1, usdValue: 10)
+        let overrideMap = TokenSettingsFeature.overridesByAssetId([
+            TokenPricingOverrideSnapshot(assetId: hidden.assetId, isIgnored: true)
+        ])
+
+        #expect(!OverviewPositionVisibility.isVisible(
+            token: hidden,
+            prices: ["hidden": 10],
+            overrideMap: overrideMap,
+            settings: .defaults))
     }
 
     @Test func `position pricing normalizes coin gecko ids`() {

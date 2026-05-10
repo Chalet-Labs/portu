@@ -10,6 +10,14 @@ struct OverviewPositionTabs: View {
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
+    @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
+    private var tokenPricingOverrides: [TokenPricingOverride]
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
 
     @State private var selectedTab: OverviewTab = .keyChanges
 
@@ -87,12 +95,29 @@ struct OverviewPositionTabs: View {
         }
     }
 
+    private var visibleActiveTokens: [(PositionToken, Position)] {
+        allActiveTokens.filter { token, _ in
+            isDashboardVisible(token)
+        }
+    }
+
     private var categoryResolver: PortfolioCategoryResolver {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
     }
 
+    private var overrideMap: [UUID: TokenPricingOverrideSnapshot] {
+        TokenSettingsFeature.overridesByAssetId(tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
+    }
+
+    private var dashboardSettings: TokenDashboardSettings {
+        TokenDashboardSettings(
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust)
+    }
+
     private var keyChangeTokens: [(PositionToken, Position)] {
-        allActiveTokens
+        visibleActiveTokens
             .filter(\.0.role.isPositive)
             .compactMap { token, position -> TokenChangeCandidate? in
                 let change = tokenChange24h(token)
@@ -113,7 +138,7 @@ struct OverviewPositionTabs: View {
 
     private var idleStableTokens: [(PositionToken, Position)] {
         let resolver = categoryResolver
-        return allActiveTokens
+        return visibleActiveTokens
             .filter { token, position in
                 guard position.positionType == .idle, token.role.isPositive, let asset = token.asset else { return false }
                 return resolver
@@ -124,7 +149,7 @@ struct OverviewPositionTabs: View {
 
     private var idleMajorTokens: [(PositionToken, Position)] {
         let resolver = categoryResolver
-        return allActiveTokens
+        return visibleActiveTokens
             .filter { token, position in
                 guard position.positionType == .idle, token.role.isPositive, let asset = token.asset else { return false }
                 let category = resolver.resolve(symbol: asset.symbol, legacyCategory: asset.category)
@@ -195,20 +220,24 @@ struct OverviewPositionTabs: View {
 
     @ViewBuilder
     private var borrowingView: some View {
-        let borrowPositions = positions.filter { position in
-            position.tokens.contains { $0.role.isBorrow }
+        let borrowPositions = positions.compactMap { position -> OverviewPositionGroupData? in
+            let tokens = position.tokens.filter { token in
+                token.role.isBorrow && isDashboardVisible(token)
+            }
+            guard !tokens.isEmpty else { return nil }
+            return OverviewPositionGroupData(
+                id: position.id,
+                position: position,
+                tokens: tokens)
         }
 
         if borrowPositions.isEmpty {
             emptyState("No borrowing")
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                ForEach(borrowPositions, id: \.id) { position in
+                ForEach(borrowPositions, id: \.id) { group in
                     OverviewPositionGroupCard(
-                        group: OverviewPositionGroupData(
-                            id: position.id,
-                            position: position,
-                            tokens: position.tokens.filter(\.role.isBorrow)),
+                        group: group,
                         price: price,
                         tokenValue: tokenValue,
                         tokenChange24h: tokenChange24h)
@@ -218,6 +247,30 @@ struct OverviewPositionTabs: View {
     }
 
     // MARK: - Helpers
+
+    private func isDashboardVisible(_ token: PositionToken) -> Bool {
+        guard let entry = tokenEntry(for: token) else { return false }
+        return OverviewPositionVisibility.isVisible(
+            token: entry,
+            prices: appState.prices,
+            overrideMap: overrideMap,
+            settings: dashboardSettings)
+    }
+
+    private func tokenEntry(for token: PositionToken) -> TokenEntry? {
+        guard let asset = token.asset else { return nil }
+        return TokenEntry(
+            assetId: asset.id,
+            symbol: asset.symbol,
+            name: asset.name,
+            category: asset.category,
+            portfolioCategory: categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
+            coinGeckoId: asset.coinGeckoId,
+            role: token.role,
+            amount: token.amount,
+            usdValue: token.usdValue,
+            logoURL: asset.logoURL)
+    }
 
     private func price(_ token: PositionToken) -> Decimal {
         OverviewPositionPricing.price(
@@ -233,238 +286,5 @@ struct OverviewPositionTabs: View {
             amount: token.amount,
             usdValue: token.usdValue,
             prices: appState.prices)
-    }
-}
-
-private struct OverviewPositionGroupData: Identifiable {
-    let id: UUID
-    let position: Position
-    let tokens: [PositionToken]
-}
-
-private struct TokenChangeCandidate {
-    let token: PositionToken
-    let position: Position
-    let change: Decimal
-}
-
-private struct OverviewPositionGroupCard: View {
-    let group: OverviewPositionGroupData
-    let price: (PositionToken) -> Decimal
-    let tokenValue: (PositionToken) -> Decimal
-    let tokenChange24h: (PositionToken) -> Decimal
-
-    private var groupValue: Decimal {
-        group.tokens.reduce(Decimal.zero) { partial, token in
-            let value = tokenValue(token)
-            return token.role.isBorrow ? partial - value : partial + value
-        }
-    }
-
-    private var groupChange: Decimal {
-        group.tokens.reduce(Decimal.zero) { partial, token in
-            let change = tokenChange24h(token)
-            return token.role.isBorrow ? partial - change : partial + change
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            groupHeader
-
-            VStack(spacing: 0) {
-                columnHeader
-
-                ForEach(group.tokens, id: \.id) { token in
-                    OverviewPositionTokenRow(
-                        token: token,
-                        position: group.position,
-                        price: price(token),
-                        value: tokenValue(token),
-                        change24h: tokenChange24h(token))
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(PortuTheme.dashboardPanelElevatedBackground.opacity(0.65)))
-        }
-    }
-
-    private var groupHeader: some View {
-        HStack(spacing: 10) {
-            Image(systemName: iconName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(PortuTheme.dashboardGold)
-                .frame(width: 18)
-
-            Text(groupTitle)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(PortuTheme.dashboardText)
-                .lineLimit(1)
-
-            Spacer(minLength: 10)
-
-            Text(groupValue, format: .currency(code: "USD").precision(.fractionLength(0)))
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(PortuTheme.dashboardText)
-                .lineLimit(1)
-
-            Text(groupChange, format: .currency(code: "USD").precision(.fractionLength(0)))
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(groupChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
-                .lineLimit(1)
-        }
-        .padding(.bottom, 8)
-    }
-
-    private var columnHeader: some View {
-        HStack(spacing: 12) {
-            Text("Position")
-                .frame(width: 250, alignment: .leading)
-            Text("Asset")
-                .frame(width: 90, alignment: .leading)
-            Text("Price / 24h")
-                .frame(width: 140, alignment: .trailing)
-            Text("Amount")
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .font(.system(size: 11))
-        .foregroundStyle(PortuTheme.dashboardTertiaryText)
-        .lineLimit(1)
-        .padding(.bottom, 8)
-    }
-
-    private var groupTitle: String {
-        group.position.protocolName ?? group.position.account?.name ?? "Wallet"
-    }
-
-    private var iconName: String {
-        switch group.position.positionType {
-        case .idle: "wallet.pass"
-        case .lending: "building.columns"
-        case .staking: "diamond"
-        case .farming, .liquidityPool: "leaf"
-        case .vesting: "clock"
-        case .other: "square.grid.2x2"
-        }
-    }
-}
-
-private struct OverviewPositionTokenRow: View {
-    let token: PositionToken
-    let position: Position
-    let price: Decimal
-    let value: Decimal
-    let change24h: Decimal
-
-    var body: some View {
-        HStack(spacing: 12) {
-            positionContext
-                .frame(width: 250, alignment: .leading)
-
-            HStack(spacing: 7) {
-                assetDot
-                Text(token.asset?.symbol ?? "???")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(PortuTheme.dashboardText)
-                    .lineLimit(1)
-            }
-            .frame(width: 90, alignment: .leading)
-
-            HStack(spacing: 8) {
-                Text(price, format: .currency(code: "USD").precision(.fractionLength(0 ... 5)))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(PortuTheme.dashboardText)
-                    .lineLimit(1)
-
-                Text(change24h, format: .currency(code: "USD").precision(.fractionLength(0)))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(OverviewPositionChangeTone.tone(for: token.role, change: change24h).color)
-                    .lineLimit(1)
-            }
-            .frame(width: 140, alignment: .trailing)
-
-            HStack(spacing: 8) {
-                Text(token.amount, format: .number.precision(.fractionLength(2 ... 6)))
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(PortuTheme.dashboardText)
-                    .lineLimit(1)
-
-                if token.role.isBorrow {
-                    Text("Close")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(PortuTheme.dashboardWarning)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(PortuTheme.dashboardWarning.opacity(0.12)))
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(PortuTheme.dashboardWarning.opacity(0.55), lineWidth: 1))
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .frame(minHeight: 42)
-    }
-
-    private var positionContext: some View {
-        HStack(spacing: 8) {
-            Text(positionLabel)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(roleColor)
-                .lineLimit(1)
-
-            if let chain = position.chain {
-                HStack(spacing: 5) {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 6))
-                    Text(chain.rawValue.capitalized)
-                        .font(.system(size: 12))
-                }
-                .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                .lineLimit(1)
-            }
-
-            Text(token.role.rawValue)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                .lineLimit(1)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(PortuTheme.dashboardGoldMuted.opacity(0.35)))
-        }
-    }
-
-    private var assetDot: some View {
-        ZStack {
-            Circle()
-                .fill(PortuTheme.dashboardGoldMuted)
-            Text(String((token.asset?.symbol ?? "?").prefix(1)))
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(PortuTheme.dashboardText)
-        }
-        .frame(width: 16, height: 16)
-    }
-
-    private var positionLabel: String {
-        switch position.positionType {
-        case .idle: "Idle on"
-        case .lending: "Lending on"
-        case .staking: "Staked on"
-        case .farming, .liquidityPool: "Yield on"
-        case .vesting: "Vesting on"
-        case .other: "Position on"
-        }
-    }
-
-    private var roleColor: Color {
-        token.role.isBorrow ? PortuTheme.dashboardWarning : PortuTheme.dashboardText
     }
 }

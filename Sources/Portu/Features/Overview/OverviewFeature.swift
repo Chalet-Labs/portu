@@ -368,14 +368,22 @@ enum OverviewFeature {
 
     static func pricePollingIDs(
         tokens: [TokenEntry],
+        prices: [String: Decimal] = [:],
         watchlistIDs: [String],
-        overrides: [TokenPricingOverrideSnapshot]) -> [String] {
+        overrides: [TokenPricingOverrideSnapshot],
+        settings: TokenDashboardSettings = .defaults) -> [String] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var ids = tokens.compactMap { token -> String? in
-            guard token.amount > 0, token.role.isPositive || token.role.isBorrow else { return nil }
-            return TokenSettingsFeature.resolvedCoinGeckoID(
-                token: token,
-                override: overrideMap[token.assetId])
+            let override = overrideMap[token.assetId]
+            guard
+                TokenSettingsFeature.isDashboardEligible(
+                    token: token,
+                    prices: prices,
+                    override: override,
+                    settings: settings)
+            else { return nil }
+
+            return TokenSettingsFeature.dashboardAdjustedToken(from: token, override: override).coinGeckoId
         }
 
         ids.append(contentsOf: watchlistIDs)
