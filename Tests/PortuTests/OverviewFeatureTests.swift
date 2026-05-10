@@ -326,17 +326,17 @@ struct OverviewFeatureTests {
             watchlistIDs: ["solana", " Bitcoin ", "monero"],
             overrides: [])
 
-        #expect(ids == ["bitcoin", "borrow-token", "ethereum", "monero", "solana"])
+        #expect(ids == ["bitcoin", "borrow-token", "ethereum", "monero", "solana", "zero-token"])
     }
 
-    @Test func `price polling ids exclude ignored dust and unpriced portfolio tokens`() throws {
+    @Test func `price polling ids exclude ignored dust and unpriceable portfolio tokens`() throws {
         let visible = token(symbol: "VISIBLE", coinGeckoId: "visible", amount: 1, usdValue: 2)
         let ignored = token(symbol: "IGNORED", coinGeckoId: "ignored", amount: 1, usdValue: 10)
         let dust = try token(symbol: "DUST", coinGeckoId: "dust", amount: 1, usdValue: #require(Decimal(string: "0.25")))
-        let unpriced = token(symbol: "UNPRICED", coinGeckoId: "unpriced", amount: 1, usdValue: 0)
+        let unpriceable = token(symbol: "UNPRICEABLE", coinGeckoId: nil, amount: 1, usdValue: 0)
 
         let ids = try OverviewFeature.pricePollingIDs(
-            tokens: [visible, ignored, dust, unpriced],
+            tokens: [visible, ignored, dust, unpriceable],
             prices: ["visible": 2, "ignored": 10, "dust": #require(Decimal(string: "0.25"))],
             watchlistIDs: ["bitcoin"],
             overrides: [
@@ -344,6 +344,18 @@ struct OverviewFeatureTests {
             ])
 
         #expect(ids == ["bitcoin", "visible"])
+    }
+
+    @Test func `price polling ids keep resolvable unpriced holdings for recovery`() {
+        let unpriced = token(symbol: "UNPRICED", coinGeckoId: "unpriced", amount: 1, usdValue: 0)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [unpriced],
+            prices: [:],
+            watchlistIDs: [],
+            overrides: [])
+
+        #expect(ids == ["unpriced"])
     }
 
     @Test func `price polling ids use token pricing overrides`() {

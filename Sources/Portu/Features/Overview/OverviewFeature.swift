@@ -366,30 +366,6 @@ enum OverviewFeature {
         return rows
     }
 
-    static func pricePollingIDs(
-        tokens: [TokenEntry],
-        prices: [String: Decimal] = [:],
-        watchlistIDs: [String],
-        overrides: [TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults) -> [String] {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        var ids = tokens.compactMap { token -> String? in
-            let override = overrideMap[token.assetId]
-            guard
-                TokenSettingsFeature.isDashboardEligible(
-                    token: token,
-                    prices: prices,
-                    override: override,
-                    settings: settings)
-            else { return nil }
-
-            return TokenSettingsFeature.dashboardAdjustedToken(from: token, override: override).coinGeckoId
-        }
-
-        ids.append(contentsOf: watchlistIDs)
-        return OverviewWatchlistStore.normalizedUniqueIDs(ids).sorted()
-    }
-
     private struct SliceInput {
         let id: String
         let label: String
