@@ -140,7 +140,7 @@ struct ExposureTokenValueTests {
         #expect(try #require(data.assetRows.first { $0.symbol == "MANUAL" }).spotAssets == 4)
         #expect(try #require(data.assetRows.first { $0.symbol == "MAP" }).spotAssets == 4)
         #expect(data.summary.totalSpot == 108)
-        #expect(data.pollingIDs == ["bitcoin", "ignored", "new-map"])
+        #expect(data.pollingIDs == ["bitcoin", "new-map"])
     }
 
     private func makeToken(

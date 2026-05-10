@@ -186,6 +186,27 @@ struct PerformancePnLTests {
 // MARK: - Category Change Breakdown
 
 struct PerformanceCategoryChangeTests {
+    @MainActor
+    @Test func `category snapshot entry uses snapshotted category identity`() {
+        let categoryID = "custom-category"
+        let snapshot = AssetSnapshot(
+            syncBatchId: UUID(),
+            timestamp: Date(),
+            accountId: UUID(),
+            assetId: UUID(),
+            symbol: "ETH",
+            category: .major,
+            portfolioCategoryID: categoryID,
+            portfolioCategoryName: "Custom Category",
+            amount: 1,
+            usdValue: 100)
+
+        let entry = CategorySnapshotEntry(snapshot: snapshot)
+
+        #expect(entry.categoryID == categoryID)
+        #expect(entry.categoryName == "Custom Category")
+    }
+
     @Test func `computes start end and percent change`() throws {
         let cal = Calendar.current
         let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))

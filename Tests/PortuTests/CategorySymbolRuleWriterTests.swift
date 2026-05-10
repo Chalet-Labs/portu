@@ -56,6 +56,37 @@ struct CategorySymbolRuleWriterTests {
         #expect(rules.first?.category?.id == newCategory.id)
     }
 
+    @Test func `assigning category restores previous category when save fails`() throws {
+        let fixture = try makeFixture()
+        let oldCategory = try PortfolioCategory(
+            id: #require(UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")),
+            name: "Stablecoins",
+            sortOrder: 0,
+            semanticRole: .stablecoin)
+        let newCategory = try PortfolioCategory(
+            id: #require(UUID(uuidString: "CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC")),
+            name: "Majors",
+            sortOrder: 1)
+        let rule = CategorySymbolRule(normalizedSymbol: "ETH", category: oldCategory)
+        fixture.context.insert(oldCategory)
+        fixture.context.insert(newCategory)
+        fixture.context.insert(rule)
+        try fixture.context.save()
+
+        do {
+            try CategorySymbolRuleWriter.assign(
+                symbol: "eth",
+                to: newCategory,
+                existingRules: [rule],
+                in: fixture.context) {
+                    throw TestSaveError.expected
+                }
+            Issue.record("Expected assigning the rule to rethrow the save failure.")
+        } catch {
+            #expect(rule.category?.id == oldCategory.id)
+        }
+    }
+
     @Test func `removing symbol rule restores it when save fails`() throws {
         let fixture = try makeFixture()
         let category = try PortfolioCategory(

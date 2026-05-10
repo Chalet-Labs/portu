@@ -1,6 +1,7 @@
 import Foundation
 @testable import Portu
 import PortuCore
+import SwiftData
 import Testing
 
 struct TokenSettingsFeatureTests {
@@ -242,6 +243,31 @@ struct TokenSettingsFeatureTests {
         #expect(TokenSettingsOverrideDraft(override: first) != TokenSettingsOverrideDraft(override: second))
     }
 
+    @MainActor
+    @Test func `override upsert rolls back existing override when save fails`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let assetId = UUID()
+        let override = TokenPricingOverride(assetId: assetId, manualPriceUSD: 1)
+        context.insert(override)
+        try context.save()
+
+        do {
+            try TokenPricingOverrideWriter.upsert(
+                assetId: assetId,
+                overrides: [override],
+                in: context) {
+                    throw TestSaveError.expected
+                } update: { existing in
+                    existing.manualPriceUSD = 42
+                }
+            Issue.record("Expected override upsert to rethrow the save failure.")
+        } catch {
+            let fetched = try #require(try context.fetch(FetchDescriptor<TokenPricingOverride>()).first)
+            #expect(fetched.manualPriceUSD == 1)
+        }
+    }
+
     private func token(
         assetId: UUID = UUID(),
         symbol: String,
@@ -269,5 +295,9 @@ struct TokenSettingsFeatureTests {
 
     private func uuid(_ index: Int) -> UUID {
         UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index)) ?? UUID()
+    }
+
+    private enum TestSaveError: Error {
+        case expected
     }
 }

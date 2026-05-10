@@ -10,6 +10,8 @@
 
 ---
 
+## Implementation Tasks
+
 ### Task 1: Core Category Model And Resolver
 
 **Files:**

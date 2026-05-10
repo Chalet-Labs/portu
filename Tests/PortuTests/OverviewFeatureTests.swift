@@ -236,6 +236,22 @@ struct OverviewFeatureTests {
         #expect(suggestions == [preferred])
     }
 
+    @MainActor
+    @Test func `asset candidates use coin gecko overrides`() throws {
+        let assetId = UUID()
+        let asset = Asset(id: assetId, symbol: "LOCAL", name: "Local", category: .other)
+
+        let candidates = OverviewAssetCandidate.fromAssets(
+            [asset],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: assetId, coinGeckoIdOverride: " Local-Token ")
+            ])
+
+        let candidate = try #require(candidates.first)
+        #expect(candidate.coinGeckoId == "local-token")
+        #expect(candidate.symbol == "LOCAL")
+    }
+
     @Test func `price display uses compact dollar prefix and trims asset labels`() throws {
         #expect(OverviewPriceDisplay.assetLabel("wrappedsteth") == "wrappe")
         #expect(OverviewPriceDisplay.assetLabel("BTC") == "BTC")
@@ -359,6 +375,24 @@ struct OverviewFeatureTests {
         #expect(PriceWatchlistText.priceHeaderTitle == "Portfolio + Watchlist")
         #expect(TopAssetsDonutText.seeAllButtonTitle == "See all →")
         #expect(OverviewLayout.inspectorRailWidthAdjustment == 22)
+    }
+
+    @Test func `overview major label uses configured category names`() {
+        let customBTC = PortfolioCategorySnapshot(
+            id: PortfolioCategoryDefaults.btcCategoryID,
+            name: "Majors",
+            sortOrder: 0,
+            semanticRole: .normal,
+            isSystemRequired: false)
+        let customETH = PortfolioCategorySnapshot(
+            id: PortfolioCategoryDefaults.ethCategoryID,
+            name: "L1s",
+            sortOrder: 1,
+            semanticRole: .normal,
+            isSystemRequired: false)
+
+        #expect(OverviewSummaryLabels.majorCategoryTitle(categories: [customETH, customBTC]) == "Majors / L1s")
+        #expect(OverviewSummaryLabels.majorCategoryTitle(categories: []) == "Majors")
     }
 
     private func token(

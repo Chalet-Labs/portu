@@ -36,16 +36,10 @@ struct AssetsChartMode: View {
     }
 
     private var chartData: [ChartPoint] {
-        let resolver = categoryResolver
         let entries: [CategorySnapshotEntry] = filtered.compactMap { snapshot in
-            let category = resolver.resolve(symbol: snapshot.symbol, legacyCategory: snapshot.category)
-            guard !store.performance.disabledPortfolioCategoryIDs.contains(category.id.uuidString) else { return nil }
-            return CategorySnapshotEntry(
-                accountId: snapshot.accountId, assetId: snapshot.assetId,
-                timestamp: snapshot.timestamp, category: snapshot.category,
-                categoryID: category.id.uuidString,
-                categoryName: category.name,
-                usdValue: snapshot.usdValue)
+            let entry = CategorySnapshotEntry(snapshot: snapshot)
+            guard !store.performance.disabledPortfolioCategoryIDs.contains(entry.categoryID) else { return nil }
+            return entry
         }
         return PerformanceFeature.aggregateCategorySnapshots(entries: entries)
             .map { ChartPoint(date: $0.date, category: $0.category, value: $0.value) }

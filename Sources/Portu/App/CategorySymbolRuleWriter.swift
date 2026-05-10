@@ -9,16 +9,43 @@ enum CategorySymbolRuleWriter {
         to category: PortfolioCategory,
         existingRules: [CategorySymbolRule],
         in modelContext: ModelContext) throws {
+        try assign(
+            symbol: symbol,
+            to: category,
+            existingRules: existingRules,
+            in: modelContext) {
+                try modelContext.save()
+            }
+    }
+
+    static func assign(
+        symbol: String,
+        to category: PortfolioCategory,
+        existingRules: [CategorySymbolRule],
+        in modelContext: ModelContext,
+        save: () throws -> Void) throws {
         let normalizedSymbol = PortfolioCategoryDefaults.normalizeSymbol(symbol)
         guard !normalizedSymbol.isEmpty else { return }
 
-        if let existing = existingRules.first(where: { $0.normalizedSymbol == normalizedSymbol }) {
+        let existingRule = existingRules.first(where: { $0.normalizedSymbol == normalizedSymbol })
+        let previousCategory = existingRule?.category
+        let inserted: CategorySymbolRule?
+        if let existing = existingRule {
             existing.category = category
+            inserted = nil
         } else {
-            modelContext.insert(CategorySymbolRule(normalizedSymbol: normalizedSymbol, category: category))
+            let rule = CategorySymbolRule(normalizedSymbol: normalizedSymbol, category: category)
+            modelContext.insert(rule)
+            inserted = rule
         }
 
-        try modelContext.save()
+        do {
+            try save()
+        } catch {
+            if let inserted { modelContext.delete(inserted) }
+            if let existingRule { existingRule.category = previousCategory }
+            throw error
+        }
     }
 
     static func remove(_ rule: CategorySymbolRule, in modelContext: ModelContext) throws {

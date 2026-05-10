@@ -214,13 +214,6 @@ enum ExposureFeature {
 
         for token in tokens {
             let override = overrideMap[token.assetId]
-            if
-                token.amount > 0,
-                token.role.isPositive || token.role.isBorrow,
-                let coinGeckoId = TokenSettingsFeature.resolvedCoinGeckoID(token: token, override: override) {
-                pollingIDs.insert(coinGeckoId)
-            }
-
             guard
                 TokenSettingsFeature.isDashboardEligible(
                     token: token,
@@ -230,6 +223,13 @@ enum ExposureFeature {
             else { continue }
 
             let dashboardToken = TokenSettingsFeature.dashboardAdjustedToken(from: token, override: override)
+            if
+                dashboardToken.amount > 0,
+                dashboardToken.role.isPositive || dashboardToken.role.isBorrow,
+                let coinGeckoId = dashboardToken.coinGeckoId {
+                pollingIDs.insert(coinGeckoId)
+            }
+
             let value = resolveTokenUSDValue(
                 amount: dashboardToken.amount,
                 coinGeckoId: dashboardToken.coinGeckoId,

@@ -37,7 +37,7 @@ struct PriceWatchlist: View {
     }
 
     private var assetCandidates: [OverviewAssetCandidate] {
-        OverviewAssetCandidate.fromAssets(assets)
+        OverviewAssetCandidate.fromAssets(assets, overrides: overrideSnapshots)
     }
 
     private var assetCandidatesByCoinGeckoId: [String: OverviewAssetCandidate] {

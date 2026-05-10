@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Override Model and Schema
+## Task 1: Override Model and Schema
 
 **Files:**
 - Create: `Packages/PortuCore/Sources/PortuCore/Models/TokenPricingOverride.swift`
@@ -24,7 +24,7 @@
 - [ ] Add `TokenPricingOverride.self` to app/test SwiftData schemas.
 - [ ] Re-run the focused PortuCore test.
 
-### Task 2: Dashboard Eligibility and Token Settings Row Shaping
+## Task 2: Dashboard Eligibility and Token Settings Row Shaping
 
 **Files:**
 - Create: `Sources/Portu/Features/Settings/TokenSettingsFeature.swift`
@@ -35,7 +35,7 @@
 - [ ] Implement `TokenDashboardSettings`, `TokenPricingOverrideSnapshot`, `TokenPricingSource`, `TokenVisibilityStatus`, `TokenSettingsFilter`, `TokenSettingsRow`, `TokenSettingsCounts`, and `TokenSettingsFeature`.
 - [ ] Re-run focused tests until green.
 
-### Task 3: Settings UI
+## Task 3: Settings UI
 
 **Files:**
 - Create: `Sources/Portu/Features/Settings/TokenSettingsTab.swift`
@@ -48,7 +48,7 @@
 - [ ] Add the `Tokens` settings tab, global threshold controls, capped searchable table, filters, and per-row override controls.
 - [ ] Re-run focused tests until green.
 
-### Task 4: Heavy View Filtering
+## Task 4: Heavy View Filtering
 
 **Files:**
 - Modify: `Sources/Portu/Features/Exposure/ExposureView.swift`
@@ -64,7 +64,7 @@
 - [ ] Wire views to query `TokenPricingOverride`, apply CoinGecko ID overrides for price polling, and aggregate dashboard-eligible token entries.
 - [ ] Re-run focused feature tests until green.
 
-### Task 5: Verification
+## Task 5: Verification
 
 **Files:**
 - No new files.

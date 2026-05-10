@@ -222,21 +222,14 @@ private struct CategoryRuleEditor: View {
         let symbol = normalizedSymbol
         guard !symbol.isEmpty else { return }
 
-        let inserted: CategorySymbolRule?
-        if let existing = rules.first(where: { $0.normalizedSymbol == symbol }) {
-            existing.category = category
-            inserted = nil
-        } else {
-            let rule = CategorySymbolRule(normalizedSymbol: symbol, category: category)
-            modelContext.insert(rule)
-            inserted = rule
-        }
-
         do {
-            try modelContext.save()
+            try CategorySymbolRuleWriter.assign(
+                symbol: symbol,
+                to: category,
+                existingRules: rules,
+                in: modelContext)
             newSymbol = ""
         } catch {
-            if let inserted { modelContext.delete(inserted) }
             categorySettingsLogger.error("Failed to add symbol \(symbol, privacy: .public): \(String(describing: error), privacy: .public)")
             onSaveError(error.localizedDescription)
         }

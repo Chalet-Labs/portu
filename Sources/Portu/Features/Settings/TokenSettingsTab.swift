@@ -252,23 +252,13 @@ struct TokenSettingsTab: View {
     private func upsertOverride(
         assetId: UUID,
         update: (TokenPricingOverride) -> Void) {
-        let override: TokenPricingOverride
-        let inserted: TokenPricingOverride?
-        if let existing = overrides.first(where: { $0.assetId == assetId }) {
-            override = existing
-            inserted = nil
-        } else {
-            override = TokenPricingOverride(assetId: assetId)
-            modelContext.insert(override)
-            inserted = override
-        }
-
-        update(override)
-        override.updatedAt = .now
         do {
-            try modelContext.save()
+            try TokenPricingOverrideWriter.upsert(
+                assetId: assetId,
+                overrides: overrides,
+                in: modelContext,
+                update: update)
         } catch {
-            if let inserted { modelContext.delete(inserted) }
             tokenSettingsLogger.error("Failed to save override for \(assetId, privacy: .public): \(String(describing: error), privacy: .public)")
             saveError = error.localizedDescription
         }

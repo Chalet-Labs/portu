@@ -10,8 +10,19 @@ struct OverviewAssetCandidate: Equatable, Identifiable {
 
     @MainActor
     static func fromAssets(_ assets: [Asset]) -> [OverviewAssetCandidate] {
-        assets.compactMap { asset in
-            guard let coinGeckoId = asset.coinGeckoId else { return nil }
+        fromAssets(assets, overrides: [])
+    }
+
+    @MainActor
+    static func fromAssets(
+        _ assets: [Asset],
+        overrides: [TokenPricingOverrideSnapshot]) -> [OverviewAssetCandidate] {
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        return assets.compactMap { asset -> OverviewAssetCandidate? in
+            let coinGeckoId = OverviewWatchlistStore.normalizedID(
+                overrideMap[asset.id]?.coinGeckoIdOverride)
+                ?? OverviewWatchlistStore.normalizedID(asset.coinGeckoId)
+            guard let coinGeckoId else { return nil }
             return OverviewAssetCandidate(
                 id: asset.id,
                 symbol: asset.symbol,
@@ -19,6 +30,24 @@ struct OverviewAssetCandidate: Equatable, Identifiable {
                 category: asset.category,
                 coinGeckoId: coinGeckoId)
         }
+    }
+}
+
+enum OverviewSummaryLabels {
+    static let genericMajorsTitle = "Majors"
+
+    static func majorCategoryTitle(categories: [PortfolioCategorySnapshot]) -> String {
+        let title = categories
+            .filter { PortfolioCategoryDefaults.majorCategoryIDs.contains($0.id) }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+                let nameOrder = $0.name.localizedStandardCompare($1.name)
+                if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+            .map(\.name)
+            .joined(separator: " / ")
+        return title.isEmpty ? genericMajorsTitle : title
     }
 }
 

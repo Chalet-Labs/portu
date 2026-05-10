@@ -40,9 +40,10 @@ struct OverviewSummaryCards: View {
                 }
             }
         }
+        let majorLabel = OverviewSummaryLabels.majorCategoryTitle(categories: resolver.categories)
         return [
             ("Stablecoins & Fiat", stablesFiat),
-            ("BTC / ETH / SOL", majors),
+            (majorLabel, majors),
             ("Tokens & Memecoins", tokens)
         ]
     }
