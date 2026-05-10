@@ -188,7 +188,7 @@ public enum PortfolioCategoryDefaults {
 
     private static func unknownDefaultRuleSymbol(_ symbol: String) -> String {
         assertionFailure("Add a deterministic UUID for default symbol rule '\(symbol)'.")
-        return "00000000-0000-0000-0000-000000000299"
+        return UUID().uuidString
     }
 }
 
