@@ -2,6 +2,8 @@ import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general
+    case tokens
+    case categories
     case apiKeys
     case debug
 
@@ -12,6 +14,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: "General"
+        case .tokens: "Tokens"
+        case .categories: "Categories"
         case .apiKeys: "API Keys"
         case .debug: "Debug"
         }
@@ -20,6 +24,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .general: "Price refresh preferences for portfolio data."
+        case .tokens: "Manual pricing, low-value visibility, and token overrides."
+        case .categories: "Category symbol rules for app-wide portfolio categories."
         case .apiKeys: "Provider credentials and optional custom RPC endpoints."
         case .debug: "Local debug server controls for development builds."
         }
@@ -28,13 +34,15 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var sidebarGlyph: String {
         switch self {
         case .general: "G"
+        case .tokens: "T"
+        case .categories: "C"
         case .apiKeys: "K"
         case .debug: "D"
         }
     }
 
     static func visibleTabs(debugEnabled: Bool) -> [SettingsTab] {
-        debugEnabled ? [.general, .apiKeys, .debug] : [.general, .apiKeys]
+        debugEnabled ? [.general, .tokens, .categories, .apiKeys, .debug] : [.general, .tokens, .categories, .apiKeys]
     }
 
     static func filter(_ tabs: [SettingsTab], query: String) -> [SettingsTab] {
@@ -104,6 +112,10 @@ struct SettingsView: View {
         switch selectedTab {
         case .general:
             GeneralSettingsTab()
+        case .tokens:
+            TokenSettingsTab()
+        case .categories:
+            CategorySettingsTab()
         case .apiKeys:
             APIKeysSettingsTab()
         case .debug:

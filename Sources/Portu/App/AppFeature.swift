@@ -110,7 +110,6 @@ struct AppFeature {
         var allAssets = AllAssetsFeature.State()
         var assetDetail = AssetDetailFeature.State()
         var accounts = AccountsFeature.State()
-        var exposure = ExposureFeature.State()
         var performance = PerformanceFeature.State()
         var portfolioHealth = PortfolioHealthFeature.State()
     }
@@ -128,7 +127,6 @@ struct AppFeature {
         case allAssets(AllAssetsFeature.Action)
         case assetDetail(AssetDetailFeature.Action)
         case accounts(AccountsFeature.Action)
-        case exposure(ExposureFeature.Action)
         case performance(PerformanceFeature.Action)
         case portfolioHealth(PortfolioHealthFeature.Action)
     }
@@ -152,9 +150,6 @@ struct AppFeature {
         }
         Scope(state: \.accounts, action: \.accounts) {
             AccountsFeature()
-        }
-        Scope(state: \.exposure, action: \.exposure) {
-            ExposureFeature()
         }
         Scope(state: \.performance, action: \.performance) {
             PerformanceFeature()
@@ -238,9 +233,6 @@ struct AppFeature {
             case .accounts:
                 return .none
 
-            case .exposure:
-                return .none
-
             case .performance:
                 return .none
 
@@ -270,7 +262,6 @@ extension AppFeature.Action: Equatable {
         case let (.allAssets(l), .allAssets(r)): l == r
         case let (.assetDetail(l), .assetDetail(r)): l == r
         case let (.accounts(l), .accounts(r)): l == r
-        case let (.exposure(l), .exposure(r)): l == r
         case let (.performance(l), .performance(r)): l == r
         case let (.portfolioHealth(l), .portfolioHealth(r)): l == r
         default: false

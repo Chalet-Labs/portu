@@ -10,21 +10,52 @@ struct TopAssetsDonut: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
     @Query private var tokens: [PositionToken]
+    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
+    private var portfolioCategories: [PortfolioCategory]
+    @Query(sort: \CategorySymbolRule.normalizedSymbol)
+    private var categoryRules: [CategorySymbolRule]
+    @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
 
     @State private var selectedMode: TopAssetMode = .assets
 
-    /// Only tokens from active accounts
     private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(tokens)
+        TokenEntry.fromActiveTokens(
+            tokens,
+            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
+    }
+
+    private var dashboardTokenEntries: [TokenEntry] {
+        TokenSettingsFeature.dashboardEligibleTokens(
+            tokens: tokenEntries,
+            prices: appState.prices,
+            overrides: overrideSnapshots,
+            settings: dashboardSettings)
     }
 
     private var slices: [OverviewAssetSlice] {
         switch selectedMode {
         case .assets:
-            OverviewFeature.topAssetSlices(from: tokenEntries, prices: appState.prices, limit: 5)
+            OverviewFeature.topAssetSlices(from: dashboardTokenEntries, prices: appState.prices, limit: 5)
         case .category:
-            OverviewFeature.categorySlices(from: tokenEntries, prices: appState.prices, limit: 6)
+            OverviewFeature.categorySlices(from: dashboardTokenEntries, prices: appState.prices, limit: 6)
         }
+    }
+
+    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
+        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var dashboardSettings: TokenDashboardSettings {
+        TokenDashboardSettings(
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust)
     }
 
     var body: some View {

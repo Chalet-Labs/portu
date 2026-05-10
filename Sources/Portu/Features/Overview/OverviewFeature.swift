@@ -10,8 +10,19 @@ struct OverviewAssetCandidate: Equatable, Identifiable {
 
     @MainActor
     static func fromAssets(_ assets: [Asset]) -> [OverviewAssetCandidate] {
-        assets.compactMap { asset in
-            guard let coinGeckoId = asset.coinGeckoId else { return nil }
+        fromAssets(assets, overrides: [])
+    }
+
+    @MainActor
+    static func fromAssets(
+        _ assets: [Asset],
+        overrides: [TokenPricingOverrideSnapshot]) -> [OverviewAssetCandidate] {
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        return assets.compactMap { asset -> OverviewAssetCandidate? in
+            let coinGeckoId = OverviewWatchlistStore.normalizedID(
+                overrideMap[asset.id]?.coinGeckoIdOverride)
+                ?? OverviewWatchlistStore.normalizedID(asset.coinGeckoId)
+            guard let coinGeckoId else { return nil }
             return OverviewAssetCandidate(
                 id: asset.id,
                 symbol: asset.symbol,
@@ -19,6 +30,24 @@ struct OverviewAssetCandidate: Equatable, Identifiable {
                 category: asset.category,
                 coinGeckoId: coinGeckoId)
         }
+    }
+}
+
+enum OverviewSummaryLabels {
+    static let genericMajorsTitle = "Majors"
+
+    static func majorCategoryTitle(categories: [PortfolioCategorySnapshot]) -> String {
+        let title = categories
+            .filter { PortfolioCategoryDefaults.majorCategoryIDs.contains($0.id) }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+                let nameOrder = $0.name.localizedStandardCompare($1.name)
+                if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+            .map(\.name)
+            .joined(separator: " / ")
+        return title.isEmpty ? genericMajorsTitle : title
     }
 }
 
@@ -151,6 +180,7 @@ enum OverviewFeature {
         var symbol: String
         var name: String
         var category: AssetCategory
+        var portfolioCategory: PortfolioCategorySnapshot
         var coinGeckoId: String?
         var value: Decimal
         var amount: Decimal
@@ -183,25 +213,28 @@ enum OverviewFeature {
         from tokens: [TokenEntry],
         prices: [String: Decimal],
         limit: Int = 6) -> [OverviewAssetSlice] {
-        var values: [AssetCategory: Decimal] = [:]
+        var values: [PortfolioCategorySnapshot: Decimal] = [:]
         for token in tokens where token.role.isPositive {
-            values[token.category, default: 0] += resolvedValue(for: token, prices: prices)
+            values[token.portfolioCategory, default: 0] += resolvedValue(for: token, prices: prices)
         }
 
         let sortedValues = values
             .filter { $0.value > 0 }
             .sorted {
-                if $0.value == $1.value {
-                    return $0.key.rawValue < $1.key.rawValue
+                if $0.value != $1.value { return $0.value > $1.value }
+                if $0.key.sortOrder != $1.key.sortOrder {
+                    return $0.key.sortOrder < $1.key.sortOrder
                 }
-                return $0.value > $1.value
+                let nameOrder = $0.key.name.localizedStandardCompare($1.key.name)
+                if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+                return $0.key.id.uuidString < $1.key.id.uuidString
             }
 
         let visibleCount = max(limit, 0)
         var inputs = sortedValues
             .prefix(visibleCount)
             .map { category, value in
-                SliceInput(id: category.rawValue, label: category.rawValue.capitalized, value: value)
+                SliceInput(id: category.id.uuidString, label: category.name, value: value)
             }
 
         let otherValue = sortedValues.dropFirst(visibleCount).reduce(Decimal.zero) { $0 + $1.value }
@@ -336,18 +369,6 @@ enum OverviewFeature {
         return rows
     }
 
-    static func pricePollingIDs(
-        tokens: [TokenEntry],
-        watchlistIDs: [String]) -> [String] {
-        var ids = tokens.compactMap { token -> String? in
-            guard token.role.isPositive, token.amount > 0 else { return nil }
-            return token.coinGeckoId
-        }
-
-        ids.append(contentsOf: watchlistIDs)
-        return OverviewWatchlistStore.normalizedUniqueIDs(ids).sorted()
-    }
-
     private struct SliceInput {
         let id: String
         let label: String
@@ -377,6 +398,7 @@ enum OverviewFeature {
                 symbol: token.symbol,
                 name: token.name,
                 category: token.category,
+                portfolioCategory: token.portfolioCategory,
                 coinGeckoId: OverviewWatchlistStore.normalizedID(token.coinGeckoId),
                 value: 0,
                 amount: 0)

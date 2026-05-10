@@ -8,7 +8,7 @@ import Testing
 
 @MainActor
 struct AssetDetailFeatureTests {
-    // MARK: - B1: Chart Mode Selection
+    // MARK: - Chart Mode Selection
 
     @Test func `chart mode selection updates state`() async {
         let store = TestStore(initialState: AssetDetailFeature.State()) {
@@ -26,7 +26,7 @@ struct AssetDetailFeatureTests {
         }
     }
 
-    // MARK: - B2: Time Range Selection
+    // MARK: - Time Range Selection
 
     @Test func `time range selection updates state`() async {
         let store = TestStore(initialState: AssetDetailFeature.State()) {
@@ -48,7 +48,7 @@ struct AssetDetailFeatureTests {
     }
 }
 
-// MARK: - B3: Position Row Aggregation
+// MARK: - Position Row Aggregation
 
 struct AssetDetailPositionRowTests {
     @Test func `uses live price for usd balance`() {
@@ -137,7 +137,7 @@ struct AssetDetailPositionRowTests {
     }
 }
 
-// MARK: - B4: Holdings Summary
+// MARK: - Holdings Summary
 
 struct AssetDetailHoldingsSummaryTests {
     @Test func `total amount sums positive minus borrow`() {
@@ -256,7 +256,7 @@ struct AssetDetailHoldingsSummaryTests {
     }
 }
 
-// MARK: - B5: Snapshot Aggregation
+// MARK: - Snapshot Aggregation
 
 struct AssetDetailSnapshotTests {
     private let assetId = UUID()
@@ -394,7 +394,7 @@ struct AssetDetailSnapshotTests {
     }
 }
 
-// MARK: - B5b: Category Chart Aggregation
+// MARK: - Category Chart Aggregation
 
 struct AssetsChartAggregationTests {
     private let accountA = UUID()
@@ -438,14 +438,14 @@ struct AssetsChartAggregationTests {
 
         let points = PerformanceFeature.aggregateCategorySnapshots(entries: entries)
 
-        let major = points.first { $0.category == "Major" }
-        let defi = points.first { $0.category == "Defi" }
+        let major = points.first(where: { $0.categoryName == "Major" })
+        let defi = points.first(where: { $0.categoryName == "Defi" })
         #expect(major?.value == 5000)
         #expect(defi?.value == 2000)
     }
 }
 
-// MARK: - B6: Header Price Display
+// MARK: - Header Price Display
 
 struct AssetDetailHeaderPriceTests {
     @Test func `returns price and change when available`() throws {

@@ -238,7 +238,10 @@ final class SyncEngine: @unchecked Sendable {
 
         createPortfolioSnapshot(batchId: batchId, timestamp: batchTimestamp, positions: allPositions, isPartial: isPartial)
         createAccountSnapshots(batchId: batchId, timestamp: batchTimestamp, accounts: activeAccounts)
-        createAssetSnapshots(batchId: batchId, timestamp: batchTimestamp, positions: allPositions)
+        createAssetSnapshots(
+            batchId: batchId,
+            timestamp: batchTimestamp,
+            positions: allPositions)
 
         pruneSnapshots()
         try modelContext.save()
@@ -294,7 +297,10 @@ final class SyncEngine: @unchecked Sendable {
         }
     }
 
-    private func createAssetSnapshots(batchId: UUID, timestamp: Date, positions: [Position]) {
+    private func createAssetSnapshots(
+        batchId: UUID,
+        timestamp: Date,
+        positions: [Position]) {
         var accumulators: [String: AssetSnapshotAccumulator] = [:]
 
         for pos in positions {

@@ -67,6 +67,9 @@ struct ModelContainerFactory {
         Position.self,
         PositionToken.self,
         Asset.self,
+        TokenPricingOverride.self,
+        PortfolioCategory.self,
+        CategorySymbolRule.self,
         PortfolioSnapshot.self,
         AccountSnapshot.self,
         AssetSnapshot.self

@@ -1,32 +1,106 @@
-import ComposableArchitecture
 import Foundation
 @testable import Portu
 import PortuCore
 import Testing
 
-// MARK: - Reducer Tests
-
-@MainActor
-struct ExposureFeatureTests {
-    // MARK: - B1: View Mode Toggle
-
-    @Test func `view mode toggle updates state`() async {
-        let store = TestStore(initialState: ExposureFeature.State()) {
-            ExposureFeature()
-        }
-
-        await store.send(.viewModeChanged(true)) {
-            $0.showByAsset = true
-        }
-        await store.send(.viewModeChanged(false)) {
-            $0.showByAsset = false
-        }
-    }
-}
-
-// MARK: - B2: Category Exposure
-
 struct ExposureCategoryTests {
+    @Test func `groups default buckets without sui while preserving defi and meme`() {
+        let tokens = [
+            token(symbol: "BTC", category: .major, usdValue: 100),
+            token(symbol: "ETH", category: .major, usdValue: 90),
+            token(symbol: "SOL", category: .major, usdValue: 50),
+            token(symbol: "SUI", category: .major, usdValue: 40),
+            token(symbol: "UNI", category: .defi, usdValue: 30),
+            token(symbol: "PEPE", category: .meme, usdValue: 20),
+            token(symbol: "XMR", category: .privacy, usdValue: 10),
+            token(symbol: "CHF", category: .fiat, usdValue: 5),
+            token(symbol: "USDC", category: .stablecoin, usdValue: 4),
+            token(symbol: "OP", category: .governance, usdValue: 3),
+            token(symbol: "UNKNOWN", category: .other, usdValue: 2)
+        ]
+
+        let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
+        let names = categories.map(\.name)
+
+        #expect(names == [
+            "BTC",
+            "ETH",
+            "SOL",
+            "Other Tokens",
+            "DeFi",
+            "Meme",
+            "Privacy",
+            "Fiat",
+            "Stablecoins"
+        ])
+    }
+
+    @Test func `reference symbol buckets take precedence over stored fallback categories`() throws {
+        let tokens = [
+            token(symbol: "ETH", category: .other, usdValue: 100),
+            token(symbol: "WETH", category: .defi, usdValue: 50),
+            token(symbol: "UNI", category: .defi, usdValue: 25)
+        ]
+
+        let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
+        let eth = try #require(categories.first { $0.name == "ETH" })
+        let defi = try #require(categories.first { $0.name == "DeFi" })
+
+        #expect(eth.spotAssets == 150)
+        #expect(defi.spotAssets == 25)
+        #expect(categories.contains { $0.name == "Other Tokens" } == false)
+    }
+
+    @Test func `category share uses net exposure over total spot`() throws {
+        let tokens = [
+            token(symbol: "BTC", category: .major, usdValue: 60),
+            token(symbol: "ETH", category: .major, usdValue: 40),
+            token(symbol: "BTC", category: .major, role: .borrow, usdValue: 10)
+        ]
+
+        let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
+        let btc = try #require(categories.first { $0.name == "BTC" })
+        let eth = try #require(categories.first { $0.name == "ETH" })
+
+        #expect(btc.shareOfSpot == decimal("0.5"))
+        #expect(eth.shareOfSpot == decimal("0.4"))
+    }
+
+    @Test func `category share is zero when total spot is zero`() throws {
+        let tokens = [
+            token(symbol: "BTC", category: .major, role: .borrow, usdValue: 10)
+        ]
+
+        let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
+        let btc = try #require(categories.first { $0.name == "BTC" })
+
+        #expect(btc.shareOfSpot == 0)
+    }
+
+    @Test func `stablecoins are shown but excluded from net exposure`() {
+        let tokens = [
+            token(symbol: "BTC", category: .major, usdValue: 100),
+            token(symbol: "USDC", category: .stablecoin, usdValue: 40)
+        ]
+
+        let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
+        let summary = ExposureFeature.computeSummary(from: categories)
+
+        #expect(categories.contains { $0.name == "Stablecoins" })
+        #expect(summary.netExposure == 100)
+    }
+
+    @Test func `unmatched major symbols use other tokens by default`() {
+        let tokens = [
+            token(symbol: "SUI", category: .major, usdValue: 10),
+            token(symbol: "SOL", category: .major, usdValue: 10)
+        ]
+
+        let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
+
+        #expect(categories.map(\.name) == ["Other Tokens", "SOL"])
+    }
+
     @Test func `groups by category with spot and liabilities`() {
         let tokens = [
             TokenEntry(
@@ -69,14 +143,18 @@ struct ExposureCategoryTests {
 
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
 
-        let major = categories.first { $0.id == "major" }
-        let stable = categories.first { $0.id == "stablecoin" }
+        let btc = categories.first { $0.name == "BTC" }
+        let eth = categories.first { $0.name == "ETH" }
+        let stable = categories.first { $0.name == "Stablecoins" }
 
-        #expect(major != nil)
-        #expect(major?.spotAssets == 90000) // 60000 + 30000
-        #expect(major?.liabilities == 9000)
-        #expect(major?.spotNet == 81000) // 90000 - 9000
+        #expect(btc != nil)
+        #expect(btc?.spotAssets == 60000)
+        #expect(btc?.liabilities == 0)
 
+        #expect(eth != nil)
+        #expect(eth?.spotAssets == 30000)
+        #expect(eth?.liabilities == 9000)
+        #expect(eth?.netExposure == 21000)
         #expect(stable != nil)
         #expect(stable?.spotAssets == 5000)
         #expect(stable?.liabilities == 0)
@@ -107,7 +185,7 @@ struct ExposureCategoryTests {
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
 
         #expect(categories.count == 1) // Only major, no defi (reward excluded)
-        #expect(categories[0].id == "major")
+        #expect(categories[0].name == "ETH")
     }
 
     @Test func `omits categories with zero values`() {
@@ -126,7 +204,7 @@ struct ExposureCategoryTests {
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
 
         #expect(categories.count == 1)
-        #expect(categories[0].id == "major")
+        #expect(categories[0].name == "BTC")
     }
 
     @Test func `uses live prices when available`() {
@@ -148,7 +226,7 @@ struct ExposureCategoryTests {
         #expect(categories[0].spotAssets == 130_000) // 2 * 65000
     }
 
-    @Test func `maintains stable category ordering`() {
+    @Test func `sorts categories by net exposure descending`() {
         let tokens = [
             TokenEntry(
                 assetId: UUID(),
@@ -180,16 +258,36 @@ struct ExposureCategoryTests {
         ]
 
         let categories = ExposureFeature.computeCategoryExposure(tokens: tokens, prices: [:])
-        let ids = categories.map(\.id)
+        let ids = categories.map(\.name)
 
-        // AssetCategory.allCases order: major, stablecoin, defi, ...
-        #expect(ids == ["major", "stablecoin", "defi"])
+        #expect(ids == ["BTC", "Stablecoins", "DeFi"])
     }
 }
 
-// MARK: - B3: Asset Exposure
+// MARK: - Asset Exposure
 
 struct ExposureAssetTests {
+    @Test func `asset exposure carries logo url and share of spot`() throws {
+        let assetId = UUID()
+        let tokens = [
+            token(
+                assetId: assetId,
+                symbol: "BTC",
+                category: .major,
+                usdValue: 60,
+                logoURL: "https://img.example/btc.png"),
+            token(symbol: "ETH", category: .major, usdValue: 40)
+        ]
+
+        let assets = ExposureFeature.computeAssetExposure(tokens: tokens, prices: [:])
+        let btc = try #require(assets.first { $0.symbol == "BTC" })
+        let eth = try #require(assets.first { $0.symbol == "ETH" })
+
+        #expect(btc.logoURL == "https://img.example/btc.png")
+        #expect(btc.shareOfSpot == decimal("0.6"))
+        #expect(eth.shareOfSpot == decimal("0.4"))
+    }
+
     @Test func `groups by asset with spot and liabilities`() {
         let ethId = UUID()
         let tokens = [
@@ -219,7 +317,7 @@ struct ExposureAssetTests {
         #expect(assets[0].symbol == "ETH")
         #expect(assets[0].spotAssets == 30000)
         #expect(assets[0].liabilities == 9000)
-        #expect(assets[0].spotNet == 21000)
+        #expect(assets[0].netExposure == 21000)
     }
 
     @Test func `sorted by spot net descending`() {
@@ -273,66 +371,27 @@ struct ExposureAssetTests {
     }
 }
 
-// MARK: - B4: Summary Totals
-
-struct ExposureSummaryTests {
-    @Test func `computes totals from category exposures`() {
-        let categories = [
-            CategoryExposure(id: "major", name: "Major", spotAssets: 90000, liabilities: 9000),
-            CategoryExposure(id: "stablecoin", name: "Stablecoin", spotAssets: 5000, liabilities: 0),
-            CategoryExposure(id: "defi", name: "Defi", spotAssets: 1000, liabilities: 500)
-        ]
-
-        let summary = ExposureFeature.computeSummary(from: categories)
-
-        #expect(summary.totalSpot == 96000) // 90000 + 5000 + 1000
-        #expect(summary.totalLiabilities == 9500) // 9000 + 0 + 500
-    }
-
-    @Test func `net exposure excludes stablecoins`() {
-        let categories = [
-            CategoryExposure(id: "major", name: "Major", spotAssets: 90000, liabilities: 9000),
-            CategoryExposure(id: "stablecoin", name: "Stablecoin", spotAssets: 50000, liabilities: 0)
-        ]
-
-        let summary = ExposureFeature.computeSummary(from: categories)
-
-        #expect(summary.netExposure == 81000) // 90000 - 9000, stablecoin excluded
-    }
-
-    @Test func `empty categories returns zero`() {
-        let summary = ExposureFeature.computeSummary(from: [])
-
-        #expect(summary.totalSpot == 0)
-        #expect(summary.totalLiabilities == 0)
-        #expect(summary.netExposure == 0)
-    }
+private func token(
+    assetId: UUID = UUID(),
+    symbol: String,
+    coinGeckoId: String? = nil,
+    category: AssetCategory,
+    role: TokenRole = .balance,
+    amount: Decimal = 1,
+    usdValue: Decimal = 1,
+    logoURL: String? = nil) -> TokenEntry {
+    TokenEntry(
+        assetId: assetId,
+        symbol: symbol,
+        name: symbol,
+        category: category,
+        coinGeckoId: coinGeckoId,
+        role: role,
+        amount: amount,
+        usdValue: usdValue,
+        logoURL: logoURL)
 }
 
-// MARK: - B5: Token USD Value Resolution
-
-struct ExposureTokenValueTests {
-    @Test func `uses live price when available`() {
-        let value = ExposureFeature.resolveTokenUSDValue(
-            amount: 2, coinGeckoId: "bitcoin", usdValue: 100_000,
-            prices: ["bitcoin": 65000])
-
-        #expect(value == 130_000)
-    }
-
-    @Test func `falls back to usd value when no live price`() {
-        let value = ExposureFeature.resolveTokenUSDValue(
-            amount: 100, coinGeckoId: nil, usdValue: 500,
-            prices: [:])
-
-        #expect(value == 500)
-    }
-
-    @Test func `falls back when coinGeckoId not in prices`() {
-        let value = ExposureFeature.resolveTokenUSDValue(
-            amount: 10, coinGeckoId: "unknown-token", usdValue: 300,
-            prices: ["bitcoin": 65000])
-
-        #expect(value == 300)
-    }
+private func decimal(_ value: String) -> Decimal {
+    Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")) ?? 0
 }

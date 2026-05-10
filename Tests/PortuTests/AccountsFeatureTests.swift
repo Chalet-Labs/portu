@@ -8,7 +8,7 @@ import Testing
 
 @MainActor
 struct AccountsFeatureTests {
-    // MARK: - B1: Search Text
+    // MARK: - Search Text
 
     @Test func `search text updates state`() async {
         let store = TestStore(initialState: AccountsFeature.State()) {
@@ -23,7 +23,7 @@ struct AccountsFeatureTests {
         }
     }
 
-    // MARK: - B2: Group Filter
+    // MARK: - Group Filter
 
     @Test func `group filter updates state`() async {
         let store = TestStore(initialState: AccountsFeature.State()) {
@@ -38,7 +38,7 @@ struct AccountsFeatureTests {
         }
     }
 
-    // MARK: - B3: Show Inactive Toggle
+    // MARK: - Show Inactive Toggle
 
     @Test func `show inactive toggles state`() async {
         let store = TestStore(initialState: AccountsFeature.State()) {
@@ -53,7 +53,7 @@ struct AccountsFeatureTests {
         }
     }
 
-    // MARK: - B4: Show Add Sheet
+    // MARK: - Show Add Sheet
 
     @Test func `add sheet presentation updates state`() async {
         let store = TestStore(initialState: AccountsFeature.State()) {
@@ -69,7 +69,7 @@ struct AccountsFeatureTests {
     }
 }
 
-// MARK: - B5: Account Row Mapping
+// MARK: - Account Row Mapping
 
 struct AccountRowMappingTests {
     @Test func `maps wallet account with truncated address`() {
@@ -141,7 +141,7 @@ struct AccountRowMappingTests {
     }
 }
 
-// MARK: - B6: Account Row Filtering
+// MARK: - Account Row Filtering
 
 struct AccountRowFilteringTests {
     private let activeRow = AccountRowData(
@@ -210,7 +210,7 @@ struct AccountRowFilteringTests {
     }
 }
 
-// MARK: - B7: Group Extraction
+// MARK: - Group Extraction
 
 struct AccountGroupExtractionTests {
     @Test func `extracts sorted unique groups`() {
@@ -282,7 +282,7 @@ struct AccountGroupExtractionTests {
     }
 }
 
-// MARK: - B8: Form Validation
+// MARK: - Form Validation
 
 struct AccountFormValidationTests {
     @Test func `chain tab requires name and address`() {

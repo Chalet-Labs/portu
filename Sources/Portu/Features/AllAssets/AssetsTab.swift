@@ -10,6 +10,17 @@ import UniformTypeIdentifiers
 struct AssetsTab: View {
     let store: StoreOf<AppFeature>
     @Query private var allTokens: [PositionToken]
+    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
+    private var portfolioCategories: [PortfolioCategory]
+    @Query(sort: \CategorySymbolRule.normalizedSymbol)
+    private var categoryRules: [CategorySymbolRule]
+    @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
 
     @State private var exportError: String?
     @State private var sortColumn: AssetSortColumn = .value
@@ -17,11 +28,29 @@ struct AssetsTab: View {
 
     /// Map @Query tokens to lightweight entries, aggregate with live prices, filter, sort.
     private var rows: [AssetRowData] {
-        let entries = TokenEntry.fromActiveTokens(allTokens)
+        let entries = TokenEntry.fromActiveTokens(
+            allTokens,
+            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
 
-        let aggregated = AllAssetsFeature.aggregateRows(tokens: entries, prices: store.prices)
+        let dashboardEntries = TokenSettingsFeature.dashboardEligibleTokens(
+            tokens: entries,
+            prices: store.prices,
+            overrides: overrideSnapshots,
+            settings: dashboardSettings)
+        let aggregated = AllAssetsFeature.aggregateRows(tokens: dashboardEntries, prices: store.prices)
         let filtered = AllAssetsFeature.filterRows(aggregated, searchText: store.allAssets.searchText)
         return sortRows(filtered)
+    }
+
+    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
+        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var dashboardSettings: TokenDashboardSettings {
+        TokenDashboardSettings(
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust)
     }
 
     // MARK: - Body
@@ -132,7 +161,7 @@ struct AssetsTab: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                CapsuleBadge(row.category.rawValue.capitalized)
+                CapsuleBadge(row.portfolioCategory.name)
                     .frame(width: 112, alignment: .leading)
 
                 Text(row.netAmount, format: .number.precision(.fractionLength(2 ... 8)))
@@ -225,7 +254,7 @@ struct AssetsTab: View {
         case .name:
             lhs.name.localizedCaseInsensitiveCompare(rhs.name)
         case .category:
-            lhs.category.rawValue.localizedCaseInsensitiveCompare(rhs.category.rawValue)
+            lhs.portfolioCategory.name.localizedCaseInsensitiveCompare(rhs.portfolioCategory.name)
         case .netAmount:
             compare(lhs.netAmount, rhs.netAmount)
         case .price:

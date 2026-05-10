@@ -9,7 +9,14 @@ struct OverviewView: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
     @Query private var allTokens: [PositionToken]
+    @Query private var tokenPricingOverrides: [TokenPricingOverride]
     @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
 
     private var tokenEntries: [TokenEntry] {
         TokenEntry.fromActiveTokens(allTokens)
@@ -20,7 +27,23 @@ struct OverviewView: View {
     }
 
     private var pricePollingIDs: [String] {
-        OverviewFeature.pricePollingIDs(tokens: tokenEntries, watchlistIDs: watchlistIDs)
+        OverviewFeature.pricePollingIDs(
+            tokens: tokenEntries,
+            prices: appState.prices,
+            watchlistIDs: watchlistIDs,
+            overrides: overrideSnapshots,
+            settings: dashboardSettings)
+    }
+
+    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
+        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var dashboardSettings: TokenDashboardSettings {
+        TokenDashboardSettings(
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust)
     }
 
     var body: some View {
@@ -63,34 +86,11 @@ struct OverviewView: View {
 
     private var pageHeader: some View {
         DashboardPageHeader("Overview") {
-            HStack(spacing: 12) {
-                if let lastPriceUpdate = store.lastPriceUpdate {
-                    Text("Updated \(lastPriceUpdate, format: .relative(presentation: .named))")
-                        .font(.caption)
-                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                        .lineLimit(1)
-                } else {
-                    Text("Not updated yet")
-                        .font(.caption)
-                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                        .lineLimit(1)
+            DashboardHeaderSyncActions(
+                lastPriceUpdate: store.lastPriceUpdate,
+                isSyncing: appState.syncStatus.isSyncing) {
+                    appState.onSyncRequested?()
                 }
-
-                if case .syncing = appState.syncStatus {
-                    Button {} label: {
-                        OverviewSyncButtonLabel(isSyncing: true)
-                    }
-                    .buttonStyle(OverviewSyncButtonStyle())
-                    .disabled(true)
-                } else {
-                    Button {
-                        appState.onSyncRequested?()
-                    } label: {
-                        OverviewSyncButtonLabel(isSyncing: false)
-                    }
-                    .buttonStyle(OverviewSyncButtonStyle())
-                }
-            }
         }
     }
 
@@ -138,69 +138,4 @@ struct OverviewView: View {
 
 enum OverviewLayout {
     static let inspectorRailWidthAdjustment: CGFloat = 22
-}
-
-enum OverviewSyncButtonStyleMetrics {
-    static let iconName = "arrow.triangle.2.circlepath"
-    static let height: CGFloat = 30
-    static let cornerRadius: CGFloat = 6
-    static let horizontalPadding: CGFloat = 11
-    static let labelSpacing: CGFloat = 7
-}
-
-private struct OverviewSyncButtonLabel: View {
-    let isSyncing: Bool
-
-    var body: some View {
-        HStack(spacing: OverviewSyncButtonStyleMetrics.labelSpacing) {
-            Text("Sync")
-            if isSyncing {
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.62)
-                    .frame(width: 12, height: 12)
-                    .tint(PortuTheme.dashboardGold)
-            } else {
-                Image(systemName: OverviewSyncButtonStyleMetrics.iconName)
-                    .font(.system(size: 11, weight: .bold))
-            }
-        }
-        .lineLimit(1)
-    }
-}
-
-private struct OverviewSyncButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(isEnabled ? PortuTheme.dashboardText : PortuTheme.dashboardTertiaryText)
-            .padding(.horizontal, OverviewSyncButtonStyleMetrics.horizontalPadding)
-            .frame(height: OverviewSyncButtonStyleMetrics.height)
-            .background(
-                RoundedRectangle(cornerRadius: OverviewSyncButtonStyleMetrics.cornerRadius, style: .continuous)
-                    .fill(backgroundColor(isPressed: configuration.isPressed)))
-            .overlay(
-                RoundedRectangle(cornerRadius: OverviewSyncButtonStyleMetrics.cornerRadius, style: .continuous)
-                    .stroke(borderColor(isPressed: configuration.isPressed), lineWidth: 1))
-            .contentShape(
-                RoundedRectangle(cornerRadius: OverviewSyncButtonStyleMetrics.cornerRadius, style: .continuous))
-            .opacity(isEnabled ? 1 : 0.72)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
-
-    private func backgroundColor(isPressed: Bool) -> Color {
-        if isPressed {
-            return PortuTheme.dashboardGoldMuted.opacity(0.52)
-        }
-        return PortuTheme.dashboardGoldMuted.opacity(0.34)
-    }
-
-    private func borderColor(isPressed: Bool) -> Color {
-        if isPressed {
-            return PortuTheme.dashboardGold.opacity(0.58)
-        }
-        return PortuTheme.dashboardGold.opacity(0.34)
-    }
 }

@@ -12,7 +12,8 @@ struct SyncEngineTests {
     private func makeModelContext() throws -> ModelContext {
         let schema = Schema([
             Account.self, WalletAddress.self, Position.self,
-            PositionToken.self, Asset.self,
+            PositionToken.self, Asset.self, TokenPricingOverride.self,
+            PortfolioCategory.self, CategorySymbolRule.self,
             PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)

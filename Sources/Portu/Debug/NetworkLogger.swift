@@ -15,7 +15,7 @@ struct NetworkLogEntry: Codable, Identifiable {
 
     private static let sensitiveHeaderNames: Set<String> = [
         "authorization", "api-key", "api-sign", "api-secret",
-        "cookie", "set-cookie"
+        "cookie", "set-cookie", "x-zapper-api-key"
     ]
 
     static func redactHeaders(_ headers: [String: String]) -> [String: String] {

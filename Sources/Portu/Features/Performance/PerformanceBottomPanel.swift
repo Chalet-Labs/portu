@@ -8,17 +8,22 @@ struct PerformanceBottomPanel: View {
     let startDate: Date
 
     @Query(sort: \AssetSnapshot.timestamp) private var snapshots: [AssetSnapshot]
+    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
+    private var portfolioCategories: [PortfolioCategory]
+    @Query(sort: \CategorySymbolRule.normalizedSymbol)
+    private var categoryRules: [CategorySymbolRule]
+
+    private var categoryResolver: PortfolioCategoryResolver {
+        PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
+    }
 
     private var categoryChanges: [CategoryChange] {
+        let resolver = categoryResolver
         let entries = snapshots
             .filter { s in
                 s.timestamp >= startDate && (accountId == nil || s.accountId == accountId)
             }
-            .map {
-                CategorySnapshotEntry(
-                    accountId: $0.accountId, assetId: $0.assetId,
-                    timestamp: $0.timestamp, category: $0.category, usdValue: $0.usdValue)
-            }
+            .map { CategorySnapshotEntry(snapshot: $0, categoryResolver: resolver) }
         return PerformanceFeature.computeCategoryChanges(entries: entries)
     }
 

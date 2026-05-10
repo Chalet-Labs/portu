@@ -12,11 +12,18 @@ struct AssetsChartMode: View {
 
     @Query(sort: \AssetSnapshot.timestamp)
     private var snapshots: [AssetSnapshot]
+    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
+    private var portfolioCategories: [PortfolioCategory]
+    @Query(sort: \CategorySymbolRule.normalizedSymbol)
+    private var categoryRules: [CategorySymbolRule]
+
+    private var categoryResolver: PortfolioCategoryResolver {
+        PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
+    }
 
     private var filtered: [AssetSnapshot] {
         snapshots.filter { snap in
             snap.timestamp >= startDate
-                && !store.performance.disabledCategories.contains(snap.category)
                 && (accountId == nil || snap.accountId == accountId)
         }
     }
@@ -24,18 +31,19 @@ struct AssetsChartMode: View {
     private struct ChartPoint: Identifiable {
         let id = UUID()
         let date: Date
-        let category: String
+        let categoryID: String
+        let categoryName: String
         let value: Decimal
     }
 
     private var chartData: [ChartPoint] {
-        let entries = filtered.map {
-            CategorySnapshotEntry(
-                accountId: $0.accountId, assetId: $0.assetId,
-                timestamp: $0.timestamp, category: $0.category, usdValue: $0.usdValue)
+        let entries: [CategorySnapshotEntry] = filtered.compactMap { snapshot in
+            let entry = CategorySnapshotEntry(snapshot: snapshot, categoryResolver: categoryResolver)
+            guard !store.performance.disabledPortfolioCategoryIDs.contains(entry.categoryID) else { return nil }
+            return entry
         }
         return PerformanceFeature.aggregateCategorySnapshots(entries: entries)
-            .map { ChartPoint(date: $0.date, category: $0.category, value: $0.value) }
+            .map { ChartPoint(date: $0.date, categoryID: $0.categoryID, categoryName: $0.categoryName, value: $0.value) }
     }
 
     var body: some View {
@@ -52,7 +60,7 @@ struct AssetsChartMode: View {
                         x: .value("Date", point.date),
                         y: .value("Value", point.value),
                         stacking: .standard)
-                        .foregroundStyle(by: .value("Category", point.category))
+                        .foregroundStyle(by: .value("Category", point.categoryID))
                 }
                 .chartYAxis {
                     AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))
@@ -61,16 +69,16 @@ struct AssetsChartMode: View {
             }
 
             HStack(spacing: 8) {
-                ForEach(AssetCategory.allCases, id: \.self) { cat in
+                ForEach(categoryResolver.categories) { cat in
                     Button {
-                        store.send(.performance(.categoryToggled(cat)))
+                        store.send(.performance(.portfolioCategoryToggled(cat.id.uuidString)))
                     } label: {
-                        Text(cat.rawValue.capitalized)
+                        Text(cat.name)
                             .font(.caption)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(
-                                store.performance.disabledCategories.contains(cat)
+                                store.performance.disabledPortfolioCategoryIDs.contains(cat.id.uuidString)
                                     ? AnyShapeStyle(PortuTheme.dashboardMutedPanelBackground)
                                     : AnyShapeStyle(PortuTheme.dashboardGoldMuted))
                             .clipShape(Capsule())

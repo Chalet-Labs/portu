@@ -64,6 +64,75 @@ struct ZapperProviderTests {
     }
 
     @Test
+    func `fetchBalances maps Zapper chain id 100 to Gnosis`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        ZapperMockURLProtocol.requestHandler = { _ in
+            try (jsonData(tokenResponse(symbol: "GNO", tokenAddress: "0xgno", chainId: 100)), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        let results = try await provider.fetchBalances(context: makeSyncContext())
+
+        #expect(results.first?.chain?.rawValue == "gnosis")
+        #expect(results.first?.tokens.first?.chain?.rawValue == "gnosis")
+        #expect(results.first?.tokens.first?.sourceKey == "zapper:100:0xgno")
+    }
+
+    @Test
+    func `fetchBalances maps Zapper chain id 80094 to Berachain`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        ZapperMockURLProtocol.requestHandler = { _ in
+            try (jsonData(tokenResponse(symbol: "BERA", tokenAddress: "0xbera", chainId: 80094)), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        let results = try await provider.fetchBalances(context: makeSyncContext())
+
+        #expect(results.first?.chain?.rawValue == "berachain")
+        #expect(results.first?.tokens.first?.chain?.rawValue == "berachain")
+        #expect(results.first?.tokens.first?.sourceKey == "zapper:80094:0xbera")
+    }
+
+    @Test
+    func `fetchBalances maps observed Zapper response chain ids`() async throws {
+        let cases: [(chainId: Int, rawValue: String, symbol: String)] = [
+            (130, "unichain", "UNI"),
+            (146, "sonic", "S"),
+            (324, "zksync", "ZK"),
+            (1101, "polygonZkEVM", "POL"),
+            (1284, "moonbeam", "GLMR"),
+            (2020, "ronin", "RON"),
+            (5000, "mantle", "MNT"),
+            (13371, "immutableX", "IMX"),
+            (34443, "mode", "MODE"),
+            (59144, "linea", "ETH"),
+            (81457, "blast", "BLAST"),
+            (167_000, "taiko", "TAIKO"),
+            (534_352, "scroll", "SCR"),
+            (911_911, "hyperliquid", "HYPE"),
+            (7_777_777, "zora", "ZORA")
+        ]
+
+        defer { ZapperMockURLProtocol.reset() }
+        let provider = makeProvider(session: session)
+
+        for testCase in cases {
+            ZapperMockURLProtocol.requestHandler = { _ in
+                try (jsonData(tokenResponse(
+                    symbol: testCase.symbol,
+                    tokenAddress: "0x\(testCase.symbol.lowercased())",
+                    chainId: testCase.chainId)), 200)
+            }
+
+            let results = try await provider.fetchBalances(context: makeSyncContext())
+
+            #expect(results.first?.chain?.rawValue == testCase.rawValue)
+            #expect(results.first?.tokens.first?.chain?.rawValue == testCase.rawValue)
+            #expect(results.first?.tokens.first?.sourceKey == "zapper:\(testCase.chainId):0x\(testCase.symbol.lowercased())")
+        }
+    }
+
+    @Test
     func `fetchBalances paginates token balances until final page`() async throws {
         var callCount = 0
         defer { ZapperMockURLProtocol.reset() }

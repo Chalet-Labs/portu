@@ -129,6 +129,99 @@ struct DashboardSectionHeader<Trailing: View>: View {
     }
 }
 
+struct DashboardHeaderSyncActions: View {
+    let lastPriceUpdate: Date?
+    let isSyncing: Bool
+    let sync: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if let lastPriceUpdate {
+                Text("Updated \(lastPriceUpdate, format: .relative(presentation: .named))")
+                    .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .lineLimit(1)
+            } else {
+                Text("Not updated yet")
+                    .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .lineLimit(1)
+            }
+
+            Button(action: sync) {
+                DashboardSyncButtonLabel(isSyncing: isSyncing)
+            }
+            .buttonStyle(DashboardSyncButtonStyle())
+            .disabled(isSyncing)
+        }
+    }
+}
+
+enum DashboardSyncButtonStyleMetrics {
+    static let iconName = "arrow.triangle.2.circlepath"
+    static let height: CGFloat = 30
+    static let cornerRadius: CGFloat = 6
+    static let horizontalPadding: CGFloat = 11
+    static let labelSpacing: CGFloat = 7
+}
+
+struct DashboardSyncButtonLabel: View {
+    let isSyncing: Bool
+
+    var body: some View {
+        HStack(spacing: DashboardSyncButtonStyleMetrics.labelSpacing) {
+            Text("Sync")
+            if isSyncing {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.62)
+                    .frame(width: 12, height: 12)
+                    .tint(PortuTheme.dashboardGold)
+            } else {
+                Image(systemName: DashboardSyncButtonStyleMetrics.iconName)
+                    .font(.system(size: 11, weight: .bold))
+            }
+        }
+        .lineLimit(1)
+    }
+}
+
+struct DashboardSyncButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(isEnabled ? PortuTheme.dashboardText : PortuTheme.dashboardTertiaryText)
+            .padding(.horizontal, DashboardSyncButtonStyleMetrics.horizontalPadding)
+            .frame(height: DashboardSyncButtonStyleMetrics.height)
+            .background(
+                RoundedRectangle(cornerRadius: DashboardSyncButtonStyleMetrics.cornerRadius, style: .continuous)
+                    .fill(backgroundColor(isPressed: configuration.isPressed)))
+            .overlay(
+                RoundedRectangle(cornerRadius: DashboardSyncButtonStyleMetrics.cornerRadius, style: .continuous)
+                    .stroke(borderColor(isPressed: configuration.isPressed), lineWidth: 1))
+            .contentShape(
+                RoundedRectangle(cornerRadius: DashboardSyncButtonStyleMetrics.cornerRadius, style: .continuous))
+            .opacity(isEnabled ? 1 : 0.72)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+
+    private func backgroundColor(isPressed: Bool) -> Color {
+        if isPressed {
+            return PortuTheme.dashboardGoldMuted.opacity(0.52)
+        }
+        return PortuTheme.dashboardGoldMuted.opacity(0.34)
+    }
+
+    private func borderColor(isPressed: Bool) -> Color {
+        if isPressed {
+            return PortuTheme.dashboardGold.opacity(0.58)
+        }
+        return PortuTheme.dashboardGold.opacity(0.34)
+    }
+}
+
 struct DashboardSearchField: View {
     let placeholder: String
     @Binding var text: String

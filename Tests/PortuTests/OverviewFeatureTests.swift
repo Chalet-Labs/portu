@@ -55,26 +55,27 @@ struct OverviewFeatureTests {
         let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
 
         #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
-        #expect(slices.first?.label == "Major")
-        #expect(slices.first?.displayPercent == 67)
+        #expect(slices.first?.label == "BTC")
+        #expect(slices.first?.displayPercent == 34)
     }
 
     @Test func `category slices preserve omitted values in other bucket`() throws {
         let tokens = [
-            token(symbol: "MAJOR", category: .major, amount: 1, usdValue: 80),
-            token(symbol: "STABLE", category: .stablecoin, amount: 1, usdValue: 70),
-            token(symbol: "DEFI", category: .defi, amount: 1, usdValue: 60),
-            token(symbol: "MEME", category: .meme, amount: 1, usdValue: 50),
-            token(symbol: "PRIV", category: .privacy, amount: 1, usdValue: 40),
-            token(symbol: "FIAT", category: .fiat, amount: 1, usdValue: 30),
-            token(symbol: "GOV", category: .governance, amount: 1, usdValue: 20),
-            token(symbol: "OTHER", category: .other, amount: 1, usdValue: 10)
+            token(symbol: "BTC", category: .major, amount: 1, usdValue: 120),
+            token(symbol: "ETH", category: .major, amount: 1, usdValue: 100),
+            token(symbol: "OTHER", category: .other, amount: 1, usdValue: 90),
+            token(symbol: "STABLE", category: .stablecoin, amount: 1, usdValue: 80),
+            token(symbol: "DEFI", category: .defi, amount: 1, usdValue: 70),
+            token(symbol: "MEME", category: .meme, amount: 1, usdValue: 60),
+            token(symbol: "PRIV", category: .privacy, amount: 1, usdValue: 5),
+            token(symbol: "FIAT", category: .fiat, amount: 1, usdValue: 4),
+            token(symbol: "SOL", category: .major, amount: 1, usdValue: 3)
         ]
 
         let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
 
-        #expect(slices.map(\.label) == ["Major", "Stablecoin", "Defi", "Meme", "Privacy", "Fiat", "other"])
-        #expect(try #require(slices.last).value == 30)
+        #expect(slices.map(\.label) == ["BTC", "ETH", "Other Tokens", "Stablecoins", "DeFi", "Meme", "other"])
+        #expect(try #require(slices.last).value == 12)
         #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
     }
 
@@ -86,12 +87,13 @@ struct OverviewFeatureTests {
             token(symbol: "DEFI", category: .defi, amount: 1, usdValue: 60),
             token(symbol: "MEME", category: .meme, amount: 1, usdValue: 50),
             token(symbol: "PRIV", category: .privacy, amount: 1, usdValue: 40),
-            token(symbol: "GOV", category: .governance, amount: 1, usdValue: 30)
+            token(symbol: "BTC", category: .major, amount: 1, usdValue: 35),
+            token(symbol: "ETH", category: .major, amount: 1, usdValue: 20)
         ]
 
         let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
 
-        #expect(slices.map(\.id).contains("other"))
+        #expect(slices.map(\.id).contains(PortfolioCategoryDefaults.fallbackCategoryID.uuidString))
         #expect(slices.map(\.id).contains("category-residual"))
         #expect(Set(slices.map(\.id)).count == slices.count)
         #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
@@ -234,6 +236,22 @@ struct OverviewFeatureTests {
         #expect(suggestions == [preferred])
     }
 
+    @MainActor
+    @Test func `asset candidates use coin gecko overrides`() throws {
+        let assetId = UUID()
+        let asset = Asset(id: assetId, symbol: "LOCAL", name: "Local", category: .other)
+
+        let candidates = OverviewAssetCandidate.fromAssets(
+            [asset],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: assetId, coinGeckoIdOverride: " Local-Token ")
+            ])
+
+        let candidate = try #require(candidates.first)
+        #expect(candidate.coinGeckoId == "local-token")
+        #expect(candidate.symbol == "LOCAL")
+    }
+
     @Test func `price display uses compact dollar prefix and trims asset labels`() throws {
         #expect(OverviewPriceDisplay.assetLabel("wrappedsteth") == "wrappe")
         #expect(OverviewPriceDisplay.assetLabel("BTC") == "BTC")
@@ -272,10 +290,10 @@ struct OverviewFeatureTests {
     }
 
     @Test func `overview sync button uses compact reference metrics`() {
-        #expect(OverviewSyncButtonStyleMetrics.iconName == "arrow.triangle.2.circlepath")
-        #expect(OverviewSyncButtonStyleMetrics.height == 30)
-        #expect(OverviewSyncButtonStyleMetrics.cornerRadius == 6)
-        #expect(OverviewSyncButtonStyleMetrics.horizontalPadding == 11)
+        #expect(DashboardSyncButtonStyleMetrics.iconName == "arrow.triangle.2.circlepath")
+        #expect(DashboardSyncButtonStyleMetrics.height == 30)
+        #expect(DashboardSyncButtonStyleMetrics.cornerRadius == 6)
+        #expect(DashboardSyncButtonStyleMetrics.horizontalPadding == 11)
     }
 
     @Test func `watchlist persistence keeps order and uniqueness`() {
@@ -292,19 +310,79 @@ struct OverviewFeatureTests {
         #expect(removed == ["ethereum"])
     }
 
-    @Test func `price polling ids combine active portfolio and watchlist ids in stable order`() {
+    @Test func `price polling ids combine eligible portfolio and watchlist ids in stable order`() {
         let tokens = [
             token(symbol: "ETH", coinGeckoId: "ethereum", amount: 1, usdValue: 3000),
             token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 1, usdValue: 70000),
             token(symbol: "ETH", coinGeckoId: "ethereum", amount: 2, usdValue: 6000),
+            token(symbol: "BORROW", coinGeckoId: "borrow-token", role: .borrow, amount: 10, usdValue: 100),
+            token(symbol: "REWARD", coinGeckoId: "reward-token", role: .reward, amount: 10, usdValue: 100),
             token(symbol: "ZERO", coinGeckoId: "zero-token", amount: 10, usdValue: 0)
         ]
 
         let ids = OverviewFeature.pricePollingIDs(
             tokens: tokens,
-            watchlistIDs: ["solana", " Bitcoin ", "monero"])
+            prices: ["ethereum": 3000, "bitcoin": 70000, "borrow-token": 10],
+            watchlistIDs: ["solana", " Bitcoin ", "monero"],
+            overrides: [])
 
-        #expect(ids == ["bitcoin", "ethereum", "monero", "solana", "zero-token"])
+        #expect(ids == ["bitcoin", "borrow-token", "ethereum", "monero", "solana", "zero-token"])
+    }
+
+    @Test func `price polling ids exclude ignored dust and unpriceable portfolio tokens`() throws {
+        let visible = token(symbol: "VISIBLE", coinGeckoId: "visible", amount: 1, usdValue: 2)
+        let ignored = token(symbol: "IGNORED", coinGeckoId: "ignored", amount: 1, usdValue: 10)
+        let dust = try token(symbol: "DUST", coinGeckoId: "dust", amount: 1, usdValue: #require(Decimal(string: "0.25")))
+        let unpriceable = token(symbol: "UNPRICEABLE", coinGeckoId: nil, amount: 1, usdValue: 0)
+
+        let ids = try OverviewFeature.pricePollingIDs(
+            tokens: [visible, ignored, dust, unpriceable],
+            prices: ["visible": 2, "ignored": 10, "dust": #require(Decimal(string: "0.25"))],
+            watchlistIDs: ["bitcoin"],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true)
+            ])
+
+        #expect(ids == ["bitcoin", "visible"])
+    }
+
+    @Test func `price polling ids keep resolvable unpriced holdings for recovery`() {
+        let unpriced = token(symbol: "UNPRICED", coinGeckoId: "unpriced", amount: 1, usdValue: 0)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [unpriced],
+            prices: [:],
+            watchlistIDs: [],
+            overrides: [])
+
+        #expect(ids == ["unpriced"])
+    }
+
+    @Test func `price polling ids use token pricing overrides`() {
+        let mapped = token(symbol: "MAP", coinGeckoId: "old-map", amount: 1, usdValue: 10)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [mapped],
+            prices: ["new-map": 10],
+            watchlistIDs: [],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: mapped.assetId, coinGeckoIdOverride: " New-Map ")
+            ])
+
+        #expect(ids == ["new-map"])
+    }
+
+    @Test func `overview position visibility excludes ignored dashboard tokens`() {
+        let hidden = token(symbol: "HIDDEN", coinGeckoId: "hidden", amount: 1, usdValue: 10)
+        let overrideMap = TokenSettingsFeature.overridesByAssetId([
+            TokenPricingOverrideSnapshot(assetId: hidden.assetId, isIgnored: true)
+        ])
+
+        #expect(!OverviewPositionVisibility.isVisible(
+            token: hidden,
+            prices: ["hidden": 10],
+            overrideMap: overrideMap,
+            settings: .defaults))
     }
 
     @Test func `position pricing normalizes coin gecko ids`() {
@@ -341,6 +419,24 @@ struct OverviewFeatureTests {
         #expect(PriceWatchlistText.priceHeaderTitle == "Portfolio + Watchlist")
         #expect(TopAssetsDonutText.seeAllButtonTitle == "See all →")
         #expect(OverviewLayout.inspectorRailWidthAdjustment == 22)
+    }
+
+    @Test func `overview major label uses configured category names`() {
+        let customBTC = PortfolioCategorySnapshot(
+            id: PortfolioCategoryDefaults.btcCategoryID,
+            name: "Majors",
+            sortOrder: 0,
+            semanticRole: .normal,
+            isSystemRequired: false)
+        let customETH = PortfolioCategorySnapshot(
+            id: PortfolioCategoryDefaults.ethCategoryID,
+            name: "L1s",
+            sortOrder: 1,
+            semanticRole: .normal,
+            isSystemRequired: false)
+
+        #expect(OverviewSummaryLabels.majorCategoryTitle(categories: [customETH, customBTC]) == "Majors / L1s")
+        #expect(OverviewSummaryLabels.majorCategoryTitle(categories: []) == "Majors")
     }
 
     private func token(

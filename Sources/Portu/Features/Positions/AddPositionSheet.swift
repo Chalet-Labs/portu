@@ -10,6 +10,10 @@ struct AddPositionSheet: View {
     @Query(filter: #Predicate<Account> { $0.isActive == true && $0.dataSource.rawValue == "manual" })
     private var manualAccounts: [Account]
     @Query private var assets: [Asset]
+    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
+    private var portfolioCategories: [PortfolioCategory]
+    @Query(sort: \CategorySymbolRule.normalizedSymbol)
+    private var categoryRules: [CategorySymbolRule]
 
     @State private var selectedAccountId: UUID?
     @State private var assetSearch = ""
@@ -24,8 +28,12 @@ struct AddPositionSheet: View {
     // New asset fields
     @State private var newSymbol = ""
     @State private var newName = ""
-    @State private var newCategory: AssetCategory = .other
+    @State private var newPortfolioCategoryId = PortfolioCategoryDefaults.fallbackCategoryID
     @State private var createNewAsset = false
+
+    private var categoryResolver: PortfolioCategoryResolver {
+        PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
+    }
 
     private var filteredAssets: [Asset] {
         if assetSearch.isEmpty { return Array(assets.prefix(20)) }
@@ -55,9 +63,9 @@ struct AddPositionSheet: View {
                     if createNewAsset {
                         TextField("Symbol", text: $newSymbol)
                         TextField("Name", text: $newName)
-                        Picker("Category", selection: $newCategory) {
-                            ForEach(AssetCategory.allCases, id: \.self) { cat in
-                                Text(cat.rawValue.capitalized).tag(cat)
+                        Picker("Category", selection: $newPortfolioCategoryId) {
+                            ForEach(categoryResolver.categories) { category in
+                                Text(category.name).tag(category.id)
                             }
                         }
                         Button("Use existing asset") { createNewAsset = false }
@@ -114,7 +122,21 @@ struct AddPositionSheet: View {
 
         let asset: Asset
         if createNewAsset {
-            asset = Asset(symbol: newSymbol, name: newName, category: newCategory)
+            let portfolioCategory = categoryResolver.categories.first { $0.id == newPortfolioCategoryId }
+                ?? PortfolioCategoryDefaults.fallbackCategory
+            do {
+                try ManualPositionCategoryRules.upsertGlobalRule(
+                    symbol: newSymbol,
+                    categoryId: portfolioCategory.id,
+                    in: modelContext)
+            } catch {
+                saveError = error.localizedDescription
+                return
+            }
+            asset = Asset(
+                symbol: newSymbol,
+                name: newName,
+                category: ManualPositionCategoryRules.legacyCategory(for: portfolioCategory))
             modelContext.insert(asset)
         } else if let existing = selectedAsset {
             asset = existing
@@ -138,6 +160,112 @@ struct AddPositionSheet: View {
             dismiss()
         } catch {
             saveError = error.localizedDescription
+        }
+    }
+}
+
+enum ManualPositionCategoryRules {
+    static func legacyCategory(for category: PortfolioCategorySnapshot) -> AssetCategory {
+        switch category.id {
+        case PortfolioCategoryDefaults.defiCategoryID:
+            .defi
+        case PortfolioCategoryDefaults.memeCategoryID:
+            .meme
+        case PortfolioCategoryDefaults.privacyCategoryID:
+            .privacy
+        case PortfolioCategoryDefaults.fiatCategoryID:
+            .fiat
+        case PortfolioCategoryDefaults.stablecoinsCategoryID:
+            .stablecoin
+        default:
+            .other
+        }
+    }
+
+    @MainActor
+    static func upsertGlobalRule(
+        symbol: String,
+        categoryId: UUID,
+        in modelContext: ModelContext) throws {
+        try upsertGlobalRule(
+            symbol: symbol,
+            categoryId: categoryId,
+            in: modelContext) {
+                try modelContext.save()
+            }
+    }
+
+    @MainActor
+    static func upsertGlobalRule(
+        symbol: String,
+        categoryId: UUID,
+        in modelContext: ModelContext,
+        save: () throws -> Void) throws {
+        try PortfolioCategorySeeder.seedIfNeeded(in: modelContext)
+
+        let normalizedSymbol = PortfolioCategoryDefaults.normalizeSymbol(symbol)
+        guard !normalizedSymbol.isEmpty else { return }
+
+        let categoryDescriptor = FetchDescriptor<PortfolioCategory>(
+            predicate: #Predicate { $0.id == categoryId })
+        guard let category = try modelContext.fetch(categoryDescriptor).first else { return }
+
+        let ruleDescriptor = FetchDescriptor<CategorySymbolRule>(
+            predicate: #Predicate { $0.normalizedSymbol == normalizedSymbol })
+        let existingRules = try modelContext.fetch(ruleDescriptor)
+        let previousRules = existingRules.map(SymbolRuleSnapshot.init)
+        let insertedRule: CategorySymbolRule?
+        if let firstRule = existingRules.first {
+            firstRule.category = category
+            for duplicateRule in existingRules.dropFirst() {
+                modelContext.delete(duplicateRule)
+            }
+            insertedRule = nil
+        } else {
+            let rule = CategorySymbolRule(
+                normalizedSymbol: normalizedSymbol,
+                category: category)
+            modelContext.insert(rule)
+            insertedRule = rule
+        }
+
+        do {
+            try save()
+        } catch {
+            if let insertedRule {
+                modelContext.delete(insertedRule)
+            } else {
+                if let firstRule = existingRules.first, let firstSnapshot = previousRules.first {
+                    firstSnapshot.restore(firstRule)
+                }
+                for snapshot in previousRules.dropFirst() {
+                    modelContext.insert(snapshot.makeRule())
+                }
+            }
+            throw error
+        }
+    }
+
+    private struct SymbolRuleSnapshot {
+        let id: UUID
+        let normalizedSymbol: String
+        let category: PortfolioCategory?
+
+        init(_ rule: CategorySymbolRule) {
+            self.id = rule.id
+            self.normalizedSymbol = rule.normalizedSymbol
+            self.category = rule.category
+        }
+
+        func restore(_ rule: CategorySymbolRule) {
+            rule.category = category
+        }
+
+        func makeRule() -> CategorySymbolRule {
+            CategorySymbolRule(
+                id: id,
+                normalizedSymbol: normalizedSymbol,
+                category: category)
         }
     }
 }

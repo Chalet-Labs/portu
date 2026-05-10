@@ -20,10 +20,7 @@ struct PnLBar: Identifiable, Equatable {
 
 /// Category change data for the bottom panel.
 struct CategoryChange: Identifiable, Equatable {
-    var id: String {
-        name
-    }
-
+    let id: String
     let name: String
     let startValue: Decimal
     let endValue: Decimal
@@ -36,13 +33,50 @@ struct CategorySnapshotEntry: Equatable {
     let assetId: UUID
     let timestamp: Date
     let category: AssetCategory
+    let categoryID: String
+    let categoryName: String
     let usdValue: Decimal
+
+    init(
+        accountId: UUID,
+        assetId: UUID,
+        timestamp: Date,
+        category: AssetCategory,
+        categoryID: String? = nil,
+        categoryName: String? = nil,
+        usdValue: Decimal) {
+        self.accountId = accountId
+        self.assetId = assetId
+        self.timestamp = timestamp
+        self.category = category
+        self.categoryID = categoryID ?? category.rawValue
+        self.categoryName = categoryName ?? category.rawValue.capitalized
+        self.usdValue = usdValue
+    }
+
+    @MainActor
+    init(
+        snapshot: AssetSnapshot,
+        categoryResolver: PortfolioCategoryResolver = .defaults) {
+        let resolved = categoryResolver.resolve(
+            symbol: snapshot.symbol,
+            legacyCategory: snapshot.category)
+        self.init(
+            accountId: snapshot.accountId,
+            assetId: snapshot.assetId,
+            timestamp: snapshot.timestamp,
+            category: snapshot.category,
+            categoryID: resolved.id.uuidString,
+            categoryName: resolved.name,
+            usdValue: snapshot.usdValue)
+    }
 }
 
 /// Aggregated category chart data point (one per day per category).
 struct CategoryChartPoint: Equatable {
     let date: Date
-    let category: String
+    let categoryID: String
+    let categoryName: String
     let value: Decimal
 }
 
@@ -55,7 +89,7 @@ struct PerformanceFeature {
         var selectedAccountId: UUID?
         var selectedRange: ChartTimeRange = .oneMonth
         var chartMode: PerformanceChartMode = .value
-        var disabledCategories: Set<AssetCategory> = []
+        var disabledPortfolioCategoryIDs: Set<String> = []
         var showCumulative: Bool = false
     }
 
@@ -63,7 +97,7 @@ struct PerformanceFeature {
         case accountSelected(UUID?)
         case timeRangeChanged(ChartTimeRange)
         case chartModeChanged(PerformanceChartMode)
-        case categoryToggled(AssetCategory)
+        case portfolioCategoryToggled(String)
         case showCumulativeToggled
     }
 
@@ -82,11 +116,11 @@ struct PerformanceFeature {
                 state.chartMode = mode
                 return .none
 
-            case let .categoryToggled(category):
-                if state.disabledCategories.contains(category) {
-                    state.disabledCategories.remove(category)
+            case let .portfolioCategoryToggled(id):
+                if state.disabledPortfolioCategoryIDs.contains(id) {
+                    state.disabledPortfolioCategoryIDs.remove(id)
                 } else {
-                    state.disabledCategories.insert(category)
+                    state.disabledPortfolioCategoryIDs.insert(id)
                 }
                 return .none
 
@@ -162,21 +196,28 @@ struct PerformanceFeature {
         let cal = Calendar.current
         let deduped = deduplicateByDayAndAsset(entries)
 
-        var grouped: [Date: [AssetCategory: Decimal]] = [:]
+        var grouped: [Date: [String: (name: String, value: Decimal)]] = [:]
         for entry in deduped {
             let day = cal.startOfDay(for: entry.timestamp)
-            grouped[day, default: [:]][entry.category, default: 0] += entry.usdValue
+            var category = grouped[day, default: [:]][entry.categoryID] ?? (entry.categoryName, 0)
+            category.value += entry.usdValue
+            grouped[day, default: [:]][entry.categoryID] = category
         }
 
         return grouped.flatMap { date, categories in
             categories.map {
                 CategoryChartPoint(
-                    date: date, category: $0.key.rawValue.capitalized, value: $0.value)
+                    date: date,
+                    categoryID: $0.key,
+                    categoryName: $0.value.name,
+                    value: $0.value.value)
             }
         }
         .sorted {
             if $0.date != $1.date { return $0.date < $1.date }
-            return $0.category < $1.category
+            let nameOrder = $0.categoryName.localizedStandardCompare($1.categoryName)
+            if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+            return $0.categoryID < $1.categoryID
         }
     }
 
@@ -190,22 +231,27 @@ struct PerformanceFeature {
         let lastDay = cal.startOfDay(for: sorted.last!.timestamp)
         let deduped = deduplicateByDayAndAsset(sorted)
 
-        var startValues: [AssetCategory: Decimal] = [:]
-        var endValues: [AssetCategory: Decimal] = [:]
+        var namesByID: [String: String] = [:]
+        var startValues: [String: Decimal] = [:]
+        var endValues: [String: Decimal] = [:]
 
         for entry in deduped {
             let day = cal.startOfDay(for: entry.timestamp)
-            if day == firstDay { startValues[entry.category, default: 0] += entry.usdValue }
-            if day == lastDay { endValues[entry.category, default: 0] += entry.usdValue }
+            namesByID[entry.categoryID] = entry.categoryName
+            if day == firstDay { startValues[entry.categoryID, default: 0] += entry.usdValue }
+            if day == lastDay { endValues[entry.categoryID, default: 0] += entry.usdValue }
         }
 
-        return AssetCategory.allCases.compactMap { cat in
-            let start = startValues[cat, default: 0]
-            let end = endValues[cat, default: 0]
+        return namesByID.keys.sorted { lhs, rhs in
+            (namesByID[lhs] ?? lhs).localizedStandardCompare(namesByID[rhs] ?? rhs) == .orderedAscending
+        }.compactMap { id in
+            let start = startValues[id, default: 0]
+            let end = endValues[id, default: 0]
             guard start > 0 || end > 0 else { return nil }
             let change = start > 0 ? (end - start) / start : 0
             return CategoryChange(
-                name: cat.rawValue.capitalized,
+                id: id,
+                name: namesByID[id] ?? id,
                 startValue: start,
                 endValue: end,
                 percentChange: change)

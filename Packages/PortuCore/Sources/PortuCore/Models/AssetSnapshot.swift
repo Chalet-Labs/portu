@@ -11,9 +11,13 @@ public final class AssetSnapshot: Timestamped {
     public var accountId: UUID
     public var assetId: UUID
 
-    /// Denormalized for display — survives Asset changes
+    /// Denormalized asset metadata — survives Asset changes.
     public var symbol: String
     public var category: AssetCategory
+    /// Legacy compatibility fields. Current portfolio category display is resolved
+    /// from the live app-wide category rules at render time.
+    public var portfolioCategoryID: String?
+    public var portfolioCategoryName: String?
 
     /// GROSS POSITIVE: sum of supply + balance + stake + lpToken roles
     public var amount: Decimal
@@ -31,6 +35,8 @@ public final class AssetSnapshot: Timestamped {
         assetId: UUID,
         symbol: String,
         category: AssetCategory,
+        portfolioCategoryID: String? = nil,
+        portfolioCategoryName: String? = nil,
         amount: Decimal,
         usdValue: Decimal,
         borrowAmount: Decimal = 0,
@@ -42,6 +48,8 @@ public final class AssetSnapshot: Timestamped {
         self.assetId = assetId
         self.symbol = symbol
         self.category = category
+        self.portfolioCategoryID = portfolioCategoryID
+        self.portfolioCategoryName = portfolioCategoryName
         self.amount = amount
         self.usdValue = usdValue
         self.borrowAmount = borrowAmount

@@ -27,6 +27,13 @@ enum SyncStatus: Hashable {
     case syncing(progress: Double)
     case completedWithErrors(failedAccounts: [String])
     case error(String)
+
+    var isSyncing: Bool {
+        if case .syncing = self {
+            return true
+        }
+        return false
+    }
 }
 
 @Observable

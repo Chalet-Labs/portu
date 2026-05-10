@@ -6,14 +6,16 @@ struct SettingsTabTests {
     @Test func `default visible tabs match settings sidebar order`() {
         let tabs = SettingsTab.visibleTabs(debugEnabled: true)
 
-        #expect(tabs.map(\.title) == ["General", "API Keys", "Debug"])
-        #expect(tabs.map(\.sidebarGlyph) == ["G", "K", "D"])
+        #expect(tabs.map(\.title) == ["General", "Tokens", "Categories", "API Keys", "Debug"])
+        #expect(tabs.map(\.sidebarGlyph) == ["G", "T", "C", "K", "D"])
     }
 
     @Test func `search filters settings tabs by title and subtitle`() {
         let tabs = SettingsTab.visibleTabs(debugEnabled: true)
 
         #expect(SettingsTab.filter(tabs, query: "key") == [.apiKeys])
+        #expect(SettingsTab.filter(tabs, query: "pricing") == [.tokens])
+        #expect(SettingsTab.filter(tabs, query: "category") == [.categories])
         #expect(SettingsTab.filter(tabs, query: "server") == [.debug])
         #expect(SettingsTab.filter(tabs, query: "price") == [.general])
         #expect(SettingsTab.filter(tabs, query: " ") == tabs)

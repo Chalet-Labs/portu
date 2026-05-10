@@ -12,6 +12,7 @@ func makeTestContainer() throws -> ModelContainer {
         Position.self,
         PositionToken.self,
         Asset.self,
+        TokenPricingOverride.self,
         PortfolioSnapshot.self,
         AccountSnapshot.self,
         AssetSnapshot.self
@@ -180,6 +181,37 @@ struct ModelTests {
         let fetched = try context.fetch(FetchDescriptor<AssetSnapshot>())
         #expect(fetched[0].syncBatchId == batchId)
         #expect(fetched[0].borrowAmount == 0)
+    }
+
+    @Test func `token pricing override stores user pricing and visibility settings`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+        let assetId = UUID()
+        let createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let updatedAt = Date(timeIntervalSince1970: 1_700_000_600)
+
+        let override = TokenPricingOverride(
+            assetId: assetId,
+            manualPriceUSD: Decimal(string: "1.25"),
+            coinGeckoIdOverride: "custom-token",
+            isIgnored: true,
+            alwaysShow: true,
+            notes: "manual check",
+            createdAt: createdAt,
+            updatedAt: updatedAt)
+
+        context.insert(override)
+        try context.save()
+
+        let fetched = try #require(try context.fetch(FetchDescriptor<TokenPricingOverride>()).first)
+        #expect(fetched.assetId == assetId)
+        #expect(fetched.manualPriceUSD == Decimal(string: "1.25"))
+        #expect(fetched.coinGeckoIdOverride == "custom-token")
+        #expect(fetched.isIgnored)
+        #expect(fetched.alwaysShow)
+        #expect(fetched.notes == "manual check")
+        #expect(fetched.createdAt == createdAt)
+        #expect(fetched.updatedAt == updatedAt)
     }
 
     @Test func `account is active by default`() {
