@@ -23,10 +23,33 @@ nonisolated struct AssetRowData: Identifiable {
     let symbol: String
     let name: String
     let category: AssetCategory
+    let portfolioCategory: PortfolioCategorySnapshot
     let netAmount: Decimal
     let price: Decimal
     let value: Decimal
     let hasLivePrice: Bool
+
+    init(
+        id: UUID,
+        symbol: String,
+        name: String,
+        category: AssetCategory,
+        portfolioCategory: PortfolioCategorySnapshot? = nil,
+        netAmount: Decimal,
+        price: Decimal,
+        value: Decimal,
+        hasLivePrice: Bool) {
+        self.id = id
+        self.symbol = symbol
+        self.name = name
+        self.category = category
+        self.portfolioCategory = portfolioCategory
+            ?? PortfolioCategoryResolver.defaults.resolve(symbol: symbol, legacyCategory: category)
+        self.netAmount = netAmount
+        self.price = price
+        self.value = value
+        self.hasLivePrice = hasLivePrice
+    }
 }
 
 /// Accumulator for aggregating token amounts per asset.
@@ -34,6 +57,7 @@ struct AssetAccumulator {
     var symbol: String
     var name: String
     var category: AssetCategory
+    var portfolioCategory: PortfolioCategorySnapshot = PortfolioCategoryDefaults.fallbackCategory
     var coinGeckoId: String?
     var positive: Decimal = 0
     var borrow: Decimal = 0
@@ -47,19 +71,50 @@ struct TokenEntry: Equatable {
     let symbol: String
     let name: String
     let category: AssetCategory
+    let portfolioCategory: PortfolioCategorySnapshot
     let coinGeckoId: String?
     let role: TokenRole
     let amount: Decimal
     let usdValue: Decimal
+    let logoURL: String?
+
+    init(
+        assetId: UUID,
+        symbol: String,
+        name: String,
+        category: AssetCategory,
+        portfolioCategory: PortfolioCategorySnapshot? = nil,
+        coinGeckoId: String?,
+        role: TokenRole,
+        amount: Decimal,
+        usdValue: Decimal,
+        logoURL: String? = nil) {
+        self.assetId = assetId
+        self.symbol = symbol
+        self.name = name
+        self.category = category
+        self.portfolioCategory = portfolioCategory
+            ?? PortfolioCategoryResolver.defaults.resolve(symbol: symbol, legacyCategory: category)
+        self.coinGeckoId = coinGeckoId
+        self.role = role
+        self.amount = amount
+        self.usdValue = usdValue
+        self.logoURL = logoURL
+    }
 
     /// Convert active PositionTokens to TokenEntries, filtering out tokens without assets or inactive accounts.
-    static func fromActiveTokens(_ tokens: [PositionToken]) -> [TokenEntry] {
+    static func fromActiveTokens(
+        _ tokens: [PositionToken],
+        categoryResolver: PortfolioCategoryResolver = .defaults) -> [TokenEntry] {
         tokens.compactMap { token in
             guard let asset = token.asset, token.position?.account?.isActive == true else { return nil }
             return TokenEntry(
                 assetId: asset.id, symbol: asset.symbol, name: asset.name,
-                category: asset.category, coinGeckoId: asset.coinGeckoId,
-                role: token.role, amount: token.amount, usdValue: token.usdValue)
+                category: asset.category,
+                portfolioCategory: categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
+                coinGeckoId: asset.coinGeckoId,
+                role: token.role, amount: token.amount, usdValue: token.usdValue,
+                logoURL: asset.logoURL)
         }
     }
 }
@@ -112,6 +167,7 @@ struct AllAssetsFeature {
 
             var entry = assetTokens[token.assetId] ?? AssetAccumulator(
                 symbol: token.symbol, name: token.name, category: token.category,
+                portfolioCategory: token.portfolioCategory,
                 coinGeckoId: token.coinGeckoId)
             entry.coinGeckoId = entry.coinGeckoId ?? token.coinGeckoId
 
@@ -152,6 +208,7 @@ struct AllAssetsFeature {
                 symbol: entry.symbol,
                 name: entry.name,
                 category: entry.category,
+                portfolioCategory: entry.portfolioCategory,
                 netAmount: netAmount,
                 price: price,
                 value: value,
@@ -177,7 +234,7 @@ struct AllAssetsFeature {
         }
         let header = "Symbol,Name,Category,Net Amount,Price,Value"
         let lines = rows.map { row in
-            "\(csv(row.symbol)),\(csv(row.name)),\(csv(row.category.rawValue)),\(row.netAmount),\(row.price),\(row.value)"
+            "\(csv(row.symbol)),\(csv(row.name)),\(csv(row.portfolioCategory.name)),\(row.netAmount),\(row.price),\(row.value)"
         }
         return ([header] + lines).joined(separator: "\n")
     }

@@ -127,6 +127,8 @@ struct SettingsGlyphTile: View {
     private var glyphColor: Color {
         switch tab {
         case .general: SettingsDesign.accentBlue
+        case .tokens: SettingsDesign.tokenTeal
+        case .categories: SettingsDesign.successBadgeText
         case .apiKeys: SettingsDesign.warningOrange
         case .debug: SettingsDesign.debugOrange
         }
@@ -135,6 +137,8 @@ struct SettingsGlyphTile: View {
     private var glyphBackground: Color {
         switch tab {
         case .general: SettingsDesign.blueGlyphBackground
+        case .tokens: SettingsDesign.tokenGlyphBackground
+        case .categories: SettingsDesign.successBadgeBackground
         case .apiKeys: SettingsDesign.orangeGlyphBackground
         case .debug: SettingsDesign.peachGlyphBackground
         }
@@ -315,12 +319,14 @@ enum SettingsDesign {
     static let primaryText = Color(red: 0.045, green: 0.070, blue: 0.125)
     static let secondaryText = Color(red: 0.390, green: 0.440, blue: 0.560)
     static let accentBlue = Color(red: 0.055, green: 0.360, blue: 0.840)
+    static let tokenTeal = Color(red: 0.000, green: 0.455, blue: 0.505)
     static let warningOrange = Color(red: 0.925, green: 0.250, blue: 0.050)
     static let debugOrange = Color(red: 0.830, green: 0.365, blue: 0.070)
     static let logoBackground = Color(red: 0.900, green: 0.925, blue: 1.0)
     static let logoForeground = Color(red: 0.340, green: 0.250, blue: 0.900)
     static let selectedGlyphBackground = Color.white
     static let blueGlyphBackground = Color(red: 0.930, green: 0.945, blue: 1.0)
+    static let tokenGlyphBackground = Color(red: 0.875, green: 0.965, blue: 0.965)
     static let orangeGlyphBackground = Color(red: 1.0, green: 0.955, blue: 0.900)
     static let peachGlyphBackground = Color(red: 1.0, green: 0.940, blue: 0.895)
     static let successBadgeBackground = Color(red: 0.870, green: 0.965, blue: 0.925)

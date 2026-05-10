@@ -6,7 +6,7 @@ import Testing
 
 @MainActor
 struct AppFeatureTests {
-    // MARK: - B1: Section Navigation
+    // MARK: - Section Navigation
 
     @Test func `section selection updates state`() async {
         let store = TestStore(initialState: AppFeature.State()) {
@@ -62,7 +62,7 @@ struct AppFeatureTests {
         #expect(store.state.selectedSection == .overview)
     }
 
-    // MARK: - B2: Sync Happy Path
+    // MARK: - Sync Happy Path
 
     @Test func `sync happy path`() async {
         let store = TestStore(initialState: AppFeature.State()) {
@@ -79,7 +79,7 @@ struct AppFeatureTests {
         }
     }
 
-    // MARK: - B3: Sync Partial Failure
+    // MARK: - Sync Partial Failure
 
     @Test func `sync partial failure`() async {
         let store = TestStore(initialState: AppFeature.State()) {
@@ -96,7 +96,7 @@ struct AppFeatureTests {
         }
     }
 
-    // MARK: - B4: Sync Full Failure
+    // MARK: - Sync Full Failure
 
     @Test func `sync full failure`() async {
         struct SyncFailed: Error, LocalizedError {
@@ -119,7 +119,7 @@ struct AppFeatureTests {
         }
     }
 
-    // MARK: - B5: Guard Against Double-Tap
+    // MARK: - Guard Against Double-Tap
 
     @Test func `sync guards against double tap`() async {
         let store = TestStore(
@@ -131,7 +131,7 @@ struct AppFeatureTests {
         await store.send(.syncTapped)
     }
 
-    // MARK: - B6 + B7: Price Polling
+    // MARK: - Price Polling
 
     @Test func `price polling receives update`() async {
         let testClock = TestClock()
@@ -201,7 +201,7 @@ struct AppFeatureTests {
         await store.send(.stopPricePolling)
     }
 
-    // MARK: - B8: Price Polling Error
+    // MARK: - Price Polling Error
 
     @Test func `price fetch error preserves existing prices`() async {
         struct PriceFailed: Error, LocalizedError {
@@ -244,7 +244,7 @@ struct AppFeatureTests {
         #expect(called)
     }
 
-    // MARK: - B7: Price Merge (not replace)
+    // MARK: - Price Merge (not replace)
 
     @Test func `prices merge with existing`() async {
         let testDate = Date(timeIntervalSince1970: 1_000_000)

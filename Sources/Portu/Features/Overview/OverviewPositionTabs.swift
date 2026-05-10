@@ -6,6 +6,10 @@ import SwiftUI
 struct OverviewPositionTabs: View {
     @Environment(AppState.self) private var appState
     @Query private var allPositions: [Position]
+    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
+    private var portfolioCategories: [PortfolioCategory]
+    @Query(sort: \CategorySymbolRule.normalizedSymbol)
+    private var categoryRules: [CategorySymbolRule]
 
     @State private var selectedTab: OverviewTab = .keyChanges
 
@@ -16,7 +20,7 @@ struct OverviewPositionTabs: View {
     enum OverviewTab: String, CaseIterable {
         case keyChanges = "Key Changes"
         case idleStables = "Idle Stables"
-        case idleMajors = "Idle Majors"
+        case idleMajors = "Idle BTC / ETH / SOL"
         case borrowing = "Borrowing"
         case futures = "Futures"
         case options = "Options"
@@ -46,7 +50,7 @@ struct OverviewPositionTabs: View {
                 case .idleStables:
                     positionCards(tokens: idleStableTokens, emptyTitle: "No idle stables")
                 case .idleMajors:
-                    positionCards(tokens: idleMajorTokens, emptyTitle: "No idle majors")
+                    positionCards(tokens: idleMajorTokens, emptyTitle: "No idle BTC / ETH / SOL")
                 case .borrowing:
                     borrowingView
                 case .futures, .options:
@@ -83,6 +87,10 @@ struct OverviewPositionTabs: View {
         }
     }
 
+    private var categoryResolver: PortfolioCategoryResolver {
+        PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
+    }
+
     private var keyChangeTokens: [(PositionToken, Position)] {
         allActiveTokens
             .filter(\.0.role.isPositive)
@@ -104,13 +112,24 @@ struct OverviewPositionTabs: View {
     }
 
     private var idleStableTokens: [(PositionToken, Position)] {
-        allActiveTokens
-            .filter { $0.1.positionType == .idle && $0.0.asset?.category == .stablecoin && $0.0.role.isPositive }
+        let resolver = categoryResolver
+        return allActiveTokens
+            .filter { token, position in
+                guard position.positionType == .idle, token.role.isPositive, let asset = token.asset else { return false }
+                return resolver
+                    .resolve(symbol: asset.symbol, legacyCategory: asset.category)
+                    .semanticRole == .stablecoin
+            }
     }
 
     private var idleMajorTokens: [(PositionToken, Position)] {
-        allActiveTokens
-            .filter { $0.1.positionType == .idle && $0.0.asset?.category == .major && $0.0.role.isPositive }
+        let resolver = categoryResolver
+        return allActiveTokens
+            .filter { token, position in
+                guard position.positionType == .idle, token.role.isPositive, let asset = token.asset else { return false }
+                let category = resolver.resolve(symbol: asset.symbol, legacyCategory: asset.category)
+                return PortfolioCategoryDefaults.majorCategoryIDs.contains(category.id)
+            }
     }
 
     private func tokenChange24h(_ token: PositionToken) -> Decimal {

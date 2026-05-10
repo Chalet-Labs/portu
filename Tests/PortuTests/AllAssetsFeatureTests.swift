@@ -8,7 +8,7 @@ import Testing
 
 @MainActor
 struct AllAssetsFeatureTests {
-    // MARK: - B1: Tab Selection
+    // MARK: - Tab Selection
 
     @Test func `tab selection updates state`() async {
         let store = TestStore(initialState: AllAssetsFeature.State()) {
@@ -26,7 +26,7 @@ struct AllAssetsFeatureTests {
         }
     }
 
-    // MARK: - B2: Search Text
+    // MARK: - Search Text
 
     @Test func `search text updates state`() async {
         let store = TestStore(initialState: AllAssetsFeature.State()) {
@@ -41,7 +41,7 @@ struct AllAssetsFeatureTests {
         }
     }
 
-    // MARK: - B3: Grouping Change
+    // MARK: - Grouping Change
 
     @Test func `grouping change updates state`() async {
         let store = TestStore(initialState: AllAssetsFeature.State()) {
@@ -63,7 +63,7 @@ struct AllAssetsFeatureTests {
 // MARK: - Pure Function Tests
 
 struct AssetRowAggregationTests {
-    // MARK: - B4: Row Aggregation
+    // MARK: - Row Aggregation
 
     @Test func `groups tokens by asset`() {
         let assetId = UUID()
@@ -231,7 +231,7 @@ struct AssetRowAggregationTests {
         #expect(symbols == ["BTC", "ETH"])
     }
 
-    // MARK: - B5: Search Filtering
+    // MARK: - Search Filtering
 
     @Test func `filter matches symbol case-insensitively`() {
         let rows = [
@@ -352,7 +352,7 @@ struct AssetRowAggregationTests {
         #expect(acc.coinGeckoId == nil)
     }
 
-    // MARK: - B6: CSV Generation
+    // MARK: - CSV Generation
 
     @Test func `CSV has header and formatted rows`() {
         let rows = [

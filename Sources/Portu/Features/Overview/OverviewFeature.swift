@@ -151,6 +151,7 @@ enum OverviewFeature {
         var symbol: String
         var name: String
         var category: AssetCategory
+        var portfolioCategory: PortfolioCategorySnapshot
         var coinGeckoId: String?
         var value: Decimal
         var amount: Decimal
@@ -183,16 +184,16 @@ enum OverviewFeature {
         from tokens: [TokenEntry],
         prices: [String: Decimal],
         limit: Int = 6) -> [OverviewAssetSlice] {
-        var values: [AssetCategory: Decimal] = [:]
+        var values: [PortfolioCategorySnapshot: Decimal] = [:]
         for token in tokens where token.role.isPositive {
-            values[token.category, default: 0] += resolvedValue(for: token, prices: prices)
+            values[token.portfolioCategory, default: 0] += resolvedValue(for: token, prices: prices)
         }
 
         let sortedValues = values
             .filter { $0.value > 0 }
             .sorted {
                 if $0.value == $1.value {
-                    return $0.key.rawValue < $1.key.rawValue
+                    return $0.key.name.localizedStandardCompare($1.key.name) == .orderedAscending
                 }
                 return $0.value > $1.value
             }
@@ -201,7 +202,7 @@ enum OverviewFeature {
         var inputs = sortedValues
             .prefix(visibleCount)
             .map { category, value in
-                SliceInput(id: category.rawValue, label: category.rawValue.capitalized, value: value)
+                SliceInput(id: category.id.uuidString, label: category.name, value: value)
             }
 
         let otherValue = sortedValues.dropFirst(visibleCount).reduce(Decimal.zero) { $0 + $1.value }
@@ -338,10 +339,14 @@ enum OverviewFeature {
 
     static func pricePollingIDs(
         tokens: [TokenEntry],
-        watchlistIDs: [String]) -> [String] {
+        watchlistIDs: [String],
+        overrides: [TokenPricingOverrideSnapshot]) -> [String] {
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var ids = tokens.compactMap { token -> String? in
-            guard token.role.isPositive, token.amount > 0 else { return nil }
-            return token.coinGeckoId
+            guard token.amount > 0, token.role.isPositive || token.role.isBorrow else { return nil }
+            return TokenSettingsFeature.resolvedCoinGeckoID(
+                token: token,
+                override: overrideMap[token.assetId])
         }
 
         ids.append(contentsOf: watchlistIDs)
@@ -377,6 +382,7 @@ enum OverviewFeature {
                 symbol: token.symbol,
                 name: token.name,
                 category: token.category,
+                portfolioCategory: token.portfolioCategory,
                 coinGeckoId: OverviewWatchlistStore.normalizedID(token.coinGeckoId),
                 value: 0,
                 amount: 0)

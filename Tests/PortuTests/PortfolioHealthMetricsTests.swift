@@ -3,7 +3,7 @@ import Foundation
 import PortuCore
 import Testing
 
-// MARK: - B3: Diversification Metrics
+// MARK: - Diversification Metrics
 
 struct PortfolioHealthDiversificationTests {
     @Test func `computes all metrics for a diversified portfolio`() throws {
@@ -261,7 +261,7 @@ struct PortfolioHealthDiversificationTests {
     }
 }
 
-// MARK: - B4: Risk Level Classification
+// MARK: - Risk Level Classification
 
 struct PortfolioHealthRiskLevelTests {
     @Test func `high risk when HHI above 0_5`() throws {

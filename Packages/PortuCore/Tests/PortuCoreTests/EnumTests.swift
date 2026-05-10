@@ -75,7 +75,24 @@ struct EnumTests {
     // MARK: - Chain
 
     @Test func `chain cases`() {
-        #expect(Chain.allCases.count == 11)
+        #expect(Chain.allCases.count == 28)
+        #expect(Chain.allCases.contains(.gnosis))
+        #expect(Chain.allCases.contains(.unichain))
+        #expect(Chain.allCases.contains(.berachain))
+        #expect(Chain.allCases.contains(.sonic))
+        #expect(Chain.allCases.contains(.zksync))
+        #expect(Chain.allCases.contains(.polygonZkEVM))
+        #expect(Chain.allCases.contains(.moonbeam))
+        #expect(Chain.allCases.contains(.ronin))
+        #expect(Chain.allCases.contains(.mantle))
+        #expect(Chain.allCases.contains(.immutableX))
+        #expect(Chain.allCases.contains(.mode))
+        #expect(Chain.allCases.contains(.linea))
+        #expect(Chain.allCases.contains(.blast))
+        #expect(Chain.allCases.contains(.taiko))
+        #expect(Chain.allCases.contains(.scroll))
+        #expect(Chain.allCases.contains(.hyperliquid))
+        #expect(Chain.allCases.contains(.zora))
         #expect(Chain.allCases.contains(.monad))
         #expect(Chain.allCases.contains(.katana))
     }

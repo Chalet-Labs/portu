@@ -8,11 +8,32 @@ struct PriceWatchlist: View {
     @Environment(AppState.self) private var appState
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
+    @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
+    private var portfolioCategories: [PortfolioCategory]
+    @Query(sort: \CategorySymbolRule.normalizedSymbol)
+    private var categoryRules: [CategorySymbolRule]
     @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
     @State private var searchText = ""
 
     private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(tokens)
+        TokenEntry.fromActiveTokens(
+            tokens,
+            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
+    }
+
+    private var dashboardTokenEntries: [TokenEntry] {
+        TokenSettingsFeature.dashboardEligibleTokens(
+            tokens: tokenEntries,
+            prices: appState.prices,
+            overrides: overrideSnapshots,
+            settings: dashboardSettings)
     }
 
     private var assetCandidates: [OverviewAssetCandidate] {
@@ -29,11 +50,22 @@ struct PriceWatchlist: View {
 
     private var rows: [OverviewPriceRowData] {
         OverviewFeature.priceRows(
-            tokens: tokenEntries,
+            tokens: dashboardTokenEntries,
             assetsByCoinGeckoId: assetCandidatesByCoinGeckoId,
             prices: appState.prices,
             changes24h: appState.priceChanges24h,
             watchlistIDs: watchlistIDs)
+    }
+
+    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
+        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var dashboardSettings: TokenDashboardSettings {
+        TokenDashboardSettings(
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust)
     }
 
     private var matchingAssets: [OverviewAssetCandidate] {

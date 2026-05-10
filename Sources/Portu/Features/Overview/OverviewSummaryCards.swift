@@ -6,30 +6,43 @@ import SwiftUI
 
 struct OverviewSummaryCards: View {
     @Query private var allPositions: [Position]
+    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
+    private var portfolioCategories: [PortfolioCategory]
+    @Query(sort: \CategorySymbolRule.normalizedSymbol)
+    private var categoryRules: [CategorySymbolRule]
 
     /// Only positions from active accounts
     private var positions: [Position] {
         allPositions.filter { $0.account?.isActive == true }
     }
 
+    private var categoryResolver: PortfolioCategoryResolver {
+        PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
+    }
+
     private var idleBreakdown: [(String, Decimal)] {
         let idle = positions.filter { $0.positionType == .idle }
+        let resolver = categoryResolver
         var stablesFiat: Decimal = 0
         var majors: Decimal = 0
         var tokens: Decimal = 0
 
         for pos in idle {
             for token in pos.tokens where token.role.isPositive {
-                switch token.asset?.category {
-                case .stablecoin, .fiat: stablesFiat += token.usdValue
-                case .major: majors += token.usdValue
-                default: tokens += token.usdValue
+                guard let asset = token.asset else { continue }
+                let category = resolver.resolve(symbol: asset.symbol, legacyCategory: asset.category)
+                if category.semanticRole == .stablecoin || category.semanticRole == .fiat {
+                    stablesFiat += token.usdValue
+                } else if PortfolioCategoryDefaults.majorCategoryIDs.contains(category.id) {
+                    majors += token.usdValue
+                } else {
+                    tokens += token.usdValue
                 }
             }
         }
         return [
             ("Stablecoins & Fiat", stablesFiat),
-            ("Majors", majors),
+            ("BTC / ETH / SOL", majors),
             ("Tokens & Memecoins", tokens)
         ]
     }

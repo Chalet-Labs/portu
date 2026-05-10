@@ -5,6 +5,23 @@ public enum Chain: String, Codable, CaseIterable, Sendable {
     case optimism
     case base
     case bsc
+    case gnosis
+    case unichain
+    case berachain
+    case sonic
+    case zksync
+    case polygonZkEVM
+    case moonbeam
+    case ronin
+    case mantle
+    case immutableX
+    case mode
+    case linea
+    case blast
+    case taiko
+    case scroll
+    case hyperliquid
+    case zora
     case solana
     case bitcoin
     case avalanche

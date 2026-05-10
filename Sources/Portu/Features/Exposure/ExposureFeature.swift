@@ -1,75 +1,79 @@
-import ComposableArchitecture
 import Foundation
 import PortuCore
 
-// MARK: - Supporting Types
-
-/// Shared fields for exposure row types.
 protocol ExposureRow: Identifiable, Equatable {
     var spotAssets: Decimal { get }
     var liabilities: Decimal { get }
+    var shareOfSpot: Decimal { get }
 }
 
 extension ExposureRow {
-    var spotNet: Decimal {
-        spotAssets - liabilities
-    }
-
     var netExposure: Decimal {
-        spotNet
+        spotAssets - liabilities
     }
 }
 
-/// Category-level exposure breakdown.
 nonisolated struct CategoryExposure: ExposureRow {
     let id: String
     let name: String
+    let semanticRole: PortfolioCategorySemanticRole
     let spotAssets: Decimal
     let liabilities: Decimal
+    let shareOfSpot: Decimal
+
+    init(
+        id: String,
+        name: String,
+        semanticRole: PortfolioCategorySemanticRole = .normal,
+        spotAssets: Decimal,
+        liabilities: Decimal,
+        shareOfSpot: Decimal = 0) {
+        self.id = id
+        self.name = name
+        self.semanticRole = semanticRole
+        self.spotAssets = spotAssets
+        self.liabilities = liabilities
+        self.shareOfSpot = shareOfSpot
+    }
 }
 
-/// Asset-level exposure breakdown.
 nonisolated struct AssetExposure: ExposureRow {
     let id: UUID
     let symbol: String
     let category: AssetCategory
+    let portfolioCategory: PortfolioCategorySnapshot
     let spotAssets: Decimal
     let liabilities: Decimal
+    let logoURL: String?
+    let shareOfSpot: Decimal
+
+    init(
+        id: UUID,
+        symbol: String,
+        category: AssetCategory,
+        portfolioCategory: PortfolioCategorySnapshot,
+        spotAssets: Decimal,
+        liabilities: Decimal,
+        logoURL: String? = nil,
+        shareOfSpot: Decimal = 0) {
+        self.id = id
+        self.symbol = symbol
+        self.category = category
+        self.portfolioCategory = portfolioCategory
+        self.spotAssets = spotAssets
+        self.liabilities = liabilities
+        self.logoURL = logoURL
+        self.shareOfSpot = shareOfSpot
+    }
 }
 
-/// Summary totals for the exposure dashboard.
 struct ExposureSummary: Equatable {
     let totalSpot: Decimal
     let totalLiabilities: Decimal
     let netExposure: Decimal
 }
 
-// MARK: - ExposureFeature
-
-@Reducer
-struct ExposureFeature {
-    @ObservableState
-    struct State: Equatable {
-        var showByAsset: Bool = false
-    }
-
-    enum Action: Equatable {
-        case viewModeChanged(Bool)
-    }
-
-    var body: some ReducerOf<Self> {
-        Reduce { state, action in
-            switch action {
-            case let .viewModeChanged(byAsset):
-                state.showByAsset = byAsset
-                return .none
-            }
-        }
-    }
-
-    // MARK: - Pure Functions
-
-    /// Resolve USD value for a token using live price or fallback.
+enum ExposureFeature {
     static func resolveTokenUSDValue(
         amount: Decimal,
         coinGeckoId: String?,
@@ -81,53 +85,67 @@ struct ExposureFeature {
         return usdValue
     }
 
-    /// Aggregate token entries into category-level exposure.
     static func computeCategoryExposure(
         tokens: [TokenEntry],
         prices: [String: Decimal]) -> [CategoryExposure] {
-        var assets: [AssetCategory: Decimal] = [:]
-        var borrows: [AssetCategory: Decimal] = [:]
+        var buckets: [PortfolioCategorySnapshot: (assets: Decimal, borrows: Decimal)] = [:]
 
         for token in tokens {
             if token.role.isReward { continue }
             let value = resolveTokenUSDValue(
                 amount: token.amount, coinGeckoId: token.coinGeckoId,
                 usdValue: token.usdValue, prices: prices)
+            let bucket = token.portfolioCategory
+            var entry = buckets[bucket] ?? (0, 0)
             if token.role.isPositive {
-                assets[token.category, default: 0] += value
+                entry.assets += value
             } else if token.role.isBorrow {
-                borrows[token.category, default: 0] += value
+                entry.borrows += value
             }
+            buckets[bucket] = entry
         }
 
-        return AssetCategory.allCases.compactMap { cat in
-            let a = assets[cat, default: 0]
-            let b = borrows[cat, default: 0]
-            guard a > 0 || b > 0 else { return nil }
+        let totalSpot = buckets.values.reduce(Decimal.zero) { $0 + $1.assets }
+        return buckets.compactMap { bucket, exposure in
+            guard exposure.assets > 0 || exposure.borrows > 0 else { return nil }
             return CategoryExposure(
-                id: cat.rawValue,
-                name: cat.rawValue.capitalized,
-                spotAssets: a,
-                liabilities: b)
+                id: bucket.id.uuidString,
+                name: bucket.name,
+                semanticRole: bucket.semanticRole,
+                spotAssets: exposure.assets,
+                liabilities: exposure.borrows,
+                shareOfSpot: shareOfSpot(netExposure: exposure.assets - exposure.borrows, totalSpot: totalSpot))
         }
+        .sorted(by: sortExposureRows)
     }
 
-    /// Aggregate token entries into asset-level exposure.
+    private struct AssetAggregate {
+        let symbol: String
+        let category: AssetCategory
+        let portfolioCategory: PortfolioCategorySnapshot
+        var logoURL: String?
+        var assets: Decimal
+        var borrows: Decimal
+    }
+
     static func computeAssetExposure(
         tokens: [TokenEntry],
         prices: [String: Decimal]) -> [AssetExposure] {
-        var assetMap: [UUID: (
-            symbol: String,
-            category: AssetCategory,
-            assets: Decimal,
-            borrows: Decimal)] = [:]
+        var assetMap: [UUID: AssetAggregate] = [:]
 
         for token in tokens {
             if token.role.isReward { continue }
             let value = resolveTokenUSDValue(
                 amount: token.amount, coinGeckoId: token.coinGeckoId,
                 usdValue: token.usdValue, prices: prices)
-            var entry = assetMap[token.assetId] ?? (token.symbol, token.category, 0, 0)
+            var entry = assetMap[token.assetId] ?? AssetAggregate(
+                symbol: token.symbol,
+                category: token.category,
+                portfolioCategory: token.portfolioCategory,
+                logoURL: token.logoURL,
+                assets: 0,
+                borrows: 0)
+            entry.logoURL = entry.logoURL ?? token.logoURL
             if token.role.isPositive {
                 entry.assets += value
             } else if token.role.isBorrow {
@@ -136,21 +154,79 @@ struct ExposureFeature {
             assetMap[token.assetId] = entry
         }
 
+        let totalSpot = assetMap.values.reduce(Decimal.zero) { $0 + $1.assets }
         return assetMap.map { id, entry in
             AssetExposure(
                 id: id, symbol: entry.symbol, category: entry.category,
-                spotAssets: entry.assets, liabilities: entry.borrows)
+                portfolioCategory: entry.portfolioCategory,
+                spotAssets: entry.assets, liabilities: entry.borrows,
+                logoURL: entry.logoURL,
+                shareOfSpot: shareOfSpot(netExposure: entry.assets - entry.borrows, totalSpot: totalSpot))
         }
-        .sorted { $0.spotNet > $1.spotNet }
+        .sorted(by: sortAssetRows)
     }
 
-    /// Compute summary totals from category exposures.
+    static func computeDashboardAssetExposure(
+        tokens: [TokenEntry],
+        prices: [String: Decimal],
+        overrides: [TokenPricingOverrideSnapshot],
+        settings: TokenDashboardSettings = .defaults) -> [AssetExposure] {
+        computeAssetExposure(
+            tokens: TokenSettingsFeature.dashboardEligibleTokens(
+                tokens: tokens,
+                prices: prices,
+                overrides: overrides,
+                settings: settings),
+            prices: prices)
+    }
+
     static func computeSummary(from categories: [CategoryExposure]) -> ExposureSummary {
         ExposureSummary(
             totalSpot: categories.reduce(0) { $0 + $1.spotAssets },
             totalLiabilities: categories.reduce(0) { $0 + $1.liabilities },
             netExposure: categories
-                .filter { $0.id != AssetCategory.stablecoin.rawValue }
-                .reduce(0) { $0 + $1.spotNet })
+                .filter { $0.semanticRole != .stablecoin }
+                .reduce(0) { $0 + $1.netExposure })
+    }
+
+    static func pricePollingIDs(
+        tokens: [TokenEntry],
+        overrides: [TokenPricingOverrideSnapshot]) -> [String] {
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        let ids = tokens.compactMap { token -> String? in
+            guard token.amount > 0, token.role.isPositive || token.role.isBorrow else { return nil }
+            return TokenSettingsFeature.resolvedCoinGeckoID(
+                token: token,
+                override: overrideMap[token.assetId])
+        }
+
+        return Array(Set(ids)).sorted()
+    }
+
+    private static func shareOfSpot(netExposure: Decimal, totalSpot: Decimal) -> Decimal {
+        guard totalSpot > 0 else { return 0 }
+        return netExposure / totalSpot
+    }
+
+    private static func sortExposureRows(_ lhs: CategoryExposure, _ rhs: CategoryExposure) -> Bool {
+        if lhs.netExposure == rhs.netExposure {
+            let nameOrder = lhs.name.localizedStandardCompare(rhs.name)
+            if nameOrder != .orderedSame {
+                return nameOrder == .orderedAscending
+            }
+            return lhs.id < rhs.id
+        }
+        return lhs.netExposure > rhs.netExposure
+    }
+
+    private static func sortAssetRows(_ lhs: AssetExposure, _ rhs: AssetExposure) -> Bool {
+        if lhs.netExposure == rhs.netExposure {
+            let symbolOrder = lhs.symbol.localizedStandardCompare(rhs.symbol)
+            if symbolOrder != .orderedSame {
+                return symbolOrder == .orderedAscending
+            }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+        return lhs.netExposure > rhs.netExposure
     }
 }

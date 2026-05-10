@@ -50,6 +50,22 @@ struct ViewRenderSmokeTests {
         render(view, size: size)
     }
 
+    @Test(arguments: ExposureRenderSize.allCases)
+    func `exposure renders at supported dashboard sizes`(_ renderSize: ExposureRenderSize) throws {
+        let container = try makeContainer()
+        let store = makeStore(section: .exposure)
+        let appState = AppState()
+        appState.bridge(from: store)
+        let size = renderSize.size
+
+        let view = ContentView(store: store)
+            .modelContainer(container)
+            .environment(appState)
+            .frame(width: size.width, height: size.height)
+
+        render(view, size: size)
+    }
+
     @Test(arguments: AssetTab.allCases)
     func `all assets tabs render without crashing`(_ tab: AssetTab) throws {
         let container = try makeContainer()
@@ -95,6 +111,31 @@ struct ViewRenderSmokeTests {
         render(view)
     }
 
+    @Test func `category settings tab renders without crashing`() throws {
+        let container = try makeContainer()
+
+        let view = CategorySettingsTab()
+            .modelContainer(container)
+            .environment(\.colorScheme, .dark)
+            .frame(width: 980, height: 720)
+
+        render(view, size: CGSize(width: 980, height: 720))
+    }
+
+    @Test func `token settings tab renders without crashing`() throws {
+        let container = try makeContainer()
+        let appState = AppState()
+        appState.prices = ["ethereum": 3050, "usd-coin": 1]
+
+        let view = TokenSettingsTab()
+            .modelContainer(container)
+            .environment(appState)
+            .environment(\.colorScheme, .dark)
+            .frame(width: 980, height: 720)
+
+        render(view, size: CGSize(width: 980, height: 720))
+    }
+
     @Test func `add account sheet renders without crashing`() throws {
         let container = try makeContainer()
 
@@ -137,6 +178,9 @@ struct ViewRenderSmokeTests {
             Position.self,
             PositionToken.self,
             Asset.self,
+            TokenPricingOverride.self,
+            PortfolioCategory.self,
+            CategorySymbolRule.self,
             PortfolioSnapshot.self,
             AccountSnapshot.self,
             AssetSnapshot.self
@@ -149,6 +193,7 @@ struct ViewRenderSmokeTests {
 
     private func seedSampleData(in container: ModelContainer) throws {
         let context = container.mainContext
+        try PortfolioCategorySeeder.seedIfNeeded(in: context)
         let ids = SampleIDs()
         let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
         let assets = makeSampleAssets(ids: ids)
@@ -288,6 +333,18 @@ struct ViewRenderSmokeTests {
     }
 
     enum OverviewRenderSize: CaseIterable {
+        case large
+        case compact
+
+        var size: CGSize {
+            switch self {
+            case .large: CGSize(width: 1400, height: 900)
+            case .compact: CGSize(width: 900, height: 600)
+            }
+        }
+    }
+
+    enum ExposureRenderSize: CaseIterable {
         case large
         case compact
 

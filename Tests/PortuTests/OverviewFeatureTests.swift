@@ -55,26 +55,27 @@ struct OverviewFeatureTests {
         let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
 
         #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
-        #expect(slices.first?.label == "Major")
-        #expect(slices.first?.displayPercent == 67)
+        #expect(slices.first?.label == "BTC")
+        #expect(slices.first?.displayPercent == 34)
     }
 
     @Test func `category slices preserve omitted values in other bucket`() throws {
         let tokens = [
-            token(symbol: "MAJOR", category: .major, amount: 1, usdValue: 80),
-            token(symbol: "STABLE", category: .stablecoin, amount: 1, usdValue: 70),
-            token(symbol: "DEFI", category: .defi, amount: 1, usdValue: 60),
-            token(symbol: "MEME", category: .meme, amount: 1, usdValue: 50),
-            token(symbol: "PRIV", category: .privacy, amount: 1, usdValue: 40),
-            token(symbol: "FIAT", category: .fiat, amount: 1, usdValue: 30),
-            token(symbol: "GOV", category: .governance, amount: 1, usdValue: 20),
-            token(symbol: "OTHER", category: .other, amount: 1, usdValue: 10)
+            token(symbol: "BTC", category: .major, amount: 1, usdValue: 120),
+            token(symbol: "ETH", category: .major, amount: 1, usdValue: 100),
+            token(symbol: "OTHER", category: .other, amount: 1, usdValue: 90),
+            token(symbol: "STABLE", category: .stablecoin, amount: 1, usdValue: 80),
+            token(symbol: "DEFI", category: .defi, amount: 1, usdValue: 70),
+            token(symbol: "MEME", category: .meme, amount: 1, usdValue: 60),
+            token(symbol: "PRIV", category: .privacy, amount: 1, usdValue: 5),
+            token(symbol: "FIAT", category: .fiat, amount: 1, usdValue: 4),
+            token(symbol: "SOL", category: .major, amount: 1, usdValue: 3)
         ]
 
         let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
 
-        #expect(slices.map(\.label) == ["Major", "Stablecoin", "Defi", "Meme", "Privacy", "Fiat", "other"])
-        #expect(try #require(slices.last).value == 30)
+        #expect(slices.map(\.label) == ["BTC", "ETH", "Other Tokens", "Stablecoins", "DeFi", "Meme", "other"])
+        #expect(try #require(slices.last).value == 12)
         #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
     }
 
@@ -86,12 +87,13 @@ struct OverviewFeatureTests {
             token(symbol: "DEFI", category: .defi, amount: 1, usdValue: 60),
             token(symbol: "MEME", category: .meme, amount: 1, usdValue: 50),
             token(symbol: "PRIV", category: .privacy, amount: 1, usdValue: 40),
-            token(symbol: "GOV", category: .governance, amount: 1, usdValue: 30)
+            token(symbol: "BTC", category: .major, amount: 1, usdValue: 35),
+            token(symbol: "ETH", category: .major, amount: 1, usdValue: 20)
         ]
 
         let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
 
-        #expect(slices.map(\.id).contains("other"))
+        #expect(slices.map(\.id).contains(PortfolioCategoryDefaults.fallbackCategoryID.uuidString))
         #expect(slices.map(\.id).contains("category-residual"))
         #expect(Set(slices.map(\.id)).count == slices.count)
         #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
@@ -272,10 +274,10 @@ struct OverviewFeatureTests {
     }
 
     @Test func `overview sync button uses compact reference metrics`() {
-        #expect(OverviewSyncButtonStyleMetrics.iconName == "arrow.triangle.2.circlepath")
-        #expect(OverviewSyncButtonStyleMetrics.height == 30)
-        #expect(OverviewSyncButtonStyleMetrics.cornerRadius == 6)
-        #expect(OverviewSyncButtonStyleMetrics.horizontalPadding == 11)
+        #expect(DashboardSyncButtonStyleMetrics.iconName == "arrow.triangle.2.circlepath")
+        #expect(DashboardSyncButtonStyleMetrics.height == 30)
+        #expect(DashboardSyncButtonStyleMetrics.cornerRadius == 6)
+        #expect(DashboardSyncButtonStyleMetrics.horizontalPadding == 11)
     }
 
     @Test func `watchlist persistence keeps order and uniqueness`() {
@@ -297,14 +299,30 @@ struct OverviewFeatureTests {
             token(symbol: "ETH", coinGeckoId: "ethereum", amount: 1, usdValue: 3000),
             token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 1, usdValue: 70000),
             token(symbol: "ETH", coinGeckoId: "ethereum", amount: 2, usdValue: 6000),
+            token(symbol: "BORROW", coinGeckoId: "borrow-token", role: .borrow, amount: 10, usdValue: 100),
+            token(symbol: "REWARD", coinGeckoId: "reward-token", role: .reward, amount: 10, usdValue: 100),
             token(symbol: "ZERO", coinGeckoId: "zero-token", amount: 10, usdValue: 0)
         ]
 
         let ids = OverviewFeature.pricePollingIDs(
             tokens: tokens,
-            watchlistIDs: ["solana", " Bitcoin ", "monero"])
+            watchlistIDs: ["solana", " Bitcoin ", "monero"],
+            overrides: [])
 
-        #expect(ids == ["bitcoin", "ethereum", "monero", "solana", "zero-token"])
+        #expect(ids == ["bitcoin", "borrow-token", "ethereum", "monero", "solana", "zero-token"])
+    }
+
+    @Test func `price polling ids use token pricing overrides`() {
+        let mapped = token(symbol: "MAP", coinGeckoId: "old-map", amount: 1, usdValue: 10)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [mapped],
+            watchlistIDs: [],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: mapped.assetId, coinGeckoIdOverride: " New-Map ")
+            ])
+
+        #expect(ids == ["new-map"])
     }
 
     @Test func `position pricing normalizes coin gecko ids`() {

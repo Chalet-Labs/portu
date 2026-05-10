@@ -8,7 +8,7 @@ import Testing
 
 @MainActor
 struct PerformanceFeatureTests {
-    // MARK: - B1: Account Filter
+    // MARK: - Account Filter
 
     @Test func `account filter updates state`() async {
         let store = TestStore(initialState: PerformanceFeature.State()) {
@@ -24,7 +24,7 @@ struct PerformanceFeatureTests {
         }
     }
 
-    // MARK: - B2: Time Range
+    // MARK: - Time Range
 
     @Test func `time range updates state`() async {
         let store = TestStore(initialState: PerformanceFeature.State()) {
@@ -39,7 +39,7 @@ struct PerformanceFeatureTests {
         }
     }
 
-    // MARK: - B3: Chart Mode
+    // MARK: - Chart Mode
 
     @Test func `chart mode updates state`() async {
         let store = TestStore(initialState: PerformanceFeature.State()) {
@@ -57,7 +57,7 @@ struct PerformanceFeatureTests {
         }
     }
 
-    // MARK: - B4: Category Toggle
+    // MARK: - Category Toggle
 
     @Test func `category toggle adds and removes`() async {
         let store = TestStore(initialState: PerformanceFeature.State()) {
@@ -75,7 +75,26 @@ struct PerformanceFeatureTests {
         }
     }
 
-    // MARK: - B5: Cumulative Toggle
+    @Test func `portfolio category toggle adds and removes`() async {
+        let store = TestStore(initialState: PerformanceFeature.State()) {
+            PerformanceFeature()
+        }
+
+        let btc = PortfolioCategoryDefaults.btcCategoryID.uuidString
+        let eth = PortfolioCategoryDefaults.ethCategoryID.uuidString
+
+        await store.send(.portfolioCategoryToggled(btc)) {
+            $0.disabledPortfolioCategoryIDs = [btc]
+        }
+        await store.send(.portfolioCategoryToggled(eth)) {
+            $0.disabledPortfolioCategoryIDs = [btc, eth]
+        }
+        await store.send(.portfolioCategoryToggled(btc)) {
+            $0.disabledPortfolioCategoryIDs = [eth]
+        }
+    }
+
+    // MARK: - Cumulative Toggle
 
     @Test func `cumulative toggle updates state`() async {
         let store = TestStore(initialState: PerformanceFeature.State()) {
@@ -91,7 +110,7 @@ struct PerformanceFeatureTests {
     }
 }
 
-// MARK: - B6: Last Per Day
+// MARK: - Last Per Day
 
 struct PerformanceLastPerDayTests {
     private let cal = Calendar.current
@@ -129,7 +148,7 @@ struct PerformanceLastPerDayTests {
     }
 }
 
-// MARK: - B7: PnL Bar Computation
+// MARK: - PnL Bar Computation
 
 struct PerformancePnLTests {
     @Test func `computes daily and cumulative pnl`() throws {
@@ -164,7 +183,7 @@ struct PerformancePnLTests {
     }
 }
 
-// MARK: - B8: Category Change Breakdown
+// MARK: - Category Change Breakdown
 
 struct PerformanceCategoryChangeTests {
     @Test func `computes start end and percent change`() throws {
@@ -191,6 +210,40 @@ struct PerformanceCategoryChangeTests {
 
         let stable = changes.first { $0.name == "Stablecoin" }
         #expect(stable?.percentChange == 0)
+    }
+
+    @Test func `uses resolved portfolio category names`() throws {
+        let cal = Calendar.current
+        let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
+        let day2 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 12)))
+        let acct = UUID()
+        let eth = UUID()
+
+        let entries: [CategorySnapshotEntry] = [
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: eth,
+                timestamp: day1,
+                category: .major,
+                categoryID: PortfolioCategoryDefaults.ethCategoryID.uuidString,
+                categoryName: "ETH",
+                usdValue: 1000),
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: eth,
+                timestamp: day2,
+                category: .major,
+                categoryID: PortfolioCategoryDefaults.ethCategoryID.uuidString,
+                categoryName: "ETH",
+                usdValue: 1200)
+        ]
+
+        let chartPoints = PerformanceFeature.aggregateCategorySnapshots(entries: entries)
+        let changes = PerformanceFeature.computeCategoryChanges(entries: entries)
+
+        #expect(Set(chartPoints.map(\.category)) == ["ETH"])
+        #expect(changes.first?.name == "ETH")
+        #expect(changes.first?.percentChange == Decimal(string: "0.2")!)
     }
 
     @Test func `omits categories with zero on both days`() throws {

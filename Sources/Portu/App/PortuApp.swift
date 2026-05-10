@@ -1,7 +1,5 @@
 import ComposableArchitecture
-#if DEBUG
-    import os
-#endif
+import os
 import PortuCore
 import PortuNetwork
 import PortuUI
@@ -27,6 +25,13 @@ struct PortuApp: App {
             } catch {
                 fatalError("Failed to create even an in-memory ModelContainer: \(error)")
             }
+        }
+
+        do {
+            try PortfolioCategorySeeder.seedIfNeeded(in: container.mainContext)
+        } catch {
+            Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app", category: "PortfolioCategorySeeder")
+                .error("Portfolio category seeding failed: \(String(describing: error), privacy: .public)")
         }
 
         #if DEBUG

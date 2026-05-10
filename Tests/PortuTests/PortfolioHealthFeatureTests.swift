@@ -4,7 +4,7 @@ import Foundation
 import PortuCore
 import Testing
 
-// MARK: - B5/B6: Reducer Tests
+// MARK: - Reducer Tests
 
 @MainActor
 struct PortfolioHealthFeatureTests {
@@ -22,7 +22,7 @@ struct PortfolioHealthFeatureTests {
     }
 }
 
-// MARK: - B1: Asset Weight Computation
+// MARK: - Asset Weight Computation
 
 struct PortfolioHealthWeightTests {
     @Test func `computes weights sorted by percentage descending`() throws {
@@ -169,7 +169,7 @@ struct PortfolioHealthWeightTests {
     }
 }
 
-// MARK: - B2: Concentration Risk
+// MARK: - Concentration Risk
 
 struct PortfolioHealthConcentrationTests {
     @Test func `detects assets exceeding threshold`() throws {

@@ -1,9 +1,20 @@
 import PortuCore
 import PortuUI
+import SwiftData
 import SwiftUI
 
 struct AssetMetadataSidebar: View {
     let asset: Asset
+    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
+    private var portfolioCategories: [PortfolioCategory]
+    @Query(sort: \CategorySymbolRule.normalizedSymbol)
+    private var categoryRules: [CategorySymbolRule]
+
+    private var portfolioCategory: PortfolioCategorySnapshot {
+        PortfolioCategoryResolver
+            .live(categories: portfolioCategories, rules: categoryRules)
+            .resolve(symbol: asset.symbol, legacyCategory: asset.category)
+    }
 
     var body: some View {
         ScrollView {
@@ -32,7 +43,7 @@ struct AssetMetadataSidebar: View {
                 Rectangle().fill(PortuTheme.dashboardStroke).frame(height: 1)
 
                 LabeledContent("Category") {
-                    CapsuleBadge(asset.category.rawValue.capitalized)
+                    CapsuleBadge(portfolioCategory.name)
                 }
 
                 LabeledContent("Verified") {

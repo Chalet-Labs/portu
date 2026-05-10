@@ -10,7 +10,7 @@
         private func makeTestContainer() throws -> ModelContainer {
             let schema = Schema([
                 Account.self, WalletAddress.self, Position.self,
-                PositionToken.self, Asset.self,
+                PositionToken.self, Asset.self, TokenPricingOverride.self,
                 PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
             ])
             let config = ModelConfiguration(isStoredInMemoryOnly: true)

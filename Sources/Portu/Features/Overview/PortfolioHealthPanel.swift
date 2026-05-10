@@ -7,19 +7,40 @@ import SwiftUI
 struct PortfolioHealthPanel: View {
     let store: StoreOf<AppFeature>
     @Query private var allTokens: [PositionToken]
+    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
+    private var portfolioCategories: [PortfolioCategory]
+    @Query(sort: \CategorySymbolRule.normalizedSymbol)
+    private var categoryRules: [CategorySymbolRule]
+    @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
 
     private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(allTokens)
+        TokenEntry.fromActiveTokens(
+            allTokens,
+            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
+    }
+
+    private var dashboardTokenEntries: [TokenEntry] {
+        TokenSettingsFeature.dashboardEligibleTokens(
+            tokens: tokenEntries,
+            prices: store.prices,
+            overrides: overrideSnapshots,
+            settings: dashboardSettings)
     }
 
     private var weights: [AssetWeight] {
-        PortfolioHealthFeature.computeAssetWeights(tokens: tokenEntries, prices: store.prices)
+        PortfolioHealthFeature.computeAssetWeights(tokens: dashboardTokenEntries, prices: store.prices)
     }
 
     private var metrics: DiversificationMetrics {
         let chainCount = Set(allTokens.compactMap { $0.position?.chain }).count
         return PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokenEntries, weights: weights, chainCount: chainCount)
+            tokens: dashboardTokenEntries, weights: weights, chainCount: chainCount)
     }
 
     private var riskLevel: RiskLevel {
@@ -32,6 +53,17 @@ struct PortfolioHealthPanel: View {
 
     private var displayedWeights: [AssetWeight] {
         store.portfolioHealth.showAllAssets ? weights : Array(weights.prefix(5))
+    }
+
+    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
+        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var dashboardSettings: TokenDashboardSettings {
+        TokenDashboardSettings(
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust)
     }
 
     var body: some View {
