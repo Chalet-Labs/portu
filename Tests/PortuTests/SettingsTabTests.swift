@@ -54,6 +54,14 @@ struct SettingsTabTests {
         #expect(TokenDashboardSettings.hideDustTitle == "Hide dust")
     }
 
+    @Test func `token dashboard toggles render as stacked inline setting rows`() {
+        let toggles = TokenDashboardToggle.allCases
+
+        #expect(toggles.map(\.title) == ["Hide unpriced", "Hide dust"])
+        #expect(toggles.allSatisfy { $0.presentation == .inlineSettingRow })
+        #expect(SettingsDesign.switchRowMinHeight >= 52)
+    }
+
     @Test func `category settings labels use configurable portfolio categories`() {
         let names = PortfolioCategoryDefaults.categorySnapshots.map(\.name)
 

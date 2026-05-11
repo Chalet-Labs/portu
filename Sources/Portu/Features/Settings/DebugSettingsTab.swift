@@ -119,8 +119,8 @@
                 Spacer(minLength: 18)
 
                 Toggle("Enable Debug Server", isOn: $isEnabled)
-                    .labelsHidden()
-                    .settingsSwitchToggle()
+                    .settingsSwitchToggle(showsLabel: false)
+                    .accessibilityLabel("Enable Debug Server")
             }
         }
 

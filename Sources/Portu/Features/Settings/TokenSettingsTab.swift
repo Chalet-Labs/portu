@@ -121,12 +121,23 @@ struct TokenSettingsTab: View {
                     .frame(width: 70)
             }
 
-            HStack(spacing: 24) {
-                Toggle("Hide unpriced", isOn: $hideUnpriced)
-                    .settingsSwitchToggle()
-                Toggle(TokenDashboardSettings.hideDustTitle, isOn: $hideDust)
-                    .settingsSwitchToggle()
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(TokenDashboardToggle.allCases) { toggle in
+                    SettingsSwitchRow(
+                        title: toggle.title,
+                        subtitle: toggle.subtitle,
+                        isOn: binding(for: toggle))
+                }
             }
+        }
+    }
+
+    private func binding(for toggle: TokenDashboardToggle) -> Binding<Bool> {
+        switch toggle {
+        case .hideUnpriced:
+            $hideUnpriced
+        case .hideDust:
+            $hideDust
         }
     }
 

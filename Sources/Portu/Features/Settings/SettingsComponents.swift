@@ -212,14 +212,22 @@ struct SettingsStatusBadge: View {
 }
 
 struct SettingsSwitchToggleStyle: ToggleStyle {
+    let showsLabel: Bool
+
+    init(showsLabel: Bool = true) {
+        self.showsLabel = showsLabel
+    }
+
     func makeBody(configuration: Configuration) -> some View {
         Button {
             configuration.isOn.toggle()
         } label: {
             HStack(spacing: 8) {
-                configuration.label
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(SettingsDesign.primaryText)
+                if showsLabel {
+                    configuration.label
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(SettingsDesign.primaryText)
+                }
 
                 switchControl(isOn: configuration.isOn)
             }
@@ -243,6 +251,49 @@ struct SettingsSwitchToggleStyle: ToggleStyle {
                     .padding(3)
                     .shadow(color: Color.black.opacity(0.24), radius: 2, x: 0, y: 1)
             }
+    }
+}
+
+struct SettingsSwitchRow: View {
+    let title: String
+    let subtitle: String
+    @Binding private var isOn: Bool
+
+    init(
+        title: String,
+        subtitle: String,
+        isOn: Binding<Bool>) {
+        self.title = title
+        self.subtitle = subtitle
+        self._isOn = isOn
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 18) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
+                    .foregroundStyle(SettingsDesign.primaryText)
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(SettingsDesign.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 18)
+
+            Toggle(title, isOn: $isOn)
+                .settingsSwitchToggle(showsLabel: false)
+                .accessibilityLabel(title)
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: SettingsDesign.switchRowMinHeight, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .fill(SettingsDesign.subtleCardBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 }
 
@@ -344,8 +395,8 @@ extension View {
                     .stroke(isDisabled ? SettingsDesign.cardStroke : SettingsDesign.accentBlue.opacity(0.68), lineWidth: 1))
     }
 
-    func settingsSwitchToggle() -> some View {
-        toggleStyle(SettingsSwitchToggleStyle())
+    func settingsSwitchToggle(showsLabel: Bool = true) -> some View {
+        toggleStyle(SettingsSwitchToggleStyle(showsLabel: showsLabel))
     }
 }
 
@@ -357,6 +408,7 @@ enum SettingsDesign {
     static let switchTrackWidth: CGFloat = 42
     static let switchTrackHeight: CGFloat = 24
     static let switchThumbDiameter: CGFloat = 18
+    static let switchRowMinHeight: CGFloat = 58
 
     static let contentBackground = Color(red: 0.045, green: 0.043, blue: 0.039)
     static let sidebarBackground = Color(red: 0.110, green: 0.095, blue: 0.088)
