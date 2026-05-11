@@ -6,6 +6,7 @@ struct TokenDashboardSettings: Equatable {
     static let hideUnpricedKey = "tokenSettings.hideUnpriced"
     static let hideDustKey = "tokenSettings.hideDust"
     static let hideUnpricedTitle = "Hide unpriced"
+    static let hideUnpricedSubtitle = "Exclude tokens without a resolved price from dashboard totals."
     static let hideDustTitle = "Hide dust"
     static let defaultMinimumDashboardValue: Decimal = 1
     static let defaults = TokenDashboardSettings()

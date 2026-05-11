@@ -13,38 +13,24 @@ enum SettingsSectionIcon: Equatable {
     case launchArgument
 
     var presentation: SettingsSectionIconPresentation {
-        switch self {
+        let palette: (foreground: Color, background: Color) = switch self {
         case .priceUpdates, .tokenOverrides, .customRPCs:
-            SettingsSectionIconPresentation(
-                systemImage: systemImage,
-                foreground: SettingsDesign.accentPrimary,
-                background: SettingsDesign.primaryGlyphBackground)
+            (SettingsDesign.accentPrimary, SettingsDesign.primaryGlyphBackground)
         case .dashboardVisibility:
-            SettingsSectionIconPresentation(
-                systemImage: systemImage,
-                foreground: SettingsDesign.tokenTeal,
-                background: SettingsDesign.tokenGlyphBackground)
+            (SettingsDesign.tokenTeal, SettingsDesign.tokenGlyphBackground)
         case .categoryRules, .createCategory:
-            SettingsSectionIconPresentation(
-                systemImage: systemImage,
-                foreground: SettingsDesign.successBadgeText,
-                background: SettingsDesign.successBadgeBackground)
+            (SettingsDesign.successBadgeText, SettingsDesign.successBadgeBackground)
         case .apiKeys:
-            SettingsSectionIconPresentation(
-                systemImage: systemImage,
-                foreground: SettingsDesign.warningOrange,
-                background: SettingsDesign.orangeGlyphBackground)
+            (SettingsDesign.warningOrange, SettingsDesign.orangeGlyphBackground)
         case .debugServer, .launchArgument:
-            SettingsSectionIconPresentation(
-                systemImage: systemImage,
-                foreground: SettingsDesign.debugOrange,
-                background: SettingsDesign.peachGlyphBackground)
+            (SettingsDesign.debugOrange, SettingsDesign.peachGlyphBackground)
         case .notices:
-            SettingsSectionIconPresentation(
-                systemImage: systemImage,
-                foreground: SettingsDesign.warningBadgeText,
-                background: SettingsDesign.warningBadgeBackground)
+            (SettingsDesign.warningBadgeText, SettingsDesign.warningBadgeBackground)
         }
+        return SettingsSectionIconPresentation(
+            systemImage: systemImage,
+            foreground: palette.foreground,
+            background: palette.background)
     }
 
     var systemImage: String {

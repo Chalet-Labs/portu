@@ -129,7 +129,7 @@ struct TokenSettingsTab: View {
 
             SettingsSwitchRow(
                 title: TokenDashboardSettings.hideUnpricedTitle,
-                subtitle: "Exclude tokens without a resolved price from dashboard totals.",
+                subtitle: TokenDashboardSettings.hideUnpricedSubtitle,
                 isOn: $hideUnpriced)
         }
     }

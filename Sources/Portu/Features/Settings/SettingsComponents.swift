@@ -132,29 +132,20 @@ struct SettingsGlyphTile: View {
     var isSelected = false
 
     var body: some View {
+        let palette = tabPalette
         SettingsIconTile(
             systemImage: SettingsIconography.sidebarSystemImage(for: tab),
-            foreground: glyphColor,
-            background: isSelected ? SettingsDesign.selectedGlyphBackground : glyphBackground)
+            foreground: palette.foreground,
+            background: isSelected ? SettingsDesign.selectedGlyphBackground : palette.background)
     }
 
-    private var glyphColor: Color {
+    private var tabPalette: (foreground: Color, background: Color) {
         switch tab {
-        case .general: SettingsDesign.accentPrimary
-        case .tokens: SettingsDesign.tokenTeal
-        case .categories: SettingsDesign.successBadgeText
-        case .apiKeys: SettingsDesign.warningOrange
-        case .debug: SettingsDesign.debugOrange
-        }
-    }
-
-    private var glyphBackground: Color {
-        switch tab {
-        case .general: SettingsDesign.primaryGlyphBackground
-        case .tokens: SettingsDesign.tokenGlyphBackground
-        case .categories: SettingsDesign.successBadgeBackground
-        case .apiKeys: SettingsDesign.orangeGlyphBackground
-        case .debug: SettingsDesign.peachGlyphBackground
+        case .general: (SettingsDesign.accentPrimary, SettingsDesign.primaryGlyphBackground)
+        case .tokens: (SettingsDesign.tokenTeal, SettingsDesign.tokenGlyphBackground)
+        case .categories: (SettingsDesign.successBadgeText, SettingsDesign.successBadgeBackground)
+        case .apiKeys: (SettingsDesign.warningOrange, SettingsDesign.orangeGlyphBackground)
+        case .debug: (SettingsDesign.debugOrange, SettingsDesign.peachGlyphBackground)
         }
     }
 }
