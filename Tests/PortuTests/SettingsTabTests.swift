@@ -16,8 +16,8 @@ struct SettingsTabTests {
         #expect(SettingsSectionIcon.dashboardVisibility.systemImage == "eye")
         #expect(SettingsSectionIcon.apiKeys.systemImage == "key")
         #expect(SettingsIconography.apiKeyFieldSystemImage == "key")
-        #expect(SettingsIconography.visibilityToggleSystemImage(isVisible: false) == "eye")
-        #expect(SettingsIconography.visibilityToggleSystemImage(isVisible: true) == "eye.slash")
+        #expect(SettingsIconography.visibilityToggleActionSystemImage(isCurrentlyVisible: false) == "eye")
+        #expect(SettingsIconography.visibilityToggleActionSystemImage(isCurrentlyVisible: true) == "eye.slash")
     }
 
     @Test func `section icon presentation pairs symbol with palette`() {

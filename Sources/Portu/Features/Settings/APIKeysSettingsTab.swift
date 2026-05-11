@@ -153,7 +153,7 @@ struct APIKeysSettingsTab: View {
                 Button {
                     toggleVisibility(for: descriptor.id)
                 } label: {
-                    Image(systemName: SettingsIconography.visibilityToggleSystemImage(isVisible: isVisible))
+                    Image(systemName: SettingsIconography.visibilityToggleActionSystemImage(isCurrentlyVisible: isVisible))
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(.plain)

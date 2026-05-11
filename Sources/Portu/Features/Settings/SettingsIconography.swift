@@ -68,7 +68,7 @@ enum SettingsIconography {
         }
     }
 
-    static func visibilityToggleSystemImage(isVisible: Bool) -> String {
-        isVisible ? "eye.slash" : "eye"
+    static func visibilityToggleActionSystemImage(isCurrentlyVisible: Bool) -> String {
+        isCurrentlyVisible ? "eye.slash" : "eye"
     }
 }
