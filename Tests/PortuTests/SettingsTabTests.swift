@@ -54,11 +54,13 @@ struct SettingsTabTests {
         #expect(TokenDashboardSettings.hideDustTitle == "Hide dust")
     }
 
-    @Test func `token dashboard toggles render as stacked inline setting rows`() {
+    @Test func `token dashboard toggles expose threshold relationship in layout`() {
         let toggles = TokenDashboardToggle.allCases
 
         #expect(toggles.map(\.title) == ["Hide unpriced", "Hide dust"])
-        #expect(toggles.allSatisfy { $0.presentation == .inlineSettingRow })
+        #expect(TokenDashboardToggle.standaloneRows == [.hideUnpriced])
+        #expect(TokenDashboardToggle.hideUnpriced.presentation == .inlineSettingRow)
+        #expect(TokenDashboardToggle.hideDust.presentation == .minimumValueInputAccessory)
         #expect(SettingsDesign.switchRowMinHeight >= 52)
     }
 

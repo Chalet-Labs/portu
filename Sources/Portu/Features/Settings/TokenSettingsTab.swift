@@ -98,7 +98,7 @@ struct TokenSettingsTab: View {
 
     private var dashboardControls: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Minimum value")
                         .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
@@ -119,10 +119,14 @@ struct TokenSettingsTab: View {
                 Stepper("", value: $minimumDashboardValue, in: 0 ... 10000, step: 1)
                     .labelsHidden()
                     .frame(width: 70)
+
+                Toggle(TokenDashboardSettings.hideDustTitle, isOn: $hideDust)
+                    .settingsSwitchToggle()
+                    .fixedSize()
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(TokenDashboardToggle.allCases) { toggle in
+                ForEach(TokenDashboardToggle.standaloneRows) { toggle in
                     SettingsSwitchRow(
                         title: toggle.title,
                         subtitle: toggle.subtitle,

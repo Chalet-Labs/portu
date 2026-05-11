@@ -2,6 +2,7 @@ import Foundation
 
 enum TokenDashboardTogglePresentation: Equatable {
     case inlineSettingRow
+    case minimumValueInputAccessory
 }
 
 enum TokenDashboardToggle: CaseIterable, Equatable, Identifiable {
@@ -31,6 +32,15 @@ enum TokenDashboardToggle: CaseIterable, Equatable, Identifiable {
     }
 
     var presentation: TokenDashboardTogglePresentation {
-        .inlineSettingRow
+        switch self {
+        case .hideUnpriced:
+            .inlineSettingRow
+        case .hideDust:
+            .minimumValueInputAccessory
+        }
+    }
+
+    static var standaloneRows: [Self] {
+        allCases.filter { $0.presentation == .inlineSettingRow }
     }
 }
