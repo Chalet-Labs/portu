@@ -56,6 +56,8 @@ struct SettingsTabTests {
 
     @Test func `switch thumb fits inside track for custom toggle layout`() {
         #expect(SettingsDesign.switchThumbDiameter < SettingsDesign.switchTrackHeight)
+        #expect(SettingsDesign.switchAnimationDuration == 0.25)
+        #expect(SettingsDesign.primaryButtonMinWidth == 64)
         #expect(TokenDashboardSettings.hideDustTitle == "Hide dust")
         #expect(TokenDashboardSettings.hideUnpricedTitle == "Hide unpriced")
     }

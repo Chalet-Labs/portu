@@ -253,7 +253,7 @@ struct SettingsSwitchToggleStyle: ToggleStyle {
             .frame(width: SettingsDesign.switchTrackWidth, height: SettingsDesign.switchTrackHeight)
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsDesign.switchTrackHeight / 2, style: .continuous)
-                    .stroke(isOn ? SettingsDesign.accentPrimary.opacity(0.9) : SettingsDesign.cardStroke, lineWidth: 1))
+                    .strokeBorder(isOn ? SettingsDesign.accentPrimary.opacity(0.9) : SettingsDesign.cardStroke, lineWidth: 1))
             .overlay(alignment: isOn ? .trailing : .leading) {
                 Circle()
                     .fill(isOn ? SettingsDesign.primaryText : SettingsDesign.secondaryText)
@@ -261,6 +261,7 @@ struct SettingsSwitchToggleStyle: ToggleStyle {
                     .padding(3)
                     .shadow(color: Color.black.opacity(0.24), radius: 2, x: 0, y: 1)
             }
+            .animation(.spring(duration: SettingsDesign.switchAnimationDuration), value: isOn)
     }
 }
 
@@ -396,13 +397,14 @@ extension View {
 
     func settingsPrimaryButton(isDisabled: Bool) -> some View {
         foregroundStyle(isDisabled ? SettingsDesign.secondaryText : SettingsDesign.primaryText)
-            .frame(width: 64, height: SettingsMetrics.compactControlHeight)
+            .frame(minWidth: SettingsDesign.primaryButtonMinWidth)
+            .frame(height: SettingsMetrics.compactControlHeight)
             .background(
                 RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .fill(isDisabled ? SettingsDesign.disabledControlBackground : SettingsDesign.accentPrimary.opacity(0.42)))
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                    .stroke(isDisabled ? SettingsDesign.cardStroke : SettingsDesign.accentPrimary.opacity(0.68), lineWidth: 1))
+                    .strokeBorder(isDisabled ? SettingsDesign.cardStroke : SettingsDesign.accentPrimary.opacity(0.68), lineWidth: 1))
     }
 
     func settingsSwitchToggle(showsLabel: Bool = true) -> some View {
@@ -417,6 +419,8 @@ enum SettingsDesign {
     static let switchTrackHeight: CGFloat = 24
     static let switchThumbDiameter: CGFloat = 18
     static let switchRowMinHeight: CGFloat = 58
+    static let switchAnimationDuration = 0.25
+    static let primaryButtonMinWidth: CGFloat = 64
 
     static let contentBackground = Color(red: 0.045, green: 0.043, blue: 0.039)
     static let sidebarBackground = Color(red: 0.110, green: 0.095, blue: 0.088)
