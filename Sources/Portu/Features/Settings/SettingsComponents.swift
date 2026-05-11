@@ -68,10 +68,11 @@ struct SettingsSectionCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 10) {
                 if let icon {
+                    let presentation = icon.presentation
                     SettingsIconTile(
-                        systemImage: SettingsIconography.sectionSystemImage(icon),
-                        foreground: SettingsIconography.sectionForeground(icon),
-                        background: SettingsIconography.sectionBackground(icon))
+                        systemImage: presentation.systemImage,
+                        foreground: presentation.foreground,
+                        background: presentation.background)
                         .frame(width: 30, height: 30)
                 }
 
@@ -139,7 +140,7 @@ struct SettingsGlyphTile: View {
 
     private var glyphColor: Color {
         switch tab {
-        case .general: SettingsDesign.accentBlue
+        case .general: SettingsDesign.accentPrimary
         case .tokens: SettingsDesign.tokenTeal
         case .categories: SettingsDesign.successBadgeText
         case .apiKeys: SettingsDesign.warningOrange
@@ -149,7 +150,7 @@ struct SettingsGlyphTile: View {
 
     private var glyphBackground: Color {
         switch tab {
-        case .general: SettingsDesign.blueGlyphBackground
+        case .general: SettingsDesign.primaryGlyphBackground
         case .tokens: SettingsDesign.tokenGlyphBackground
         case .categories: SettingsDesign.successBadgeBackground
         case .apiKeys: SettingsDesign.orangeGlyphBackground
@@ -248,16 +249,20 @@ struct SettingsSwitchToggleStyle: ToggleStyle {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityValue(configuration.isOn ? "On" : "Off")
+        .accessibilityRepresentation {
+            Toggle(isOn: configuration.$isOn) {
+                configuration.label
+            }
+        }
     }
 
     private func switchControl(isOn: Bool) -> some View {
         RoundedRectangle(cornerRadius: SettingsDesign.switchTrackHeight / 2, style: .continuous)
-            .fill(isOn ? SettingsDesign.accentBlue.opacity(0.78) : SettingsDesign.disabledControlBackground)
+            .fill(isOn ? SettingsDesign.accentPrimary.opacity(0.78) : SettingsDesign.disabledControlBackground)
             .frame(width: SettingsDesign.switchTrackWidth, height: SettingsDesign.switchTrackHeight)
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsDesign.switchTrackHeight / 2, style: .continuous)
-                    .stroke(isOn ? SettingsDesign.accentBlue.opacity(0.9) : SettingsDesign.cardStroke, lineWidth: 1))
+                    .stroke(isOn ? SettingsDesign.accentPrimary.opacity(0.9) : SettingsDesign.cardStroke, lineWidth: 1))
             .overlay(alignment: isOn ? .trailing : .leading) {
                 Circle()
                     .fill(isOn ? SettingsDesign.primaryText : SettingsDesign.secondaryText)
@@ -351,7 +356,7 @@ struct SettingsInlineNotice: View {
     private var stroke: Color {
         switch style {
         case .error: SettingsDesign.warningOrange.opacity(0.58)
-        case .action: SettingsDesign.accentBlue.opacity(0.58)
+        case .action: SettingsDesign.accentPrimary.opacity(0.58)
         }
     }
 
@@ -403,10 +408,10 @@ extension View {
             .frame(width: 64, height: SettingsMetrics.compactControlHeight)
             .background(
                 RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                    .fill(isDisabled ? SettingsDesign.disabledControlBackground : SettingsDesign.accentBlue.opacity(0.42)))
+                    .fill(isDisabled ? SettingsDesign.disabledControlBackground : SettingsDesign.accentPrimary.opacity(0.42)))
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                    .stroke(isDisabled ? SettingsDesign.cardStroke : SettingsDesign.accentBlue.opacity(0.68), lineWidth: 1))
+                    .stroke(isDisabled ? SettingsDesign.cardStroke : SettingsDesign.accentPrimary.opacity(0.68), lineWidth: 1))
     }
 
     func settingsSwitchToggle(showsLabel: Bool = true) -> some View {
@@ -415,8 +420,6 @@ extension View {
 }
 
 enum SettingsDesign {
-    static let usesDashboardPalette = true
-    static let usesCustomSwitchToggles = true
     static let panelCornerRadius: CGFloat = 8
     static let controlCornerRadius: CGFloat = 6
     static let switchTrackWidth: CGFloat = 42
@@ -435,15 +438,12 @@ enum SettingsDesign {
     static let cardStroke = Color(red: 0.178, green: 0.160, blue: 0.135)
     static let primaryText = Color(red: 0.910, green: 0.885, blue: 0.820)
     static let secondaryText = Color(red: 0.610, green: 0.570, blue: 0.500)
-    static let tertiaryText = Color(red: 0.390, green: 0.355, blue: 0.305)
-    static let accentBlue = Color(red: 0.690, green: 0.550, blue: 0.310)
+    static let accentPrimary = Color(red: 0.690, green: 0.550, blue: 0.310)
     static let tokenTeal = Color(red: 0.260, green: 0.670, blue: 0.620)
     static let warningOrange = Color(red: 0.860, green: 0.330, blue: 0.330)
     static let debugOrange = Color(red: 0.850, green: 0.520, blue: 0.260)
-    static let logoBackground = Color(red: 0.910, green: 0.850, blue: 0.680)
-    static let logoForeground = contentBackground
     static let selectedGlyphBackground = Color(red: 0.360, green: 0.285, blue: 0.175)
-    static let blueGlyphBackground = Color(red: 0.190, green: 0.155, blue: 0.095)
+    static let primaryGlyphBackground = Color(red: 0.190, green: 0.155, blue: 0.095)
     static let tokenGlyphBackground = Color(red: 0.105, green: 0.185, blue: 0.160)
     static let orangeGlyphBackground = Color(red: 0.220, green: 0.120, blue: 0.090)
     static let peachGlyphBackground = Color(red: 0.215, green: 0.145, blue: 0.090)

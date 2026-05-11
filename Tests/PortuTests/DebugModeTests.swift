@@ -36,6 +36,19 @@
             #expect(result)
         }
 
+        // MARK: - isValidPort
+
+        @Test func `valid port range covers 1 through UInt16 max`() {
+            #expect(DebugMode.isValidPort(1))
+            #expect(DebugMode.isValidPort(Int(UInt16.max)))
+        }
+
+        @Test func `invalid port rejects zero negative and above UInt16 max`() {
+            #expect(!DebugMode.isValidPort(0))
+            #expect(!DebugMode.isValidPort(-1))
+            #expect(!DebugMode.isValidPort(Int(UInt16.max) + 1))
+        }
+
         // MARK: - port
 
         @Test func `port defaults to 9999`() {

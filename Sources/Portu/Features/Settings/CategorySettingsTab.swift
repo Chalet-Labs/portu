@@ -137,7 +137,7 @@ private struct CategoryRuleEditor: View {
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .buttonStyle(.plain)
-                    .settingsIconButton(color: SettingsDesign.accentBlue)
+                    .settingsIconButton(color: SettingsDesign.accentPrimary)
                     .accessibilityLabel("Move \(category.name) up")
                     .disabled(previousCategory == nil)
 
@@ -148,7 +148,7 @@ private struct CategoryRuleEditor: View {
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .buttonStyle(.plain)
-                    .settingsIconButton(color: SettingsDesign.accentBlue)
+                    .settingsIconButton(color: SettingsDesign.accentPrimary)
                     .accessibilityLabel("Move \(category.name) down")
                     .disabled(nextCategory == nil)
 

@@ -127,23 +127,10 @@ struct TokenSettingsTab: View {
                     .fixedSize()
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(TokenDashboardToggle.standaloneRows) { toggle in
-                    SettingsSwitchRow(
-                        title: toggle.title,
-                        subtitle: toggle.subtitle,
-                        isOn: binding(for: toggle))
-                }
-            }
-        }
-    }
-
-    private func binding(for toggle: TokenDashboardToggle) -> Binding<Bool> {
-        switch toggle {
-        case .hideUnpriced:
-            $hideUnpriced
-        case .hideDust:
-            $hideDust
+            SettingsSwitchRow(
+                title: TokenDashboardSettings.hideUnpricedTitle,
+                subtitle: "Exclude tokens without a resolved price from dashboard totals.",
+                isOn: $hideUnpriced)
         }
     }
 

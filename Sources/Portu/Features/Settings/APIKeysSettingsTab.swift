@@ -26,8 +26,8 @@ private extension APIKeyFieldDescriptor {
         id: .zapper,
         title: "Zapper",
         systemImage: SettingsIconography.apiKeyFieldSystemImage,
-        foreground: SettingsDesign.accentBlue,
-        background: SettingsDesign.blueGlyphBackground,
+        foreground: SettingsDesign.accentPrimary,
+        background: SettingsDesign.primaryGlyphBackground,
         hint: nil)
 
     static let debank = Self(

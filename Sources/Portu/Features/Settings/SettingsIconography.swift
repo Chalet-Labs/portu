@@ -11,6 +11,62 @@ enum SettingsSectionIcon: Equatable {
     case debugServer
     case notices
     case launchArgument
+
+    var presentation: SettingsSectionIconPresentation {
+        switch self {
+        case .priceUpdates, .tokenOverrides, .customRPCs:
+            SettingsSectionIconPresentation(
+                systemImage: systemImage,
+                foreground: SettingsDesign.accentPrimary,
+                background: SettingsDesign.primaryGlyphBackground)
+        case .dashboardVisibility:
+            SettingsSectionIconPresentation(
+                systemImage: systemImage,
+                foreground: SettingsDesign.tokenTeal,
+                background: SettingsDesign.tokenGlyphBackground)
+        case .categoryRules, .createCategory:
+            SettingsSectionIconPresentation(
+                systemImage: systemImage,
+                foreground: SettingsDesign.successBadgeText,
+                background: SettingsDesign.successBadgeBackground)
+        case .apiKeys:
+            SettingsSectionIconPresentation(
+                systemImage: systemImage,
+                foreground: SettingsDesign.warningOrange,
+                background: SettingsDesign.orangeGlyphBackground)
+        case .debugServer, .launchArgument:
+            SettingsSectionIconPresentation(
+                systemImage: systemImage,
+                foreground: SettingsDesign.debugOrange,
+                background: SettingsDesign.peachGlyphBackground)
+        case .notices:
+            SettingsSectionIconPresentation(
+                systemImage: systemImage,
+                foreground: SettingsDesign.warningBadgeText,
+                background: SettingsDesign.warningBadgeBackground)
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .priceUpdates: "arrow.clockwise"
+        case .dashboardVisibility: "eye"
+        case .tokenOverrides: "slider.horizontal.3"
+        case .categoryRules: "tag"
+        case .createCategory: "plus"
+        case .apiKeys: "key"
+        case .customRPCs: "network"
+        case .debugServer: "wrench.and.screwdriver"
+        case .notices: "bell"
+        case .launchArgument: "terminal"
+        }
+    }
+}
+
+struct SettingsSectionIconPresentation: Equatable {
+    let systemImage: String
+    let foreground: Color
+    let background: Color
 }
 
 enum SettingsIconography {
@@ -26,44 +82,7 @@ enum SettingsIconography {
         }
     }
 
-    static func sectionSystemImage(_ icon: SettingsSectionIcon) -> String {
-        switch icon {
-        case .priceUpdates: "arrow.clockwise"
-        case .dashboardVisibility: "eye"
-        case .tokenOverrides: "slider.horizontal.3"
-        case .categoryRules: "tag"
-        case .createCategory: "plus"
-        case .apiKeys: "key"
-        case .customRPCs: "network"
-        case .debugServer: "wrench.and.screwdriver"
-        case .notices: "bell"
-        case .launchArgument: "terminal"
-        }
-    }
-
     static func visibilityToggleSystemImage(isVisible: Bool) -> String {
         isVisible ? "eye.slash" : "eye"
-    }
-
-    static func sectionForeground(_ icon: SettingsSectionIcon) -> Color {
-        switch icon {
-        case .priceUpdates, .tokenOverrides, .customRPCs: SettingsDesign.accentBlue
-        case .dashboardVisibility: SettingsDesign.tokenTeal
-        case .categoryRules, .createCategory: SettingsDesign.successBadgeText
-        case .apiKeys: SettingsDesign.warningOrange
-        case .debugServer, .launchArgument: SettingsDesign.debugOrange
-        case .notices: SettingsDesign.warningBadgeText
-        }
-    }
-
-    static func sectionBackground(_ icon: SettingsSectionIcon) -> Color {
-        switch icon {
-        case .priceUpdates, .tokenOverrides, .customRPCs: SettingsDesign.blueGlyphBackground
-        case .dashboardVisibility: SettingsDesign.tokenGlyphBackground
-        case .categoryRules, .createCategory: SettingsDesign.successBadgeBackground
-        case .apiKeys: SettingsDesign.orangeGlyphBackground
-        case .debugServer, .launchArgument: SettingsDesign.peachGlyphBackground
-        case .notices: SettingsDesign.warningBadgeBackground
-        }
     }
 }

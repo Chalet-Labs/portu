@@ -204,7 +204,7 @@ struct TokenSettingsRowView: View {
     private var sourceColor: Color {
         switch row.pricingSource {
         case .live: SettingsDesign.successBadgeText
-        case .syncTime: SettingsDesign.accentBlue
+        case .syncTime: SettingsDesign.accentPrimary
         case .manual: SettingsDesign.tokenTeal
         case .unpriced: SettingsDesign.warningOrange
         }

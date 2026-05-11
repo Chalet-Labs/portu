@@ -13,11 +13,19 @@ struct SettingsTabTests {
     }
 
     @Test func `settings mockup iconography uses semantic system symbols`() {
-        #expect(SettingsIconography.sectionSystemImage(.dashboardVisibility) == "eye")
-        #expect(SettingsIconography.sectionSystemImage(.apiKeys) == "key")
+        #expect(SettingsSectionIcon.dashboardVisibility.systemImage == "eye")
+        #expect(SettingsSectionIcon.apiKeys.systemImage == "key")
         #expect(SettingsIconography.apiKeyFieldSystemImage == "key")
         #expect(SettingsIconography.visibilityToggleSystemImage(isVisible: false) == "eye")
         #expect(SettingsIconography.visibilityToggleSystemImage(isVisible: true) == "eye.slash")
+    }
+
+    @Test func `section icon presentation pairs symbol with palette`() {
+        let presentation = SettingsSectionIcon.apiKeys.presentation
+
+        #expect(presentation.systemImage == SettingsSectionIcon.apiKeys.systemImage)
+        #expect(presentation.foreground == SettingsDesign.warningOrange)
+        #expect(presentation.background == SettingsDesign.orangeGlyphBackground)
     }
 
     @Test func `search filters settings tabs by title and subtitle`() {
@@ -41,35 +49,15 @@ struct SettingsTabTests {
         #expect(SettingsMetrics.showsBackNavigation == false)
     }
 
-    @Test func `settings presentation uses dashboard dark theme contract`() {
-        #expect(SettingsMetrics.preferredColorScheme == .dark)
-        #expect(SettingsDesign.usesDashboardPalette)
-        #expect(SettingsDesign.panelCornerRadius == 8)
-        #expect(SettingsDesign.controlCornerRadius == 6)
-    }
-
-    @Test func `settings sidebar header uses section title instead of duplicate app branding`() {
+    @Test func `settings sidebar header sits above page title in hierarchy`() {
         #expect(SettingsMetrics.sidebarHeaderTitle == "Settings")
-        #expect(SettingsMetrics.sidebarHeaderShowsAppLogo == false)
         #expect(SettingsMetrics.sidebarHeaderTitleSize > SettingsMetrics.pageTitleSize)
     }
 
-    @Test func `settings toggles use custom switch controls from mockups`() {
-        #expect(SettingsDesign.usesCustomSwitchToggles)
-        #expect(SettingsDesign.switchTrackWidth == 42)
-        #expect(SettingsDesign.switchTrackHeight == 24)
+    @Test func `switch thumb fits inside track for custom toggle layout`() {
         #expect(SettingsDesign.switchThumbDiameter < SettingsDesign.switchTrackHeight)
         #expect(TokenDashboardSettings.hideDustTitle == "Hide dust")
-    }
-
-    @Test func `token dashboard toggles expose threshold relationship in layout`() {
-        let toggles = TokenDashboardToggle.allCases
-
-        #expect(toggles.map(\.title) == ["Hide unpriced", "Hide dust"])
-        #expect(TokenDashboardToggle.standaloneRows == [.hideUnpriced])
-        #expect(TokenDashboardToggle.hideUnpriced.presentation == .inlineSettingRow)
-        #expect(TokenDashboardToggle.hideDust.presentation == .minimumValueInputAccessory)
-        #expect(SettingsDesign.switchRowMinHeight >= 52)
+        #expect(TokenDashboardSettings.hideUnpricedTitle == "Hide unpriced")
     }
 
     @Test func `category settings labels use configurable portfolio categories`() {

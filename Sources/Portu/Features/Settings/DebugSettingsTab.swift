@@ -148,7 +148,7 @@
                     .settingsInputFrame(height: SettingsMetrics.compactInputHeight)
                     .frame(width: 96)
                     .onChange(of: port) { _, newValue in
-                        if newValue <= 0 || newValue > Int(UInt16.max) {
+                        if !DebugMode.isValidPort(newValue) {
                             port = Int(DebugMode.defaultPort)
                         }
                     }

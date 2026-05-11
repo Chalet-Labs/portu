@@ -56,11 +56,9 @@ enum SettingsMetrics {
     static let sidebarRowTitleSize: CGFloat = 13
     static let sidebarHeaderTitle = "Settings"
     static let sidebarHeaderTitleSize: CGFloat = 30
-    static let sidebarHeaderShowsAppLogo = false
     static let compactControlHeight: CGFloat = 34
     static let compactInputHeight: CGFloat = 34
     static let showsBackNavigation = false
-    static let preferredColorScheme: ColorScheme = .dark
 }
 
 struct SettingsView: View {
@@ -190,7 +188,6 @@ private struct SettingsSidebarHeader: View {
             .font(.system(size: SettingsMetrics.sidebarHeaderTitleSize, weight: .bold))
             .foregroundStyle(SettingsDesign.primaryText)
             .lineLimit(1)
-            .minimumScaleFactor(0.82)
             .frame(height: 50, alignment: .leading)
             .accessibilityAddTraits(.isHeader)
             .padding(.horizontal, 4)
@@ -241,7 +238,7 @@ private struct SettingsSidebarRow: View {
 
             Text(tab.title)
                 .font(.system(size: SettingsMetrics.sidebarRowTitleSize, weight: .semibold))
-                .foregroundStyle(isSelected ? SettingsDesign.accentBlue : SettingsDesign.primaryText)
+                .foregroundStyle(isSelected ? SettingsDesign.accentPrimary : SettingsDesign.primaryText)
 
             Spacer(minLength: 0)
         }
@@ -252,7 +249,7 @@ private struct SettingsSidebarRow: View {
                 .fill(isSelected ? SettingsDesign.sidebarSelection : .clear))
         .overlay(
             RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                .stroke(isSelected ? SettingsDesign.accentBlue.opacity(0.34) : .clear, lineWidth: 1))
+                .stroke(isSelected ? SettingsDesign.accentPrimary.opacity(0.34) : .clear, lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous))
     }
 }
@@ -351,10 +348,10 @@ private struct RefreshIntervalControl: View {
     private func selectedBackground(for option: RefreshIntervalOption) -> some View {
         if isSelected(option) {
             RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                .fill(SettingsDesign.accentBlue.opacity(0.42))
+                .fill(SettingsDesign.accentPrimary.opacity(0.42))
                 .overlay(
                     RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                        .stroke(SettingsDesign.accentBlue.opacity(0.62), lineWidth: 1))
+                        .stroke(SettingsDesign.accentPrimary.opacity(0.62), lineWidth: 1))
         }
     }
 }
