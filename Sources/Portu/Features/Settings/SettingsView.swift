@@ -64,6 +64,9 @@ enum SettingsMetrics {
     static let sectionTitleSize: CGFloat = 15
     static let rowTitleSize: CGFloat = 14
     static let sidebarRowTitleSize: CGFloat = 13
+    static let sidebarHeaderTitle = "Settings"
+    static let sidebarHeaderTitleSize: CGFloat = 30
+    static let sidebarHeaderShowsAppLogo = false
     static let compactControlHeight: CGFloat = 34
     static let compactInputHeight: CGFloat = 34
     static let showsBackNavigation = false
@@ -150,7 +153,7 @@ private struct SettingsSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SettingsBrandHeader()
+            SettingsSidebarHeader()
 
             SettingsSearchField(text: $searchText)
 
@@ -190,28 +193,16 @@ private struct SettingsSidebar: View {
     }
 }
 
-private struct SettingsBrandHeader: View {
+private struct SettingsSidebarHeader: View {
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                    .fill(SettingsDesign.logoBackground)
-                Text("P")
-                    .font(.system(size: 26, weight: .black, design: .rounded))
-                    .foregroundStyle(SettingsDesign.logoForeground)
-            }
-            .frame(width: 34, height: 34)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Portu")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(SettingsDesign.primaryText)
-                Text("Settings")
-                    .font(.footnote)
-                    .foregroundStyle(SettingsDesign.secondaryText)
-            }
-        }
-        .padding(.horizontal, 4)
+        Text(SettingsMetrics.sidebarHeaderTitle)
+            .font(.system(size: SettingsMetrics.sidebarHeaderTitleSize, weight: .bold))
+            .foregroundStyle(SettingsDesign.primaryText)
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
+            .frame(height: 50, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+            .padding(.horizontal, 4)
     }
 }
 

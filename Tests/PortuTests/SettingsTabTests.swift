@@ -40,6 +40,12 @@ struct SettingsTabTests {
         #expect(SettingsDesign.controlCornerRadius == 6)
     }
 
+    @Test func `settings sidebar header uses section title instead of duplicate app branding`() {
+        #expect(SettingsMetrics.sidebarHeaderTitle == "Settings")
+        #expect(SettingsMetrics.sidebarHeaderShowsAppLogo == false)
+        #expect(SettingsMetrics.sidebarHeaderTitleSize > SettingsMetrics.pageTitleSize)
+    }
+
     @Test func `category settings labels use configurable portfolio categories`() {
         let names = PortfolioCategoryDefaults.categorySnapshots.map(\.name)
 
