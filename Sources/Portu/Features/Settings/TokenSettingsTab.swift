@@ -123,10 +123,10 @@ struct TokenSettingsTab: View {
 
             HStack(spacing: 24) {
                 Toggle("Hide unpriced", isOn: $hideUnpriced)
-                Toggle("Hide below threshold", isOn: $hideDust)
+                    .settingsSwitchToggle()
+                Toggle(TokenDashboardSettings.hideDustTitle, isOn: $hideDust)
+                    .settingsSwitchToggle()
             }
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(SettingsDesign.primaryText)
         }
     }
 

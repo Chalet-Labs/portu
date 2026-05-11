@@ -211,6 +211,41 @@ struct SettingsStatusBadge: View {
     }
 }
 
+struct SettingsSwitchToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                configuration.label
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(SettingsDesign.primaryText)
+
+                switchControl(isOn: configuration.isOn)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(configuration.isOn ? "On" : "Off")
+    }
+
+    private func switchControl(isOn: Bool) -> some View {
+        RoundedRectangle(cornerRadius: SettingsDesign.switchTrackHeight / 2, style: .continuous)
+            .fill(isOn ? SettingsDesign.accentBlue.opacity(0.78) : SettingsDesign.disabledControlBackground)
+            .frame(width: SettingsDesign.switchTrackWidth, height: SettingsDesign.switchTrackHeight)
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsDesign.switchTrackHeight / 2, style: .continuous)
+                    .stroke(isOn ? SettingsDesign.accentBlue.opacity(0.9) : SettingsDesign.cardStroke, lineWidth: 1))
+            .overlay(alignment: isOn ? .trailing : .leading) {
+                Circle()
+                    .fill(isOn ? SettingsDesign.primaryText : SettingsDesign.secondaryText)
+                    .frame(width: SettingsDesign.switchThumbDiameter, height: SettingsDesign.switchThumbDiameter)
+                    .padding(3)
+                    .shadow(color: Color.black.opacity(0.24), radius: 2, x: 0, y: 1)
+            }
+    }
+}
+
 struct SettingsInlineNotice: View {
     enum Style {
         case error
@@ -308,12 +343,20 @@ extension View {
                 RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .stroke(isDisabled ? SettingsDesign.cardStroke : SettingsDesign.accentBlue.opacity(0.68), lineWidth: 1))
     }
+
+    func settingsSwitchToggle() -> some View {
+        toggleStyle(SettingsSwitchToggleStyle())
+    }
 }
 
 enum SettingsDesign {
     static let usesDashboardPalette = true
+    static let usesCustomSwitchToggles = true
     static let panelCornerRadius: CGFloat = 8
     static let controlCornerRadius: CGFloat = 6
+    static let switchTrackWidth: CGFloat = 42
+    static let switchTrackHeight: CGFloat = 24
+    static let switchThumbDiameter: CGFloat = 18
 
     static let contentBackground = Color(red: 0.045, green: 0.043, blue: 0.039)
     static let sidebarBackground = Color(red: 0.110, green: 0.095, blue: 0.088)

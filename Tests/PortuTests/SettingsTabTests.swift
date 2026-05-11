@@ -46,6 +46,14 @@ struct SettingsTabTests {
         #expect(SettingsMetrics.sidebarHeaderTitleSize > SettingsMetrics.pageTitleSize)
     }
 
+    @Test func `settings toggles use custom switch controls from mockups`() {
+        #expect(SettingsDesign.usesCustomSwitchToggles)
+        #expect(SettingsDesign.switchTrackWidth == 42)
+        #expect(SettingsDesign.switchTrackHeight == 24)
+        #expect(SettingsDesign.switchThumbDiameter < SettingsDesign.switchTrackHeight)
+        #expect(TokenDashboardSettings.hideDustTitle == "Hide dust")
+    }
+
     @Test func `category settings labels use configurable portfolio categories`() {
         let names = PortfolioCategoryDefaults.categorySnapshots.map(\.name)
 

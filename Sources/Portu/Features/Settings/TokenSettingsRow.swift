@@ -132,12 +132,12 @@ struct TokenSettingsRowView: View {
                 Toggle("Ignore", isOn: Binding(
                     get: { row.override?.isIgnored ?? false },
                     set: { setIgnored(row.assetId, $0) }))
+                    .settingsSwitchToggle()
                 Toggle("Always show", isOn: Binding(
                     get: { row.override?.alwaysShow ?? false },
                     set: { setAlwaysShow(row.assetId, $0) }))
+                    .settingsSwitchToggle()
             }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(SettingsDesign.primaryText)
 
             HStack(spacing: 8) {
                 TextField("Manual price", text: $manualPriceText)

@@ -120,7 +120,7 @@
 
                 Toggle("Enable Debug Server", isOn: $isEnabled)
                     .labelsHidden()
-                    .toggleStyle(.switch)
+                    .settingsSwitchToggle()
             }
         }
 
