@@ -59,14 +59,15 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 enum SettingsMetrics {
     static let minimumWidth: CGFloat = 720
     static let minimumHeight: CGFloat = 560
-    static let sidebarWidth: CGFloat = 226
-    static let pageTitleSize: CGFloat = 32
-    static let sectionTitleSize: CGFloat = 20
-    static let rowTitleSize: CGFloat = 18
-    static let sidebarRowTitleSize: CGFloat = 15
-    static let compactControlHeight: CGFloat = 40
-    static let compactInputHeight: CGFloat = 40
+    static let sidebarWidth: CGFloat = 208
+    static let pageTitleSize: CGFloat = 22
+    static let sectionTitleSize: CGFloat = 15
+    static let rowTitleSize: CGFloat = 14
+    static let sidebarRowTitleSize: CGFloat = 13
+    static let compactControlHeight: CGFloat = 34
+    static let compactInputHeight: CGFloat = 34
     static let showsBackNavigation = false
+    static let preferredColorScheme: ColorScheme = .dark
 }
 
 struct SettingsView: View {
@@ -148,12 +149,12 @@ private struct SettingsSidebar: View {
     @Binding var searchText: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 14) {
             SettingsBrandHeader()
 
             SettingsSearchField(text: $searchText)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
                 ForEach(tabs) { tab in
                     Button {
                         selectedTab = tab
@@ -185,7 +186,7 @@ private struct SettingsSidebar: View {
     }
 
     private var topPadding: CGFloat {
-        42
+        12
     }
 }
 
@@ -193,13 +194,13 @@ private struct SettingsBrandHeader: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .fill(SettingsDesign.logoBackground)
                 Text("P")
                     .font(.system(size: 26, weight: .black, design: .rounded))
                     .foregroundStyle(SettingsDesign.logoForeground)
             }
-            .frame(width: 44, height: 44)
+            .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text("Portu")
@@ -210,7 +211,7 @@ private struct SettingsBrandHeader: View {
                     .foregroundStyle(SettingsDesign.secondaryText)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 4)
     }
 }
 
@@ -239,8 +240,11 @@ private struct SettingsSearchField: View {
         .padding(.horizontal, 12)
         .frame(height: 34)
         .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                 .fill(SettingsDesign.sidebarSearchBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 }
 
@@ -259,13 +263,15 @@ private struct SettingsSidebarRow: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 12)
-        .frame(height: 44)
+        .padding(.horizontal, 8)
+        .frame(height: 32)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                 .fill(isSelected ? SettingsDesign.sidebarSelection : .clear))
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .stroke(isSelected ? SettingsDesign.accentBlue.opacity(0.34) : .clear, lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous))
     }
 }
 
@@ -275,7 +281,7 @@ private struct GeneralSettingsTab: View {
 
     var body: some View {
         SettingsPage(tab: .general) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Price Updates",
                     subtitle: "Choose how often Portu refreshes token pricing.") {
@@ -338,7 +344,7 @@ private struct RefreshIntervalControl: View {
                     Text(option.title)
                         .font(.footnote.weight(isSelected(option) ? .bold : .regular))
                         .foregroundStyle(isSelected(option) ? SettingsDesign.primaryText : SettingsDesign.secondaryText)
-                        .frame(width: 84, height: 34)
+                        .frame(width: 84, height: 30)
                         .background(selectedBackground(for: option))
                 }
                 .buttonStyle(.plain)
@@ -352,10 +358,10 @@ private struct RefreshIntervalControl: View {
         }
         .padding(2)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(red: 0.930, green: 0.950, blue: 0.980)))
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .fill(SettingsDesign.subtleCardBackground))
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                 .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 
@@ -366,9 +372,11 @@ private struct RefreshIntervalControl: View {
     @ViewBuilder
     private func selectedBackground(for option: RefreshIntervalOption) -> some View {
         if isSelected(option) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.white)
-                .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 1)
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .fill(SettingsDesign.accentBlue.opacity(0.42))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                        .stroke(SettingsDesign.accentBlue.opacity(0.62), lineWidth: 1))
         }
     }
 }

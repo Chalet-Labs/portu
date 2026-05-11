@@ -65,10 +65,10 @@ struct TokenSettingsRowView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .fill(SettingsDesign.subtleCardBackground))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .stroke(SettingsDesign.cardStroke, lineWidth: 1))
         .onChange(of: row.override) { _, override in
             let draft = TokenSettingsOverrideDraft(override: override)

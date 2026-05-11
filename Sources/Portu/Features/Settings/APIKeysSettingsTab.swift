@@ -42,8 +42,8 @@ private extension APIKeyFieldDescriptor {
         id: .coingecko,
         title: "CoinGecko",
         glyph: "C",
-        foreground: Color(red: 0.015, green: 0.520, blue: 0.275),
-        background: Color(red: 0.885, green: 0.985, blue: 0.930),
+        foreground: SettingsDesign.successBadgeText,
+        background: SettingsDesign.successBadgeBackground,
         hint: "Optional. Provides higher rate limits.")
 }
 
@@ -65,7 +65,7 @@ struct APIKeysSettingsTab: View {
 
     var body: some View {
         SettingsPage(tab: .apiKeys, badge: .autoSave) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Provider API Keys",
                     subtitle: "Secrets are stored locally in macOS Keychain.") {
@@ -234,10 +234,10 @@ struct APIKeysSettingsTab: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .fill(SettingsDesign.subtleCardBackground))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .stroke(SettingsDesign.separator, lineWidth: 1))
     }
 

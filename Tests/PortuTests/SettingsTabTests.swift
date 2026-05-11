@@ -1,5 +1,7 @@
 import Foundation
 @testable import Portu
+import PortuCore
+import SwiftUI
 import Testing
 
 struct SettingsTabTests {
@@ -29,6 +31,22 @@ struct SettingsTabTests {
 
     @Test func `settings omits explicit back navigation`() {
         #expect(SettingsMetrics.showsBackNavigation == false)
+    }
+
+    @Test func `settings presentation uses dashboard dark theme contract`() {
+        #expect(SettingsMetrics.preferredColorScheme == .dark)
+        #expect(SettingsDesign.usesDashboardPalette)
+        #expect(SettingsDesign.panelCornerRadius == 8)
+        #expect(SettingsDesign.controlCornerRadius == 6)
+    }
+
+    @Test func `category settings labels use configurable portfolio categories`() {
+        let names = PortfolioCategoryDefaults.categorySnapshots.map(\.name)
+
+        #expect(Array(names.prefix(3)) == ["BTC", "ETH", "SOL"])
+        #expect(names.contains("Stablecoins"))
+        #expect(names.contains("Other Tokens"))
+        #expect(names.contains("Major") == false)
     }
 
     @Test func `api key inputs default secure and reveal only by explicit action`() {

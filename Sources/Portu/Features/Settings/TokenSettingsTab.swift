@@ -33,7 +33,7 @@ struct TokenSettingsTab: View {
         let result = makeResult()
 
         SettingsPage(tab: .tokens, badge: .autoSave) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Dashboard Visibility",
                     subtitle: "Set the global minimum value used by exposure, assets, and overview panels.") {

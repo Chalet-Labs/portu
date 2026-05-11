@@ -19,7 +19,7 @@ struct CategorySettingsTab: View {
 
     var body: some View {
         SettingsPage(tab: .categories, badge: .autoSave) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Category Rules",
                     subtitle: "Assign token symbols to the categories used across Portu.") {
@@ -128,25 +128,37 @@ private struct CategoryRuleEditor: View {
                 Spacer(minLength: 16)
 
                 HStack(spacing: 8) {
-                    Button("Up") {
+                    Button {
                         moveCategory(offset: -1)
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 12, weight: .semibold))
                     }
                     .buttonStyle(.plain)
                     .settingsIconButton(color: SettingsDesign.accentBlue)
+                    .accessibilityLabel("Move \(category.name) up")
                     .disabled(previousCategory == nil)
 
-                    Button("Down") {
+                    Button {
                         moveCategory(offset: 1)
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 12, weight: .semibold))
                     }
                     .buttonStyle(.plain)
                     .settingsIconButton(color: SettingsDesign.accentBlue)
+                    .accessibilityLabel("Move \(category.name) down")
                     .disabled(nextCategory == nil)
 
-                    Button("Delete") {
+                    Button {
                         deleteCategory()
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12, weight: .semibold))
                     }
                     .buttonStyle(.plain)
                     .settingsIconButton(color: SettingsDesign.warningOrange)
+                    .accessibilityLabel("Delete \(category.name)")
                     .disabled(category.isSystemRequired)
                 }
             }
@@ -177,10 +189,10 @@ private struct CategoryRuleEditor: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .fill(SettingsDesign.subtleCardBackground))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .stroke(SettingsDesign.cardStroke, lineWidth: 1))
         .onAppear {
             categoryNameDraft = category.name
@@ -329,7 +341,7 @@ private struct FlexibleSymbolGrid: View {
                 .frame(height: 26)
                 .background(
                     Capsule()
-                        .fill(Color.white))
+                        .fill(SettingsDesign.subtleCardBackground))
                 .overlay(
                     Capsule()
                         .stroke(SettingsDesign.cardStroke, lineWidth: 1))

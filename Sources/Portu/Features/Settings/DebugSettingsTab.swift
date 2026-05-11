@@ -27,7 +27,7 @@
 
         var body: some View {
             SettingsPage(tab: .debug, badge: .debugOnly) {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 14) {
                     SettingsSectionCard(
                         title: "Debug Server",
                         subtitle: "Enable, configure, and inspect the local debug server.") {
@@ -86,12 +86,15 @@
                             VStack(alignment: .leading, spacing: 14) {
                                 Text(DebugMode.launchArgument)
                                     .font(.system(size: 16, weight: .medium, design: .monospaced))
-                                    .foregroundStyle(Color.white)
+                                    .foregroundStyle(SettingsDesign.primaryText)
                                     .padding(.horizontal, 16)
                                     .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .fill(Color(red: 0.040, green: 0.060, blue: 0.100)))
+                                        RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                                            .fill(SettingsDesign.sidebarSearchBackground))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                                            .stroke(SettingsDesign.cardStroke, lineWidth: 1))
 
                                 Text("When active and running, Portu shows that the debug server was enabled via launch argument.")
                                     .font(.footnote)
@@ -172,10 +175,10 @@
                         .padding(.horizontal, 14)
                         .frame(height: 32)
                         .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                                 .fill(SettingsDesign.subtleCardBackground))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                                 .stroke(SettingsDesign.separator, lineWidth: 1))
                 }
             }

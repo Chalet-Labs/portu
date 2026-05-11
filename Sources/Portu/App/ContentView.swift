@@ -50,7 +50,7 @@ struct ContentView: View {
                 .dashboardPage()
         case .settings:
             SettingsView()
-                .environment(\.colorScheme, .light)
+                .environment(\.colorScheme, SettingsMetrics.preferredColorScheme)
         }
     }
 
