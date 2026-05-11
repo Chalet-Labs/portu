@@ -31,16 +31,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
-    var sidebarGlyph: String {
-        switch self {
-        case .general: "G"
-        case .tokens: "T"
-        case .categories: "C"
-        case .apiKeys: "K"
-        case .debug: "D"
-        }
-    }
-
     static func visibleTabs(debugEnabled: Bool) -> [SettingsTab] {
         debugEnabled ? [.general, .tokens, .categories, .apiKeys, .debug] : [.general, .tokens, .categories, .apiKeys]
     }
@@ -129,7 +119,8 @@ struct SettingsView: View {
                 SettingsPage(tab: .debug) {
                     SettingsSectionCard(
                         title: "Debug unavailable",
-                        subtitle: "Debug settings are only available in development builds.") {
+                        subtitle: "Debug settings are only available in development builds.",
+                        icon: .debugServer) {
                             EmptyView()
                         }
                 }
@@ -275,23 +266,19 @@ private struct GeneralSettingsTab: View {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Price Updates",
-                    subtitle: "Choose how often Portu refreshes token pricing.") {
-                        HStack(alignment: .top, spacing: 14) {
-                            SettingsGlyphTile(tab: .general)
-                                .frame(width: 32, height: 32)
-
-                            VStack(alignment: .leading, spacing: 14) {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text("Refresh interval")
-                                        .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
-                                        .foregroundStyle(SettingsDesign.primaryText)
-                                    Text("Default: 30 seconds")
-                                        .font(.footnote)
-                                        .foregroundStyle(SettingsDesign.secondaryText)
-                                }
-
-                                RefreshIntervalControl(selection: $refreshInterval)
+                    subtitle: "Choose how often Portu refreshes token pricing.",
+                    icon: .priceUpdates) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Refresh interval")
+                                    .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
+                                    .foregroundStyle(SettingsDesign.primaryText)
+                                Text("Default: 30 seconds")
+                                    .font(.footnote)
+                                    .foregroundStyle(SettingsDesign.secondaryText)
                             }
+
+                            RefreshIntervalControl(selection: $refreshInterval)
                         }
                     }
 

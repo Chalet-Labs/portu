@@ -22,7 +22,8 @@ struct CategorySettingsTab: View {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Category Rules",
-                    subtitle: "Assign token symbols to the categories used across Portu.") {
+                    subtitle: "Assign token symbols to the categories used across Portu.",
+                    icon: .categoryRules) {
                         VStack(alignment: .leading, spacing: 14) {
                             if categories.isEmpty {
                                 SettingsInlineNotice(
@@ -43,7 +44,8 @@ struct CategorySettingsTab: View {
 
                 SettingsSectionCard(
                     title: "Create Category",
-                    subtitle: "New categories are available immediately in dashboards and charts.") {
+                    subtitle: "New categories are available immediately in dashboards and charts.",
+                    icon: .createCategory) {
                         HStack(spacing: 12) {
                             TextField("Category name", text: $newCategoryName)
                                 .textFieldStyle(.plain)

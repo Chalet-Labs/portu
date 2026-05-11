@@ -30,7 +30,8 @@
                 VStack(alignment: .leading, spacing: 14) {
                     SettingsSectionCard(
                         title: "Debug Server",
-                        subtitle: "Enable, configure, and inspect the local debug server.") {
+                        subtitle: "Enable, configure, and inspect the local debug server.",
+                        icon: .debugServer) {
                             VStack(spacing: 0) {
                                 debugToggleRow
 
@@ -48,7 +49,8 @@
 
                     SettingsSectionCard(
                         title: "Conditional Notices",
-                        subtitle: "Shown only when the matching debug state is active.") {
+                        subtitle: "Shown only when the matching debug state is active.",
+                        icon: .notices) {
                             VStack(alignment: .leading, spacing: 12) {
                                 if launchArgActive, isRunning {
                                     SettingsInlineNotice(
@@ -82,7 +84,8 @@
 
                     SettingsSectionCard(
                         title: "Launch Argument",
-                        subtitle: "Enable the server without using the toggle.") {
+                        subtitle: "Enable the server without using the toggle.",
+                        icon: .launchArgument) {
                             VStack(alignment: .leading, spacing: 14) {
                                 Text(DebugMode.launchArgument)
                                     .font(.system(size: 16, weight: .medium, design: .monospaced))

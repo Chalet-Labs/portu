@@ -50,26 +50,39 @@ struct SettingsPage<Content: View>: View {
 struct SettingsSectionCard<Content: View>: View {
     let title: String
     let subtitle: String
+    let icon: SettingsSectionIcon?
     private let content: Content
 
     init(
         title: String,
         subtitle: String,
+        icon: SettingsSectionIcon? = nil,
         @ViewBuilder content: () -> Content) {
         self.title = title
         self.subtitle = subtitle
+        self.icon = icon
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title)
-                    .font(.system(size: SettingsMetrics.sectionTitleSize, weight: .bold))
-                    .foregroundStyle(SettingsDesign.primaryText)
-                Text(subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(SettingsDesign.secondaryText)
+            HStack(alignment: .top, spacing: 10) {
+                if let icon {
+                    SettingsIconTile(
+                        systemImage: SettingsIconography.sectionSystemImage(icon),
+                        foreground: SettingsIconography.sectionForeground(icon),
+                        background: SettingsIconography.sectionBackground(icon))
+                        .frame(width: 30, height: 30)
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title)
+                        .font(.system(size: SettingsMetrics.sectionTitleSize, weight: .bold))
+                        .foregroundStyle(SettingsDesign.primaryText)
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(SettingsDesign.secondaryText)
+                }
             }
 
             SettingsDivider()
@@ -118,8 +131,8 @@ struct SettingsGlyphTile: View {
     var isSelected = false
 
     var body: some View {
-        SettingsLetterTile(
-            glyph: tab.sidebarGlyph,
+        SettingsIconTile(
+            systemImage: SettingsIconography.sidebarSystemImage(for: tab),
             foreground: glyphColor,
             background: isSelected ? SettingsDesign.selectedGlyphBackground : glyphBackground)
     }
@@ -145,19 +158,20 @@ struct SettingsGlyphTile: View {
     }
 }
 
-struct SettingsLetterTile: View {
-    let glyph: String
+struct SettingsIconTile: View {
+    let systemImage: String
     let foreground: Color
     let background: Color
 
     var body: some View {
-        Text(glyph)
-            .font(.caption.weight(.bold))
+        Image(systemName: systemImage)
+            .font(.system(size: 14, weight: .bold))
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .fill(background))
+            .accessibilityHidden(true)
     }
 }
 

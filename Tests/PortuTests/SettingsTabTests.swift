@@ -9,7 +9,15 @@ struct SettingsTabTests {
         let tabs = SettingsTab.visibleTabs(debugEnabled: true)
 
         #expect(tabs.map(\.title) == ["General", "Tokens", "Categories", "API Keys", "Debug"])
-        #expect(tabs.map(\.sidebarGlyph) == ["G", "T", "C", "K", "D"])
+        #expect(tabs.map { SettingsIconography.sidebarSystemImage(for: $0) } == ["gearshape", "eye", "tag", "key", "wrench.and.screwdriver"])
+    }
+
+    @Test func `settings mockup iconography uses semantic system symbols`() {
+        #expect(SettingsIconography.sectionSystemImage(.dashboardVisibility) == "eye")
+        #expect(SettingsIconography.sectionSystemImage(.apiKeys) == "key")
+        #expect(SettingsIconography.apiKeyFieldSystemImage == "key")
+        #expect(SettingsIconography.visibilityToggleSystemImage(isVisible: false) == "eye")
+        #expect(SettingsIconography.visibilityToggleSystemImage(isVisible: true) == "eye.slash")
     }
 
     @Test func `search filters settings tabs by title and subtitle`() {

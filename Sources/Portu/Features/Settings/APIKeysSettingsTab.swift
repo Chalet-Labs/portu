@@ -15,7 +15,7 @@ private enum APIKeyFieldID: Hashable {
 private struct APIKeyFieldDescriptor {
     let id: APIKeyFieldID
     let title: String
-    let glyph: String
+    let systemImage: String
     let foreground: Color
     let background: Color
     let hint: String?
@@ -25,7 +25,7 @@ private extension APIKeyFieldDescriptor {
     static let zapper = Self(
         id: .zapper,
         title: "Zapper",
-        glyph: "Z",
+        systemImage: SettingsIconography.apiKeyFieldSystemImage,
         foreground: SettingsDesign.accentBlue,
         background: SettingsDesign.blueGlyphBackground,
         hint: nil)
@@ -33,7 +33,7 @@ private extension APIKeyFieldDescriptor {
     static let debank = Self(
         id: .debank,
         title: "DeBank",
-        glyph: "D",
+        systemImage: SettingsIconography.apiKeyFieldSystemImage,
         foreground: SettingsDesign.warningOrange,
         background: SettingsDesign.orangeGlyphBackground,
         hint: nil)
@@ -41,7 +41,7 @@ private extension APIKeyFieldDescriptor {
     static let coingecko = Self(
         id: .coingecko,
         title: "CoinGecko",
-        glyph: "C",
+        systemImage: SettingsIconography.apiKeyFieldSystemImage,
         foreground: SettingsDesign.successBadgeText,
         background: SettingsDesign.successBadgeBackground,
         hint: "Optional. Provides higher rate limits.")
@@ -68,7 +68,8 @@ struct APIKeysSettingsTab: View {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Provider API Keys",
-                    subtitle: "Secrets are stored locally in macOS Keychain.") {
+                    subtitle: "Secrets are stored locally in macOS Keychain.",
+                    icon: .apiKeys) {
                         VStack(spacing: 0) {
                             apiKeyField(
                                 .zapper,
@@ -92,7 +93,8 @@ struct APIKeysSettingsTab: View {
 
                 SettingsSectionCard(
                     title: "Custom RPCs",
-                    subtitle: "Override a chain's default RPC endpoint when needed.") {
+                    subtitle: "Override a chain's default RPC endpoint when needed.",
+                    icon: .customRPCs) {
                         VStack(alignment: .leading, spacing: 22) {
                             rpcTable
                             addEndpointSection
@@ -118,8 +120,8 @@ struct APIKeysSettingsTab: View {
         _ descriptor: APIKeyFieldDescriptor,
         text: Binding<String>) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            SettingsLetterTile(
-                glyph: descriptor.glyph,
+            SettingsIconTile(
+                systemImage: descriptor.systemImage,
                 foreground: descriptor.foreground,
                 background: descriptor.background)
                 .frame(width: 32, height: 32)
@@ -151,7 +153,7 @@ struct APIKeysSettingsTab: View {
                 Button {
                     toggleVisibility(for: descriptor.id)
                 } label: {
-                    Image(systemName: isVisible ? "eye.slash" : "eye")
+                    Image(systemName: SettingsIconography.visibilityToggleSystemImage(isVisible: isVisible))
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(.plain)
