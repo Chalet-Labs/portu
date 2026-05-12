@@ -142,7 +142,7 @@ public actor PriceService {
 
         var url = baseURL
         for component in pathComponents {
-            url = url.appending(path: component)
+            url = url.appending(component: component)
         }
         url = url.appending(queryItems: queryItems)
 

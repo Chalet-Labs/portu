@@ -173,6 +173,21 @@ struct PriceServiceTests {
         #expect(prices.map(\.usdPrice) == expectedPrices)
     }
 
+    @Test func `fetch historical prices escapes slash in coin id path component`() async throws {
+        var capturedURL: URL?
+        MockURLProtocol.requestHandler = { request in
+            capturedURL = request.url
+            return (Data("{\"prices\":[]}".utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        _ = try await service.fetchHistoricalPrices(for: "foo/bar", days: 1)
+
+        let url = try #require(capturedURL)
+        #expect(url.absoluteString.contains("/coins/foo%2Fbar/market_chart?"))
+        #expect(!url.absoluteString.contains("/coins/foo/bar/market_chart?"))
+    }
+
     @Test func `fetch historical prices rejects malformed payload`() async {
         MockURLProtocol.requestHandler = { _ in
             (Data("{\"prices\":[[\"bad\", 42]]}".utf8), 200)
