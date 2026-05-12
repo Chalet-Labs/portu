@@ -13,6 +13,7 @@ func makeTestContainer() throws -> ModelContainer {
         PositionToken.self,
         Asset.self,
         TokenPricingOverride.self,
+        HistoricalPricePoint.self,
         PortfolioSnapshot.self,
         AccountSnapshot.self,
         AssetSnapshot.self
@@ -212,6 +213,43 @@ struct ModelTests {
         #expect(fetched.notes == "manual check")
         #expect(fetched.createdAt == createdAt)
         #expect(fetched.updatedAt == updatedAt)
+    }
+
+    @Test func `historical price point stores utc day cache data`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+        let rawDate = Date(timeIntervalSince1970: 1_704_110_456)
+        let fetchedAt = Date(timeIntervalSince1970: 1_704_200_000)
+        let usdPrice = try #require(Decimal(string: "43123.45"))
+
+        let point = HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: rawDate,
+            usdPrice: usdPrice,
+            fetchedAt: fetchedAt)
+
+        context.insert(point)
+        try context.save()
+
+        let fetchedPoints = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+        let fetched = try #require(fetchedPoints.first)
+        #expect(fetched.coinGeckoId == "bitcoin")
+        #expect(fetched.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
+        #expect(fetched.usdPrice == usdPrice)
+        #expect(fetched.source == .coingecko)
+        #expect(fetched.fetchedAt == fetchedAt)
+    }
+
+    @Test func `historical price dto is sendable and normalizes day`() {
+        let rawDate = Date(timeIntervalSince1970: 1_704_110_456)
+        let dto = HistoricalPriceDTO(
+            coinGeckoId: "ethereum",
+            timestamp: rawDate,
+            usdPrice: 2500)
+
+        let sendable: any Sendable = dto
+        #expect(sendable is HistoricalPriceDTO)
+        #expect(dto.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
     }
 
     @Test func `account is active by default`() {

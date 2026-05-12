@@ -179,6 +179,7 @@ struct ViewRenderSmokeTests {
             PositionToken.self,
             Asset.self,
             TokenPricingOverride.self,
+            HistoricalPricePoint.self,
             PortfolioCategory.self,
             CategorySymbolRule.self,
             PortfolioSnapshot.self,

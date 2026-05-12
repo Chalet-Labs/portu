@@ -13,6 +13,7 @@ struct SyncEngineTests {
         let schema = Schema([
             Account.self, WalletAddress.self, Position.self,
             PositionToken.self, Asset.self, TokenPricingOverride.self,
+            HistoricalPricePoint.self,
             PortfolioCategory.self, CategorySymbolRule.self,
             PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
         ])
