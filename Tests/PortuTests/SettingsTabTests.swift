@@ -101,6 +101,22 @@ struct SettingsTabTests {
         #expect(HistoricalPriceBackfillSettings.chartHorizonDays == 365)
     }
 
+    @Test func `historical backfill status surfaces partial failures`() {
+        let result = HistoricalBackfillResult(
+            requestedAssets: 4,
+            fetchedAssets: 3,
+            skippedAssets: 1,
+            insertedPoints: 10,
+            updatedPoints: 2,
+            failedCoinGeckoIDs: ["ethereum"])
+
+        let message = HistoricalBackfillStatusFormatter.message(for: .succeeded(result))
+
+        #expect(message.contains("Fetched 3 assets"))
+        #expect(message.contains("failed 1"))
+        #expect(message.contains("ethereum"))
+    }
+
     private func cleanDefaults() -> UserDefaults {
         let suite = "com.portu.test.SettingsTab.\(UUID().uuidString)"
         return UserDefaults(suiteName: suite)!

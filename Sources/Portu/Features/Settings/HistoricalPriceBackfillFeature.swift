@@ -85,52 +85,62 @@ enum HistoricalPriceCacheWriter {
         in context: ModelContext,
         fetchedAt: Date = .now) throws -> HistoricalBackfillWriteResult {
         let existing = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
-        let groupedExisting = Dictionary(grouping: existing) {
-            HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day)
-        }
-        var existingByKey: [HistoricalPriceCacheKey: HistoricalPricePoint] = [:]
-        for (cacheKey, rows) in groupedExisting {
-            let sortedRows = rows.sorted { lhs, rhs in
-                if lhs.fetchedAt == rhs.fetchedAt {
-                    lhs.id.uuidString < rhs.id.uuidString
-                } else {
-                    lhs.fetchedAt > rhs.fetchedAt
+        do {
+            let groupedExisting = Dictionary(grouping: existing) {
+                HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day)
+            }
+            var existingByKey: [HistoricalPriceCacheKey: HistoricalPricePoint] = [:]
+            for (cacheKey, rows) in groupedExisting {
+                let sortedRows = rows.sorted { lhs, rhs in
+                    if lhs.fetchedAt == rhs.fetchedAt {
+                        lhs.id.uuidString < rhs.id.uuidString
+                    } else {
+                        lhs.fetchedAt > rhs.fetchedAt
+                    }
+                }
+                guard let survivor = sortedRows.first else { continue }
+                existingByKey[cacheKey] = survivor
+                for duplicate in sortedRows.dropFirst() {
+                    context.delete(duplicate)
                 }
             }
-            guard let survivor = sortedRows.first else { continue }
-            existingByKey[cacheKey] = survivor
-            for duplicate in sortedRows.dropFirst() {
-                context.delete(duplicate)
-            }
-        }
-        var inserted = 0
-        var updated = 0
+            var inserted = 0
+            var updated = 0
 
-        for dto in dtos {
-            let cacheKey = HistoricalPriceCacheKey(coinGeckoId: dto.coinGeckoId, day: dto.day)
-            if let row = existingByKey[cacheKey] {
-                row.usdPrice = dto.usdPrice
-                row.fetchedAt = fetchedAt
-                updated += 1
-            } else {
-                let row = HistoricalPricePoint(dto: dto, fetchedAt: fetchedAt)
-                context.insert(row)
-                existingByKey[cacheKey] = row
-                inserted += 1
+            for dto in dtos {
+                let cacheKey = HistoricalPriceCacheKey(coinGeckoId: dto.coinGeckoId, day: dto.day)
+                if let row = existingByKey[cacheKey] {
+                    row.usdPrice = dto.usdPrice
+                    row.fetchedAt = fetchedAt
+                    updated += 1
+                } else {
+                    let row = HistoricalPricePoint(dto: dto, fetchedAt: fetchedAt)
+                    context.insert(row)
+                    existingByKey[cacheKey] = row
+                    inserted += 1
+                }
             }
-        }
 
-        try context.save()
-        return HistoricalBackfillWriteResult(inserted: inserted, updated: updated)
+            try context.save()
+            return HistoricalBackfillWriteResult(inserted: inserted, updated: updated)
+        } catch {
+            context.rollback()
+            throw error
+        }
     }
 
     @MainActor
     static func clear(in context: ModelContext) throws {
         let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
-        for row in rows {
-            context.delete(row)
+        do {
+            for row in rows {
+                context.delete(row)
+            }
+            try context.save()
+        } catch {
+            context.rollback()
+            throw error
         }
-        try context.save()
     }
 }
 

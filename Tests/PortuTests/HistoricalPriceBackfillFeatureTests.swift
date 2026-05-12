@@ -151,10 +151,16 @@ struct HistoricalPriceBackfillFeatureTests {
             now: { Date(timeIntervalSince1970: 20) })
 
         let result = try await client.run()
+        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
 
         #expect(result.requestedAssets == 3)
         #expect(result.fetchedAssets == 2)
         #expect(result.failedCoinGeckoIDs == ["ethereum"])
+        #expect(result.insertedPoints == 1)
+        #expect(result.updatedPoints == 0)
+        #expect(rows.count == 1)
+        #expect(rows.first?.coinGeckoId == "aave")
+        #expect(rows.first?.fetchedAt == Date(timeIntervalSince1970: 20))
     }
 
     @Test func `backfill failure preserves thrown dependency message`() async {

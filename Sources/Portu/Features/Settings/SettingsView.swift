@@ -325,24 +325,35 @@ private struct HistoricalBackfillStatusText: View {
     let status: HistoricalBackfillStatus
 
     var body: some View {
-        Text(message)
+        Text(HistoricalBackfillStatusFormatter.message(for: status))
             .font(.footnote)
             .foregroundStyle(SettingsDesign.secondaryText)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
 
-    private var message: String {
+enum HistoricalBackfillStatusFormatter {
+    static func message(for status: HistoricalBackfillStatus) -> String {
         switch status {
         case .idle:
             "No historical backfill run in this session."
         case .running:
             "Fetching historical prices from CoinGecko..."
         case let .succeeded(result):
-            "Fetched \(result.fetchedAssets) assets, inserted \(result.insertedPoints), "
-                + "updated \(result.updatedPoints), skipped \(result.skippedAssets)."
+            successMessage(for: result)
         case let .failed(message):
             "Backfill failed: \(message)"
         }
+    }
+
+    private static func successMessage(for result: HistoricalBackfillResult) -> String {
+        let baseMessage = "Fetched \(result.fetchedAssets) assets, inserted \(result.insertedPoints), "
+            + "updated \(result.updatedPoints), skipped \(result.skippedAssets)."
+        guard !result.failedCoinGeckoIDs.isEmpty else { return baseMessage }
+
+        let visibleIDs = result.failedCoinGeckoIDs.prefix(3).joined(separator: ", ")
+        let overflow = result.failedCoinGeckoIDs.count > 3 ? ", ..." : ""
+        return baseMessage + " Partial success: failed \(result.failedCoinGeckoIDs.count) (\(visibleIDs)\(overflow))."
     }
 }
 
