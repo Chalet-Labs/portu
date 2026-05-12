@@ -78,6 +78,34 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(try context.fetch(FetchDescriptor<Asset>()).count == 1)
     }
 
+    @Test func `backfill failure preserves thrown dependency message`() async {
+        let store = TestStore(initialState: HistoricalPriceBackfillFeature.State()) {
+            HistoricalPriceBackfillFeature()
+        } withDependencies: {
+            $0.historicalPriceBackfill.run = { throw HistoricalBackfillError(message: "boom") }
+        }
+
+        await store.send(.backfillButtonTapped) {
+            $0.status = .running
+        }
+        await store.receive(\.backfillCompleted) {
+            $0.status = .failed("boom")
+        }
+    }
+
+    @Test func `clear cache failure preserves thrown dependency message`() async {
+        let store = TestStore(initialState: HistoricalPriceBackfillFeature.State()) {
+            HistoricalPriceBackfillFeature()
+        } withDependencies: {
+            $0.historicalPriceBackfill.clearCache = { throw HistoricalBackfillError(message: "cache boom") }
+        }
+
+        await store.send(.clearCacheButtonTapped)
+        await store.receive(\.clearCacheCompleted) {
+            $0.status = .failed("cache boom")
+        }
+    }
+
     private func token(
         assetId: UUID,
         symbol: String,

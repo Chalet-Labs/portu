@@ -38,8 +38,12 @@ enum HistoricalBackfillStatus: Equatable {
     }
 }
 
-struct HistoricalBackfillError: Error, Equatable {
+struct HistoricalBackfillError: LocalizedError, Equatable {
     let message: String
+
+    var errorDescription: String? {
+        message
+    }
 }
 
 enum HistoricalBackfillCandidateResolver {
