@@ -1,3 +1,4 @@
+import ComposableArchitecture
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
@@ -62,6 +63,7 @@ enum SettingsMetrics {
 }
 
 struct SettingsView: View {
+    let store: StoreOf<AppFeature>
     @State private var selectedTab: SettingsTab = .general
     @State private var searchText = ""
 
@@ -103,7 +105,7 @@ struct SettingsView: View {
     private var selectedContent: some View {
         switch selectedTab {
         case .general:
-            GeneralSettingsTab()
+            GeneralSettingsTab(store: store)
         case .tokens:
             TokenSettingsTab()
         case .categories:
@@ -255,8 +257,12 @@ private struct SettingsSidebarRow: View {
 }
 
 private struct GeneralSettingsTab: View {
+    let store: StoreOf<AppFeature>
+
     @AppStorage(PricePollingSettings.refreshIntervalKey)
     private var refreshInterval = PricePollingSettings.defaultRefreshIntervalSeconds
+    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
+    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
 
     var body: some View {
         SettingsPage(tab: .general) {
@@ -279,10 +285,62 @@ private struct GeneralSettingsTab: View {
                         }
                     }
 
+                SettingsSectionCard(
+                    title: HistoricalPriceBackfillSettings.sectionTitle,
+                    subtitle: "Cache CoinGecko daily prices separately from Portu snapshots.",
+                    icon: .priceUpdates) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Toggle(HistoricalPriceBackfillSettings.useBackfillTitle, isOn: $historicalBackfillEnabled)
+                                .toggleStyle(SettingsSwitchToggleStyle())
+
+                            HStack(spacing: 10) {
+                                Button(HistoricalPriceBackfillSettings.backfillButtonTitle) {
+                                    store.send(.historicalPriceBackfill(.backfillButtonTapped))
+                                }
+                                .buttonStyle(.plain)
+                                .settingsPrimaryButton(isDisabled: store.historicalPriceBackfill.status.isRunning)
+                                .disabled(store.historicalPriceBackfill.status.isRunning)
+
+                                Button(HistoricalPriceBackfillSettings.clearCacheButtonTitle) {
+                                    store.send(.historicalPriceBackfill(.clearCacheButtonTapped))
+                                }
+                                .buttonStyle(.plain)
+                                .settingsPrimaryButton(isDisabled: false)
+                            }
+
+                            HistoricalBackfillStatusText(status: store.historicalPriceBackfill.status)
+                        }
+                    }
+
                 SettingsInfoCard(
                     title: "Auto-saved",
                     message: "This setting is stored locally with AppStorage and applies across Portu views.")
             }
+        }
+    }
+}
+
+private struct HistoricalBackfillStatusText: View {
+    let status: HistoricalBackfillStatus
+
+    var body: some View {
+        Text(message)
+            .font(.footnote)
+            .foregroundStyle(SettingsDesign.secondaryText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var message: String {
+        switch status {
+        case .idle:
+            "No historical backfill run in this session."
+        case .running:
+            "Fetching historical prices from CoinGecko..."
+        case let .succeeded(result):
+            "Fetched \(result.fetchedAssets) assets, inserted \(result.insertedPoints), "
+                + "updated \(result.updatedPoints), skipped \(result.skippedAssets)."
+        case let .failed(message):
+            "Backfill failed: \(message)"
         }
     }
 }

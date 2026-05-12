@@ -49,7 +49,7 @@ struct ContentView: View {
             sectionView(section)
                 .dashboardPage()
         case .settings:
-            SettingsView()
+            SettingsView(store: store)
         }
     }
 

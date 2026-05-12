@@ -89,6 +89,18 @@ struct SettingsTabTests {
         #expect(PricePollingSettings.refreshIntervalSeconds(defaults: defaults) == 30)
     }
 
+    @Test func `historical price settings use shared keys and labels`() {
+        let defaults = cleanDefaults()
+
+        #expect(HistoricalPriceBackfillSettings.isEnabledKey == "historicalPriceBackfill.isEnabled")
+        #expect(HistoricalPriceBackfillSettings.isEnabled(defaults: defaults) == false)
+
+        defaults.set(true, forKey: HistoricalPriceBackfillSettings.isEnabledKey)
+        #expect(HistoricalPriceBackfillSettings.isEnabled(defaults: defaults) == true)
+        #expect(HistoricalPriceBackfillSettings.sectionTitle == "Historical Prices")
+        #expect(HistoricalPriceBackfillSettings.chartHorizonDays == 365)
+    }
+
     private func cleanDefaults() -> UserDefaults {
         let suite = "com.portu.test.SettingsTab.\(UUID().uuidString)"
         return UserDefaults(suiteName: suite)!

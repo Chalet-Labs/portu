@@ -42,18 +42,23 @@ struct PortuApp: App {
         #endif
 
         let secretStore = KeychainService()
+        let modelContext = container.mainContext
         let syncEngine = SyncEngine(
-            modelContext: container.mainContext,
+            modelContext: modelContext,
             providerFactory: ProviderFactory(secretStore: secretStore, session: session))
         let priceService = PriceService(session: session) {
             try? secretStore.get(key: .serviceAPIKey("coingecko"))
         }
+        let priceServiceClient = PriceServiceClient.live(service: priceService)
 
         self.store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
             AppFeature()
         } withDependencies: {
             $0.syncEngine = .live(engine: syncEngine)
-            $0.priceService = .live(service: priceService)
+            $0.priceService = priceServiceClient
+            $0.historicalPriceBackfill = .live(
+                modelContext: modelContext,
+                priceService: priceServiceClient)
         }
 
         // Bridge: features can trigger sync via AppState until migrated to TCA
@@ -68,7 +73,7 @@ struct PortuApp: App {
                     port: DebugMode.port(),
                     modelContainer: container,
                     store: store,
-                    priceService: .live(service: priceService))
+                    priceService: priceServiceClient)
                 // App.init is implicitly @MainActor via App protocol conformance
                 let state = appState
                 Task { @MainActor in

@@ -118,6 +118,7 @@ struct AppFeature {
         var accounts = AccountsFeature.State()
         var performance = PerformanceFeature.State()
         var portfolioHealth = PortfolioHealthFeature.State()
+        var historicalPriceBackfill = HistoricalPriceBackfillFeature.State()
     }
 
     enum Action {
@@ -135,6 +136,7 @@ struct AppFeature {
         case accounts(AccountsFeature.Action)
         case performance(PerformanceFeature.Action)
         case portfolioHealth(PortfolioHealthFeature.Action)
+        case historicalPriceBackfill(HistoricalPriceBackfillFeature.Action)
     }
 
     private enum CancelID {
@@ -162,6 +164,9 @@ struct AppFeature {
         }
         Scope(state: \.portfolioHealth, action: \.portfolioHealth) {
             PortfolioHealthFeature()
+        }
+        Scope(state: \.historicalPriceBackfill, action: \.historicalPriceBackfill) {
+            HistoricalPriceBackfillFeature()
         }
         Reduce { state, action in
             switch action {
@@ -244,6 +249,9 @@ struct AppFeature {
 
             case .portfolioHealth:
                 return .none
+
+            case .historicalPriceBackfill:
+                return .none
             }
         }
     }
@@ -270,6 +278,7 @@ extension AppFeature.Action: Equatable {
         case let (.accounts(l), .accounts(r)): l == r
         case let (.performance(l), .performance(r)): l == r
         case let (.portfolioHealth(l), .portfolioHealth(r)): l == r
+        case let (.historicalPriceBackfill(l), .historicalPriceBackfill(r)): l == r
         default: false
         }
     }

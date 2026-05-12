@@ -245,6 +245,46 @@ struct AppFeatureTests {
         #expect(called)
     }
 
+    // MARK: - Historical Price Backfill
+
+    @Test func `historical backfill success updates settings status`() async {
+        let result = HistoricalBackfillResult(
+            requestedAssets: 2,
+            fetchedAssets: 2,
+            skippedAssets: 1,
+            insertedPoints: 10,
+            updatedPoints: 3,
+            failedCoinGeckoIDs: [])
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.historicalPriceBackfill.run = { result }
+        }
+
+        await store.send(.historicalPriceBackfill(.backfillButtonTapped)) {
+            $0.historicalPriceBackfill.status = .running
+        }
+        await store.receive(\.historicalPriceBackfill.backfillCompleted) {
+            $0.historicalPriceBackfill.status = .succeeded(result)
+        }
+    }
+
+    @Test func `historical backfill clear resets status`() async {
+        let initial = AppFeature.State(
+            historicalPriceBackfill: HistoricalPriceBackfillFeature.State(
+                status: .failed("Rate limited")))
+        let store = TestStore(initialState: initial) {
+            AppFeature()
+        } withDependencies: {
+            $0.historicalPriceBackfill.clearCache = {}
+        }
+
+        await store.send(.historicalPriceBackfill(.clearCacheButtonTapped))
+        await store.receive(\.historicalPriceBackfill.clearCacheCompleted) {
+            $0.historicalPriceBackfill.status = .idle
+        }
+    }
+
     // MARK: - Price Merge (not replace)
 
     @Test func `prices merge with existing`() async {
