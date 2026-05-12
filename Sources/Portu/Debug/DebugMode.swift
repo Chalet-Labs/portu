@@ -15,9 +15,13 @@
                 || defaults.bool(forKey: enabledKey)
         }
 
+        static func isValidPort(_ value: Int) -> Bool {
+            value > 0 && value <= Int(UInt16.max)
+        }
+
         static func port(defaults: UserDefaults = .standard) -> UInt16 {
             let stored = defaults.integer(forKey: portKey)
-            guard stored > 0, stored <= UInt16.max else { return defaultPort }
+            guard isValidPort(stored) else { return defaultPort }
             return UInt16(stored)
         }
     }

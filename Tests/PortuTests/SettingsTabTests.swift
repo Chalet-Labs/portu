@@ -1,5 +1,7 @@
 import Foundation
 @testable import Portu
+import PortuCore
+import SwiftUI
 import Testing
 
 struct SettingsTabTests {
@@ -7,7 +9,23 @@ struct SettingsTabTests {
         let tabs = SettingsTab.visibleTabs(debugEnabled: true)
 
         #expect(tabs.map(\.title) == ["General", "Tokens", "Categories", "API Keys", "Debug"])
-        #expect(tabs.map(\.sidebarGlyph) == ["G", "T", "C", "K", "D"])
+        #expect(tabs.map { SettingsIconography.sidebarSystemImage(for: $0) } == ["gearshape", "eye", "tag", "key", "wrench.and.screwdriver"])
+    }
+
+    @Test func `settings mockup iconography uses semantic system symbols`() {
+        #expect(SettingsSectionIcon.dashboardVisibility.systemImage == "eye")
+        #expect(SettingsSectionIcon.apiKeys.systemImage == "key")
+        #expect(SettingsIconography.apiKeyFieldSystemImage == "key")
+        #expect(SettingsIconography.visibilityToggleActionSystemImage(isCurrentlyVisible: false) == "eye")
+        #expect(SettingsIconography.visibilityToggleActionSystemImage(isCurrentlyVisible: true) == "eye.slash")
+    }
+
+    @Test func `section icon presentation pairs symbol with palette`() {
+        let presentation = SettingsSectionIcon.apiKeys.presentation
+
+        #expect(presentation.systemImage == SettingsSectionIcon.apiKeys.systemImage)
+        #expect(presentation.foreground == SettingsDesign.warningOrange)
+        #expect(presentation.background == SettingsDesign.orangeGlyphBackground)
     }
 
     @Test func `search filters settings tabs by title and subtitle`() {
@@ -29,6 +47,28 @@ struct SettingsTabTests {
 
     @Test func `settings omits explicit back navigation`() {
         #expect(SettingsMetrics.showsBackNavigation == false)
+    }
+
+    @Test func `settings sidebar header sits above page title in hierarchy`() {
+        #expect(SettingsMetrics.sidebarHeaderTitle == "Settings")
+        #expect(SettingsMetrics.sidebarHeaderTitleSize > SettingsMetrics.pageTitleSize)
+    }
+
+    @Test func `switch thumb fits inside track for custom toggle layout`() {
+        #expect(SettingsDesign.switchThumbDiameter < SettingsDesign.switchTrackHeight)
+        #expect(SettingsDesign.switchAnimationDuration == 0.25)
+        #expect(SettingsDesign.primaryButtonMinWidth == 64)
+        #expect(TokenDashboardSettings.hideDustTitle == "Hide dust")
+        #expect(TokenDashboardSettings.hideUnpricedTitle == "Hide unpriced")
+    }
+
+    @Test func `category settings labels use configurable portfolio categories`() {
+        let names = PortfolioCategoryDefaults.categorySnapshots.map(\.name)
+
+        #expect(Array(names.prefix(3)) == ["BTC", "ETH", "SOL"])
+        #expect(names.contains("Stablecoins"))
+        #expect(names.contains("Other Tokens"))
+        #expect(names.contains("Major") == false)
     }
 
     @Test func `api key inputs default secure and reveal only by explicit action`() {

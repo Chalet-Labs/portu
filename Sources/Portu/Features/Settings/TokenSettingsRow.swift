@@ -65,10 +65,10 @@ struct TokenSettingsRowView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .fill(SettingsDesign.subtleCardBackground))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .stroke(SettingsDesign.cardStroke, lineWidth: 1))
         .onChange(of: row.override) { _, override in
             let draft = TokenSettingsOverrideDraft(override: override)
@@ -132,12 +132,12 @@ struct TokenSettingsRowView: View {
                 Toggle("Ignore", isOn: Binding(
                     get: { row.override?.isIgnored ?? false },
                     set: { setIgnored(row.assetId, $0) }))
+                    .settingsSwitchToggle()
                 Toggle("Always show", isOn: Binding(
                     get: { row.override?.alwaysShow ?? false },
                     set: { setAlwaysShow(row.assetId, $0) }))
+                    .settingsSwitchToggle()
             }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(SettingsDesign.primaryText)
 
             HStack(spacing: 8) {
                 TextField("Manual price", text: $manualPriceText)
@@ -204,7 +204,7 @@ struct TokenSettingsRowView: View {
     private var sourceColor: Color {
         switch row.pricingSource {
         case .live: SettingsDesign.successBadgeText
-        case .syncTime: SettingsDesign.accentBlue
+        case .syncTime: SettingsDesign.accentPrimary
         case .manual: SettingsDesign.tokenTeal
         case .unpriced: SettingsDesign.warningOrange
         }

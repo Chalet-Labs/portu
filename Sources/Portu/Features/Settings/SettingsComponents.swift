@@ -16,7 +16,7 @@ struct SettingsPage<Content: View>: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 20) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(tab.title)
@@ -34,12 +34,12 @@ struct SettingsPage<Content: View>: View {
                             .padding(.top, 4)
                     }
                 }
-                .padding(.top, 34)
+                .padding(.top, 16)
 
                 content
             }
-            .padding(.horizontal, 42)
-            .padding(.bottom, 40)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollContentBackground(.hidden)
@@ -50,40 +50,54 @@ struct SettingsPage<Content: View>: View {
 struct SettingsSectionCard<Content: View>: View {
     let title: String
     let subtitle: String
+    let icon: SettingsSectionIcon?
     private let content: Content
 
     init(
         title: String,
         subtitle: String,
+        icon: SettingsSectionIcon? = nil,
         @ViewBuilder content: () -> Content) {
         self.title = title
         self.subtitle = subtitle
+        self.icon = icon
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title)
-                    .font(.system(size: SettingsMetrics.sectionTitleSize, weight: .bold))
-                    .foregroundStyle(SettingsDesign.primaryText)
-                Text(subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(SettingsDesign.secondaryText)
+            HStack(alignment: .top, spacing: 10) {
+                if let icon {
+                    let presentation = icon.presentation
+                    SettingsIconTile(
+                        systemImage: presentation.systemImage,
+                        foreground: presentation.foreground,
+                        background: presentation.background)
+                        .frame(width: 30, height: 30)
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title)
+                        .font(.system(size: SettingsMetrics.sectionTitleSize, weight: .bold))
+                        .foregroundStyle(SettingsDesign.primaryText)
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(SettingsDesign.secondaryText)
+                }
             }
 
             SettingsDivider()
 
             content
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 18)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .fill(SettingsDesign.cardBackground))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 }
@@ -101,14 +115,14 @@ struct SettingsInfoCard: View {
                 .font(.footnote)
                 .foregroundStyle(SettingsDesign.secondaryText)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: 62, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .fill(SettingsDesign.subtleCardBackground))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 }
@@ -118,46 +132,38 @@ struct SettingsGlyphTile: View {
     var isSelected = false
 
     var body: some View {
-        SettingsLetterTile(
-            glyph: tab.sidebarGlyph,
-            foreground: glyphColor,
-            background: isSelected ? SettingsDesign.selectedGlyphBackground : glyphBackground)
+        let palette = tabPalette
+        SettingsIconTile(
+            systemImage: SettingsIconography.sidebarSystemImage(for: tab),
+            foreground: palette.foreground,
+            background: isSelected ? SettingsDesign.selectedGlyphBackground : palette.background)
     }
 
-    private var glyphColor: Color {
+    private var tabPalette: (foreground: Color, background: Color) {
         switch tab {
-        case .general: SettingsDesign.accentBlue
-        case .tokens: SettingsDesign.tokenTeal
-        case .categories: SettingsDesign.successBadgeText
-        case .apiKeys: SettingsDesign.warningOrange
-        case .debug: SettingsDesign.debugOrange
-        }
-    }
-
-    private var glyphBackground: Color {
-        switch tab {
-        case .general: SettingsDesign.blueGlyphBackground
-        case .tokens: SettingsDesign.tokenGlyphBackground
-        case .categories: SettingsDesign.successBadgeBackground
-        case .apiKeys: SettingsDesign.orangeGlyphBackground
-        case .debug: SettingsDesign.peachGlyphBackground
+        case .general: (SettingsDesign.accentPrimary, SettingsDesign.primaryGlyphBackground)
+        case .tokens: (SettingsDesign.tokenTeal, SettingsDesign.tokenGlyphBackground)
+        case .categories: (SettingsDesign.successBadgeText, SettingsDesign.successBadgeBackground)
+        case .apiKeys: (SettingsDesign.warningOrange, SettingsDesign.orangeGlyphBackground)
+        case .debug: (SettingsDesign.debugOrange, SettingsDesign.peachGlyphBackground)
         }
     }
 }
 
-struct SettingsLetterTile: View {
-    let glyph: String
+struct SettingsIconTile: View {
+    let systemImage: String
     let foreground: Color
     let background: Color
 
     var body: some View {
-        Text(glyph)
-            .font(.caption.weight(.bold))
+        Image(systemName: systemImage)
+            .font(.system(size: 14, weight: .bold))
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .fill(background))
+            .accessibilityHidden(true)
     }
 }
 
@@ -192,7 +198,7 @@ struct SettingsStatusBadge: View {
             .padding(.horizontal, 16)
             .frame(minWidth: 100, minHeight: 30)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .fill(background))
     }
 
@@ -208,6 +214,97 @@ struct SettingsStatusBadge: View {
         case .success: SettingsDesign.successBadgeText
         case .warning: SettingsDesign.warningBadgeText
         }
+    }
+}
+
+struct SettingsSwitchToggleStyle: ToggleStyle {
+    let showsLabel: Bool
+
+    init(showsLabel: Bool = true) {
+        self.showsLabel = showsLabel
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                if showsLabel {
+                    configuration.label
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(SettingsDesign.primaryText)
+                }
+
+                switchControl(isOn: configuration.isOn)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityRepresentation {
+            Toggle(isOn: configuration.$isOn) {
+                configuration.label
+            }
+        }
+    }
+
+    private func switchControl(isOn: Bool) -> some View {
+        RoundedRectangle(cornerRadius: SettingsDesign.switchTrackHeight / 2, style: .continuous)
+            .fill(isOn ? SettingsDesign.accentPrimary.opacity(0.78) : SettingsDesign.disabledControlBackground)
+            .frame(width: SettingsDesign.switchTrackWidth, height: SettingsDesign.switchTrackHeight)
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsDesign.switchTrackHeight / 2, style: .continuous)
+                    .strokeBorder(isOn ? SettingsDesign.accentPrimary.opacity(0.9) : SettingsDesign.cardStroke, lineWidth: 1))
+            .overlay(alignment: isOn ? .trailing : .leading) {
+                Circle()
+                    .fill(isOn ? SettingsDesign.primaryText : SettingsDesign.secondaryText)
+                    .frame(width: SettingsDesign.switchThumbDiameter, height: SettingsDesign.switchThumbDiameter)
+                    .padding(3)
+                    .shadow(color: Color.black.opacity(0.24), radius: 2, x: 0, y: 1)
+            }
+            .animation(.spring(duration: SettingsDesign.switchAnimationDuration), value: isOn)
+    }
+}
+
+struct SettingsSwitchRow: View {
+    let title: String
+    let subtitle: String
+    @Binding private var isOn: Bool
+
+    init(
+        title: String,
+        subtitle: String,
+        isOn: Binding<Bool>) {
+        self.title = title
+        self.subtitle = subtitle
+        self._isOn = isOn
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 18) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
+                    .foregroundStyle(SettingsDesign.primaryText)
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(SettingsDesign.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 18)
+
+            Toggle(title, isOn: $isOn)
+                .settingsSwitchToggle(showsLabel: false)
+                .accessibilityLabel(title)
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: SettingsDesign.switchRowMinHeight, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .fill(SettingsDesign.subtleCardBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 }
 
@@ -234,31 +331,31 @@ struct SettingsInlineNotice: View {
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, minHeight: message == nil ? 38 : 56, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                 .fill(background))
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                 .stroke(stroke, lineWidth: 1))
     }
 
     private var background: Color {
         switch style {
-        case .error: Color(red: 1.0, green: 0.970, blue: 0.925)
-        case .action: Color(red: 0.910, green: 0.930, blue: 1.0)
+        case .error: Color(red: 0.190, green: 0.082, blue: 0.064)
+        case .action: Color(red: 0.165, green: 0.135, blue: 0.082)
         }
     }
 
     private var stroke: Color {
         switch style {
-        case .error: Color(red: 0.980, green: 0.590, blue: 0.235)
-        case .action: Color(red: 0.600, green: 0.690, blue: 1.0)
+        case .error: SettingsDesign.warningOrange.opacity(0.58)
+        case .action: SettingsDesign.accentPrimary.opacity(0.58)
         }
     }
 
     private var foreground: Color {
         switch style {
-        case .error: Color(red: 0.640, green: 0.160, blue: 0.050)
-        case .action: Color(red: 0.245, green: 0.180, blue: 0.780)
+        case .error: Color(red: 0.950, green: 0.535, blue: 0.390)
+        case .action: SettingsDesign.primaryText
         }
     }
 }
@@ -269,10 +366,10 @@ extension View {
             .frame(height: height)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .fill(SettingsDesign.subtleCardBackground))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 
@@ -280,10 +377,10 @@ extension View {
         padding(.horizontal, 12)
             .frame(height: height)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .fill(SettingsDesign.subtleCardBackground))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 
@@ -291,46 +388,62 @@ extension View {
         foregroundStyle(color)
             .frame(width: 42, height: 28)
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .fill(color.opacity(0.10)))
             .overlay(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .stroke(color.opacity(0.25), lineWidth: 1))
     }
 
     func settingsPrimaryButton(isDisabled: Bool) -> some View {
-        foregroundStyle(isDisabled ? SettingsDesign.secondaryText : Color.white)
-            .frame(width: 64, height: SettingsMetrics.compactControlHeight)
+        foregroundStyle(isDisabled ? SettingsDesign.secondaryText : SettingsDesign.primaryText)
+            .frame(minWidth: SettingsDesign.primaryButtonMinWidth)
+            .frame(height: SettingsMetrics.compactControlHeight)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isDisabled ? Color(red: 0.800, green: 0.830, blue: 0.880) : SettingsDesign.accentBlue))
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                    .fill(isDisabled ? SettingsDesign.disabledControlBackground : SettingsDesign.accentPrimary.opacity(0.42)))
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                    .strokeBorder(isDisabled ? SettingsDesign.cardStroke : SettingsDesign.accentPrimary.opacity(0.68), lineWidth: 1))
+    }
+
+    func settingsSwitchToggle(showsLabel: Bool = true) -> some View {
+        toggleStyle(SettingsSwitchToggleStyle(showsLabel: showsLabel))
     }
 }
 
 enum SettingsDesign {
-    static let contentBackground = Color(red: 0.995, green: 0.997, blue: 1.0)
-    static let sidebarBackground = Color(red: 0.945, green: 0.965, blue: 0.995)
-    static let sidebarSearchBackground = Color(red: 0.905, green: 0.925, blue: 0.965)
-    static let sidebarSelection = Color(red: 0.855, green: 0.895, blue: 1.0)
-    static let cardBackground = Color.white
-    static let subtleCardBackground = Color(red: 0.980, green: 0.988, blue: 0.998)
-    static let separator = Color(red: 0.855, green: 0.875, blue: 0.910)
-    static let cardStroke = Color(red: 0.800, green: 0.850, blue: 0.920)
-    static let primaryText = Color(red: 0.045, green: 0.070, blue: 0.125)
-    static let secondaryText = Color(red: 0.390, green: 0.440, blue: 0.560)
-    static let accentBlue = Color(red: 0.055, green: 0.360, blue: 0.840)
-    static let tokenTeal = Color(red: 0.000, green: 0.455, blue: 0.505)
-    static let warningOrange = Color(red: 0.925, green: 0.250, blue: 0.050)
-    static let debugOrange = Color(red: 0.830, green: 0.365, blue: 0.070)
-    static let logoBackground = Color(red: 0.900, green: 0.925, blue: 1.0)
-    static let logoForeground = Color(red: 0.340, green: 0.250, blue: 0.900)
-    static let selectedGlyphBackground = Color.white
-    static let blueGlyphBackground = Color(red: 0.930, green: 0.945, blue: 1.0)
-    static let tokenGlyphBackground = Color(red: 0.875, green: 0.965, blue: 0.965)
-    static let orangeGlyphBackground = Color(red: 1.0, green: 0.955, blue: 0.900)
-    static let peachGlyphBackground = Color(red: 1.0, green: 0.940, blue: 0.895)
-    static let successBadgeBackground = Color(red: 0.870, green: 0.965, blue: 0.925)
-    static let successBadgeText = Color(red: 0.045, green: 0.415, blue: 0.275)
-    static let warningBadgeBackground = Color(red: 1.0, green: 0.935, blue: 0.690)
-    static let warningBadgeText = Color(red: 0.515, green: 0.205, blue: 0.010)
+    static let panelCornerRadius: CGFloat = 8
+    static let controlCornerRadius: CGFloat = 6
+    static let switchTrackWidth: CGFloat = 42
+    static let switchTrackHeight: CGFloat = 24
+    static let switchThumbDiameter: CGFloat = 18
+    static let switchRowMinHeight: CGFloat = 58
+    static let switchAnimationDuration = 0.25
+    static let primaryButtonMinWidth: CGFloat = 64
+
+    static let contentBackground = Color(red: 0.045, green: 0.043, blue: 0.039)
+    static let sidebarBackground = Color(red: 0.110, green: 0.095, blue: 0.088)
+    static let sidebarSearchBackground = Color(red: 0.105, green: 0.096, blue: 0.084)
+    static let sidebarSelection = Color(red: 0.135, green: 0.123, blue: 0.108)
+    static let cardBackground = Color(red: 0.072, green: 0.068, blue: 0.060)
+    static let subtleCardBackground = Color(red: 0.105, green: 0.096, blue: 0.084)
+    static let disabledControlBackground = Color(red: 0.090, green: 0.084, blue: 0.074)
+    static let separator = Color(red: 0.178, green: 0.160, blue: 0.135)
+    static let cardStroke = Color(red: 0.178, green: 0.160, blue: 0.135)
+    static let primaryText = Color(red: 0.910, green: 0.885, blue: 0.820)
+    static let secondaryText = Color(red: 0.610, green: 0.570, blue: 0.500)
+    static let accentPrimary = Color(red: 0.690, green: 0.550, blue: 0.310)
+    static let tokenTeal = Color(red: 0.260, green: 0.670, blue: 0.620)
+    static let warningOrange = Color(red: 0.860, green: 0.330, blue: 0.330)
+    static let debugOrange = Color(red: 0.850, green: 0.520, blue: 0.260)
+    static let selectedGlyphBackground = Color(red: 0.360, green: 0.285, blue: 0.175)
+    static let primaryGlyphBackground = Color(red: 0.190, green: 0.155, blue: 0.095)
+    static let tokenGlyphBackground = Color(red: 0.105, green: 0.185, blue: 0.160)
+    static let orangeGlyphBackground = Color(red: 0.220, green: 0.120, blue: 0.090)
+    static let peachGlyphBackground = Color(red: 0.215, green: 0.145, blue: 0.090)
+    static let successBadgeBackground = Color(red: 0.115, green: 0.215, blue: 0.145)
+    static let successBadgeText = Color(red: 0.360, green: 0.730, blue: 0.455)
+    static let warningBadgeBackground = Color(red: 0.255, green: 0.145, blue: 0.085)
+    static let warningBadgeText = Color(red: 0.900, green: 0.600, blue: 0.250)
 }

@@ -27,10 +27,11 @@
 
         var body: some View {
             SettingsPage(tab: .debug, badge: .debugOnly) {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 14) {
                     SettingsSectionCard(
                         title: "Debug Server",
-                        subtitle: "Enable, configure, and inspect the local debug server.") {
+                        subtitle: "Enable, configure, and inspect the local debug server.",
+                        icon: .debugServer) {
                             VStack(spacing: 0) {
                                 debugToggleRow
 
@@ -48,7 +49,8 @@
 
                     SettingsSectionCard(
                         title: "Conditional Notices",
-                        subtitle: "Shown only when the matching debug state is active.") {
+                        subtitle: "Shown only when the matching debug state is active.",
+                        icon: .notices) {
                             VStack(alignment: .leading, spacing: 12) {
                                 if launchArgActive, isRunning {
                                     SettingsInlineNotice(
@@ -82,16 +84,20 @@
 
                     SettingsSectionCard(
                         title: "Launch Argument",
-                        subtitle: "Enable the server without using the toggle.") {
+                        subtitle: "Enable the server without using the toggle.",
+                        icon: .launchArgument) {
                             VStack(alignment: .leading, spacing: 14) {
                                 Text(DebugMode.launchArgument)
                                     .font(.system(size: 16, weight: .medium, design: .monospaced))
-                                    .foregroundStyle(Color.white)
+                                    .foregroundStyle(SettingsDesign.primaryText)
                                     .padding(.horizontal, 16)
                                     .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .fill(Color(red: 0.040, green: 0.060, blue: 0.100)))
+                                        RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                                            .fill(SettingsDesign.sidebarSearchBackground))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                                            .stroke(SettingsDesign.cardStroke, lineWidth: 1))
 
                                 Text("When active and running, Portu shows that the debug server was enabled via launch argument.")
                                     .font(.footnote)
@@ -116,8 +122,8 @@
                 Spacer(minLength: 18)
 
                 Toggle("Enable Debug Server", isOn: $isEnabled)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
+                    .settingsSwitchToggle(showsLabel: false)
+                    .accessibilityLabel("Enable Debug Server")
             }
         }
 
@@ -142,7 +148,7 @@
                     .settingsInputFrame(height: SettingsMetrics.compactInputHeight)
                     .frame(width: 96)
                     .onChange(of: port) { _, newValue in
-                        if newValue <= 0 || newValue > Int(UInt16.max) {
+                        if !DebugMode.isValidPort(newValue) {
                             port = Int(DebugMode.defaultPort)
                         }
                     }
@@ -172,10 +178,10 @@
                         .padding(.horizontal, 14)
                         .frame(height: 32)
                         .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                                 .fill(SettingsDesign.subtleCardBackground))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                                 .stroke(SettingsDesign.separator, lineWidth: 1))
                 }
             }

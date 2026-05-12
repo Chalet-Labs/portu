@@ -33,16 +33,18 @@ struct TokenSettingsTab: View {
         let result = makeResult()
 
         SettingsPage(tab: .tokens, badge: .autoSave) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Dashboard Visibility",
-                    subtitle: "Set the global minimum value used by exposure, assets, and overview panels.") {
+                    subtitle: "Set the global minimum value used by exposure, assets, and overview panels.",
+                    icon: .dashboardVisibility) {
                         dashboardControls
                     }
 
                 SettingsSectionCard(
                     title: "Token Overrides",
-                    subtitle: "Search active tokens and save manual pricing, visibility, or category rules.") {
+                    subtitle: "Search active tokens and save manual pricing, visibility, or category rules.",
+                    icon: .tokenOverrides) {
                         VStack(alignment: .leading, spacing: 14) {
                             filterControls(result: result)
                             tokenTable(result: result)
@@ -98,7 +100,7 @@ struct TokenSettingsTab: View {
 
     private var dashboardControls: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 16) {
+            HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Minimum value")
                         .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
@@ -119,14 +121,16 @@ struct TokenSettingsTab: View {
                 Stepper("", value: $minimumDashboardValue, in: 0 ... 10000, step: 1)
                     .labelsHidden()
                     .frame(width: 70)
+
+                Toggle(TokenDashboardSettings.hideDustTitle, isOn: $hideDust)
+                    .settingsSwitchToggle()
+                    .fixedSize()
             }
 
-            HStack(spacing: 24) {
-                Toggle("Hide unpriced", isOn: $hideUnpriced)
-                Toggle("Hide below threshold", isOn: $hideDust)
-            }
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(SettingsDesign.primaryText)
+            SettingsSwitchRow(
+                title: TokenDashboardSettings.hideUnpricedTitle,
+                subtitle: TokenDashboardSettings.hideUnpricedSubtitle,
+                isOn: $hideUnpriced)
         }
     }
 

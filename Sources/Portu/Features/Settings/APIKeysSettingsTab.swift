@@ -15,7 +15,7 @@ private enum APIKeyFieldID: Hashable {
 private struct APIKeyFieldDescriptor {
     let id: APIKeyFieldID
     let title: String
-    let glyph: String
+    let systemImage: String
     let foreground: Color
     let background: Color
     let hint: String?
@@ -25,15 +25,15 @@ private extension APIKeyFieldDescriptor {
     static let zapper = Self(
         id: .zapper,
         title: "Zapper",
-        glyph: "Z",
-        foreground: SettingsDesign.accentBlue,
-        background: SettingsDesign.blueGlyphBackground,
+        systemImage: SettingsIconography.apiKeyFieldSystemImage,
+        foreground: SettingsDesign.accentPrimary,
+        background: SettingsDesign.primaryGlyphBackground,
         hint: nil)
 
     static let debank = Self(
         id: .debank,
         title: "DeBank",
-        glyph: "D",
+        systemImage: SettingsIconography.apiKeyFieldSystemImage,
         foreground: SettingsDesign.warningOrange,
         background: SettingsDesign.orangeGlyphBackground,
         hint: nil)
@@ -41,9 +41,9 @@ private extension APIKeyFieldDescriptor {
     static let coingecko = Self(
         id: .coingecko,
         title: "CoinGecko",
-        glyph: "C",
-        foreground: Color(red: 0.015, green: 0.520, blue: 0.275),
-        background: Color(red: 0.885, green: 0.985, blue: 0.930),
+        systemImage: SettingsIconography.apiKeyFieldSystemImage,
+        foreground: SettingsDesign.successBadgeText,
+        background: SettingsDesign.successBadgeBackground,
         hint: "Optional. Provides higher rate limits.")
 }
 
@@ -65,10 +65,11 @@ struct APIKeysSettingsTab: View {
 
     var body: some View {
         SettingsPage(tab: .apiKeys, badge: .autoSave) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Provider API Keys",
-                    subtitle: "Secrets are stored locally in macOS Keychain.") {
+                    subtitle: "Secrets are stored locally in macOS Keychain.",
+                    icon: .apiKeys) {
                         VStack(spacing: 0) {
                             apiKeyField(
                                 .zapper,
@@ -92,7 +93,8 @@ struct APIKeysSettingsTab: View {
 
                 SettingsSectionCard(
                     title: "Custom RPCs",
-                    subtitle: "Override a chain's default RPC endpoint when needed.") {
+                    subtitle: "Override a chain's default RPC endpoint when needed.",
+                    icon: .customRPCs) {
                         VStack(alignment: .leading, spacing: 22) {
                             rpcTable
                             addEndpointSection
@@ -118,8 +120,8 @@ struct APIKeysSettingsTab: View {
         _ descriptor: APIKeyFieldDescriptor,
         text: Binding<String>) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            SettingsLetterTile(
-                glyph: descriptor.glyph,
+            SettingsIconTile(
+                systemImage: descriptor.systemImage,
                 foreground: descriptor.foreground,
                 background: descriptor.background)
                 .frame(width: 32, height: 32)
@@ -151,7 +153,7 @@ struct APIKeysSettingsTab: View {
                 Button {
                     toggleVisibility(for: descriptor.id)
                 } label: {
-                    Image(systemName: isVisible ? "eye.slash" : "eye")
+                    Image(systemName: SettingsIconography.visibilityToggleActionSystemImage(isCurrentlyVisible: isVisible))
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(.plain)
@@ -234,10 +236,10 @@ struct APIKeysSettingsTab: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .fill(SettingsDesign.subtleCardBackground))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .stroke(SettingsDesign.separator, lineWidth: 1))
     }
 

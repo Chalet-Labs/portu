@@ -5,6 +5,28 @@ import SwiftData
 import Testing
 
 struct TokenSettingsFeatureTests {
+    @Test func `dashboard threshold uses strict less than so boundary value stays visible`() {
+        let boundary = token(symbol: "BOUND", coinGeckoId: "bound", amount: 1, usdValue: 0)
+        let prices: [String: Decimal] = ["bound": 1]
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        #expect(TokenSettingsFeature.isDashboardEligible(
+            token: boundary,
+            prices: prices,
+            override: nil,
+            settings: settings))
+    }
+
+    @Test func `dashboard threshold hides values strictly below the minimum when hide dust is on`() {
+        let below = token(symbol: "BELOW", coinGeckoId: "below", amount: 1, usdValue: 0)
+        let prices: [String: Decimal] = ["below": decimal("0.99")]
+        let hideDust = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+        let showDust = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: false)
+
+        #expect(!TokenSettingsFeature.isDashboardEligible(token: below, prices: prices, override: nil, settings: hideDust))
+        #expect(TokenSettingsFeature.isDashboardEligible(token: below, prices: prices, override: nil, settings: showDust))
+    }
+
     @Test func `dashboard defaults exclude zero amount ignored unpriced and dust tokens`() {
         let visible = token(symbol: "VISIBLE", coinGeckoId: "visible", amount: 1, usdValue: 2)
         let zeroAmount = token(symbol: "ZERO", coinGeckoId: "zero", amount: 0, usdValue: 10)

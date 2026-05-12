@@ -31,16 +31,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         }
     }
 
-    var sidebarGlyph: String {
-        switch self {
-        case .general: "G"
-        case .tokens: "T"
-        case .categories: "C"
-        case .apiKeys: "K"
-        case .debug: "D"
-        }
-    }
-
     static func visibleTabs(debugEnabled: Bool) -> [SettingsTab] {
         debugEnabled ? [.general, .tokens, .categories, .apiKeys, .debug] : [.general, .tokens, .categories, .apiKeys]
     }
@@ -59,13 +49,15 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 enum SettingsMetrics {
     static let minimumWidth: CGFloat = 720
     static let minimumHeight: CGFloat = 560
-    static let sidebarWidth: CGFloat = 226
-    static let pageTitleSize: CGFloat = 32
-    static let sectionTitleSize: CGFloat = 20
-    static let rowTitleSize: CGFloat = 18
-    static let sidebarRowTitleSize: CGFloat = 15
-    static let compactControlHeight: CGFloat = 40
-    static let compactInputHeight: CGFloat = 40
+    static let sidebarWidth: CGFloat = 208
+    static let pageTitleSize: CGFloat = 22
+    static let sectionTitleSize: CGFloat = 15
+    static let rowTitleSize: CGFloat = 14
+    static let sidebarRowTitleSize: CGFloat = 13
+    static let sidebarHeaderTitle = "Settings"
+    static let sidebarHeaderTitleSize: CGFloat = 30
+    static let compactControlHeight: CGFloat = 34
+    static let compactInputHeight: CGFloat = 34
     static let showsBackNavigation = false
 }
 
@@ -125,7 +117,8 @@ struct SettingsView: View {
                 SettingsPage(tab: .debug) {
                     SettingsSectionCard(
                         title: "Debug unavailable",
-                        subtitle: "Debug settings are only available in development builds.") {
+                        subtitle: "Debug settings are only available in development builds.",
+                        icon: .debugServer) {
                             EmptyView()
                         }
                 }
@@ -148,12 +141,12 @@ private struct SettingsSidebar: View {
     @Binding var searchText: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            SettingsBrandHeader()
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsSidebarHeader()
 
             SettingsSearchField(text: $searchText)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
                 ForEach(tabs) { tab in
                     Button {
                         selectedTab = tab
@@ -185,32 +178,19 @@ private struct SettingsSidebar: View {
     }
 
     private var topPadding: CGFloat {
-        42
+        12
     }
 }
 
-private struct SettingsBrandHeader: View {
+private struct SettingsSidebarHeader: View {
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(SettingsDesign.logoBackground)
-                Text("P")
-                    .font(.system(size: 26, weight: .black, design: .rounded))
-                    .foregroundStyle(SettingsDesign.logoForeground)
-            }
-            .frame(width: 44, height: 44)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Portu")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(SettingsDesign.primaryText)
-                Text("Settings")
-                    .font(.footnote)
-                    .foregroundStyle(SettingsDesign.secondaryText)
-            }
-        }
-        .padding(.horizontal, 8)
+        Text(SettingsMetrics.sidebarHeaderTitle)
+            .font(.system(size: SettingsMetrics.sidebarHeaderTitleSize, weight: .bold))
+            .foregroundStyle(SettingsDesign.primaryText)
+            .lineLimit(1)
+            .frame(height: 50, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+            .padding(.horizontal, 4)
     }
 }
 
@@ -239,8 +219,11 @@ private struct SettingsSearchField: View {
         .padding(.horizontal, 12)
         .frame(height: 34)
         .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                 .fill(SettingsDesign.sidebarSearchBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 }
 
@@ -255,17 +238,19 @@ private struct SettingsSidebarRow: View {
 
             Text(tab.title)
                 .font(.system(size: SettingsMetrics.sidebarRowTitleSize, weight: .semibold))
-                .foregroundStyle(isSelected ? SettingsDesign.accentBlue : SettingsDesign.primaryText)
+                .foregroundStyle(isSelected ? SettingsDesign.accentPrimary : SettingsDesign.primaryText)
 
             Spacer(minLength: 0)
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 12)
-        .frame(height: 44)
+        .padding(.horizontal, 8)
+        .frame(height: 32)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                 .fill(isSelected ? SettingsDesign.sidebarSelection : .clear))
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .stroke(isSelected ? SettingsDesign.accentPrimary.opacity(0.34) : .clear, lineWidth: 1))
+        .contentShape(RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous))
     }
 }
 
@@ -275,26 +260,22 @@ private struct GeneralSettingsTab: View {
 
     var body: some View {
         SettingsPage(tab: .general) {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Price Updates",
-                    subtitle: "Choose how often Portu refreshes token pricing.") {
-                        HStack(alignment: .top, spacing: 14) {
-                            SettingsGlyphTile(tab: .general)
-                                .frame(width: 32, height: 32)
-
-                            VStack(alignment: .leading, spacing: 14) {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text("Refresh interval")
-                                        .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
-                                        .foregroundStyle(SettingsDesign.primaryText)
-                                    Text("Default: 30 seconds")
-                                        .font(.footnote)
-                                        .foregroundStyle(SettingsDesign.secondaryText)
-                                }
-
-                                RefreshIntervalControl(selection: $refreshInterval)
+                    subtitle: "Choose how often Portu refreshes token pricing.",
+                    icon: .priceUpdates) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Refresh interval")
+                                    .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
+                                    .foregroundStyle(SettingsDesign.primaryText)
+                                Text("Default: 30 seconds")
+                                    .font(.footnote)
+                                    .foregroundStyle(SettingsDesign.secondaryText)
                             }
+
+                            RefreshIntervalControl(selection: $refreshInterval)
                         }
                     }
 
@@ -338,7 +319,7 @@ private struct RefreshIntervalControl: View {
                     Text(option.title)
                         .font(.footnote.weight(isSelected(option) ? .bold : .regular))
                         .foregroundStyle(isSelected(option) ? SettingsDesign.primaryText : SettingsDesign.secondaryText)
-                        .frame(width: 84, height: 34)
+                        .frame(width: 84, height: 30)
                         .background(selectedBackground(for: option))
                 }
                 .buttonStyle(.plain)
@@ -352,10 +333,10 @@ private struct RefreshIntervalControl: View {
         }
         .padding(2)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(red: 0.930, green: 0.950, blue: 0.980)))
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .fill(SettingsDesign.subtleCardBackground))
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                 .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 
@@ -366,9 +347,11 @@ private struct RefreshIntervalControl: View {
     @ViewBuilder
     private func selectedBackground(for option: RefreshIntervalOption) -> some View {
         if isSelected(option) {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.white)
-                .shadow(color: .black.opacity(0.06), radius: 4, x: 0, y: 1)
+            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                .fill(SettingsDesign.accentPrimary.opacity(0.42))
+                .overlay(
+                    RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                        .stroke(SettingsDesign.accentPrimary.opacity(0.62), lineWidth: 1))
         }
     }
 }
