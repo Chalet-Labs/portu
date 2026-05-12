@@ -35,8 +35,15 @@ enum HistoricalPortfolioEstimator {
         startDate: Date,
         firstRealSnapshotDate: Date,
         accountId: UUID?) -> [HistoricalPortfolioValuePoint] {
-        let scopedHoldings = holdings.filter { holding in
-            accountId == nil || holding.accountId == accountId
+        let scopedHoldings = holdings.compactMap { holding -> HistoricalEstimateHolding? in
+            guard accountId == nil || holding.accountId == accountId else { return nil }
+            let coinGeckoId = normalizedID(holding.coinGeckoId)
+            guard !coinGeckoId.isEmpty else { return nil }
+            return HistoricalEstimateHolding(
+                accountId: holding.accountId,
+                assetId: holding.assetId,
+                coinGeckoId: coinGeckoId,
+                amount: holding.amount)
         }
         guard !scopedHoldings.isEmpty else { return [] }
 
@@ -45,7 +52,14 @@ enum HistoricalPortfolioEstimator {
         let requiredIDs = Set(scopedHoldings.map(\.coinGeckoId))
         var pricesByDay: [Date: [String: Decimal]] = [:]
 
-        for price in prices {
+        let normalizedPrices = prices.compactMap { price -> HistoricalPriceEntry? in
+            let coinGeckoId = normalizedID(price.coinGeckoId)
+            guard !coinGeckoId.isEmpty else { return nil }
+            return HistoricalPriceEntry(coinGeckoId: coinGeckoId, day: price.day, usdPrice: price.usdPrice)
+        }
+        // HistoricalPriceEntry has no fetchedAt metadata. Sorting by day, id, then price
+        // makes duplicate day/id rows deterministic; the highest price wins for exact duplicates.
+        for price in normalizedPrices.sorted(by: priceSort) {
             let day = utcStartOfDay(for: price.day)
             guard day >= startDay, day < firstRealDay else {
                 continue
@@ -64,9 +78,30 @@ enum HistoricalPortfolioEstimator {
     }
 
     static func realValues(_ values: [(Date, Decimal)]) -> [HistoricalPortfolioValuePoint] {
-        values
-            .sorted { $0.0 < $1.0 }
-            .map { HistoricalPortfolioValuePoint(date: utcStartOfDay(for: $0.0), value: $0.1, kind: .real) }
+        var latestByDay: [Date: (date: Date, value: Decimal)] = [:]
+        for (date, value) in values {
+            let day = utcStartOfDay(for: date)
+            if let existing = latestByDay[day], existing.date > date || (existing.date == date && existing.value >= value) {
+                continue
+            }
+            latestByDay[day] = (date, value)
+        }
+
+        return latestByDay.keys.sorted().map { day in
+            HistoricalPortfolioValuePoint(date: day, value: latestByDay[day]?.value ?? 0, kind: .real)
+        }
+    }
+
+    private static func priceSort(_ lhs: HistoricalPriceEntry, _ rhs: HistoricalPriceEntry) -> Bool {
+        let lhsDay = utcStartOfDay(for: lhs.day)
+        let rhsDay = utcStartOfDay(for: rhs.day)
+        if lhsDay != rhsDay { return lhsDay < rhsDay }
+        if lhs.coinGeckoId != rhs.coinGeckoId { return lhs.coinGeckoId < rhs.coinGeckoId }
+        return lhs.usdPrice < rhs.usdPrice
+    }
+
+    private static func normalizedID(_ id: String) -> String {
+        id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private static func utcStartOfDay(for date: Date) -> Date {
