@@ -1,11 +1,13 @@
 import Foundation
 
-enum HistoricalPortfolioPointKind: Equatable {
+// swiftformat:disable redundantSendable
+
+enum HistoricalPortfolioPointKind: Equatable, Sendable {
     case estimated
     case real
 }
 
-struct HistoricalPortfolioValuePoint: Equatable, Identifiable {
+struct HistoricalPortfolioValuePoint: Equatable, Identifiable, Sendable {
     var id: String {
         "\(kind)-\(date.timeIntervalSince1970)"
     }
@@ -15,14 +17,14 @@ struct HistoricalPortfolioValuePoint: Equatable, Identifiable {
     let kind: HistoricalPortfolioPointKind
 }
 
-struct HistoricalEstimateHolding: Equatable {
+struct HistoricalEstimateHolding: Equatable, Sendable {
     let accountId: UUID
     let assetId: UUID
     let coinGeckoId: String
     let amount: Decimal
 }
 
-struct HistoricalPriceEntry: Equatable {
+struct HistoricalPriceEntry: Equatable, Sendable {
     let coinGeckoId: String
     let day: Date
     let usdPrice: Decimal
