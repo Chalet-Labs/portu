@@ -9,10 +9,12 @@ import Testing
 nonisolated final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var requestHandler: ((URLRequest) -> (Data?, Int))?
 
+    // swiftlint:disable:next static_over_final_class
     override class func canInit(with _: URLRequest) -> Bool {
         true
     }
 
+    // swiftlint:disable:next static_over_final_class
     override class func canonicalRequest(for request: URLRequest) -> URLRequest {
         request
     }
@@ -50,9 +52,9 @@ struct PriceServiceTests {
 
     @Test func `fetch prices success`() async throws {
         MockURLProtocol.requestHandler = { _ in
-            ("""
+            (Data("""
             {"bitcoin":{"usd":62400},"ethereum":{"usd":3200}}
-            """.data(using: .utf8), 200)
+            """.utf8), 200)
         }
 
         let service = PriceService(session: session)
@@ -73,9 +75,9 @@ struct PriceServiceTests {
 
     @Test func `cache returns cached data`() async throws {
         MockURLProtocol.requestHandler = { _ in
-            ("""
+            (Data("""
             {"bitcoin":{"usd":62400}}
-            """.data(using: .utf8), 200)
+            """.utf8), 200)
         }
 
         let service = PriceService(session: session, cacheTTL: 60)
@@ -86,9 +88,9 @@ struct PriceServiceTests {
 
         // Change mock — but cache should still return old data
         MockURLProtocol.requestHandler = { _ in
-            ("""
+            (Data("""
             {"bitcoin":{"usd":99999}}
-            """.data(using: .utf8), 200)
+            """.utf8), 200)
         }
 
         let second = try await service.fetchPrices(for: ["bitcoin"])
@@ -97,9 +99,9 @@ struct PriceServiceTests {
 
     @Test func `invalidate cache forces refetch`() async throws {
         MockURLProtocol.requestHandler = { _ in
-            ("""
+            (Data("""
             {"bitcoin":{"usd":62400}}
-            """.data(using: .utf8), 200)
+            """.utf8), 200)
         }
 
         let service = PriceService(session: session, cacheTTL: 60)
@@ -110,9 +112,9 @@ struct PriceServiceTests {
 
         // Update mock and invalidate cache
         MockURLProtocol.requestHandler = { _ in
-            ("""
+            (Data("""
             {"bitcoin":{"usd":99999}}
-            """.data(using: .utf8), 200)
+            """.utf8), 200)
         }
 
         await service.invalidateCache()
@@ -124,9 +126,9 @@ struct PriceServiceTests {
 
     @Test func `fetch price update includes24h change`() async throws {
         MockURLProtocol.requestHandler = { _ in
-            ("""
+            (Data("""
             {"bitcoin":{"usd":67500.0,"usd_24h_change":-1.5},"ethereum":{"usd":2188.0,"usd_24h_change":3.2}}
-            """.data(using: .utf8), 200)
+            """.utf8), 200)
         }
 
         let service = PriceService(session: session)
@@ -138,11 +140,80 @@ struct PriceServiceTests {
         #expect(try #require(update.changes24h["ethereum"]) > 0)
     }
 
+    @Test func `fetch historical prices builds market chart request and dedupes by utc day`() async throws {
+        var capturedURL: URL?
+        MockURLProtocol.requestHandler = { request in
+            capturedURL = request.url
+            return (Data("""
+            {
+              "prices": [
+                [1704067200000, 42000.25],
+                [1704150000000, 43000.50],
+                [1704153600000, 43100.75]
+              ],
+              "market_caps": [],
+              "total_volumes": []
+            }
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let prices = try await service.fetchHistoricalPrices(for: " Bitcoin ", days: 365)
+
+        #expect(capturedURL?.path == "/api/v3/coins/bitcoin/market_chart")
+        let url = try #require(capturedURL)
+        let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        #expect(query.contains(URLQueryItem(name: "vs_currency", value: "usd")))
+        #expect(query.contains(URLQueryItem(name: "days", value: "365")))
+        #expect(prices.map(\.coinGeckoId) == ["bitcoin", "bitcoin"])
+        let expectedPrices = try [
+            #require(Decimal(string: "43000.50")),
+            #require(Decimal(string: "43100.75"))
+        ]
+        #expect(prices.map(\.usdPrice) == expectedPrices)
+    }
+
+    @Test func `fetch historical prices rejects malformed payload`() async {
+        MockURLProtocol.requestHandler = { _ in
+            (Data("{\"prices\":[[\"bad\", 42]]}".utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        await #expect(throws: PriceServiceError.decodingFailed) {
+            try await service.fetchHistoricalPrices(for: "bitcoin", days: 365)
+        }
+    }
+
+    @Test func `fetch historical prices maps http 429 to rate limited`() async {
+        MockURLProtocol.requestHandler = { _ in (nil, 429) }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        await #expect(throws: PriceServiceError.rateLimited) {
+            try await service.fetchHistoricalPrices(for: "bitcoin", days: 365)
+        }
+    }
+
+    @Test func `fetch historical prices sends demo api key header when provider returns a key`() async throws {
+        var header: String?
+        MockURLProtocol.requestHandler = { request in
+            header = request.value(forHTTPHeaderField: "x-cg-demo-api-key")
+            return (Data("{\"prices\":[]}".utf8), 200)
+        }
+
+        let service = PriceService(
+            session: session,
+            cacheTTL: 0,
+            coinGeckoAPIKey: { "demo-key" })
+        _ = try await service.fetchHistoricalPrices(for: "bitcoin", days: 365)
+
+        #expect(header == "demo-key")
+    }
+
     @Test func `rate limiter rejects excessive requests`() async throws {
         MockURLProtocol.requestHandler = { _ in
-            ("""
+            (Data("""
             {"bitcoin":{"usd":62400}}
-            """.data(using: .utf8), 200)
+            """.utf8), 200)
         }
 
         // Create service with strict limit (3 requests per 60s) and no cache

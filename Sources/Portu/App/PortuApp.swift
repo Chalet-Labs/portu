@@ -41,10 +41,13 @@ struct PortuApp: App {
             let session: URLSession = .shared
         #endif
 
+        let secretStore = KeychainService()
         let syncEngine = SyncEngine(
             modelContext: container.mainContext,
-            providerFactory: ProviderFactory(secretStore: KeychainService(), session: session))
-        let priceService = PriceService(session: session)
+            providerFactory: ProviderFactory(secretStore: secretStore, session: session))
+        let priceService = PriceService(session: session) {
+            try? secretStore.get(key: .serviceAPIKey("coingecko"))
+        }
 
         self.store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
             AppFeature()

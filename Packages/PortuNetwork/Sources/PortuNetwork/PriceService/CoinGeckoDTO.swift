@@ -39,3 +39,41 @@ nonisolated struct CoinGeckoSimplePriceResponse {
         return PriceUpdate(prices: prices, changes24h: changes)
     }
 }
+
+nonisolated struct CoinGeckoMarketChartResponse {
+    let prices: [HistoricalPriceDTO]
+
+    init(coinGeckoId: String, data: Data) throws(PriceServiceError) {
+        guard
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let rows = json["prices"] as? [[Any]]
+        else {
+            throw .decodingFailed
+        }
+
+        var latestByDay: [Date: HistoricalPriceDTO] = [:]
+        for row in rows {
+            guard
+                row.count >= 2,
+                let timestampNumber = row[0] as? NSNumber,
+                let priceNumber = row[1] as? NSNumber
+            else {
+                throw .decodingFailed
+            }
+            let timestamp = Date(timeIntervalSince1970: timestampNumber.doubleValue / 1000)
+            let dto = HistoricalPriceDTO(
+                coinGeckoId: coinGeckoId,
+                timestamp: timestamp,
+                usdPrice: priceNumber.decimalValue)
+            if let existing = latestByDay[dto.day], existing.timestamp >= dto.timestamp {
+                continue
+            }
+            latestByDay[dto.day] = dto
+        }
+
+        self.prices = latestByDay.values.sorted {
+            if $0.day != $1.day { return $0.day < $1.day }
+            return $0.timestamp < $1.timestamp
+        }
+    }
+}

@@ -239,6 +239,7 @@ struct AppFeatureTests {
         nonisolated(unsafe) var called = false
         let client = PriceServiceClient(
             fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+            fetchHistoricalPrices: { _, _ in [] },
             invalidateCache: { called = true })
         await client.invalidateCache()
         #expect(called)

@@ -38,21 +38,27 @@ extension DependencyValues {
 
 struct PriceServiceClient {
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
+    var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
     var invalidateCache: @Sendable () async -> Void
 }
 
 extension PriceServiceClient: DependencyKey {
     static let liveValue = Self(
         fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         invalidateCache: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") })
     static let testValue = Self(
         fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+        fetchHistoricalPrices: { _, _ in [] },
         invalidateCache: {})
 
     static func live(service: PriceService) -> Self {
         Self(
             fetchPrices: { coinIds in
                 try await service.fetchPriceUpdate(for: coinIds)
+            },
+            fetchHistoricalPrices: { coinId, days in
+                try await service.fetchHistoricalPrices(for: coinId, days: days)
             },
             invalidateCache: { await service.invalidateCache() })
     }

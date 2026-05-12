@@ -11,6 +11,7 @@ public actor PriceService {
     private var updateCache: PriceUpdate?
     private var lastUpdateFetchDate: Date?
     private let cacheTTL: TimeInterval
+    private let coinGeckoAPIKey: @Sendable () async -> String?
 
     /// Sliding-window rate limiter
     private struct RequestStamp {
@@ -27,11 +28,13 @@ public actor PriceService {
         session: URLSession = .shared,
         cacheTTL: TimeInterval = 10, // must be < polling interval to serve cached data between ticks
         maxRequestsPerWindow: Int = 10,
-        windowDuration: TimeInterval = 60) {
+        windowDuration: TimeInterval = 60,
+        coinGeckoAPIKey: @escaping @Sendable () async -> String? = { nil }) {
         self.session = session
         self.cacheTTL = cacheTTL
         self.maxRequestsPerWindow = maxRequestsPerWindow
         self.windowDuration = windowDuration
+        self.coinGeckoAPIKey = coinGeckoAPIKey
     }
 
     /// Fetch current USD prices for the given CoinGecko coin IDs.
@@ -95,10 +98,37 @@ public actor PriceService {
             changes24h: parsed.changes24h.filter { requested.contains($0.key) })
     }
 
+    public func fetchHistoricalPrices(
+        for coinId: String,
+        days: Int = 365) async throws(PriceServiceError) -> [HistoricalPriceDTO] {
+        let normalized = coinId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else { return [] }
+        let data = try await rateLimitedFetch(
+            pathComponents: ["coins", normalized, "market_chart"],
+            queryItems: [
+                URLQueryItem(name: "vs_currency", value: "usd"),
+                URLQueryItem(name: "days", value: "\(max(days, 1))")
+            ])
+        return try CoinGeckoMarketChartResponse(coinGeckoId: normalized, data: data).prices
+    }
+
     /// Shared rate limiting, stamping, network call, and HTTP status validation.
     private func rateLimitedFetch(
         coinIds: [String],
         extraParams: [URLQueryItem]) async throws(PriceServiceError) -> Data {
+        let ids = Set(coinIds).joined(separator: ",")
+        var params = [
+            URLQueryItem(name: "ids", value: ids),
+            URLQueryItem(name: "vs_currencies", value: "usd")
+        ]
+        params.append(contentsOf: extraParams)
+        return try await rateLimitedFetch(pathComponents: ["simple", "price"], queryItems: params)
+    }
+
+    /// Shared rate limiting, stamping, network call, and HTTP status validation.
+    private func rateLimitedFetch(
+        pathComponents: [String],
+        queryItems: [URLQueryItem]) async throws(PriceServiceError) -> Data {
         let now = Date.now
         requestTimestamps.removeAll { now.timeIntervalSince($0.date) > windowDuration }
         guard requestTimestamps.count < maxRequestsPerWindow else {
@@ -110,19 +140,21 @@ public actor PriceService {
         let stamp = RequestStamp(id: UUID(), date: .now)
         requestTimestamps.append(stamp)
 
-        let ids = Set(coinIds).joined(separator: ",")
-        var params = [
-            URLQueryItem(name: "ids", value: ids),
-            URLQueryItem(name: "vs_currencies", value: "usd")
-        ]
-        params.append(contentsOf: extraParams)
-        let url = baseURL.appending(path: "simple/price")
-            .appending(queryItems: params)
+        var url = baseURL
+        for component in pathComponents {
+            url = url.appending(path: component)
+        }
+        url = url.appending(queryItems: queryItems)
+
+        var request = URLRequest(url: url)
+        if let key = await coinGeckoAPIKey()?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
+            request.setValue(key, forHTTPHeaderField: "x-cg-demo-api-key")
+        }
 
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(from: url)
+            (data, response) = try await session.data(for: request)
         } catch {
             requestTimestamps.removeAll { $0.id == stamp.id }
             throw .networkUnavailable
@@ -132,12 +164,10 @@ public actor PriceService {
             throw .invalidResponse(statusCode: 0)
         }
         switch http.statusCode {
-        case 200: break
+        case 200: return data
         case 429: throw .rateLimited
         default: throw .invalidResponse(statusCode: http.statusCode)
         }
-
-        return data
     }
 
     /// Returns an async stream that polls prices at the given interval.
