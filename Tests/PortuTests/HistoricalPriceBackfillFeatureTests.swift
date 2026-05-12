@@ -65,6 +65,41 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(rows[1].coinGeckoId == "ethereum")
     }
 
+    @Test func `cache writer converges duplicate existing rows for same coin gecko id and day`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        context.insert(HistoricalPricePoint(
+            coinGeckoId: " Bitcoin ",
+            day: day,
+            usdPrice: 40000,
+            fetchedAt: Date(timeIntervalSince1970: 10)))
+        context.insert(HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: day.addingTimeInterval(3600),
+            usdPrice: 40500,
+            fetchedAt: Date(timeIntervalSince1970: 15)))
+        try context.save()
+
+        let result = try HistoricalPriceCacheWriter.upsert(
+            [
+                HistoricalPriceDTO(coinGeckoId: "BITCOIN", timestamp: day.addingTimeInterval(7200), usdPrice: 41000)
+            ],
+            in: context,
+            fetchedAt: Date(timeIntervalSince1970: 20))
+
+        let rowsForKey = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+            .filter {
+                $0.coinGeckoId == "bitcoin" &&
+                    $0.day == HistoricalPriceCalendar.utcStartOfDay(for: day)
+            }
+        #expect(result.inserted == 0)
+        #expect(result.updated == 1)
+        #expect(rowsForKey.count == 1)
+        #expect(rowsForKey.first?.usdPrice == 41000)
+        #expect(rowsForKey.first?.fetchedAt == Date(timeIntervalSince1970: 20))
+    }
+
     @Test func `clear cache removes only historical price points`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
@@ -104,6 +139,22 @@ struct HistoricalPriceBackfillFeatureTests {
         await store.receive(\.clearCacheCompleted) {
             $0.status = .failed("cache boom")
         }
+    }
+
+    @Test func `clear cache tap is ignored while backfill is running`() async {
+        var clearCallCount = 0
+        let store = TestStore(initialState: HistoricalPriceBackfillFeature.State(status: .running)) {
+            HistoricalPriceBackfillFeature()
+        } withDependencies: {
+            $0.historicalPriceBackfill.clearCache = {
+                clearCallCount += 1
+            }
+        }
+
+        await store.send(.clearCacheButtonTapped)
+
+        #expect(store.state.status == .running)
+        #expect(clearCallCount == 0)
     }
 
     private func token(

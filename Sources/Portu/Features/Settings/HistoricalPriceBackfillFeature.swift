@@ -85,9 +85,24 @@ enum HistoricalPriceCacheWriter {
         in context: ModelContext,
         fetchedAt: Date = .now) throws -> HistoricalBackfillWriteResult {
         let existing = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
-        var existingByKey = Dictionary(
-            existing.map { (HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day), $0) },
-            uniquingKeysWith: { lhs, rhs in lhs.fetchedAt >= rhs.fetchedAt ? lhs : rhs })
+        let groupedExisting = Dictionary(grouping: existing) {
+            HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day)
+        }
+        var existingByKey: [HistoricalPriceCacheKey: HistoricalPricePoint] = [:]
+        for (cacheKey, rows) in groupedExisting {
+            let sortedRows = rows.sorted { lhs, rhs in
+                if lhs.fetchedAt == rhs.fetchedAt {
+                    lhs.id.uuidString < rhs.id.uuidString
+                } else {
+                    lhs.fetchedAt > rhs.fetchedAt
+                }
+            }
+            guard let survivor = sortedRows.first else { continue }
+            existingByKey[cacheKey] = survivor
+            for duplicate in sortedRows.dropFirst() {
+                context.delete(duplicate)
+            }
+        }
         var inserted = 0
         var updated = 0
 
@@ -186,6 +201,7 @@ struct HistoricalPriceBackfillFeature {
                 return .none
 
             case .clearCacheButtonTapped:
+                guard !state.status.isRunning else { return .none }
                 return .run { send in
                     do {
                         try await historicalPriceBackfill.clearCache()
