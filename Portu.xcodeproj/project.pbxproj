@@ -45,6 +45,7 @@
 		4A30BC9910FD2DCB92E946B4 /* OverviewPositionTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEA37039B203CA0B14A05EFD /* OverviewPositionTabs.swift */; };
 		4BAE4A97F25DD88CC1E4297A /* AccountsFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E14B8750CDB4B4FF65401D0B /* AccountsFeatureTests.swift */; };
 		4C8A429B6784A49DD450615A /* AddAccountSheetReviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 737ADD29F72D176E21C41D96 /* AddAccountSheetReviewTests.swift */; };
+		4D6FBF67ABA1F278F4B6BB23 /* HistoricalPortfolioEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8489FFB3B14202D63DFC5284 /* HistoricalPortfolioEstimator.swift */; };
 		5067F5363F99C73EFD568110 /* PortuCore in Frameworks */ = {isa = PBXBuildFile; productRef = FC9D1CDC5B4BF289632883B4 /* PortuCore */; };
 		52A6CFFFCF82E2F1F98C0C35 /* MainWindowPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2F33C046095EBD74E27BAF /* MainWindowPlacement.swift */; };
 		544780D377B4F15ADCE5DAD6 /* CategorySymbolRuleWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 371ED7D4DE3A82EBE87230AC /* CategorySymbolRuleWriter.swift */; };
@@ -78,6 +79,7 @@
 		84957F67FC8B550274FAAE42 /* AccountsFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = E72F0D537E08E9AFCE7549E3 /* AccountsFeature.swift */; };
 		85E47194B92F2AD0CD67CBE9 /* NetworksTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB47E7990208DC0893BDB696 /* NetworksTab.swift */; };
 		867FA2DB1B4BF8FA9FD47FAA /* AssetValueFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EBE743A9AC8B9A2C8333003 /* AssetValueFormatter.swift */; };
+		8957FACC77F7C7A2DFD28870 /* HistoricalPortfolioEstimatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7674696086937331A79F61C2 /* HistoricalPortfolioEstimatorTests.swift */; };
 		89921F97BBE4171B786506B5 /* OverviewPositionHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = C375F4CE08E3AAE9016A076E /* OverviewPositionHelpers.swift */; };
 		8CE67C48438DA1CFEAF7E502 /* PortuApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D67B42D0DD559419EC991282 /* PortuApp.swift */; };
 		900BA59F4B44BD08BBBA4293 /* DebugMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482A88E8EF0B1290937A8602 /* DebugMode.swift */; };
@@ -206,9 +208,11 @@
 		72E3C362F353CA05871669DF /* TopAssetsDonut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopAssetsDonut.swift; sourceTree = "<group>"; };
 		737ADD29F72D176E21C41D96 /* AddAccountSheetReviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountSheetReviewTests.swift; sourceTree = "<group>"; };
 		7514F4EF1D675DEFD3D00B80 /* OverviewFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewFeature.swift; sourceTree = "<group>"; };
+		7674696086937331A79F61C2 /* HistoricalPortfolioEstimatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPortfolioEstimatorTests.swift; sourceTree = "<group>"; };
 		7866868ACC3675760E807169 /* TokenSettingsAggregate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenSettingsAggregate.swift; sourceTree = "<group>"; };
 		79425078F4E02B149F06E972 /* AppStateBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateBridgeTests.swift; sourceTree = "<group>"; };
 		80D8A6F5E0D27CFE2E0F5446 /* InspectorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPanel.swift; sourceTree = "<group>"; };
+		8489FFB3B14202D63DFC5284 /* HistoricalPortfolioEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPortfolioEstimator.swift; sourceTree = "<group>"; };
 		84E0CE70F797E90EC7D5347A /* PortfolioCategorySeederTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioCategorySeederTests.swift; sourceTree = "<group>"; };
 		87B5D6AE56F85E18A9E63B7B /* NetworkLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLogger.swift; sourceTree = "<group>"; };
 		8A6FF70061475C4B92F546CE /* AddAccountSheetFields.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountSheetFields.swift; sourceTree = "<group>"; };
@@ -313,6 +317,7 @@
 				6EBE743A9AC8B9A2C8333003 /* AssetValueFormatter.swift */,
 				DF666281E56D489791E155DE /* CSVDocument.swift */,
 				6E73BD66578FD9C7009C3632 /* DashboardStyle.swift */,
+				8489FFB3B14202D63DFC5284 /* HistoricalPortfolioEstimator.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -499,6 +504,7 @@
 				3BA60071A304587735578219 /* DebugServerTests.swift */,
 				2900A801C5F8F01CEBC99503 /* ExposureFeatureTests.swift */,
 				6BDCD2E7AB5E238E29197697 /* ExposureSummaryTests.swift */,
+				7674696086937331A79F61C2 /* HistoricalPortfolioEstimatorTests.swift */,
 				C9435D98F3F4AC7D4A8F7310 /* HistoricalPriceBackfillFeatureTests.swift */,
 				726BED9040CC03635619F414 /* HTTPParserTests.swift */,
 				8AAA2334D5B05A6C7B1C84F2 /* MainWindowPlacementTests.swift */,
@@ -698,6 +704,7 @@
 				D4B37B7013275E0393B345B1 /* ExposureFeature.swift in Sources */,
 				83245BEC701E64C1A764211B /* ExposureView.swift in Sources */,
 				C36EE8AD5FBEA7657ED9D603 /* HTTPParser.swift in Sources */,
+				4D6FBF67ABA1F278F4B6BB23 /* HistoricalPortfolioEstimator.swift in Sources */,
 				F265F29CAD907EE12E1AFA6B /* HistoricalPriceBackfillClient.swift in Sources */,
 				DBC48C3423CDC2298E35A2BB /* HistoricalPriceBackfillFeature.swift in Sources */,
 				81210B84C4D9C2AAE588C929 /* HistoricalPriceBackfillSettings.swift in Sources */,
@@ -770,6 +777,7 @@
 				0EFD203BDC0E8ED8778488C4 /* ExposureFeatureTests.swift in Sources */,
 				B20C5F008144723070453C36 /* ExposureSummaryTests.swift in Sources */,
 				358C300CA60FEC426E09EAED /* HTTPParserTests.swift in Sources */,
+				8957FACC77F7C7A2DFD28870 /* HistoricalPortfolioEstimatorTests.swift in Sources */,
 				0F827ACE62BBE11CB91A8F54 /* HistoricalPriceBackfillFeatureTests.swift in Sources */,
 				D5C9D5612731410483F544D3 /* MainWindowPlacementTests.swift in Sources */,
 				FB4F5BEA50F1EDE6B9121C82 /* NetworkLogBufferTests.swift in Sources */,
