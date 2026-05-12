@@ -70,26 +70,32 @@ private struct BackfillRunner {
         var fetched = 0
         var failures: [String] = []
         let skipped = max(0, Set(entries.map(\.assetId)).count - candidates.flatMap(\.assetIds).count)
+        let requested = candidates.reduce(0) { total, candidate in
+            total + candidate.assetIds.count
+        }
 
         for candidate in candidates {
+            let prices: [HistoricalPriceDTO]
             do {
-                let prices = try await priceService.fetchHistoricalPrices(
+                prices = try await priceService.fetchHistoricalPrices(
                     candidate.coinGeckoId,
                     HistoricalPriceBackfillSettings.chartHorizonDays)
-                let write = try HistoricalPriceCacheWriter.upsert(prices, in: modelContext, fetchedAt: now())
-                inserted += write.inserted
-                updated += write.updated
-                fetched += 1
             } catch {
                 failures.append(candidate.coinGeckoId)
                 if failures.count == candidates.count {
                     throw error
                 }
+                continue
             }
+
+            let write = try HistoricalPriceCacheWriter.upsert(prices, in: modelContext, fetchedAt: now())
+            inserted += write.inserted
+            updated += write.updated
+            fetched += candidate.assetIds.count
         }
 
         return HistoricalBackfillResult(
-            requestedAssets: candidates.count,
+            requestedAssets: requested,
             fetchedAssets: fetched,
             skippedAssets: skipped,
             insertedPoints: inserted,

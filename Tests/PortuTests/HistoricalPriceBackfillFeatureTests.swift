@@ -113,6 +113,50 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(try context.fetch(FetchDescriptor<Asset>()).count == 1)
     }
 
+    @Test func `live backfill result counts grouped asset ids`() async throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
+        let firstAsset = Asset(id: uuid(1), symbol: "AAVE", name: "Aave", coinGeckoId: "aave")
+        let secondAsset = Asset(id: uuid(2), symbol: "AAVE.e", name: "Aave", coinGeckoId: "aave")
+        let failingAsset = Asset(id: uuid(3), symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")
+        let position = Position(
+            positionType: .idle,
+            tokens: [
+                PositionToken(role: .balance, amount: 1, usdValue: 100, asset: firstAsset),
+                PositionToken(role: .balance, amount: 2, usdValue: 200, asset: secondAsset),
+                PositionToken(role: .balance, amount: 3, usdValue: 300, asset: failingAsset)
+            ],
+            account: account)
+        account.positions = [position]
+        context.insert(account)
+        try context.save()
+
+        let client = HistoricalPriceBackfillClient.live(
+            modelContext: context,
+            priceService: PriceServiceClient(
+                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                fetchHistoricalPrices: { coinGeckoId, _ in
+                    if coinGeckoId == "ethereum" {
+                        throw HistoricalBackfillError(message: "network failed")
+                    }
+                    return [
+                        HistoricalPriceDTO(
+                            coinGeckoId: coinGeckoId,
+                            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+                            usdPrice: 90)
+                    ]
+                },
+                invalidateCache: {}),
+            now: { Date(timeIntervalSince1970: 20) })
+
+        let result = try await client.run()
+
+        #expect(result.requestedAssets == 3)
+        #expect(result.fetchedAssets == 2)
+        #expect(result.failedCoinGeckoIDs == ["ethereum"])
+    }
+
     @Test func `backfill failure preserves thrown dependency message`() async {
         let store = TestStore(initialState: HistoricalPriceBackfillFeature.State()) {
             HistoricalPriceBackfillFeature()

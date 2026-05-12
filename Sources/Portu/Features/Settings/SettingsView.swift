@@ -305,7 +305,8 @@ private struct GeneralSettingsTab: View {
                                     store.send(.historicalPriceBackfill(.clearCacheButtonTapped))
                                 }
                                 .buttonStyle(.plain)
-                                .settingsPrimaryButton(isDisabled: false)
+                                .settingsPrimaryButton(isDisabled: store.historicalPriceBackfill.status.isRunning)
+                                .disabled(store.historicalPriceBackfill.status.isRunning)
                             }
 
                             HistoricalBackfillStatusText(status: store.historicalPriceBackfill.status)
