@@ -46,8 +46,28 @@ struct HistoricalEstimateSnapshotEntry: Equatable {
     let timestamp: Date
     let coinGeckoId: String?
     let coinGeckoIdOverride: String?
+    var onchainIdentity: OnchainTokenIdentity?
     let amount: Decimal
     let borrowAmount: Decimal
+
+    init(
+        accountId: UUID,
+        assetId: UUID,
+        timestamp: Date,
+        coinGeckoId: String?,
+        coinGeckoIdOverride: String?,
+        onchainIdentity: OnchainTokenIdentity? = nil,
+        amount: Decimal,
+        borrowAmount: Decimal) {
+        self.accountId = accountId
+        self.assetId = assetId
+        self.timestamp = timestamp
+        self.coinGeckoId = coinGeckoId
+        self.coinGeckoIdOverride = coinGeckoIdOverride
+        self.onchainIdentity = onchainIdentity
+        self.amount = amount
+        self.borrowAmount = borrowAmount
+    }
 }
 
 /// Lightweight input for category change and chart aggregation.
@@ -383,6 +403,7 @@ struct PerformanceFeature {
     private static func resolvedCoinGeckoID(_ snapshot: HistoricalEstimateSnapshotEntry) -> String? {
         normalizedOptionalCoinGeckoID(snapshot.coinGeckoIdOverride)
             ?? normalizedOptionalCoinGeckoID(snapshot.coinGeckoId)
+            ?? snapshot.onchainIdentity?.historicalPriceID
     }
 
     private static func normalizedOptionalCoinGeckoID(_ id: String?) -> String? {

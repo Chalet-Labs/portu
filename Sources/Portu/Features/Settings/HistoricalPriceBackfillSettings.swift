@@ -6,8 +6,8 @@ enum HistoricalPriceBackfillSettings {
     static let chartHorizonDays = 365
     static let sectionTitle = "Historical Prices"
     static let useBackfillTitle = "Use historical price backfill"
-    static let backfillButtonTitle = "Backfill historical prices"
-    static let clearCacheButtonTitle = "Clear historical price cache"
+    static let backfillButtonTitle = "Backfill prices"
+    static let clearCacheButtonTitle = "Clear cache"
 
     static func isEnabled(defaults: UserDefaults = .standard) -> Bool {
         defaults.object(forKey: isEnabledKey) as? Bool ?? defaultIsEnabled

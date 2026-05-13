@@ -298,6 +298,7 @@ enum TokenSettingsFeature {
             tokenEntry(
                 from: aggregate.base,
                 coinGeckoId: aggregate.coinGeckoId,
+                onchainIdentity: aggregate.onchainIdentity,
                 amount: aggregate.netAmount,
                 usdValue: aggregate.netUSDValue,
                 logoURL: aggregate.logoURL)
@@ -433,6 +434,7 @@ enum TokenSettingsFeature {
     private static func tokenEntry(
         from token: TokenEntry,
         coinGeckoId: String?,
+        onchainIdentity: OnchainTokenIdentity? = nil,
         amount: Decimal? = nil,
         usdValue: Decimal,
         logoURL: String? = nil) -> TokenEntry {
@@ -443,6 +445,7 @@ enum TokenSettingsFeature {
             category: token.category,
             portfolioCategory: token.portfolioCategory,
             coinGeckoId: coinGeckoId,
+            onchainIdentity: onchainIdentity ?? token.onchainIdentity,
             role: token.role,
             amount: amount ?? token.amount,
             usdValue: usdValue,

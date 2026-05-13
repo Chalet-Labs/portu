@@ -178,6 +178,19 @@ extension ZapperProvider {
       }
     }
     """
+
+    static let tokenPriceTicksQuery = """
+    query PortuTokenPriceTicks($address: Address!, $chainId: Int!, $currency: Currency!, $timeFrame: TimeFrame!) {
+      fungibleTokenV2(address: $address, chainId: $chainId) {
+        priceData {
+          priceTicks(currency: $currency, timeFrame: $timeFrame) {
+            close
+            timestamp
+          }
+        }
+      }
+    }
+    """
 }
 
 // MARK: - Request Types
@@ -247,6 +260,13 @@ struct AppPositionVariables: Encodable, Sendable {
             try container.encodeNil(forKey: .after)
         }
     }
+}
+
+struct TokenPriceTicksVariables: Encodable, Sendable {
+    let address: String
+    let chainId: Int
+    let currency: String
+    let timeFrame: String
 }
 
 // MARK: - Response Types
@@ -439,6 +459,23 @@ struct NetworkObject: Decodable, Sendable {
 struct PageInfo: Decodable, Sendable {
     let hasNextPage: Bool
     let endCursor: String?
+}
+
+struct TokenPriceTicksData: Decodable, Sendable {
+    let fungibleTokenV2: ZapperFungibleTokenV2?
+}
+
+struct ZapperFungibleTokenV2: Decodable, Sendable {
+    let priceData: ZapperTokenPriceData?
+}
+
+struct ZapperTokenPriceData: Decodable, Sendable {
+    let priceTicks: [ZapperPriceTick]
+}
+
+struct ZapperPriceTick: Decodable, Sendable {
+    let close: Double
+    let timestamp: Double
 }
 
 // swiftformat:enable redundantSendable

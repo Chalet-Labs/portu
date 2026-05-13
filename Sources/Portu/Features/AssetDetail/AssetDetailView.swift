@@ -22,6 +22,7 @@ struct AssetDetailView: View {
             tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
         return AssetDetailFeature.effectiveHistoricalCoinGeckoID(
             assetCoinGeckoId: asset.coinGeckoId,
+            onchainIdentity: OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract),
             override: overridesByAssetId[assetId])
     }
 

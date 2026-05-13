@@ -77,12 +77,14 @@ struct PerformanceBottomPanel: View {
         let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
 
         return snapshots.map { snapshot in
-            HistoricalEstimateSnapshotEntry(
+            let asset = assetsById[snapshot.assetId]
+            return HistoricalEstimateSnapshotEntry(
                 accountId: snapshot.accountId,
                 assetId: snapshot.assetId,
                 timestamp: snapshot.timestamp,
-                coinGeckoId: assetsById[snapshot.assetId]?.coinGeckoId,
+                coinGeckoId: asset?.coinGeckoId,
                 coinGeckoIdOverride: overridesByAssetId[snapshot.assetId]?.coinGeckoIdOverride,
+                onchainIdentity: OnchainTokenIdentity(chain: asset?.upsertChain, contractAddress: asset?.upsertContract),
                 amount: snapshot.amount,
                 borrowAmount: snapshot.borrowAmount)
         }

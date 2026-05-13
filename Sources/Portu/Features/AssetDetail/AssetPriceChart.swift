@@ -91,7 +91,7 @@ struct AssetPriceChart: View {
         }
     }
 
-    // MARK: - Price chart (from CoinGecko historical API)
+    // MARK: - Price chart (from cached historical prices)
 
     private var priceChart: some View {
         Group {

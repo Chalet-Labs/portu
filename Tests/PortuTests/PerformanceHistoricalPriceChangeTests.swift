@@ -1,5 +1,6 @@
 import Foundation
 @testable import Portu
+import PortuCore
 import Testing
 
 struct PerformanceHistoricalPriceChangeTests {
@@ -79,6 +80,58 @@ struct PerformanceHistoricalPriceChangeTests {
             isHistoricalBackfillEnabled: true)
 
         #expect(filtered.map(\.coinGeckoId) == ["bitcoin", "solana"])
+    }
+
+    @Test func `filters historical price rows to held zapper ids for unmapped onchain assets`() {
+        let account = UUID()
+        let asset = UUID()
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+        let startDate = date(2024, 1, 1)
+
+        let filtered = PerformanceFeature.historicalPriceEntriesForHeldAssets(
+            rows: [
+                HistoricalPriceEntry(coinGeckoId: identity.historicalPriceID, day: startDate, usdPrice: 1.5)
+            ],
+            holdings: [
+                HistoricalEstimateSnapshotEntry(
+                    accountId: account,
+                    assetId: asset,
+                    timestamp: startDate,
+                    coinGeckoId: nil,
+                    coinGeckoIdOverride: nil,
+                    onchainIdentity: identity,
+                    amount: 2,
+                    borrowAmount: 0)
+            ],
+            startDate: startDate,
+            accountId: account,
+            isHistoricalBackfillEnabled: true)
+
+        #expect(filtered.map(\.coinGeckoId) == [identity.historicalPriceID])
+    }
+
+    @Test func `earliest estimate holdings use zapper id when coin gecko id is absent`() {
+        let account = UUID()
+        let asset = UUID()
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+        let firstReal = date(2024, 1, 2)
+
+        let holdings = PerformanceFeature.earliestEstimateHoldings(
+            snapshots: [
+                HistoricalEstimateSnapshotEntry(
+                    accountId: account,
+                    assetId: asset,
+                    timestamp: firstReal,
+                    coinGeckoId: nil,
+                    coinGeckoIdOverride: nil,
+                    onchainIdentity: identity,
+                    amount: 3,
+                    borrowAmount: 0)
+            ],
+            firstRealSnapshotDate: firstReal,
+            accountId: account)
+
+        #expect(holdings.map(\.coinGeckoId) == [identity.historicalPriceID])
     }
 
     @Test func `historical price rows are empty when backfill setting is disabled`() {

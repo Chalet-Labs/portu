@@ -5,18 +5,36 @@ import SwiftData
 
 struct HistoricalBackfillCandidate: Equatable, Identifiable {
     var id: String {
-        coinGeckoId
+        historicalPriceID
     }
 
-    let coinGeckoId: String
+    var coinGeckoId: String {
+        historicalPriceID
+    }
+
+    let historicalPriceID: String
+    let source: HistoricalBackfillPriceSource
     let assetIds: [UUID]
+}
+
+enum HistoricalBackfillPriceSource: Equatable {
+    case coingecko(String)
+    case zapper(OnchainTokenIdentity)
 }
 
 struct HistoricalBackfillSnapshotEntry: Equatable {
     let assetId: UUID
     let coinGeckoId: String?
+    let onchainIdentity: OnchainTokenIdentity?
     let amount: Decimal
     let borrowAmount: Decimal
+}
+
+private struct HistoricalBackfillAssetReference {
+    let assetId: UUID
+    let coinGeckoId: String?
+    let onchainIdentity: OnchainTokenIdentity?
+    let override: TokenPricingOverrideSnapshot?
 }
 
 struct HistoricalBackfillWriteResult: Equatable {
@@ -62,30 +80,38 @@ enum HistoricalBackfillCandidateResolver {
     static func candidates(
         tokens: [TokenEntry],
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
-        overrides: [TokenPricingOverrideSnapshot]) -> [HistoricalBackfillCandidate] {
+        overrides: [TokenPricingOverrideSnapshot],
+        resolvedCoinGeckoIDs: [OnchainTokenIdentity: String] = [:]) -> [HistoricalBackfillCandidate] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        var grouped: [String: Set<UUID>] = [:]
+        var grouped: [HistoricalBackfillCandidateKey: Set<UUID>] = [:]
         for token in tokens where token.amount > 0 && (token.role.isPositive || token.role.isBorrow) {
             addCandidate(
-                assetId: token.assetId,
-                coinGeckoId: token.coinGeckoId,
-                override: overrideMap[token.assetId],
+                asset: HistoricalBackfillAssetReference(
+                    assetId: token.assetId,
+                    coinGeckoId: token.coinGeckoId,
+                    onchainIdentity: token.onchainIdentity,
+                    override: overrideMap[token.assetId]),
+                resolvedCoinGeckoIDs: resolvedCoinGeckoIDs,
                 grouped: &grouped)
         }
         for snapshot in snapshots where snapshot.amount - snapshot.borrowAmount != 0 {
             addCandidate(
-                assetId: snapshot.assetId,
-                coinGeckoId: snapshot.coinGeckoId,
-                override: overrideMap[snapshot.assetId],
+                asset: HistoricalBackfillAssetReference(
+                    assetId: snapshot.assetId,
+                    coinGeckoId: snapshot.coinGeckoId,
+                    onchainIdentity: snapshot.onchainIdentity,
+                    override: overrideMap[snapshot.assetId]),
+                resolvedCoinGeckoIDs: resolvedCoinGeckoIDs,
                 grouped: &grouped)
         }
         return grouped
-            .map { coinGeckoId, ids in
+            .map { candidateKey, ids in
                 HistoricalBackfillCandidate(
-                    coinGeckoId: coinGeckoId,
+                    historicalPriceID: candidateKey.historicalPriceID,
+                    source: candidateKey.source,
                     assetIds: ids.sorted { $0.uuidString < $1.uuidString })
             }
-            .sorted { $0.coinGeckoId < $1.coinGeckoId }
+            .sorted { $0.historicalPriceID < $1.historicalPriceID }
     }
 
     static func sourceAssetIDs(
@@ -102,24 +128,143 @@ enum HistoricalBackfillCandidateResolver {
         return Set(tokenIDs + snapshotIDs)
     }
 
+    static func onchainIdentitiesNeedingResolution(
+        tokens: [TokenEntry],
+        snapshots: [HistoricalBackfillSnapshotEntry] = [],
+        overrides: [TokenPricingOverrideSnapshot]) -> [OnchainTokenIdentity] {
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        var identities = Set<OnchainTokenIdentity>()
+        for token in tokens where token.amount > 0 && (token.role.isPositive || token.role.isBorrow) {
+            addUnresolvedIdentity(
+                assetId: token.assetId,
+                coinGeckoId: token.coinGeckoId,
+                onchainIdentity: token.onchainIdentity,
+                override: overrideMap[token.assetId],
+                identities: &identities)
+        }
+        for snapshot in snapshots where snapshot.amount - snapshot.borrowAmount != 0 {
+            addUnresolvedIdentity(
+                assetId: snapshot.assetId,
+                coinGeckoId: snapshot.coinGeckoId,
+                onchainIdentity: snapshot.onchainIdentity,
+                override: overrideMap[snapshot.assetId],
+                identities: &identities)
+        }
+        return identities.sorted {
+            if $0.chain.rawValue != $1.chain.rawValue { return $0.chain.rawValue < $1.chain.rawValue }
+            return $0.contractAddress < $1.contractAddress
+        }
+    }
+
+    static func assetIDsByOnchainIdentity(
+        tokens: [TokenEntry],
+        snapshots: [HistoricalBackfillSnapshotEntry] = [],
+        overrides: [TokenPricingOverrideSnapshot]) -> [OnchainTokenIdentity: Set<UUID>] {
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        var result: [OnchainTokenIdentity: Set<UUID>] = [:]
+        for token in tokens where token.amount > 0 && (token.role.isPositive || token.role.isBorrow) {
+            addUnresolvedAsset(
+                assetId: token.assetId,
+                coinGeckoId: token.coinGeckoId,
+                onchainIdentity: token.onchainIdentity,
+                override: overrideMap[token.assetId],
+                result: &result)
+        }
+        for snapshot in snapshots where snapshot.amount - snapshot.borrowAmount != 0 {
+            addUnresolvedAsset(
+                assetId: snapshot.assetId,
+                coinGeckoId: snapshot.coinGeckoId,
+                onchainIdentity: snapshot.onchainIdentity,
+                override: overrideMap[snapshot.assetId],
+                result: &result)
+        }
+        return result
+    }
+
     private static func addCandidate(
+        asset: HistoricalBackfillAssetReference,
+        resolvedCoinGeckoIDs: [OnchainTokenIdentity: String],
+        grouped: inout [HistoricalBackfillCandidateKey: Set<UUID>]) {
+        if asset.override?.manualPriceUSD != nil, normalizedID(asset.override?.coinGeckoIdOverride) == nil {
+            return
+        }
+        if let resolvedID = normalizedID(asset.override?.coinGeckoIdOverride) ?? normalizedID(asset.coinGeckoId) {
+            grouped[HistoricalBackfillCandidateKey(source: .coingecko(resolvedID)), default: []].insert(asset.assetId)
+            return
+        }
+        guard let onchainIdentity = asset.onchainIdentity else { return }
+        if let resolvedID = normalizedID(resolvedCoinGeckoIDs[onchainIdentity]) {
+            grouped[HistoricalBackfillCandidateKey(source: .coingecko(resolvedID)), default: []].insert(asset.assetId)
+        } else {
+            grouped[HistoricalBackfillCandidateKey(source: .zapper(onchainIdentity)), default: []].insert(asset.assetId)
+        }
+    }
+
+    private static func addUnresolvedIdentity(
+        assetId _: UUID,
+        coinGeckoId: String?,
+        onchainIdentity: OnchainTokenIdentity?,
+        override: TokenPricingOverrideSnapshot?,
+        identities: inout Set<OnchainTokenIdentity>) {
+        guard shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity else {
+            return
+        }
+        identities.insert(onchainIdentity)
+    }
+
+    private static func addUnresolvedAsset(
         assetId: UUID,
         coinGeckoId: String?,
+        onchainIdentity: OnchainTokenIdentity?,
         override: TokenPricingOverrideSnapshot?,
-        grouped: inout [String: Set<UUID>]) {
+        result: inout [OnchainTokenIdentity: Set<UUID>]) {
+        guard shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity else {
+            return
+        }
+        result[onchainIdentity, default: []].insert(assetId)
+    }
+
+    private static func shouldResolveOnchain(
+        coinGeckoId: String?,
+        override: TokenPricingOverrideSnapshot?) -> Bool {
         if override?.manualPriceUSD != nil, normalizedID(override?.coinGeckoIdOverride) == nil {
-            return
+            return false
         }
-        guard let resolvedID = normalizedID(override?.coinGeckoIdOverride) ?? normalizedID(coinGeckoId) else {
-            return
-        }
-        grouped[resolvedID, default: []].insert(assetId)
+        return normalizedID(override?.coinGeckoIdOverride) == nil && normalizedID(coinGeckoId) == nil
     }
 
     private static func normalizedID(_ id: String?) -> String? {
         guard let id else { return nil }
         let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized.isEmpty ? nil : normalized
+    }
+}
+
+private struct HistoricalBackfillCandidateKey: Hashable {
+    let historicalPriceID: String
+    let source: HistoricalBackfillPriceSource
+
+    init(source: HistoricalBackfillPriceSource) {
+        self.source = source
+        switch source {
+        case let .coingecko(id):
+            self.historicalPriceID = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        case let .zapper(identity):
+            self.historicalPriceID = identity.historicalPriceID
+        }
+    }
+}
+
+extension HistoricalBackfillPriceSource: Hashable {
+    func hash(into hasher: inout Hasher) {
+        switch self {
+        case let .coingecko(id):
+            hasher.combine("coingecko")
+            hasher.combine(id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+        case let .zapper(identity):
+            hasher.combine("zapper")
+            hasher.combine(identity)
+        }
     }
 }
 
@@ -170,6 +315,7 @@ enum HistoricalPriceCacheWriter {
                 let cacheKey = HistoricalPriceCacheKey(coinGeckoId: dto.coinGeckoId, day: dto.day)
                 if let row = existingByKey[cacheKey] {
                     row.usdPrice = dto.usdPrice
+                    row.source = dto.source
                     row.fetchedAt = fetchedAt
                     updated += 1
                 } else {

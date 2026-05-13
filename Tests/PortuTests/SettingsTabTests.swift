@@ -119,13 +119,20 @@ struct SettingsTabTests {
         #expect(message.contains("ethereum"))
     }
 
+    @Test func `historical backfill status names price sources while running`() {
+        let message = HistoricalBackfillStatusFormatter.message(for: .running)
+
+        #expect(message.contains("CoinGecko"))
+        #expect(message.contains("Zapper"))
+    }
+
     @Test func `historical backfill status surfaces cache clearing`() {
         let message = HistoricalBackfillStatusFormatter.message(for: .clearing)
 
         #expect(message == "Clearing historical price cache...")
     }
 
-    @Test func `historical backfill status explains when local snapshots have no eligible mapped assets`() {
+    @Test func `historical backfill status explains when local snapshots have no eligible price source`() {
         let result = HistoricalBackfillResult(
             requestedAssets: 0,
             fetchedAssets: 0,
@@ -138,6 +145,7 @@ struct SettingsTabTests {
 
         #expect(message.contains("No eligible assets"))
         #expect(message.contains("CoinGecko"))
+        #expect(message.contains("onchain addresses"))
         #expect(message.contains("1050"))
     }
 

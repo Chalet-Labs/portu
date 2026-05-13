@@ -268,9 +268,11 @@ struct AssetDetailFeature {
 
     static func effectiveHistoricalCoinGeckoID(
         assetCoinGeckoId: String?,
+        onchainIdentity: OnchainTokenIdentity? = nil,
         override: TokenPricingOverrideSnapshot?) -> String? {
         normalizedHistoricalCoinGeckoID(override?.coinGeckoIdOverride)
             ?? normalizedHistoricalCoinGeckoID(assetCoinGeckoId)
+            ?? onchainIdentity?.historicalPriceID
     }
 
     @MainActor

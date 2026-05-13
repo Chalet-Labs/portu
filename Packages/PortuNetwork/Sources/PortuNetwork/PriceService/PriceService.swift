@@ -112,6 +112,37 @@ public actor PriceService {
         return try CoinGeckoMarketChartResponse(coinGeckoId: normalized, data: data).prices
     }
 
+    public func resolveCoinGeckoIDs(
+        for identities: [OnchainTokenIdentity]) async throws(PriceServiceError) -> [OnchainTokenIdentity: String] {
+        let uniqueIdentities = Array(Set(identities)).sorted {
+            if $0.chain.rawValue != $1.chain.rawValue { return $0.chain.rawValue < $1.chain.rawValue }
+            return $0.contractAddress < $1.contractAddress
+        }
+        guard !uniqueIdentities.isEmpty else { return [:] }
+
+        let grouped = Dictionary(grouping: uniqueIdentities) { $0.chain }
+        var resolved: [OnchainTokenIdentity: String] = [:]
+        for chain in grouped.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+            guard let networkID = Self.coinGeckoOnchainNetworkID(for: chain) else {
+                continue
+            }
+            let identitiesForChain = grouped[chain, default: []]
+            for chunk in identitiesForChain.chunked(size: 100) {
+                let addresses = chunk.map(\.contractAddress).joined(separator: ",")
+                let data = try await rateLimitedFetch(
+                    pathComponents: ["onchain", "networks", networkID, "tokens", "multi", addresses],
+                    queryItems: [])
+                let parsed = try CoinGeckoOnchainTokenMapResponse(data: data)
+                for identity in chunk {
+                    if let coinGeckoID = parsed.coinGeckoIDsByAddress[identity.contractAddress] {
+                        resolved[identity] = coinGeckoID
+                    }
+                }
+            }
+        }
+        return resolved
+    }
+
     /// Shared rate limiting, stamping, network call, and HTTP status validation.
     private func rateLimitedFetch(
         coinIds: [String],
@@ -238,5 +269,51 @@ public actor PriceService {
         lastFetchDate = nil
         updateCache = nil
         lastUpdateFetchDate = nil
+    }
+
+    private static let coinGeckoOnchainNetworkIDs: [Chain: String] = [
+        .ethereum: "eth",
+        .polygon: "polygon_pos",
+        .arbitrum: "arbitrum",
+        .optimism: "optimism",
+        .base: "base",
+        .bsc: "bsc",
+        .gnosis: "xdai",
+        .avalanche: "avax",
+        .solana: "solana",
+        .zksync: "zksync",
+        .linea: "linea",
+        .scroll: "scroll",
+        .blast: "blast",
+        .mantle: "mantle",
+        .ronin: "ronin",
+        .mode: "mode",
+        .zora: "zora",
+        .taiko: "taiko",
+        .moonbeam: "moonbeam",
+        .polygonZkEVM: "polygon-zkevm",
+        .immutableX: "immutablex",
+        .unichain: "unichain",
+        .berachain: "berachain",
+        .sonic: "sonic"
+    ]
+
+    private static func coinGeckoOnchainNetworkID(for chain: Chain) -> String? {
+        coinGeckoOnchainNetworkIDs[chain]
+    }
+}
+
+private extension Array {
+    func chunked(size: Int) -> [[Element]] {
+        guard size > 0 else { return [self] }
+        var chunks: [[Element]] = []
+        chunks.reserveCapacity((count + size - 1) / size)
+        var index = startIndex
+        while index < endIndex {
+            let nextIndex = Swift.min(index + size, endIndex)
+            chunks.append(Array(self[index ..< nextIndex]))
+            index = nextIndex
+        }
+        return chunks
     }
 }

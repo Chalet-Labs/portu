@@ -398,6 +398,8 @@ extension View {
 
     func settingsPrimaryButton(isDisabled: Bool) -> some View {
         foregroundStyle(isDisabled ? SettingsDesign.secondaryText : SettingsDesign.primaryText)
+            .font(.footnote.weight(.bold))
+            .lineLimit(1)
             .padding(.horizontal, SettingsDesign.primaryButtonHorizontalPadding)
             .frame(minWidth: SettingsDesign.primaryButtonMinWidth)
             .frame(height: SettingsMetrics.compactControlHeight)
@@ -407,6 +409,21 @@ extension View {
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .strokeBorder(isDisabled ? SettingsDesign.cardStroke : SettingsDesign.accentPrimary.opacity(0.68), lineWidth: 1))
+    }
+
+    func settingsSecondaryButton(isDisabled: Bool) -> some View {
+        foregroundStyle(isDisabled ? SettingsDesign.secondaryText : SettingsDesign.primaryText)
+            .font(.footnote.weight(.bold))
+            .lineLimit(1)
+            .padding(.horizontal, SettingsDesign.primaryButtonHorizontalPadding)
+            .frame(minWidth: SettingsDesign.primaryButtonMinWidth)
+            .frame(height: SettingsMetrics.compactControlHeight)
+            .background(
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                    .fill(isDisabled ? SettingsDesign.disabledControlBackground : SettingsDesign.subtleCardBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                    .strokeBorder(SettingsDesign.cardStroke, lineWidth: 1))
     }
 
     func settingsSwitchToggle(showsLabel: Bool = true) -> some View {

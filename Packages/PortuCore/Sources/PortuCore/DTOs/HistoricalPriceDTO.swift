@@ -14,14 +14,17 @@ public struct HistoricalPriceDTO: Sendable, Equatable {
     public let timestamp: Date
     public let day: Date
     public let usdPrice: Decimal
+    public let source: HistoricalPriceSource
 
     public init(
         coinGeckoId: String,
         timestamp: Date,
-        usdPrice: Decimal) {
+        usdPrice: Decimal,
+        source: HistoricalPriceSource = .coingecko) {
         self.coinGeckoId = coinGeckoId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         self.timestamp = timestamp
         self.day = HistoricalPriceCalendar.utcStartOfDay(for: timestamp)
         self.usdPrice = usdPrice
+        self.source = source
     }
 }

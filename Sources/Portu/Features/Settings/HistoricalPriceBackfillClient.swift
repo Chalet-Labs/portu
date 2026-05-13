@@ -76,17 +76,36 @@ private struct BackfillRunner {
         let entries = TokenEntry.fromActiveTokens(tokens)
         let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
         let snapshotEntries = assetSnapshots.map { snapshot in
-            HistoricalBackfillSnapshotEntry(
+            let asset = assetsById[snapshot.assetId]
+            return HistoricalBackfillSnapshotEntry(
                 assetId: snapshot.assetId,
-                coinGeckoId: assetsById[snapshot.assetId]?.coinGeckoId,
+                coinGeckoId: asset?.coinGeckoId,
+                onchainIdentity: OnchainTokenIdentity(chain: asset?.upsertChain, contractAddress: asset?.upsertContract),
                 amount: snapshot.amount,
                 borrowAmount: snapshot.borrowAmount)
         }
         let overrideSnapshots = overrides.map(TokenPricingOverrideSnapshot.init)
-        let candidates = HistoricalBackfillCandidateResolver.candidates(
+        let identitiesNeedingResolution = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
             tokens: entries,
             snapshots: snapshotEntries,
             overrides: overrideSnapshots)
+        let resolvedCoinGeckoIDs: [OnchainTokenIdentity: String]
+        do {
+            resolvedCoinGeckoIDs = try await priceService.resolveCoinGeckoIDs(identitiesNeedingResolution)
+        } catch {
+            resolvedCoinGeckoIDs = [:]
+        }
+        try persistResolvedCoinGeckoIDs(
+            resolvedCoinGeckoIDs,
+            tokens: entries,
+            snapshots: snapshotEntries,
+            overrides: overrides,
+            overrideSnapshots: overrideSnapshots)
+        let candidates = HistoricalBackfillCandidateResolver.candidates(
+            tokens: entries,
+            snapshots: snapshotEntries,
+            overrides: overrideSnapshots,
+            resolvedCoinGeckoIDs: resolvedCoinGeckoIDs)
 
         var inserted = 0
         var updated = 0
@@ -113,7 +132,7 @@ private struct BackfillRunner {
                 if error is CancellationError {
                     throw error
                 }
-                failures.append(candidate.coinGeckoId)
+                failures.append(candidate.historicalPriceID)
                 if failures.count == candidates.count {
                     throw error
                 }
@@ -136,15 +155,53 @@ private struct BackfillRunner {
     }
 
     private func fetchHistoricalPrices(for candidate: HistoricalBackfillCandidate) async throws -> [HistoricalPriceDTO] {
-        do {
-            return try await priceService.fetchHistoricalPrices(
-                candidate.coinGeckoId,
-                HistoricalPriceBackfillSettings.chartHorizonDays)
-        } catch PriceServiceError.rateLimited {
-            try await sleep(rateLimitRetryDelay)
-            return try await priceService.fetchHistoricalPrices(
-                candidate.coinGeckoId,
-                HistoricalPriceBackfillSettings.chartHorizonDays)
+        switch candidate.source {
+        case let .coingecko(coinGeckoID):
+            do {
+                return try await priceService.fetchHistoricalPrices(
+                    coinGeckoID,
+                    HistoricalPriceBackfillSettings.chartHorizonDays)
+            } catch PriceServiceError.rateLimited {
+                try await sleep(rateLimitRetryDelay)
+                return try await priceService.fetchHistoricalPrices(
+                    coinGeckoID,
+                    HistoricalPriceBackfillSettings.chartHorizonDays)
+            }
+        case let .zapper(identity):
+            do {
+                return try await priceService.fetchZapperHistoricalPrices(
+                    identity,
+                    HistoricalPriceBackfillSettings.chartHorizonDays)
+            } catch ZapperError.rateLimited {
+                try await sleep(rateLimitRetryDelay)
+                return try await priceService.fetchZapperHistoricalPrices(
+                    identity,
+                    HistoricalPriceBackfillSettings.chartHorizonDays)
+            }
+        }
+    }
+
+    private func persistResolvedCoinGeckoIDs(
+        _ resolvedCoinGeckoIDs: [OnchainTokenIdentity: String],
+        tokens: [TokenEntry],
+        snapshots: [HistoricalBackfillSnapshotEntry],
+        overrides: [TokenPricingOverride],
+        overrideSnapshots: [TokenPricingOverrideSnapshot]) throws {
+        guard !resolvedCoinGeckoIDs.isEmpty else { return }
+        let assetIDsByIdentity = HistoricalBackfillCandidateResolver.assetIDsByOnchainIdentity(
+            tokens: tokens,
+            snapshots: snapshots,
+            overrides: overrideSnapshots)
+        var persistedAssetIDs = Set<UUID>()
+        for (identity, coinGeckoID) in resolvedCoinGeckoIDs {
+            for assetId in assetIDsByIdentity[identity, default: []] where persistedAssetIDs.insert(assetId).inserted {
+                try TokenPricingOverrideWriter.upsert(
+                    assetId: assetId,
+                    overrides: overrides,
+                    in: modelContext) { override in
+                        override.coinGeckoIdOverride = coinGeckoID
+                    }
+            }
         }
     }
 }

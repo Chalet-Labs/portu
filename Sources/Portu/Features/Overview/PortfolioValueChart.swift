@@ -64,12 +64,14 @@ struct PortfolioValueChart: View {
         let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
 
         return assetSnapshots.map { snapshot in
-            HistoricalEstimateSnapshotEntry(
+            let asset = assetsById[snapshot.assetId]
+            return HistoricalEstimateSnapshotEntry(
                 accountId: snapshot.accountId,
                 assetId: snapshot.assetId,
                 timestamp: snapshot.timestamp,
-                coinGeckoId: assetsById[snapshot.assetId]?.coinGeckoId,
+                coinGeckoId: asset?.coinGeckoId,
                 coinGeckoIdOverride: overridesByAssetId[snapshot.assetId]?.coinGeckoIdOverride,
+                onchainIdentity: OnchainTokenIdentity(chain: asset?.upsertChain, contractAddress: asset?.upsertContract),
                 amount: snapshot.amount,
                 borrowAmount: snapshot.borrowAmount)
         }
@@ -128,7 +130,7 @@ struct PortfolioValueChart: View {
                 .frame(height: 172)
 
                 if estimatedPoints.isEmpty == false {
-                    Text("Dashed segment is estimated from earliest Portu holdings and CoinGecko historical prices.")
+                    Text("Dashed segment is estimated from earliest Portu holdings and cached historical prices.")
                         .font(.caption)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
                         .padding(.top, 6)

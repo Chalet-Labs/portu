@@ -39,26 +39,52 @@ extension DependencyValues {
 struct PriceServiceClient {
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
     var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
+    var resolveCoinGeckoIDs: @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String]
+    var fetchZapperHistoricalPrices: @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO]
     var invalidateCache: @Sendable () async -> Void
+
+    init(
+        fetchPrices: @escaping @Sendable ([String]) async throws -> PriceUpdate,
+        fetchHistoricalPrices: @escaping @Sendable (String, Int) async throws -> [HistoricalPriceDTO],
+        resolveCoinGeckoIDs: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String] = { _ in [:] },
+        fetchZapperHistoricalPrices: @escaping @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO] = { _, _ in [] },
+        invalidateCache: @escaping @Sendable () async -> Void) {
+        self.fetchPrices = fetchPrices
+        self.fetchHistoricalPrices = fetchHistoricalPrices
+        self.resolveCoinGeckoIDs = resolveCoinGeckoIDs
+        self.fetchZapperHistoricalPrices = fetchZapperHistoricalPrices
+        self.invalidateCache = invalidateCache
+    }
 }
 
 extension PriceServiceClient: DependencyKey {
     static let liveValue = Self(
         fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        resolveCoinGeckoIDs: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchZapperHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         invalidateCache: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") })
     static let testValue = Self(
         fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
         fetchHistoricalPrices: { _, _ in [] },
+        resolveCoinGeckoIDs: { _ in [:] },
+        fetchZapperHistoricalPrices: { _, _ in [] },
         invalidateCache: {})
 
-    static func live(service: PriceService) -> Self {
+    static func live(service: PriceService, zapperProvider: ZapperProvider? = nil) -> Self {
         Self(
             fetchPrices: { coinIds in
                 try await service.fetchPriceUpdate(for: coinIds)
             },
             fetchHistoricalPrices: { coinId, days in
                 try await service.fetchHistoricalPrices(for: coinId, days: days)
+            },
+            resolveCoinGeckoIDs: { identities in
+                try await service.resolveCoinGeckoIDs(for: identities)
+            },
+            fetchZapperHistoricalPrices: { identity, days in
+                guard let zapperProvider else { return [] }
+                return try await zapperProvider.fetchHistoricalPrices(identity: identity, days: days)
             },
             invalidateCache: { await service.invalidateCache() })
     }

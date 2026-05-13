@@ -82,6 +82,7 @@ struct AssetPriceChartQueryTests {
 
         let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
             assetCoinGeckoId: "old-id",
+            onchainIdentity: OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal"),
             override: TokenPricingOverrideSnapshot(
                 assetId: assetId,
                 coinGeckoIdOverride: " New-ID "))
@@ -92,9 +93,21 @@ struct AssetPriceChartQueryTests {
     @Test func `effective historical coin gecko id falls back to asset id`() {
         let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
             assetCoinGeckoId: " Bitcoin ",
+            onchainIdentity: nil,
             override: nil)
 
         #expect(effectiveID == "bitcoin")
+    }
+
+    @Test func `effective historical coin gecko id falls back to zapper key for onchain assets`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+
+        let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
+            assetCoinGeckoId: nil,
+            onchainIdentity: identity,
+            override: nil)
+
+        #expect(effectiveID == identity.historicalPriceID)
     }
 
     @Test func `historical price rows are empty when backfill setting is disabled`() {

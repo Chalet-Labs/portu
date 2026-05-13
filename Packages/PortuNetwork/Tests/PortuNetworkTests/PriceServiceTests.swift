@@ -224,6 +224,36 @@ struct PriceServiceTests {
         #expect(header == "demo-key")
     }
 
+    @Test func `resolve coingecko ids fetches token metadata by onchain identity`() async throws {
+        let identity = OnchainTokenIdentity(
+            chain: .ethereum,
+            contractAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
+        var capturedURL: URL?
+        MockURLProtocol.requestHandler = { request in
+            capturedURL = request.url
+            return (Data("""
+            {
+              "data": [
+                {
+                  "id": "eth_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                  "type": "token",
+                  "attributes": {
+                    "address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+                    "coingecko_coin_id": "usd-coin"
+                  }
+                }
+              ]
+            }
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let resolved = try await service.resolveCoinGeckoIDs(for: [identity])
+
+        #expect(capturedURL?.path == "/api/v3/onchain/networks/eth/tokens/multi/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+        #expect(resolved[identity] == "usd-coin")
+    }
+
     @Test func `rate limiter rejects excessive requests`() async throws {
         MockURLProtocol.requestHandler = { _ in
             (Data("""

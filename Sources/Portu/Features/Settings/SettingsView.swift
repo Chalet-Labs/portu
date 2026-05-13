@@ -288,28 +288,34 @@ private struct GeneralSettingsTab: View {
 
                 SettingsSectionCard(
                     title: HistoricalPriceBackfillSettings.sectionTitle,
-                    subtitle: "Cache CoinGecko daily prices separately from Portu snapshots.",
+                    subtitle: "Cache daily prices from CoinGecko and Zapper separately from Portu snapshots.",
                     icon: .priceUpdates) {
                         VStack(alignment: .leading, spacing: 14) {
                             SettingsSwitchRow(
                                 title: HistoricalPriceBackfillSettings.useBackfillTitle,
-                                subtitle: "Use cached CoinGecko daily prices to extend charts before the first local snapshot.",
+                                subtitle: "Use cached daily prices to extend charts before the first local snapshot.",
                                 isOn: $historicalBackfillEnabled)
 
                             HStack(spacing: 10) {
-                                Button(HistoricalPriceBackfillSettings.backfillButtonTitle) {
+                                Button {
                                     store.send(.historicalPriceBackfill(.backfillButtonTapped))
+                                } label: {
+                                    Label(HistoricalPriceBackfillSettings.backfillButtonTitle, systemImage: "arrow.down.circle")
                                 }
                                 .buttonStyle(.plain)
                                 .settingsPrimaryButton(isDisabled: store.historicalPriceBackfill.status.isRunning)
                                 .disabled(store.historicalPriceBackfill.status.isRunning)
 
-                                Button(HistoricalPriceBackfillSettings.clearCacheButtonTitle) {
+                                Button {
                                     store.send(.historicalPriceBackfill(.clearCacheButtonTapped))
+                                } label: {
+                                    Label(HistoricalPriceBackfillSettings.clearCacheButtonTitle, systemImage: "trash")
                                 }
                                 .buttonStyle(.plain)
-                                .settingsPrimaryButton(isDisabled: store.historicalPriceBackfill.status.isRunning)
+                                .settingsSecondaryButton(isDisabled: store.historicalPriceBackfill.status.isRunning)
                                 .disabled(store.historicalPriceBackfill.status.isRunning)
+
+                                Spacer(minLength: 0)
                             }
 
                             HistoricalBackfillStatusText(status: store.historicalPriceBackfill.status)
@@ -328,10 +334,7 @@ private struct HistoricalBackfillStatusText: View {
     let status: HistoricalBackfillStatus
 
     var body: some View {
-        Text(HistoricalBackfillStatusFormatter.message(for: status))
-            .font(.footnote)
-            .foregroundStyle(SettingsDesign.secondaryText)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        HistoricalBackfillStatusRow(status: status)
     }
 }
 
@@ -341,7 +344,7 @@ enum HistoricalBackfillStatusFormatter {
         case .idle:
             "No historical backfill run in this session."
         case .running:
-            "Fetching historical prices from CoinGecko..."
+            "Fetching historical prices from CoinGecko and Zapper..."
         case .clearing:
             "Clearing historical price cache..."
         case let .succeeded(result):
@@ -354,7 +357,7 @@ enum HistoricalBackfillStatusFormatter {
     private static func successMessage(for result: HistoricalBackfillResult) -> String {
         if result.requestedAssets == 0 {
             return "No eligible assets found for historical backfill. Skipped \(result.skippedAssets) "
-                + "local snapshot assets because they do not have CoinGecko IDs or pricing overrides."
+                + "local snapshot assets because they do not have CoinGecko IDs, onchain addresses, or pricing overrides."
         }
 
         let baseMessage = "Fetched \(result.fetchedAssets) assets, inserted \(result.insertedPoints), "

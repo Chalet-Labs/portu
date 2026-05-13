@@ -3,6 +3,7 @@ import SwiftData
 
 public enum HistoricalPriceSource: String, Codable, Sendable, Equatable {
     case coingecko
+    case zapper
 }
 
 @Model
@@ -34,7 +35,7 @@ public final class HistoricalPricePoint {
             coinGeckoId: dto.coinGeckoId,
             day: dto.day,
             usdPrice: dto.usdPrice,
-            source: .coingecko,
+            source: dto.source,
             fetchedAt: fetchedAt)
     }
 }

@@ -49,7 +49,10 @@ struct PortuApp: App {
         let priceService = PriceService(session: session) {
             try? secretStore.get(key: .serviceAPIKey("coingecko"))
         }
-        let priceServiceClient = PriceServiceClient.live(service: priceService)
+        let priceServiceClient = Self.makePriceServiceClient(
+            priceService: priceService,
+            secretStore: secretStore,
+            session: session)
 
         self.store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
             AppFeature()
@@ -107,6 +110,40 @@ struct PortuApp: App {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+        }
+    }
+
+    private static func makePriceServiceClient(
+        priceService: PriceService,
+        secretStore: KeychainService,
+        session: URLSession) -> PriceServiceClient {
+        PriceServiceClient(
+            fetchPrices: { coinIds in
+                try await priceService.fetchPriceUpdate(for: coinIds)
+            },
+            fetchHistoricalPrices: { coinId, days in
+                try await priceService.fetchHistoricalPrices(for: coinId, days: days)
+            },
+            resolveCoinGeckoIDs: { identities in
+                try await priceService.resolveCoinGeckoIDs(for: identities)
+            },
+            fetchZapperHistoricalPrices: { identity, days in
+                guard let apiKey = zapperAPIKey(from: secretStore) else {
+                    return []
+                }
+                let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
+                return try await zapperProvider.fetchHistoricalPrices(identity: identity, days: days)
+            },
+            invalidateCache: { await priceService.invalidateCache() })
+    }
+
+    nonisolated private static func zapperAPIKey(from secretStore: KeychainService) -> String? {
+        do {
+            let apiKey = try secretStore.get(key: .serviceAPIKey("zapper"))?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return apiKey?.isEmpty == false ? apiKey : nil
+        } catch {
+            return nil
         }
     }
 }

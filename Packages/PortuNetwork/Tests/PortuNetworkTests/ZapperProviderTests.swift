@@ -64,6 +64,41 @@ struct ZapperProviderTests {
     }
 
     @Test
+    func `fetch historical prices reads Zapper price ticks by onchain identity`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        ZapperMockURLProtocol.requestHandler = { request in
+            let body = try graphQLBody(from: request)
+            #expect((body["query"] as? String)?.contains("priceTicks") == true)
+            let variables = try #require(body["variables"] as? [String: Any])
+            #expect(variables["address"] as? String == "0xtoken")
+            #expect(variables["chainId"] as? Int == 8453)
+            #expect(variables["currency"] as? String == "USD")
+            #expect(variables["timeFrame"] as? String == "YEAR")
+            return (Data("""
+            {
+              "data": {
+                "fungibleTokenV2": {
+                  "priceData": {
+                    "priceTicks": [
+                      { "timestamp": 1704067200000, "close": 1.25 },
+                      { "timestamp": 1704153600000, "close": 1.50 }
+                    ]
+                  }
+                }
+              }
+            }
+            """.utf8), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        let prices = try await provider.fetchHistoricalPrices(identity: identity, days: 365)
+
+        #expect(prices.map(\.coinGeckoId) == [identity.historicalPriceID, identity.historicalPriceID])
+        #expect(prices.map(\.usdPrice) == [Decimal(string: "1.25"), Decimal(string: "1.5")])
+    }
+
+    @Test
     func `fetchBalances maps Zapper chain id 100 to Gnosis`() async throws {
         defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in

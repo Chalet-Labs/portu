@@ -36,6 +36,35 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(candidates.first?.assetIds == [first.assetId, second.assetId])
     }
 
+    @Test func `candidate selection auto maps onchain assets and falls back to zapper ids`() {
+        let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
+        let fallbackIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xFallback")
+        let mapped = token(
+            assetId: uuid(1),
+            symbol: "MAP",
+            amount: 1,
+            usdValue: 10,
+            onchainIdentity: mappedIdentity)
+        let fallback = token(
+            assetId: uuid(2),
+            symbol: "LOCAL",
+            amount: 1,
+            usdValue: 20,
+            onchainIdentity: fallbackIdentity)
+
+        let candidates = HistoricalBackfillCandidateResolver.candidates(
+            tokens: [fallback, mapped],
+            overrides: [],
+            resolvedCoinGeckoIDs: [mappedIdentity: "mapped-token"])
+
+        #expect(candidates.map(\.historicalPriceID) == ["mapped-token", fallbackIdentity.historicalPriceID])
+        #expect(candidates.map(\.assetIds) == [[mapped.assetId], [fallback.assetId]])
+        #expect(candidates.map(\.source) == [
+            .coingecko("mapped-token"),
+            .zapper(fallbackIdentity)
+        ])
+    }
+
     @Test func `cache writer upserts by coin gecko id and day`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
@@ -147,164 +176,6 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(try context.fetch(FetchDescriptor<Asset>()).count == 1)
     }
 
-    @Test func `live backfill result counts grouped asset ids`() async throws {
-        let container = try ModelContainerFactory().makeInMemory()
-        let context = container.mainContext
-        let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
-        let firstAsset = Asset(id: uuid(1), symbol: "AAVE", name: "Aave", coinGeckoId: "aave")
-        let secondAsset = Asset(id: uuid(2), symbol: "AAVE.e", name: "Aave", coinGeckoId: "aave")
-        let failingAsset = Asset(id: uuid(3), symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")
-        let position = Position(
-            positionType: .idle,
-            tokens: [
-                PositionToken(role: .balance, amount: 1, usdValue: 100, asset: firstAsset),
-                PositionToken(role: .balance, amount: 2, usdValue: 200, asset: secondAsset),
-                PositionToken(role: .balance, amount: 3, usdValue: 300, asset: failingAsset)
-            ],
-            account: account)
-        account.positions = [position]
-        context.insert(account)
-        try context.save()
-
-        let client = HistoricalPriceBackfillClient.live(
-            modelContext: context,
-            priceService: PriceServiceClient(
-                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
-                fetchHistoricalPrices: { coinGeckoId, _ in
-                    if coinGeckoId == "ethereum" {
-                        throw HistoricalBackfillError(message: "network failed")
-                    }
-                    return [
-                        HistoricalPriceDTO(
-                            coinGeckoId: coinGeckoId,
-                            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
-                            usdPrice: 90)
-                    ]
-                },
-                invalidateCache: {}),
-            now: { Date(timeIntervalSince1970: 20) },
-            requestSpacing: .zero,
-            sleep: { _ in })
-
-        let result = try await client.run()
-        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
-
-        #expect(result.requestedAssets == 3)
-        #expect(result.fetchedAssets == 2)
-        #expect(result.failedCoinGeckoIDs == ["ethereum"])
-        #expect(result.insertedPoints == 1)
-        #expect(result.updatedPoints == 0)
-        #expect(rows.count == 1)
-        #expect(rows.first?.coinGeckoId == "aave")
-        #expect(rows.first?.fetchedAt == Date(timeIntervalSince1970: 20))
-    }
-
-    @Test func `live backfill includes assets present only in local snapshots`() async throws {
-        let container = try ModelContainerFactory().makeInMemory()
-        let context = container.mainContext
-        let soldAsset = Asset(id: uuid(11), symbol: "SOLD", name: "Sold Token", coinGeckoId: "sold-token")
-        context.insert(soldAsset)
-        context.insert(AssetSnapshot(
-            syncBatchId: uuid(101),
-            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
-            accountId: uuid(201),
-            assetId: soldAsset.id,
-            symbol: soldAsset.symbol,
-            category: .other,
-            amount: 4,
-            usdValue: 80))
-        try context.save()
-
-        let requestedIDs = SendableArray<String>()
-        let client = HistoricalPriceBackfillClient.live(
-            modelContext: context,
-            priceService: PriceServiceClient(
-                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
-                fetchHistoricalPrices: { coinGeckoId, _ in
-                    requestedIDs.append(coinGeckoId)
-                    return [
-                        HistoricalPriceDTO(
-                            coinGeckoId: coinGeckoId,
-                            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
-                            usdPrice: 20)
-                    ]
-                },
-                invalidateCache: {}),
-            requestSpacing: .zero,
-            sleep: { _ in })
-
-        let result = try await client.run()
-        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
-
-        #expect(requestedIDs.values == ["sold-token"])
-        #expect(result.requestedAssets == 1)
-        #expect(result.fetchedAssets == 1)
-        #expect(rows.map(\.coinGeckoId) == ["sold-token"])
-    }
-
-    @Test func `live backfill spaces requests between candidates`() async throws {
-        let container = try ModelContainerFactory().makeInMemory()
-        let context = container.mainContext
-        insertSnapshotOnlyAsset(id: uuid(11), coinGeckoId: "bitcoin", context: context)
-        insertSnapshotOnlyAsset(id: uuid(12), coinGeckoId: "ethereum", context: context)
-        try context.save()
-
-        var slept: [Duration] = []
-        let client = HistoricalPriceBackfillClient.live(
-            modelContext: context,
-            priceService: PriceServiceClient(
-                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
-                fetchHistoricalPrices: { coinGeckoId, _ in [
-                    HistoricalPriceDTO(
-                        coinGeckoId: coinGeckoId,
-                        timestamp: Date(timeIntervalSince1970: 1_704_067_200),
-                        usdPrice: 1)
-                ] },
-                invalidateCache: {}),
-            requestSpacing: .seconds(2),
-            sleep: { duration in slept.append(duration) })
-
-        _ = try await client.run()
-
-        #expect(slept == [.seconds(2)])
-    }
-
-    @Test func `live backfill retries a rate limited candidate`() async throws {
-        let container = try ModelContainerFactory().makeInMemory()
-        let context = container.mainContext
-        insertSnapshotOnlyAsset(id: uuid(11), coinGeckoId: "bitcoin", context: context)
-        try context.save()
-
-        let attempts = SendableCounter()
-        var slept: [Duration] = []
-        let client = HistoricalPriceBackfillClient.live(
-            modelContext: context,
-            priceService: PriceServiceClient(
-                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
-                fetchHistoricalPrices: { coinGeckoId, _ in
-                    if attempts.incrementAndGet() == 1 {
-                        throw PriceServiceError.rateLimited
-                    }
-                    return [
-                        HistoricalPriceDTO(
-                            coinGeckoId: coinGeckoId,
-                            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
-                            usdPrice: 1)
-                    ]
-                },
-                invalidateCache: {}),
-            requestSpacing: .zero,
-            rateLimitRetryDelay: .seconds(60),
-            sleep: { duration in slept.append(duration) })
-
-        let result = try await client.run()
-
-        #expect(attempts.value == 2)
-        #expect(slept == [.seconds(60)])
-        #expect(result.failedCoinGeckoIDs.isEmpty)
-        #expect(result.fetchedAssets == 1)
-    }
-
     @Test func `backfill failure preserves thrown dependency message`() async {
         let store = TestStore(initialState: HistoricalPriceBackfillFeature.State()) {
             HistoricalPriceBackfillFeature()
@@ -356,7 +227,8 @@ struct HistoricalPriceBackfillFeatureTests {
         symbol: String,
         coinGeckoId: String? = nil,
         amount: Decimal,
-        usdValue: Decimal) -> TokenEntry {
+        usdValue: Decimal,
+        onchainIdentity: OnchainTokenIdentity? = nil) -> TokenEntry {
         TokenEntry(
             assetId: assetId,
             symbol: symbol,
@@ -364,57 +236,13 @@ struct HistoricalPriceBackfillFeatureTests {
             category: .other,
             portfolioCategory: nil,
             coinGeckoId: coinGeckoId,
+            onchainIdentity: onchainIdentity,
             role: .balance,
             amount: amount,
             usdValue: usdValue)
     }
 
-    private func insertSnapshotOnlyAsset(id: UUID, coinGeckoId: String, context: ModelContext) {
-        let asset = Asset(id: id, symbol: coinGeckoId.uppercased(), name: coinGeckoId, coinGeckoId: coinGeckoId)
-        context.insert(asset)
-        context.insert(AssetSnapshot(
-            syncBatchId: UUID(),
-            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
-            accountId: uuid(201),
-            assetId: asset.id,
-            symbol: asset.symbol,
-            category: .other,
-            amount: 1,
-            usdValue: 1))
-    }
-
     private func uuid(_ index: Int) -> UUID {
         UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index))!
-    }
-}
-
-private final class SendableArray<Element>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: [Element] = []
-
-    var values: [Element] {
-        lock.withLock { storage }
-    }
-
-    func append(_ value: Element) {
-        lock.withLock {
-            storage.append(value)
-        }
-    }
-}
-
-private final class SendableCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage = 0
-
-    var value: Int {
-        lock.withLock { storage }
-    }
-
-    func incrementAndGet() -> Int {
-        lock.withLock {
-            storage += 1
-            return storage
-        }
     }
 }

@@ -77,3 +77,37 @@ nonisolated struct CoinGeckoMarketChartResponse {
         }
     }
 }
+
+nonisolated struct CoinGeckoOnchainTokenMapResponse {
+    let coinGeckoIDsByAddress: [String: String]
+
+    init(data: Data) throws(PriceServiceError) {
+        guard
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let rows = json["data"] as? [[String: Any]]
+        else {
+            throw .decodingFailed
+        }
+
+        var result: [String: String] = [:]
+        for row in rows {
+            guard let attributes = row["attributes"] as? [String: Any] else {
+                continue
+            }
+            guard
+                let address = attributes["address"] as? String,
+                let coinGeckoID = attributes["coingecko_coin_id"] as? String
+            else {
+                continue
+            }
+            let normalizedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let normalizedCoinGeckoID = coinGeckoID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !normalizedAddress.isEmpty, !normalizedCoinGeckoID.isEmpty else {
+                continue
+            }
+            result[normalizedAddress] = normalizedCoinGeckoID
+        }
+
+        self.coinGeckoIDsByAddress = result
+    }
+}
