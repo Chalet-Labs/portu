@@ -43,6 +43,8 @@ struct SettingsTabTests {
         #expect(SettingsMetrics.pageTitleSize < 38)
         #expect(SettingsMetrics.sectionTitleSize < 22)
         #expect(SettingsMetrics.sidebarWidth < 250)
+        #expect(SettingsMetrics.pageMaxWidth <= 980)
+        #expect(SettingsDesign.primaryButtonHorizontalPadding >= 14)
     }
 
     @Test func `settings omits explicit back navigation`() {
@@ -121,6 +123,22 @@ struct SettingsTabTests {
         let message = HistoricalBackfillStatusFormatter.message(for: .clearing)
 
         #expect(message == "Clearing historical price cache...")
+    }
+
+    @Test func `historical backfill status explains when local snapshots have no eligible mapped assets`() {
+        let result = HistoricalBackfillResult(
+            requestedAssets: 0,
+            fetchedAssets: 0,
+            skippedAssets: 1050,
+            insertedPoints: 0,
+            updatedPoints: 0,
+            failedCoinGeckoIDs: [])
+
+        let message = HistoricalBackfillStatusFormatter.message(for: .succeeded(result))
+
+        #expect(message.contains("No eligible assets"))
+        #expect(message.contains("CoinGecko"))
+        #expect(message.contains("1050"))
     }
 
     private func cleanDefaults() -> UserDefaults {

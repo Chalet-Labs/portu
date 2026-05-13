@@ -51,6 +51,7 @@ enum SettingsMetrics {
     static let minimumWidth: CGFloat = 720
     static let minimumHeight: CGFloat = 560
     static let sidebarWidth: CGFloat = 208
+    static let pageMaxWidth: CGFloat = 920
     static let pageTitleSize: CGFloat = 22
     static let sectionTitleSize: CGFloat = 15
     static let rowTitleSize: CGFloat = 14
@@ -290,8 +291,10 @@ private struct GeneralSettingsTab: View {
                     subtitle: "Cache CoinGecko daily prices separately from Portu snapshots.",
                     icon: .priceUpdates) {
                         VStack(alignment: .leading, spacing: 14) {
-                            Toggle(HistoricalPriceBackfillSettings.useBackfillTitle, isOn: $historicalBackfillEnabled)
-                                .toggleStyle(SettingsSwitchToggleStyle())
+                            SettingsSwitchRow(
+                                title: HistoricalPriceBackfillSettings.useBackfillTitle,
+                                subtitle: "Use cached CoinGecko daily prices to extend charts before the first local snapshot.",
+                                isOn: $historicalBackfillEnabled)
 
                             HStack(spacing: 10) {
                                 Button(HistoricalPriceBackfillSettings.backfillButtonTitle) {
@@ -349,6 +352,11 @@ enum HistoricalBackfillStatusFormatter {
     }
 
     private static func successMessage(for result: HistoricalBackfillResult) -> String {
+        if result.requestedAssets == 0 {
+            return "No eligible assets found for historical backfill. Skipped \(result.skippedAssets) "
+                + "local snapshot assets because they do not have CoinGecko IDs or pricing overrides."
+        }
+
         let baseMessage = "Fetched \(result.fetchedAssets) assets, inserted \(result.insertedPoints), "
             + "updated \(result.updatedPoints), skipped \(result.skippedAssets)."
         guard !result.failedCoinGeckoIDs.isEmpty else { return baseMessage }
