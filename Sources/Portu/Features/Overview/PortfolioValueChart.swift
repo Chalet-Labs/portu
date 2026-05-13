@@ -29,20 +29,42 @@ struct PortfolioValueChart: View {
             let firstRealSnapshotDate = assetSnapshots.first?.timestamp
         else { return [] }
 
-        let holdings = earliestHoldings(firstRealSnapshotDate: firstRealSnapshotDate)
+        let chartStartDate = ChartTimeRange.oneMonth.startDate
+        let holdings = PerformanceFeature.earliestEstimateHoldings(
+            snapshots: historicalEstimateSnapshotEntries,
+            firstRealSnapshotDate: firstRealSnapshotDate,
+            accountId: nil)
         guard !holdings.isEmpty else { return [] }
 
         return HistoricalPortfolioEstimator.estimatedValues(
             holdings: holdings,
-            prices: historicalPrices.map {
-                HistoricalPriceEntry(
+            prices: historicalPrices.compactMap {
+                guard $0.day >= chartStartDate, $0.day < firstRealSnapshotDate else { return nil }
+                return HistoricalPriceEntry(
                     coinGeckoId: $0.coinGeckoId,
                     day: $0.day,
                     usdPrice: $0.usdPrice)
             },
-            startDate: ChartTimeRange.oneMonth.startDate,
+            startDate: chartStartDate,
             firstRealSnapshotDate: firstRealSnapshotDate,
             accountId: nil)
+    }
+
+    private var historicalEstimateSnapshotEntries: [HistoricalEstimateSnapshotEntry] {
+        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(
+            tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
+        let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
+
+        return assetSnapshots.map { snapshot in
+            HistoricalEstimateSnapshotEntry(
+                accountId: snapshot.accountId,
+                assetId: snapshot.assetId,
+                timestamp: snapshot.timestamp,
+                coinGeckoId: assetsById[snapshot.assetId]?.coinGeckoId,
+                coinGeckoIdOverride: overridesByAssetId[snapshot.assetId]?.coinGeckoIdOverride,
+                amount: snapshot.amount,
+                borrowAmount: snapshot.borrowAmount)
+        }
     }
 
     var body: some View {
@@ -105,67 +127,5 @@ struct PortfolioValueChart: View {
                 }
             }
         }
-    }
-
-    private func earliestHoldings(firstRealSnapshotDate: Date) -> [HistoricalEstimateHolding] {
-        let firstDay = Self.utcStartOfDay(for: firstRealSnapshotDate)
-        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(
-            tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
-        let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
-
-        return latestSnapshots(on: firstDay).compactMap { snapshot in
-            guard
-                let coinGeckoId = resolvedCoinGeckoId(
-                    assetId: snapshot.assetId,
-                    assetsById: assetsById,
-                    overridesByAssetId: overridesByAssetId)
-            else { return nil }
-
-            return HistoricalEstimateHolding(
-                accountId: snapshot.accountId,
-                assetId: snapshot.assetId,
-                coinGeckoId: coinGeckoId,
-                amount: snapshot.amount - snapshot.borrowAmount)
-        }
-    }
-
-    private func latestSnapshots(on day: Date) -> [AssetSnapshot] {
-        struct SnapshotKey: Hashable {
-            let accountId: UUID
-            let assetId: UUID
-        }
-        var latestByKey: [SnapshotKey: AssetSnapshot] = [:]
-        for snapshot in assetSnapshots where Self.utcStartOfDay(for: snapshot.timestamp) == day {
-            let key = SnapshotKey(accountId: snapshot.accountId, assetId: snapshot.assetId)
-            if let existing = latestByKey[key], existing.timestamp >= snapshot.timestamp {
-                continue
-            }
-            latestByKey[key] = snapshot
-        }
-        return latestByKey.values.sorted {
-            if $0.accountId != $1.accountId { return $0.accountId.uuidString < $1.accountId.uuidString }
-            return $0.assetId.uuidString < $1.assetId.uuidString
-        }
-    }
-
-    private func resolvedCoinGeckoId(
-        assetId: UUID,
-        assetsById: [UUID: Asset],
-        overridesByAssetId: [UUID: TokenPricingOverrideSnapshot]) -> String? {
-        Self.normalizedCoinGeckoId(overridesByAssetId[assetId]?.coinGeckoIdOverride)
-            ?? Self.normalizedCoinGeckoId(assetsById[assetId]?.coinGeckoId)
-    }
-
-    private static func normalizedCoinGeckoId(_ id: String?) -> String? {
-        guard let id else { return nil }
-        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.isEmpty ? nil : normalized
-    }
-
-    private static func utcStartOfDay(for date: Date) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
-        calendar.locale = Locale(identifier: "en_US_POSIX")
-        return calendar.startOfDay(for: date)
     }
 }

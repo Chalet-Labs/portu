@@ -39,6 +39,17 @@ struct AssetPricePeriodChange: Identifiable, Equatable {
     let percentChange: Decimal
 }
 
+/// Snapshot input used for estimated history and held-price filtering.
+struct HistoricalEstimateSnapshotEntry: Equatable {
+    let accountId: UUID
+    let assetId: UUID
+    let timestamp: Date
+    let coinGeckoId: String?
+    let coinGeckoIdOverride: String?
+    let amount: Decimal
+    let borrowAmount: Decimal
+}
+
 /// Lightweight input for category change and chart aggregation.
 struct CategorySnapshotEntry: Equatable {
     let accountId: UUID
@@ -289,5 +300,102 @@ struct PerformanceFeature {
                 endPrice: last.usdPrice,
                 percentChange: (last.usdPrice - first.usdPrice) / first.usdPrice)
         }
+    }
+
+    static func earliestEstimateHoldings(
+        snapshots: [HistoricalEstimateSnapshotEntry],
+        firstRealSnapshotDate: Date,
+        accountId: UUID?) -> [HistoricalEstimateHolding] {
+        let firstDay = utcStartOfDay(for: firstRealSnapshotDate)
+        return latestEstimateSnapshots(on: firstDay, snapshots: snapshots, accountId: accountId)
+            .compactMap { snapshot in
+                let netAmount = snapshot.amount - snapshot.borrowAmount
+                guard netAmount != 0, let coinGeckoId = resolvedCoinGeckoID(snapshot) else { return nil }
+                return HistoricalEstimateHolding(
+                    accountId: snapshot.accountId,
+                    assetId: snapshot.assetId,
+                    coinGeckoId: coinGeckoId,
+                    amount: netAmount)
+            }
+    }
+
+    static func historicalPriceEntriesForHeldAssets(
+        rows: [HistoricalPriceEntry],
+        holdings: [HistoricalEstimateSnapshotEntry],
+        startDate: Date,
+        accountId: UUID?) -> [HistoricalPriceEntry] {
+        let heldIDs = heldHistoricalCoinGeckoIDs(
+            snapshots: holdings,
+            startDate: startDate,
+            accountId: accountId)
+        guard heldIDs.isEmpty == false else { return [] }
+
+        return rows.compactMap { row in
+            let coinGeckoId = normalizedCoinGeckoID(row.coinGeckoId)
+            guard row.day >= startDate, heldIDs.contains(coinGeckoId) else { return nil }
+            return HistoricalPriceEntry(
+                coinGeckoId: coinGeckoId,
+                day: row.day,
+                usdPrice: row.usdPrice)
+        }
+    }
+
+    private static func heldHistoricalCoinGeckoIDs(
+        snapshots: [HistoricalEstimateSnapshotEntry],
+        startDate: Date,
+        accountId: UUID?) -> Set<String> {
+        Set(snapshots.compactMap { snapshot in
+            guard snapshot.timestamp >= startDate else { return nil }
+            guard accountId == nil || snapshot.accountId == accountId else { return nil }
+            guard snapshot.amount - snapshot.borrowAmount != 0 else { return nil }
+            return resolvedCoinGeckoID(snapshot)
+        })
+    }
+
+    private static func latestEstimateSnapshots(
+        on day: Date,
+        snapshots: [HistoricalEstimateSnapshotEntry],
+        accountId: UUID?) -> [HistoricalEstimateSnapshotEntry] {
+        struct SnapshotKey: Hashable {
+            let accountId: UUID
+            let assetId: UUID
+        }
+
+        var latestByKey: [SnapshotKey: HistoricalEstimateSnapshotEntry] = [:]
+        for snapshot in snapshots where utcStartOfDay(for: snapshot.timestamp) == day {
+            guard accountId == nil || snapshot.accountId == accountId else { continue }
+            let key = SnapshotKey(accountId: snapshot.accountId, assetId: snapshot.assetId)
+            if let existing = latestByKey[key], existing.timestamp >= snapshot.timestamp {
+                continue
+            }
+            latestByKey[key] = snapshot
+        }
+
+        return latestByKey.values.sorted {
+            if $0.accountId != $1.accountId { return $0.accountId.uuidString < $1.accountId.uuidString }
+            return $0.assetId.uuidString < $1.assetId.uuidString
+        }
+    }
+
+    private static func resolvedCoinGeckoID(_ snapshot: HistoricalEstimateSnapshotEntry) -> String? {
+        normalizedOptionalCoinGeckoID(snapshot.coinGeckoIdOverride)
+            ?? normalizedOptionalCoinGeckoID(snapshot.coinGeckoId)
+    }
+
+    private static func normalizedOptionalCoinGeckoID(_ id: String?) -> String? {
+        guard let id else { return nil }
+        let normalized = normalizedCoinGeckoID(id)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func normalizedCoinGeckoID(_ id: String) -> String {
+        id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private static func utcStartOfDay(for date: Date) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        calendar.locale = Locale(identifier: "en_US_POSIX")
+        return calendar.startOfDay(for: date)
     }
 }

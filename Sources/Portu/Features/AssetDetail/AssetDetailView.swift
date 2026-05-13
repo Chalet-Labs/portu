@@ -10,9 +10,19 @@ struct AssetDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Query private var assets: [Asset]
+    @Query private var tokenPricingOverrides: [TokenPricingOverride]
 
     private var asset: Asset? {
         assets.first { $0.id == assetId }
+    }
+
+    private var historicalPriceCoinGeckoId: String? {
+        guard let asset else { return nil }
+        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(
+            tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
+        return AssetDetailFeature.effectiveHistoricalCoinGeckoID(
+            assetCoinGeckoId: asset.coinGeckoId,
+            override: overridesByAssetId[assetId])
     }
 
     var body: some View {
@@ -53,7 +63,7 @@ struct AssetDetailView: View {
                             }
                         }
 
-                        AssetPriceChart(assetId: assetId, coinGeckoId: asset.coinGeckoId, store: store)
+                        AssetPriceChart(assetId: assetId, coinGeckoId: historicalPriceCoinGeckoId, store: store)
                             .dashboardCard()
                         AssetHoldingsSummary(assetId: assetId, store: store)
                             .dashboardCard()

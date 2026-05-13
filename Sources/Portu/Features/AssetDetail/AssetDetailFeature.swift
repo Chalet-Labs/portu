@@ -265,4 +265,17 @@ struct AssetDetailFeature {
         guard let cgId = coinGeckoId, let price = prices[cgId] else { return nil }
         return AssetPriceInfo(price: price, change24h: changes24h[cgId])
     }
+
+    static func effectiveHistoricalCoinGeckoID(
+        assetCoinGeckoId: String?,
+        override: TokenPricingOverrideSnapshot?) -> String? {
+        normalizedHistoricalCoinGeckoID(override?.coinGeckoIdOverride)
+            ?? normalizedHistoricalCoinGeckoID(assetCoinGeckoId)
+    }
+
+    private static func normalizedHistoricalCoinGeckoID(_ id: String?) -> String? {
+        guard let id else { return nil }
+        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.isEmpty ? nil : normalized
+    }
 }

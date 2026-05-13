@@ -14,6 +14,8 @@ struct PerformanceBottomPanel: View {
     private var categoryRules: [CategorySymbolRule]
     @Query(sort: \HistoricalPricePoint.day)
     private var historicalPrices: [HistoricalPricePoint]
+    @Query private var assets: [Asset]
+    @Query private var tokenPricingOverrides: [TokenPricingOverride]
 
     private var categoryResolver: PortfolioCategoryResolver {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
@@ -31,7 +33,7 @@ struct PerformanceBottomPanel: View {
 
     private var priceChanges: [AssetPricePeriodChange] {
         let rows = historicalPrices
-            .filter { $0.day >= startDate && $0.day <= Date.now }
+            .filter { $0.day >= startDate }
             .map {
                 HistoricalPriceEntry(
                     coinGeckoId: $0.coinGeckoId,
@@ -39,13 +41,36 @@ struct PerformanceBottomPanel: View {
                     usdPrice: $0.usdPrice)
             }
 
-        return PerformanceFeature.computeHistoricalPriceChanges(rows: rows)
+        let heldRows = PerformanceFeature.historicalPriceEntriesForHeldAssets(
+            rows: rows,
+            holdings: historicalEstimateSnapshotEntries,
+            startDate: startDate,
+            accountId: accountId)
+
+        return PerformanceFeature.computeHistoricalPriceChanges(rows: heldRows)
             .sorted {
                 let lhs = absolute($0.percentChange)
                 let rhs = absolute($1.percentChange)
                 if lhs != rhs { return lhs > rhs }
                 return $0.coinGeckoId < $1.coinGeckoId
             }
+    }
+
+    private var historicalEstimateSnapshotEntries: [HistoricalEstimateSnapshotEntry] {
+        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(
+            tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
+        let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
+
+        return snapshots.map { snapshot in
+            HistoricalEstimateSnapshotEntry(
+                accountId: snapshot.accountId,
+                assetId: snapshot.assetId,
+                timestamp: snapshot.timestamp,
+                coinGeckoId: assetsById[snapshot.assetId]?.coinGeckoId,
+                coinGeckoIdOverride: overridesByAssetId[snapshot.assetId]?.coinGeckoIdOverride,
+                amount: snapshot.amount,
+                borrowAmount: snapshot.borrowAmount)
+        }
     }
 
     var body: some View {

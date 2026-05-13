@@ -167,33 +167,6 @@ struct PerformancePnLTests {
     }
 }
 
-// MARK: - Historical Price Change
-
-struct PerformanceHistoricalPriceChangeTests {
-    @Test func `computes period price changes from first and last cached prices`() {
-        let day1 = date(2024, 1, 1)
-        let day2 = date(2024, 1, 2)
-
-        let changes = PerformanceFeature.computeHistoricalPriceChanges(
-            rows: [
-                HistoricalPriceEntry(coinGeckoId: "bitcoin", day: day1, usdPrice: 40000),
-                HistoricalPriceEntry(coinGeckoId: "bitcoin", day: day2, usdPrice: 44000),
-                HistoricalPriceEntry(coinGeckoId: "ethereum", day: day1, usdPrice: 2000),
-                HistoricalPriceEntry(coinGeckoId: "ethereum", day: day2, usdPrice: 1800)
-            ])
-
-        #expect(changes.map(\.coinGeckoId) == ["bitcoin", "ethereum"])
-        #expect(changes[0].percentChange == Decimal(string: "0.1")!)
-        #expect(changes[1].percentChange == Decimal(string: "-0.1")!)
-    }
-
-    private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        return calendar.date(from: DateComponents(year: year, month: month, day: day))!
-    }
-}
-
 // MARK: - Category Change Breakdown
 
 struct PerformanceCategoryChangeTests {

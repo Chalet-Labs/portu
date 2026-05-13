@@ -76,4 +76,24 @@ struct AssetPriceChartQueryTests {
         // Prove the unfiltered load is a superset — unbounded when many assets exist
         #expect(unfiltered.count > filtered.count)
     }
+
+    @Test func `effective historical coin gecko id prefers override`() {
+        let assetId = UUID()
+
+        let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
+            assetCoinGeckoId: "old-id",
+            override: TokenPricingOverrideSnapshot(
+                assetId: assetId,
+                coinGeckoIdOverride: " New-ID "))
+
+        #expect(effectiveID == "new-id")
+    }
+
+    @Test func `effective historical coin gecko id falls back to asset id`() {
+        let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
+            assetCoinGeckoId: " Bitcoin ",
+            override: nil)
+
+        #expect(effectiveID == "bitcoin")
+    }
 }
