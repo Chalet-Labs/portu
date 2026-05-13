@@ -12,6 +12,8 @@ struct PerformanceBottomPanel: View {
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
+    @Query(sort: \HistoricalPricePoint.day)
+    private var historicalPrices: [HistoricalPricePoint]
 
     private var categoryResolver: PortfolioCategoryResolver {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
@@ -25,6 +27,25 @@ struct PerformanceBottomPanel: View {
             }
             .map { CategorySnapshotEntry(snapshot: $0, categoryResolver: resolver) }
         return PerformanceFeature.computeCategoryChanges(entries: entries)
+    }
+
+    private var priceChanges: [AssetPricePeriodChange] {
+        let rows = historicalPrices
+            .filter { $0.day >= startDate && $0.day <= Date.now }
+            .map {
+                HistoricalPriceEntry(
+                    coinGeckoId: $0.coinGeckoId,
+                    day: $0.day,
+                    usdPrice: $0.usdPrice)
+            }
+
+        return PerformanceFeature.computeHistoricalPriceChanges(rows: rows)
+            .sorted {
+                let lhs = absolute($0.percentChange)
+                let rhs = absolute($1.percentChange)
+                if lhs != rhs { return lhs > rhs }
+                return $0.coinGeckoId < $1.coinGeckoId
+            }
     }
 
     var body: some View {
@@ -59,8 +80,25 @@ struct PerformanceBottomPanel: View {
                 Text("Top assets with period price change")
                     .font(.caption)
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                ForEach(priceChanges.prefix(5)) { change in
+                    HStack {
+                        Text(change.coinGeckoId)
+                            .frame(width: 120, alignment: .leading)
+                        Text(change.endPrice, format: .currency(code: "USD"))
+                            .frame(width: 90, alignment: .trailing)
+                        Text(change.percentChange, format: .percent.precision(.fractionLength(1)))
+                            .foregroundStyle(change.percentChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
+                            .frame(width: 64, alignment: .trailing)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                }
             }
         }
         .frame(minHeight: 180, alignment: .topLeading)
+    }
+
+    private func absolute(_ value: Decimal) -> Decimal {
+        value < 0 ? -value : value
     }
 }

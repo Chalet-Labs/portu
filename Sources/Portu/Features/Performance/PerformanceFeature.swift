@@ -27,6 +27,18 @@ struct CategoryChange: Identifiable, Equatable {
     let percentChange: Decimal
 }
 
+/// Price change for one cached CoinGecko asset over a period.
+struct AssetPricePeriodChange: Identifiable, Equatable {
+    var id: String {
+        coinGeckoId
+    }
+
+    let coinGeckoId: String
+    let startPrice: Decimal
+    let endPrice: Decimal
+    let percentChange: Decimal
+}
+
 /// Lightweight input for category change and chart aggregation.
 struct CategorySnapshotEntry: Equatable {
     let accountId: UUID
@@ -255,6 +267,27 @@ struct PerformanceFeature {
                 startValue: start,
                 endValue: end,
                 percentChange: change)
+        }
+    }
+
+    static func computeHistoricalPriceChanges(
+        rows: [HistoricalPriceEntry]) -> [AssetPricePeriodChange] {
+        let grouped = Dictionary(grouping: rows) { $0.coinGeckoId }
+        return grouped.keys.sorted().compactMap { coinGeckoId in
+            let sorted = grouped[coinGeckoId, default: []].sorted {
+                if $0.day != $1.day { return $0.day < $1.day }
+                return $0.usdPrice < $1.usdPrice
+            }
+            guard
+                let first = sorted.first,
+                let last = sorted.last,
+                first.usdPrice > 0
+            else { return nil }
+            return AssetPricePeriodChange(
+                coinGeckoId: coinGeckoId,
+                startPrice: first.usdPrice,
+                endPrice: last.usdPrice,
+                percentChange: (last.usdPrice - first.usdPrice) / first.usdPrice)
         }
     }
 }

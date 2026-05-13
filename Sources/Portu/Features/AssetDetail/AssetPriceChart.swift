@@ -12,15 +12,21 @@ struct AssetPriceChart: View {
 
     @Query
     private var snapshots: [AssetSnapshot]
+    @Query
+    private var historicalPrices: [HistoricalPricePoint]
 
     init(assetId: UUID, coinGeckoId: String?, store: StoreOf<AppFeature>) {
         self.assetId = assetId
         self.coinGeckoId = coinGeckoId
         self.store = store
         let targetAssetId = assetId
+        let targetCoinGeckoId = Self.normalizedCoinGeckoId(coinGeckoId) ?? "__missing_coin_gecko_id__"
         _snapshots = Query(
             filter: #Predicate<AssetSnapshot> { $0.assetId == targetAssetId },
             sort: \.timestamp)
+        _historicalPrices = Query(
+            filter: #Predicate<HistoricalPricePoint> { $0.coinGeckoId == targetCoinGeckoId },
+            sort: \.day)
     }
 
     private var chartEntries: [SnapshotEntry] {
@@ -86,18 +92,25 @@ struct AssetPriceChart: View {
 
     private var priceChart: some View {
         Group {
-            if coinGeckoId != nil {
+            let points = historicalPrices.filter { $0.day >= store.assetDetail.selectedRange.startDate }
+            if points.isEmpty {
                 ContentUnavailableView(
-                    "Price History", systemImage: "chart.line.uptrend.xyaxis",
-                    description: Text("Historical price chart — requires CoinGecko market_chart API integration"))
+                    "No Price History",
+                    systemImage: "chart.line.uptrend.xyaxis",
+                    description: Text("Run historical price cache from Settings"))
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 250)
             } else {
-                ContentUnavailableView(
-                    "No Price Data", systemImage: "chart.line.uptrend.xyaxis",
-                    description: Text("Asset has no CoinGecko ID for price history"))
-                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    .frame(height: 250)
+                Chart(points, id: \.id) { point in
+                    LineMark(
+                        x: .value("Date", point.day),
+                        y: .value("Price", point.usdPrice))
+                        .foregroundStyle(PortuTheme.dashboardGold)
+                }
+                .chartYAxis {
+                    AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0 ... 4)))
+                }
+                .frame(height: 250)
             }
         }
     }
@@ -170,5 +183,11 @@ struct AssetPriceChart: View {
                 .frame(height: 250)
             }
         }
+    }
+
+    private static func normalizedCoinGeckoId(_ id: String?) -> String? {
+        guard let id else { return nil }
+        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.isEmpty ? nil : normalized
     }
 }
