@@ -12,6 +12,13 @@ struct HistoricalBackfillCandidate: Equatable, Identifiable {
     let assetIds: [UUID]
 }
 
+struct HistoricalBackfillSnapshotEntry: Equatable {
+    let assetId: UUID
+    let coinGeckoId: String?
+    let amount: Decimal
+    let borrowAmount: Decimal
+}
+
 struct HistoricalBackfillWriteResult: Equatable {
     var inserted: Int
     var updated: Int
@@ -49,18 +56,23 @@ struct HistoricalBackfillError: LocalizedError, Equatable {
 enum HistoricalBackfillCandidateResolver {
     static func candidates(
         tokens: [TokenEntry],
+        snapshots: [HistoricalBackfillSnapshotEntry] = [],
         overrides: [TokenPricingOverrideSnapshot]) -> [HistoricalBackfillCandidate] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var grouped: [String: Set<UUID>] = [:]
         for token in tokens where token.amount > 0 && (token.role.isPositive || token.role.isBorrow) {
-            let override = overrideMap[token.assetId]
-            if override?.manualPriceUSD != nil, normalizedID(override?.coinGeckoIdOverride) == nil {
-                continue
-            }
-            guard let coinGeckoId = normalizedID(override?.coinGeckoIdOverride) ?? normalizedID(token.coinGeckoId) else {
-                continue
-            }
-            grouped[coinGeckoId, default: []].insert(token.assetId)
+            addCandidate(
+                assetId: token.assetId,
+                coinGeckoId: token.coinGeckoId,
+                override: overrideMap[token.assetId],
+                grouped: &grouped)
+        }
+        for snapshot in snapshots where snapshot.amount - snapshot.borrowAmount != 0 {
+            addCandidate(
+                assetId: snapshot.assetId,
+                coinGeckoId: snapshot.coinGeckoId,
+                override: overrideMap[snapshot.assetId],
+                grouped: &grouped)
         }
         return grouped
             .map { coinGeckoId, ids in
@@ -69,6 +81,34 @@ enum HistoricalBackfillCandidateResolver {
                     assetIds: ids.sorted { $0.uuidString < $1.uuidString })
             }
             .sorted { $0.coinGeckoId < $1.coinGeckoId }
+    }
+
+    static func sourceAssetIDs(
+        tokens: [TokenEntry],
+        snapshots: [HistoricalBackfillSnapshotEntry] = []) -> Set<UUID> {
+        let tokenIDs = tokens.compactMap { token -> UUID? in
+            guard token.amount > 0, token.role.isPositive || token.role.isBorrow else { return nil }
+            return token.assetId
+        }
+        let snapshotIDs = snapshots.compactMap { snapshot -> UUID? in
+            guard snapshot.amount - snapshot.borrowAmount != 0 else { return nil }
+            return snapshot.assetId
+        }
+        return Set(tokenIDs + snapshotIDs)
+    }
+
+    private static func addCandidate(
+        assetId: UUID,
+        coinGeckoId: String?,
+        override: TokenPricingOverrideSnapshot?,
+        grouped: inout [String: Set<UUID>]) {
+        if override?.manualPriceUSD != nil, normalizedID(override?.coinGeckoIdOverride) == nil {
+            return
+        }
+        guard let resolvedID = normalizedID(override?.coinGeckoIdOverride) ?? normalizedID(coinGeckoId) else {
+            return
+        }
+        grouped[resolvedID, default: []].insert(assetId)
     }
 
     private static func normalizedID(_ id: String?) -> String? {
