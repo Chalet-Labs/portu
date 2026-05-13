@@ -323,7 +323,9 @@ struct PerformanceFeature {
         rows: [HistoricalPriceEntry],
         holdings: [HistoricalEstimateSnapshotEntry],
         startDate: Date,
-        accountId: UUID?) -> [HistoricalPriceEntry] {
+        accountId: UUID?,
+        isHistoricalBackfillEnabled: Bool) -> [HistoricalPriceEntry] {
+        guard isHistoricalBackfillEnabled else { return [] }
         let heldIDs = heldHistoricalCoinGeckoIDs(
             snapshots: holdings,
             startDate: startDate,

@@ -75,9 +75,36 @@ struct PerformanceHistoricalPriceChangeTests {
                     borrowAmount: 1)
             ],
             startDate: startDate,
-            accountId: account)
+            accountId: account,
+            isHistoricalBackfillEnabled: true)
 
         #expect(filtered.map(\.coinGeckoId) == ["bitcoin", "solana"])
+    }
+
+    @Test func `historical price rows are empty when backfill setting is disabled`() {
+        let account = UUID()
+        let asset = UUID()
+        let startDate = date(2024, 1, 1)
+
+        let filtered = PerformanceFeature.historicalPriceEntriesForHeldAssets(
+            rows: [
+                HistoricalPriceEntry(coinGeckoId: "bitcoin", day: startDate, usdPrice: 40000)
+            ],
+            holdings: [
+                HistoricalEstimateSnapshotEntry(
+                    accountId: account,
+                    assetId: asset,
+                    timestamp: startDate,
+                    coinGeckoId: "bitcoin",
+                    coinGeckoIdOverride: nil,
+                    amount: 1,
+                    borrowAmount: 0)
+            ],
+            startDate: startDate,
+            accountId: account,
+            isHistoricalBackfillEnabled: false)
+
+        #expect(filtered.isEmpty)
     }
 
     @Test func `earliest estimate holdings skip zero net rows and prefer overrides`() {

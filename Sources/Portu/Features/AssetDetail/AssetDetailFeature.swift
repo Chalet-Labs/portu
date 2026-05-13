@@ -273,6 +273,15 @@ struct AssetDetailFeature {
             ?? normalizedHistoricalCoinGeckoID(assetCoinGeckoId)
     }
 
+    @MainActor
+    static func historicalPriceRows(
+        _ rows: [HistoricalPricePoint],
+        startDate: Date,
+        isHistoricalBackfillEnabled: Bool) -> [HistoricalPricePoint] {
+        guard isHistoricalBackfillEnabled else { return [] }
+        return rows.filter { $0.day >= startDate }
+    }
+
     private static func normalizedHistoricalCoinGeckoID(_ id: String?) -> String? {
         guard let id else { return nil }
         let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

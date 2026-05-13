@@ -15,6 +15,9 @@ struct AssetPriceChart: View {
     @Query
     private var historicalPrices: [HistoricalPricePoint]
 
+    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
+    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
+
     init(assetId: UUID, coinGeckoId: String?, store: StoreOf<AppFeature>) {
         self.assetId = assetId
         self.coinGeckoId = coinGeckoId
@@ -92,7 +95,14 @@ struct AssetPriceChart: View {
 
     private var priceChart: some View {
         Group {
-            let points = historicalPrices.filter { $0.day >= store.assetDetail.selectedRange.startDate }
+            let points = if historicalBackfillEnabled {
+                AssetDetailFeature.historicalPriceRows(
+                    historicalPrices,
+                    startDate: store.assetDetail.selectedRange.startDate,
+                    isHistoricalBackfillEnabled: true)
+            } else {
+                [HistoricalPricePoint]()
+            }
             if points.isEmpty {
                 ContentUnavailableView(
                     "No Price History",

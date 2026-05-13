@@ -17,6 +17,9 @@ struct PerformanceBottomPanel: View {
     @Query private var assets: [Asset]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
 
+    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
+    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
+
     private var categoryResolver: PortfolioCategoryResolver {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
     }
@@ -32,6 +35,7 @@ struct PerformanceBottomPanel: View {
     }
 
     private var priceChanges: [AssetPricePeriodChange] {
+        guard historicalBackfillEnabled else { return [] }
         let rows = historicalPrices
             .filter { $0.day >= startDate }
             .map {
@@ -45,7 +49,8 @@ struct PerformanceBottomPanel: View {
             rows: rows,
             holdings: historicalEstimateSnapshotEntries,
             startDate: startDate,
-            accountId: accountId)
+            accountId: accountId,
+            isHistoricalBackfillEnabled: historicalBackfillEnabled)
 
         return PerformanceFeature.computeHistoricalPriceChanges(rows: heldRows)
             .sorted {
@@ -105,18 +110,24 @@ struct PerformanceBottomPanel: View {
                 Text("Top assets with period price change")
                     .font(.caption)
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                ForEach(priceChanges.prefix(5)) { change in
-                    HStack {
-                        Text(change.coinGeckoId)
-                            .frame(width: 120, alignment: .leading)
-                        Text(change.endPrice, format: .currency(code: "USD"))
-                            .frame(width: 90, alignment: .trailing)
-                        Text(change.percentChange, format: .percent.precision(.fractionLength(1)))
-                            .foregroundStyle(change.percentChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
-                            .frame(width: 64, alignment: .trailing)
+                if historicalBackfillEnabled {
+                    ForEach(priceChanges.prefix(5)) { change in
+                        HStack {
+                            Text(change.coinGeckoId)
+                                .frame(width: 120, alignment: .leading)
+                            Text(change.endPrice, format: .currency(code: "USD"))
+                                .frame(width: 90, alignment: .trailing)
+                            Text(change.percentChange, format: .percent.precision(.fractionLength(1)))
+                                .foregroundStyle(change.percentChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
+                                .frame(width: 64, alignment: .trailing)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     }
-                    .font(.caption)
-                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                } else {
+                    Text("Historical price backfill disabled")
+                        .font(.caption)
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 }
             }
         }

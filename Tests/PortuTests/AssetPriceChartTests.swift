@@ -96,4 +96,21 @@ struct AssetPriceChartQueryTests {
 
         #expect(effectiveID == "bitcoin")
     }
+
+    @Test func `historical price rows are empty when backfill setting is disabled`() {
+        let startDate = Date(timeIntervalSince1970: 1_704_067_200)
+        let rows = [
+            HistoricalPricePoint(
+                coinGeckoId: "bitcoin",
+                day: startDate,
+                usdPrice: 40000)
+        ]
+
+        let visibleRows = AssetDetailFeature.historicalPriceRows(
+            rows,
+            startDate: startDate,
+            isHistoricalBackfillEnabled: false)
+
+        #expect(visibleRows.isEmpty)
+    }
 }
