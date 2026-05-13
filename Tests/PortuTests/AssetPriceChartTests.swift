@@ -113,4 +113,28 @@ struct AssetPriceChartQueryTests {
 
         #expect(visibleRows.isEmpty)
     }
+
+    @Test func `price empty state prompts to enable backfill when disabled`() {
+        let description = AssetDetailFeature.historicalPriceEmptyDescription(
+            coinGeckoId: "bitcoin",
+            isHistoricalBackfillEnabled: false)
+
+        #expect(description == "Enable historical price backfill in Settings")
+    }
+
+    @Test func `price empty state prompts for coin gecko id when missing`() {
+        let description = AssetDetailFeature.historicalPriceEmptyDescription(
+            coinGeckoId: " ",
+            isHistoricalBackfillEnabled: true)
+
+        #expect(description == "Set a CoinGecko ID override in Settings")
+    }
+
+    @Test func `price empty state prompts to run cache when enabled and mapped`() {
+        let description = AssetDetailFeature.historicalPriceEmptyDescription(
+            coinGeckoId: "bitcoin",
+            isHistoricalBackfillEnabled: true)
+
+        #expect(description == "Run historical price cache from Settings")
+    }
 }

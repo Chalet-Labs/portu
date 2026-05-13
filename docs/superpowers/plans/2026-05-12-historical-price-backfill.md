@@ -847,6 +847,11 @@ enum HistoricalPriceCacheWriter {
 }
 ```
 
+The model keeps `id` as the SwiftData uniqueness constraint. Cache uniqueness for
+`(coinGeckoId, day)` is enforced by `HistoricalPriceCacheWriter.upsert`, which
+normalizes the composite key, fetches only rows matching the incoming keys, and
+deduplicates those rows before updating or inserting prices.
+
 - [ ] **Step 5: Add the backfill client dependency shell**
 
 Create `Sources/Portu/Features/Settings/HistoricalPriceBackfillClient.swift`:

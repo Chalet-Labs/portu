@@ -101,6 +101,39 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(rowsForKey.first?.fetchedAt == Date(timeIntervalSince1970: 20))
     }
 
+    @Test func `cache writer scopes existing row dedupe to incoming cache keys`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        context.insert(HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: day,
+            usdPrice: 40000,
+            fetchedAt: Date(timeIntervalSince1970: 10)))
+        context.insert(HistoricalPricePoint(
+            coinGeckoId: "ethereum",
+            day: day,
+            usdPrice: 2000,
+            fetchedAt: Date(timeIntervalSince1970: 10)))
+        context.insert(HistoricalPricePoint(
+            coinGeckoId: "ethereum",
+            day: day,
+            usdPrice: 2100,
+            fetchedAt: Date(timeIntervalSince1970: 15)))
+        try context.save()
+
+        _ = try HistoricalPriceCacheWriter.upsert(
+            [
+                HistoricalPriceDTO(coinGeckoId: "bitcoin", timestamp: day, usdPrice: 41000)
+            ],
+            in: context,
+            fetchedAt: Date(timeIntervalSince1970: 20))
+
+        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+        #expect(rows.count(where: { $0.coinGeckoId == "bitcoin" }) == 1)
+        #expect(rows.count(where: { $0.coinGeckoId == "ethereum" }) == 2)
+    }
+
     @Test func `clear cache removes only historical price points`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
@@ -294,7 +327,9 @@ struct HistoricalPriceBackfillFeatureTests {
             $0.historicalPriceBackfill.clearCache = { throw HistoricalBackfillError(message: "cache boom") }
         }
 
-        await store.send(.clearCacheButtonTapped)
+        await store.send(.clearCacheButtonTapped) {
+            $0.status = .clearing
+        }
         await store.receive(\.clearCacheCompleted) {
             $0.status = .failed("cache boom")
         }

@@ -279,7 +279,9 @@ struct AppFeatureTests {
             $0.historicalPriceBackfill.clearCache = {}
         }
 
-        await store.send(.historicalPriceBackfill(.clearCacheButtonTapped))
+        await store.send(.historicalPriceBackfill(.clearCacheButtonTapped)) {
+            $0.historicalPriceBackfill.status = .clearing
+        }
         await store.receive(\.historicalPriceBackfill.clearCacheCompleted) {
             $0.historicalPriceBackfill.status = .idle
         }

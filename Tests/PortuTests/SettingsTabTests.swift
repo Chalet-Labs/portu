@@ -117,6 +117,12 @@ struct SettingsTabTests {
         #expect(message.contains("ethereum"))
     }
 
+    @Test func `historical backfill status surfaces cache clearing`() {
+        let message = HistoricalBackfillStatusFormatter.message(for: .clearing)
+
+        #expect(message == "Clearing historical price cache...")
+    }
+
     private func cleanDefaults() -> UserDefaults {
         let suite = "com.portu.test.SettingsTab.\(UUID().uuidString)"
         return UserDefaults(suiteName: suite)!

@@ -144,6 +144,43 @@ struct PerformanceHistoricalPriceChangeTests {
         ])
     }
 
+    @Test func `earliest estimate holdings use first snapshot on first real day`() {
+        let account = UUID()
+        let asset = UUID()
+        let morning = date(2024, 1, 2).addingTimeInterval(8 * 3600)
+        let evening = date(2024, 1, 2).addingTimeInterval(20 * 3600)
+
+        let holdings = PerformanceFeature.earliestEstimateHoldings(
+            snapshots: [
+                HistoricalEstimateSnapshotEntry(
+                    accountId: account,
+                    assetId: asset,
+                    timestamp: evening,
+                    coinGeckoId: "bitcoin",
+                    coinGeckoIdOverride: nil,
+                    amount: 3,
+                    borrowAmount: 0),
+                HistoricalEstimateSnapshotEntry(
+                    accountId: account,
+                    assetId: asset,
+                    timestamp: morning,
+                    coinGeckoId: "bitcoin",
+                    coinGeckoIdOverride: nil,
+                    amount: 1,
+                    borrowAmount: 0)
+            ],
+            firstRealSnapshotDate: morning,
+            accountId: account)
+
+        #expect(holdings == [
+            HistoricalEstimateHolding(
+                accountId: account,
+                assetId: asset,
+                coinGeckoId: "bitcoin",
+                amount: 1)
+        ])
+    }
+
     private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

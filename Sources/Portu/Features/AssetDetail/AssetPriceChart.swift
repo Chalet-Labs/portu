@@ -107,7 +107,9 @@ struct AssetPriceChart: View {
                 ContentUnavailableView(
                     "No Price History",
                     systemImage: "chart.line.uptrend.xyaxis",
-                    description: Text("Run historical price cache from Settings"))
+                    description: Text(AssetDetailFeature.historicalPriceEmptyDescription(
+                        coinGeckoId: coinGeckoId,
+                        isHistoricalBackfillEnabled: historicalBackfillEnabled)))
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 250)
             } else {

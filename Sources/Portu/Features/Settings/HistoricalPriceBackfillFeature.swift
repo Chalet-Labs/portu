@@ -36,12 +36,17 @@ struct HistoricalBackfillResult: Equatable {
 enum HistoricalBackfillStatus: Equatable {
     case idle
     case running
+    case clearing
     case succeeded(HistoricalBackfillResult)
     case failed(String)
 
     var isRunning: Bool {
-        if case .running = self { return true }
-        return false
+        switch self {
+        case .running, .clearing:
+            true
+        case .idle, .succeeded, .failed:
+            false
+        }
     }
 }
 
@@ -124,8 +129,22 @@ enum HistoricalPriceCacheWriter {
         _ dtos: [HistoricalPriceDTO],
         in context: ModelContext,
         fetchedAt: Date = .now) throws -> HistoricalBackfillWriteResult {
-        let existing = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+        guard dtos.isEmpty == false else {
+            return HistoricalBackfillWriteResult(inserted: 0, updated: 0)
+        }
+
+        let incomingKeys = dtos.map {
+            HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day)
+        }
+        let coinGeckoIDs = Array(Set(incomingKeys.map(\.coinGeckoId)))
+        let days = Array(Set(incomingKeys.map(\.day)))
+        let existing = try context.fetch(FetchDescriptor<HistoricalPricePoint>(
+            predicate: #Predicate { row in
+                coinGeckoIDs.contains(row.coinGeckoId) && days.contains(row.day)
+            }))
         do {
+            // SwiftData only enforces id uniqueness for this model; cache uniqueness
+            // for (coinGeckoId, day) is enforced here by scoped upsert and dedupe.
             let groupedExisting = Dictionary(grouping: existing) {
                 HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day)
             }
@@ -171,11 +190,8 @@ enum HistoricalPriceCacheWriter {
 
     @MainActor
     static func clear(in context: ModelContext) throws {
-        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
         do {
-            for row in rows {
-                context.delete(row)
-            }
+            try context.delete(model: HistoricalPricePoint.self)
             try context.save()
         } catch {
             context.rollback()
@@ -252,6 +268,7 @@ struct HistoricalPriceBackfillFeature {
 
             case .clearCacheButtonTapped:
                 guard !state.status.isRunning else { return .none }
+                state.status = .clearing
                 return .run { send in
                     do {
                         try await historicalPriceBackfill.clearCache()

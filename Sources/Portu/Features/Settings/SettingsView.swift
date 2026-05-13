@@ -339,6 +339,8 @@ enum HistoricalBackfillStatusFormatter {
             "No historical backfill run in this session."
         case .running:
             "Fetching historical prices from CoinGecko..."
+        case .clearing:
+            "Clearing historical price cache..."
         case let .succeeded(result):
             successMessage(for: result)
         case let .failed(message):

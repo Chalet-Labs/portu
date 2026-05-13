@@ -307,7 +307,7 @@ struct PerformanceFeature {
         firstRealSnapshotDate: Date,
         accountId: UUID?) -> [HistoricalEstimateHolding] {
         let firstDay = utcStartOfDay(for: firstRealSnapshotDate)
-        return latestEstimateSnapshots(on: firstDay, snapshots: snapshots, accountId: accountId)
+        return earliestEstimateSnapshots(on: firstDay, snapshots: snapshots, accountId: accountId)
             .compactMap { snapshot in
                 let netAmount = snapshot.amount - snapshot.borrowAmount
                 guard netAmount != 0, let coinGeckoId = resolvedCoinGeckoID(snapshot) else { return nil }
@@ -354,7 +354,7 @@ struct PerformanceFeature {
         })
     }
 
-    private static func latestEstimateSnapshots(
+    private static func earliestEstimateSnapshots(
         on day: Date,
         snapshots: [HistoricalEstimateSnapshotEntry],
         accountId: UUID?) -> [HistoricalEstimateSnapshotEntry] {
@@ -363,17 +363,17 @@ struct PerformanceFeature {
             let assetId: UUID
         }
 
-        var latestByKey: [SnapshotKey: HistoricalEstimateSnapshotEntry] = [:]
+        var earliestByKey: [SnapshotKey: HistoricalEstimateSnapshotEntry] = [:]
         for snapshot in snapshots where utcStartOfDay(for: snapshot.timestamp) == day {
             guard accountId == nil || snapshot.accountId == accountId else { continue }
             let key = SnapshotKey(accountId: snapshot.accountId, assetId: snapshot.assetId)
-            if let existing = latestByKey[key], existing.timestamp >= snapshot.timestamp {
+            if let existing = earliestByKey[key], existing.timestamp <= snapshot.timestamp {
                 continue
             }
-            latestByKey[key] = snapshot
+            earliestByKey[key] = snapshot
         }
 
-        return latestByKey.values.sorted {
+        return earliestByKey.values.sorted {
             if $0.accountId != $1.accountId { return $0.accountId.uuidString < $1.accountId.uuidString }
             return $0.assetId.uuidString < $1.assetId.uuidString
         }
