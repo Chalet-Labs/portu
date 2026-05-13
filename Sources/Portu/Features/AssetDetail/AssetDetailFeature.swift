@@ -279,7 +279,8 @@ struct AssetDetailFeature {
         startDate: Date,
         isHistoricalBackfillEnabled: Bool) -> [HistoricalPricePoint] {
         guard isHistoricalBackfillEnabled else { return [] }
-        return rows.filter { $0.day >= startDate }
+        let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        return rows.filter { $0.day >= startDay }
     }
 
     static func historicalPriceEmptyDescription(

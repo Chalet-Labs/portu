@@ -21,11 +21,20 @@ struct ValueChartMode: View {
 
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
 
-    @Query(sort: \HistoricalPricePoint.day)
+    @Query
     private var historicalPrices: [HistoricalPricePoint]
 
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
     private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
+
+    init(accountId: UUID?, startDate: Date) {
+        self.accountId = accountId
+        self.startDate = startDate
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        _historicalPrices = Query(
+            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+    }
 
     private var dataPoints: [(Date, Decimal, Bool)] {
         if let accountId {
@@ -55,10 +64,11 @@ struct ValueChartMode: View {
             accountId: accountId)
         guard !holdings.isEmpty else { return [] }
 
+        let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
         return HistoricalPortfolioEstimator.estimatedValues(
             holdings: holdings,
             prices: historicalPrices.compactMap {
-                guard $0.day >= startDate, $0.day < firstRealSnapshotDate else { return nil }
+                guard $0.day >= startDay, $0.day < firstRealSnapshotDate else { return nil }
                 return HistoricalPriceEntry(
                     coinGeckoId: $0.coinGeckoId,
                     day: $0.day,

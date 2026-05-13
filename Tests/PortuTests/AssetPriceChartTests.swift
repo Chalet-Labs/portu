@@ -114,6 +114,23 @@ struct AssetPriceChartQueryTests {
         #expect(visibleRows.isEmpty)
     }
 
+    @Test func `historical price rows include boundary utc day when range start has time component`() {
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        let rows = [
+            HistoricalPricePoint(
+                coinGeckoId: "bitcoin",
+                day: day,
+                usdPrice: 40000)
+        ]
+
+        let visibleRows = AssetDetailFeature.historicalPriceRows(
+            rows,
+            startDate: day.addingTimeInterval(12 * 3600),
+            isHistoricalBackfillEnabled: true)
+
+        #expect(visibleRows.map(\.coinGeckoId) == ["bitcoin"])
+    }
+
     @Test func `price empty state prompts to enable backfill when disabled`() {
         let description = AssetDetailFeature.historicalPriceEmptyDescription(
             coinGeckoId: "bitcoin",

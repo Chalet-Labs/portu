@@ -326,15 +326,16 @@ struct PerformanceFeature {
         accountId: UUID?,
         isHistoricalBackfillEnabled: Bool) -> [HistoricalPriceEntry] {
         guard isHistoricalBackfillEnabled else { return [] }
+        let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
         let heldIDs = heldHistoricalCoinGeckoIDs(
             snapshots: holdings,
-            startDate: startDate,
+            startDate: startDay,
             accountId: accountId)
         guard heldIDs.isEmpty == false else { return [] }
 
         return rows.compactMap { row in
             let coinGeckoId = normalizedCoinGeckoID(row.coinGeckoId)
-            guard row.day >= startDate, heldIDs.contains(coinGeckoId) else { return nil }
+            guard row.day >= startDay, heldIDs.contains(coinGeckoId) else { return nil }
             return HistoricalPriceEntry(
                 coinGeckoId: coinGeckoId,
                 day: row.day,

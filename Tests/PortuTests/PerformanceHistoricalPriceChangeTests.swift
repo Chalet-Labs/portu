@@ -107,6 +107,33 @@ struct PerformanceHistoricalPriceChangeTests {
         #expect(filtered.isEmpty)
     }
 
+    @Test func `historical price rows include boundary utc day when range start has time component`() {
+        let account = UUID()
+        let asset = UUID()
+        let day = date(2024, 1, 1)
+        let startDate = day.addingTimeInterval(12 * 3600)
+
+        let filtered = PerformanceFeature.historicalPriceEntriesForHeldAssets(
+            rows: [
+                HistoricalPriceEntry(coinGeckoId: "bitcoin", day: day, usdPrice: 40000)
+            ],
+            holdings: [
+                HistoricalEstimateSnapshotEntry(
+                    accountId: account,
+                    assetId: asset,
+                    timestamp: day.addingTimeInterval(8 * 3600),
+                    coinGeckoId: "bitcoin",
+                    coinGeckoIdOverride: nil,
+                    amount: 1,
+                    borrowAmount: 0)
+            ],
+            startDate: startDate,
+            accountId: account,
+            isHistoricalBackfillEnabled: true)
+
+        #expect(filtered.map(\.coinGeckoId) == ["bitcoin"])
+    }
+
     @Test func `earliest estimate holdings skip zero net rows and prefer overrides`() {
         let account = UUID()
         let zeroNet = UUID()

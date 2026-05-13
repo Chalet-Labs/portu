@@ -12,13 +12,22 @@ struct PerformanceBottomPanel: View {
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
-    @Query(sort: \HistoricalPricePoint.day)
+    @Query
     private var historicalPrices: [HistoricalPricePoint]
     @Query private var assets: [Asset]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
 
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
     private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
+
+    init(accountId: UUID?, startDate: Date) {
+        self.accountId = accountId
+        self.startDate = startDate
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        _historicalPrices = Query(
+            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+    }
 
     private var categoryResolver: PortfolioCategoryResolver {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
@@ -36,8 +45,9 @@ struct PerformanceBottomPanel: View {
 
     private var priceChanges: [AssetPricePeriodChange] {
         guard historicalBackfillEnabled else { return [] }
+        let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
         let rows = historicalPrices
-            .filter { $0.day >= startDate }
+            .filter { $0.day >= startDay }
             .map {
                 HistoricalPriceEntry(
                     coinGeckoId: $0.coinGeckoId,
