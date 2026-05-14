@@ -7,6 +7,8 @@ import SwiftUI
 struct OverviewTopBar: View {
     @Environment(AppState.self) private var appState
     @Query private var positions: [Position]
+    @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
 
     /// Only positions from active accounts
     private var activePositions: [Position] {
@@ -17,6 +19,14 @@ struct OverviewTopBar: View {
         activePositions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
     }
 
+    private var overrideMap: [UUID: TokenPricingOverrideSnapshot] {
+        TokenSettingsFeature.overridesByAssetId(tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
+    }
+
+    private var mappingMap: [OnchainTokenIdentity: TokenIdentityMappingSnapshot] {
+        TokenIdentityMappingFeature.mappingsByIdentity(tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init))
+    }
+
     private var change24h: Decimal {
         // Sum: token.amount * priceChange24h for each token, sign-adjusted by role
         var total: Decimal = 0
@@ -24,9 +34,10 @@ struct OverviewTopBar: View {
             for token in pos.tokens {
                 guard
                     let asset = token.asset,
-                    let cgId = asset.coinGeckoId,
-                    let price = appState.prices[cgId],
-                    let changePct = appState.priceChanges24h[cgId] else { continue }
+                    let priceID = priceID(asset: asset, token: token),
+                    let price = appState.prices[priceID],
+                    let changePct = appState.priceChanges24h[priceID]
+                else { continue }
 
                 let contribution = token.amount * price * changePct
                 if token.role.isPositive {
@@ -38,6 +49,28 @@ struct OverviewTopBar: View {
             }
         }
         return total
+    }
+
+    private func priceID(asset: Asset, token: PositionToken) -> String? {
+        let identity = OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract)
+        let coinGeckoId = OverviewWatchlistStore.normalizedID(asset.coinGeckoId)
+            ?? TokenIdentityMappingFeature.mappedCoinGeckoID(
+                for: identity,
+                mappingsByIdentity: mappingMap)
+        let entry = TokenEntry(
+            assetId: asset.id,
+            symbol: asset.symbol,
+            name: asset.name,
+            category: asset.category,
+            coinGeckoId: coinGeckoId,
+            onchainIdentity: identity,
+            role: token.role,
+            amount: token.amount,
+            usdValue: token.usdValue,
+            logoURL: asset.logoURL)
+        return TokenSettingsFeature.resolvedPriceID(
+            token: entry,
+            override: overrideMap[asset.id])
     }
 
     private var changePct: Decimal {

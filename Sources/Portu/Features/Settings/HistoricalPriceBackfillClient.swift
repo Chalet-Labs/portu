@@ -40,6 +40,7 @@ extension HistoricalPriceBackfillClient {
         modelContext: ModelContext,
         priceService: PriceServiceClient,
         now: @escaping @Sendable () -> Date = { .now },
+        dashboardSettings: @escaping @MainActor @Sendable () -> TokenDashboardSettings = { .defaults },
         requestSpacing: Duration = .seconds(8),
         rateLimitRetryDelay: Duration = .seconds(60),
         sleep: @escaping Sleep = { duration in try await Task.sleep(for: duration) }) -> Self {
@@ -49,6 +50,7 @@ extension HistoricalPriceBackfillClient {
                     modelContext: modelContext,
                     priceService: priceService,
                     now: now,
+                    dashboardSettings: dashboardSettings,
                     requestSpacing: requestSpacing,
                     rateLimitRetryDelay: rateLimitRetryDelay,
                     sleep: sleep).run()
@@ -64,15 +66,18 @@ private struct BackfillRunner {
     let modelContext: ModelContext
     let priceService: PriceServiceClient
     let now: @Sendable () -> Date
+    let dashboardSettings: @MainActor @Sendable () -> TokenDashboardSettings
     let requestSpacing: Duration
     let rateLimitRetryDelay: Duration
     let sleep: HistoricalPriceBackfillClient.Sleep
 
     func run() async throws -> HistoricalBackfillResult {
+        let settings = dashboardSettings()
         let tokens = try modelContext.fetch(FetchDescriptor<PositionToken>())
         let assets = try modelContext.fetch(FetchDescriptor<Asset>())
         let assetSnapshots = try modelContext.fetch(FetchDescriptor<AssetSnapshot>())
         let overrides = try modelContext.fetch(FetchDescriptor<TokenPricingOverride>())
+        let mappings = try modelContext.fetch(FetchDescriptor<TokenIdentityMapping>())
         let entries = TokenEntry.fromActiveTokens(tokens)
         let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
         let snapshotEntries = assetSnapshots.map { snapshot in
@@ -82,13 +87,18 @@ private struct BackfillRunner {
                 coinGeckoId: asset?.coinGeckoId,
                 onchainIdentity: OnchainTokenIdentity(chain: asset?.upsertChain, contractAddress: asset?.upsertContract),
                 amount: snapshot.amount,
-                borrowAmount: snapshot.borrowAmount)
+                borrowAmount: snapshot.borrowAmount,
+                usdValue: snapshot.usdValue,
+                borrowUsdValue: snapshot.borrowUsdValue)
         }
         let overrideSnapshots = overrides.map(TokenPricingOverrideSnapshot.init)
+        let mappingSnapshots = mappings.map(TokenIdentityMappingSnapshot.init)
         let identitiesNeedingResolution = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
             tokens: entries,
             snapshots: snapshotEntries,
-            overrides: overrideSnapshots)
+            overrides: overrideSnapshots,
+            mappings: mappingSnapshots,
+            dashboardSettings: settings)
         let resolvedCoinGeckoIDs: [OnchainTokenIdentity: String]
         do {
             resolvedCoinGeckoIDs = try await priceService.resolveCoinGeckoIDs(identitiesNeedingResolution)
@@ -97,14 +107,13 @@ private struct BackfillRunner {
         }
         try persistResolvedCoinGeckoIDs(
             resolvedCoinGeckoIDs,
-            tokens: entries,
-            snapshots: snapshotEntries,
-            overrides: overrides,
-            overrideSnapshots: overrideSnapshots)
+            existingMappings: mappings)
         let candidates = HistoricalBackfillCandidateResolver.candidates(
             tokens: entries,
             snapshots: snapshotEntries,
             overrides: overrideSnapshots,
+            mappings: mappingSnapshots,
+            dashboardSettings: settings,
             resolvedCoinGeckoIDs: resolvedCoinGeckoIDs)
 
         var inserted = 0
@@ -113,14 +122,30 @@ private struct BackfillRunner {
         var failures: [String] = []
         let sourceAssetCount = HistoricalBackfillCandidateResolver.sourceAssetIDs(
             tokens: entries,
-            snapshots: snapshotEntries).count
+            snapshots: snapshotEntries,
+            overrides: overrideSnapshots,
+            dashboardSettings: settings).count
         let skipped = max(0, sourceAssetCount - candidates.flatMap(\.assetIds).count)
         let requested = candidates.reduce(0) { total, candidate in
             total + candidate.assetIds.count
         }
+        let canFetchZapperHistoricalPrices = priceService.canFetchZapperHistoricalPrices()
+        let unavailableZapperCandidates = canFetchZapperHistoricalPrices
+            ? []
+            : candidates.filter { candidate in
+                if case .zapper = candidate.source { return true }
+                return false
+            }
+        let runnableCandidates = canFetchZapperHistoricalPrices
+            ? candidates
+            : candidates.filter { candidate in
+                if case .zapper = candidate.source { return false }
+                return true
+            }
 
         var hasRequestedCandidate = false
-        for candidate in candidates {
+        failures.append(contentsOf: unavailableZapperCandidates.map(\.historicalPriceID))
+        for candidate in runnableCandidates {
             let prices: [HistoricalPriceDTO]
             do {
                 if hasRequestedCandidate {
@@ -183,25 +208,58 @@ private struct BackfillRunner {
 
     private func persistResolvedCoinGeckoIDs(
         _ resolvedCoinGeckoIDs: [OnchainTokenIdentity: String],
-        tokens: [TokenEntry],
-        snapshots: [HistoricalBackfillSnapshotEntry],
-        overrides: [TokenPricingOverride],
-        overrideSnapshots: [TokenPricingOverrideSnapshot]) throws {
+        existingMappings: [TokenIdentityMapping]) throws {
         guard !resolvedCoinGeckoIDs.isEmpty else { return }
-        let assetIDsByIdentity = HistoricalBackfillCandidateResolver.assetIDsByOnchainIdentity(
-            tokens: tokens,
-            snapshots: snapshots,
-            overrides: overrideSnapshots)
-        var persistedAssetIDs = Set<UUID>()
         for (identity, coinGeckoID) in resolvedCoinGeckoIDs {
-            for assetId in assetIDsByIdentity[identity, default: []] where persistedAssetIDs.insert(assetId).inserted {
-                try TokenPricingOverrideWriter.upsert(
-                    assetId: assetId,
-                    overrides: overrides,
-                    in: modelContext) { override in
-                        override.coinGeckoIdOverride = coinGeckoID
-                    }
-            }
+            try TokenIdentityMappingWriter.upsert(
+                identity: identity,
+                coinGeckoId: coinGeckoID,
+                mappings: existingMappings,
+                in: modelContext,
+                now: now())
         }
+    }
+}
+
+enum TokenIdentityMappingWriter {
+    @MainActor
+    static func upsert(
+        identity: OnchainTokenIdentity,
+        coinGeckoId: String,
+        mappings: [TokenIdentityMapping],
+        in context: ModelContext,
+        now: Date = .now) throws {
+        guard let normalizedID = TokenIdentityMapping.normalizedProviderID(coinGeckoId) else {
+            return
+        }
+
+        let canonicalKey = TokenIdentityMapping.canonicalKey(for: identity)
+        let matches = mappings
+            .filter { $0.canonicalKey == canonicalKey }
+            .sorted { lhs, rhs in
+                if lhs.updatedAt == rhs.updatedAt {
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+                return lhs.updatedAt > rhs.updatedAt
+            }
+
+        if let mapping = matches.first {
+            mapping.chain = identity.chain
+            mapping.contractAddress = identity.contractAddress
+            mapping.canonicalKey = canonicalKey
+            mapping.updateCoinGeckoId(normalizedID, resolvedAt: now)
+            for duplicate in matches.dropFirst() {
+                context.delete(duplicate)
+            }
+        } else {
+            context.insert(TokenIdentityMapping(
+                identity: identity,
+                coinGeckoId: normalizedID,
+                coinGeckoResolvedAt: now,
+                createdAt: now,
+                updatedAt: now))
+        }
+
+        try context.save()
     }
 }

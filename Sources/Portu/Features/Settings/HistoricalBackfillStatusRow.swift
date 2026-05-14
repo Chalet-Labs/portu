@@ -15,7 +15,10 @@ struct HistoricalBackfillStatusRow: View {
             Text(HistoricalBackfillStatusFormatter.message(for: status))
                 .font(.footnote)
                 .foregroundStyle(presentation.foreground)
+                .lineLimit(3)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

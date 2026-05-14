@@ -41,6 +41,7 @@ struct PriceServiceClient {
     var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
     var resolveCoinGeckoIDs: @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String]
     var fetchZapperHistoricalPrices: @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO]
+    var canFetchZapperHistoricalPrices: @Sendable () -> Bool
     var invalidateCache: @Sendable () async -> Void
 
     init(
@@ -48,11 +49,13 @@ struct PriceServiceClient {
         fetchHistoricalPrices: @escaping @Sendable (String, Int) async throws -> [HistoricalPriceDTO],
         resolveCoinGeckoIDs: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String] = { _ in [:] },
         fetchZapperHistoricalPrices: @escaping @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO] = { _, _ in [] },
+        canFetchZapperHistoricalPrices: @escaping @Sendable () -> Bool = { true },
         invalidateCache: @escaping @Sendable () async -> Void) {
         self.fetchPrices = fetchPrices
         self.fetchHistoricalPrices = fetchHistoricalPrices
         self.resolveCoinGeckoIDs = resolveCoinGeckoIDs
         self.fetchZapperHistoricalPrices = fetchZapperHistoricalPrices
+        self.canFetchZapperHistoricalPrices = canFetchZapperHistoricalPrices
         self.invalidateCache = invalidateCache
     }
 }
@@ -63,18 +66,26 @@ extension PriceServiceClient: DependencyKey {
         fetchHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         resolveCoinGeckoIDs: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchZapperHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        canFetchZapperHistoricalPrices: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         invalidateCache: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") })
     static let testValue = Self(
         fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
         fetchHistoricalPrices: { _, _ in [] },
         resolveCoinGeckoIDs: { _ in [:] },
         fetchZapperHistoricalPrices: { _, _ in [] },
+        canFetchZapperHistoricalPrices: { true },
         invalidateCache: {})
 
     static func live(service: PriceService, zapperProvider: ZapperProvider? = nil) -> Self {
         Self(
             fetchPrices: { coinIds in
-                try await service.fetchPriceUpdate(for: coinIds)
+                let request = PricePollingIDResolver.split(coinIds)
+                let coinGeckoUpdate = try await service.fetchPriceUpdate(for: request.coinGeckoIDs)
+                guard let zapperProvider, !request.zapperIdentities.isEmpty else {
+                    return coinGeckoUpdate
+                }
+                let zapperUpdate = try await zapperProvider.fetchPriceUpdate(for: request.zapperIdentities)
+                return PricePollingIDResolver.merge([coinGeckoUpdate, zapperUpdate])
             },
             fetchHistoricalPrices: { coinId, days in
                 try await service.fetchHistoricalPrices(for: coinId, days: days)
@@ -86,6 +97,7 @@ extension PriceServiceClient: DependencyKey {
                 guard let zapperProvider else { return [] }
                 return try await zapperProvider.fetchHistoricalPrices(identity: identity, days: days)
             },
+            canFetchZapperHistoricalPrices: { zapperProvider != nil },
             invalidateCache: { await service.invalidateCache() })
     }
 }

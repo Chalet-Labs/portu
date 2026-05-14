@@ -119,6 +119,31 @@ struct SettingsTabTests {
         #expect(message.contains("ethereum"))
     }
 
+    @Test func `historical backfill status summarizes long failed identifier lists`() {
+        let longIdentifier = "zapper:arbitrum:0x13ad3f1150db0e1e05fd32bdeeb7c110ee023de6"
+        let result = HistoricalBackfillResult(
+            requestedAssets: 4,
+            fetchedAssets: 0,
+            skippedAssets: 0,
+            insertedPoints: 0,
+            updatedPoints: 0,
+            failedCoinGeckoIDs: [
+                longIdentifier,
+                "zapper:base:0x1234567890abcdef1234567890abcdef12345678",
+                "ethereum",
+                "bitcoin"
+            ])
+
+        let message = HistoricalBackfillStatusFormatter.message(for: .succeeded(result))
+
+        #expect(message.contains("No prices fetched"))
+        #expect(message.contains("failed 4 assets"))
+        #expect(message.contains("provider access"))
+        #expect(!message.contains(longIdentifier))
+        #expect(!message.contains("zapper:"))
+        #expect(message.count <= 80)
+    }
+
     @Test func `historical backfill status names price sources while running`() {
         let message = HistoricalBackfillStatusFormatter.message(for: .running)
 

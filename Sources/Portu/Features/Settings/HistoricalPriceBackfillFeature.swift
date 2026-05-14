@@ -28,6 +28,8 @@ struct HistoricalBackfillSnapshotEntry: Equatable {
     let onchainIdentity: OnchainTokenIdentity?
     let amount: Decimal
     let borrowAmount: Decimal
+    let usdValue: Decimal
+    let borrowUsdValue: Decimal
 }
 
 private struct HistoricalBackfillAssetReference {
@@ -81,26 +83,39 @@ enum HistoricalBackfillCandidateResolver {
         tokens: [TokenEntry],
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
         overrides: [TokenPricingOverrideSnapshot],
+        mappings: [TokenIdentityMappingSnapshot] = [],
+        prices: [String: Decimal] = [:],
+        dashboardSettings: TokenDashboardSettings = .defaults,
         resolvedCoinGeckoIDs: [OnchainTokenIdentity: String] = [:]) -> [HistoricalBackfillCandidate] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
         var grouped: [HistoricalBackfillCandidateKey: Set<UUID>] = [:]
-        for token in tokens where token.amount > 0 && (token.role.isPositive || token.role.isBorrow) {
+        for token in tokens where shouldIncludeToken(
+            token,
+            override: overrideMap[token.assetId],
+            prices: prices,
+            dashboardSettings: dashboardSettings) {
             addCandidate(
                 asset: HistoricalBackfillAssetReference(
                     assetId: token.assetId,
                     coinGeckoId: token.coinGeckoId,
                     onchainIdentity: token.onchainIdentity,
                     override: overrideMap[token.assetId]),
+                mappingsByIdentity: mappingMap,
                 resolvedCoinGeckoIDs: resolvedCoinGeckoIDs,
                 grouped: &grouped)
         }
-        for snapshot in snapshots where snapshot.amount - snapshot.borrowAmount != 0 {
+        for snapshot in snapshots where shouldIncludeSnapshot(
+            snapshot,
+            override: overrideMap[snapshot.assetId],
+            dashboardSettings: dashboardSettings) {
             addCandidate(
                 asset: HistoricalBackfillAssetReference(
                     assetId: snapshot.assetId,
                     coinGeckoId: snapshot.coinGeckoId,
                     onchainIdentity: snapshot.onchainIdentity,
                     override: overrideMap[snapshot.assetId]),
+                mappingsByIdentity: mappingMap,
                 resolvedCoinGeckoIDs: resolvedCoinGeckoIDs,
                 grouped: &grouped)
         }
@@ -116,13 +131,28 @@ enum HistoricalBackfillCandidateResolver {
 
     static func sourceAssetIDs(
         tokens: [TokenEntry],
-        snapshots: [HistoricalBackfillSnapshotEntry] = []) -> Set<UUID> {
+        snapshots: [HistoricalBackfillSnapshotEntry] = [],
+        overrides: [TokenPricingOverrideSnapshot] = [],
+        prices: [String: Decimal] = [:],
+        dashboardSettings: TokenDashboardSettings = .defaults) -> Set<UUID> {
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         let tokenIDs = tokens.compactMap { token -> UUID? in
-            guard token.amount > 0, token.role.isPositive || token.role.isBorrow else { return nil }
+            guard
+                shouldIncludeToken(
+                    token,
+                    override: overrideMap[token.assetId],
+                    prices: prices,
+                    dashboardSettings: dashboardSettings)
+            else { return nil }
             return token.assetId
         }
         let snapshotIDs = snapshots.compactMap { snapshot -> UUID? in
-            guard snapshot.amount - snapshot.borrowAmount != 0 else { return nil }
+            guard
+                shouldIncludeSnapshot(
+                    snapshot,
+                    override: overrideMap[snapshot.assetId],
+                    dashboardSettings: dashboardSettings)
+            else { return nil }
             return snapshot.assetId
         }
         return Set(tokenIDs + snapshotIDs)
@@ -131,23 +161,36 @@ enum HistoricalBackfillCandidateResolver {
     static func onchainIdentitiesNeedingResolution(
         tokens: [TokenEntry],
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
-        overrides: [TokenPricingOverrideSnapshot]) -> [OnchainTokenIdentity] {
+        overrides: [TokenPricingOverrideSnapshot],
+        mappings: [TokenIdentityMappingSnapshot] = [],
+        prices: [String: Decimal] = [:],
+        dashboardSettings: TokenDashboardSettings = .defaults) -> [OnchainTokenIdentity] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
         var identities = Set<OnchainTokenIdentity>()
-        for token in tokens where token.amount > 0 && (token.role.isPositive || token.role.isBorrow) {
+        for token in tokens where shouldIncludeToken(
+            token,
+            override: overrideMap[token.assetId],
+            prices: prices,
+            dashboardSettings: dashboardSettings) {
             addUnresolvedIdentity(
                 assetId: token.assetId,
                 coinGeckoId: token.coinGeckoId,
                 onchainIdentity: token.onchainIdentity,
                 override: overrideMap[token.assetId],
+                mappingsByIdentity: mappingMap,
                 identities: &identities)
         }
-        for snapshot in snapshots where snapshot.amount - snapshot.borrowAmount != 0 {
+        for snapshot in snapshots where shouldIncludeSnapshot(
+            snapshot,
+            override: overrideMap[snapshot.assetId],
+            dashboardSettings: dashboardSettings) {
             addUnresolvedIdentity(
                 assetId: snapshot.assetId,
                 coinGeckoId: snapshot.coinGeckoId,
                 onchainIdentity: snapshot.onchainIdentity,
                 override: overrideMap[snapshot.assetId],
+                mappingsByIdentity: mappingMap,
                 identities: &identities)
         }
         return identities.sorted {
@@ -159,10 +202,16 @@ enum HistoricalBackfillCandidateResolver {
     static func assetIDsByOnchainIdentity(
         tokens: [TokenEntry],
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
-        overrides: [TokenPricingOverrideSnapshot]) -> [OnchainTokenIdentity: Set<UUID>] {
+        overrides: [TokenPricingOverrideSnapshot],
+        prices: [String: Decimal] = [:],
+        dashboardSettings: TokenDashboardSettings = .defaults) -> [OnchainTokenIdentity: Set<UUID>] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var result: [OnchainTokenIdentity: Set<UUID>] = [:]
-        for token in tokens where token.amount > 0 && (token.role.isPositive || token.role.isBorrow) {
+        for token in tokens where shouldIncludeToken(
+            token,
+            override: overrideMap[token.assetId],
+            prices: prices,
+            dashboardSettings: dashboardSettings) {
             addUnresolvedAsset(
                 assetId: token.assetId,
                 coinGeckoId: token.coinGeckoId,
@@ -170,7 +219,10 @@ enum HistoricalBackfillCandidateResolver {
                 override: overrideMap[token.assetId],
                 result: &result)
         }
-        for snapshot in snapshots where snapshot.amount - snapshot.borrowAmount != 0 {
+        for snapshot in snapshots where shouldIncludeSnapshot(
+            snapshot,
+            override: overrideMap[snapshot.assetId],
+            dashboardSettings: dashboardSettings) {
             addUnresolvedAsset(
                 assetId: snapshot.assetId,
                 coinGeckoId: snapshot.coinGeckoId,
@@ -181,8 +233,49 @@ enum HistoricalBackfillCandidateResolver {
         return result
     }
 
+    private static func shouldIncludeToken(
+        _ token: TokenEntry,
+        override: TokenPricingOverrideSnapshot?,
+        prices: [String: Decimal],
+        dashboardSettings: TokenDashboardSettings) -> Bool {
+        TokenSettingsFeature.isDashboardEligible(
+            token: token,
+            prices: prices,
+            override: override,
+            settings: dashboardSettings)
+    }
+
+    private static func shouldIncludeSnapshot(
+        _ snapshot: HistoricalBackfillSnapshotEntry,
+        override: TokenPricingOverrideSnapshot?,
+        dashboardSettings: TokenDashboardSettings) -> Bool {
+        let netAmount = snapshot.amount - snapshot.borrowAmount
+        guard netAmount != 0 else { return false }
+        guard override?.isIgnored != true else { return false }
+        if override?.alwaysShow == true { return true }
+
+        let netValue = snapshotValue(snapshot, override: override)
+        if netValue == 0 {
+            return !dashboardSettings.hideUnpriced
+        }
+        if absolute(netValue) < normalizedThreshold(dashboardSettings.minimumDashboardValue) {
+            return !dashboardSettings.hideDust
+        }
+        return true
+    }
+
+    private static func snapshotValue(
+        _ snapshot: HistoricalBackfillSnapshotEntry,
+        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        if let manualPrice = override?.manualPriceUSD, manualPrice > 0 {
+            return (snapshot.amount - snapshot.borrowAmount) * manualPrice
+        }
+        return snapshot.usdValue - snapshot.borrowUsdValue
+    }
+
     private static func addCandidate(
         asset: HistoricalBackfillAssetReference,
+        mappingsByIdentity: [OnchainTokenIdentity: TokenIdentityMappingSnapshot],
         resolvedCoinGeckoIDs: [OnchainTokenIdentity: String],
         grouped: inout [HistoricalBackfillCandidateKey: Set<UUID>]) {
         if asset.override?.manualPriceUSD != nil, normalizedID(asset.override?.coinGeckoIdOverride) == nil {
@@ -193,7 +286,9 @@ enum HistoricalBackfillCandidateResolver {
             return
         }
         guard let onchainIdentity = asset.onchainIdentity else { return }
-        if let resolvedID = normalizedID(resolvedCoinGeckoIDs[onchainIdentity]) {
+        if let resolvedID = TokenIdentityMappingFeature.mappedCoinGeckoID(
+            for: onchainIdentity,
+            mappingsByIdentity: mappingsByIdentity) ?? normalizedID(resolvedCoinGeckoIDs[onchainIdentity]) {
             grouped[HistoricalBackfillCandidateKey(source: .coingecko(resolvedID)), default: []].insert(asset.assetId)
         } else {
             grouped[HistoricalBackfillCandidateKey(source: .zapper(onchainIdentity)), default: []].insert(asset.assetId)
@@ -205,8 +300,15 @@ enum HistoricalBackfillCandidateResolver {
         coinGeckoId: String?,
         onchainIdentity: OnchainTokenIdentity?,
         override: TokenPricingOverrideSnapshot?,
+        mappingsByIdentity: [OnchainTokenIdentity: TokenIdentityMappingSnapshot],
         identities: inout Set<OnchainTokenIdentity>) {
         guard shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity else {
+            return
+        }
+        guard TokenIdentityMappingFeature.mappedCoinGeckoID(
+            for: onchainIdentity,
+            mappingsByIdentity: mappingsByIdentity) == nil
+        else {
             return
         }
         identities.insert(onchainIdentity)
@@ -237,6 +339,14 @@ enum HistoricalBackfillCandidateResolver {
         guard let id else { return nil }
         let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized.isEmpty ? nil : normalized
+    }
+
+    private static func normalizedThreshold(_ value: Decimal) -> Decimal {
+        value < 0 ? 0 : value
+    }
+
+    private static func absolute(_ value: Decimal) -> Decimal {
+        value < 0 ? -value : value
     }
 }
 

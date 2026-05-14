@@ -15,6 +15,7 @@ struct AssetPriceChartQueryTests {
         let schema = Schema([
             Account.self, WalletAddress.self, Position.self,
             PositionToken.self, Asset.self, TokenPricingOverride.self,
+            TokenIdentityMapping.self,
             HistoricalPricePoint.self,
             PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
         ])

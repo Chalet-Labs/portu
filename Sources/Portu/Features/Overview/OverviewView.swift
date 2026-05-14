@@ -10,6 +10,7 @@ struct OverviewView: View {
     @Environment(AppState.self) private var appState
     @Query private var allTokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
@@ -22,13 +23,20 @@ struct OverviewView: View {
         TokenEntry.fromActiveTokens(allTokens)
     }
 
+    private var mappedTokenEntries: [TokenEntry] {
+        TokenSettingsFeature.applyIdentityMappings(
+            to: tokenEntries,
+            mappings: mappingSnapshots,
+            overrides: overrideSnapshots)
+    }
+
     private var watchlistIDs: [String] {
         OverviewWatchlistStore.decode(watchlistRaw)
     }
 
     private var pricePollingIDs: [String] {
         OverviewFeature.pricePollingIDs(
-            tokens: tokenEntries,
+            tokens: mappedTokenEntries,
             prices: appState.prices,
             watchlistIDs: watchlistIDs,
             overrides: overrideSnapshots,
@@ -37,6 +45,10 @@ struct OverviewView: View {
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
+        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
     }
 
     private var dashboardSettings: TokenDashboardSettings {

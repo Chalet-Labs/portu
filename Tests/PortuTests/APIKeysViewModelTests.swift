@@ -88,6 +88,15 @@ struct APIKeysViewModelTests {
         #expect(try store.get(key: .serviceAPIKey("coingecko")) == "cg-ghi")
     }
 
+    @Test func `historical backfill reads zapper key saved by settings`() throws {
+        let store = MockSecretStore()
+        let vm = APIKeysViewModel(secretStore: store)
+        vm.zapperAPIKey = "zap-backfill"
+        vm.save()
+
+        #expect(PortuApp.zapperAPIKey(from: store) == "zap-backfill")
+    }
+
     @Test func `save deletes keys when field cleared`() throws {
         let store = MockSecretStore()
         try store.set(key: .providerAPIKey(.zapper), value: "old-key")

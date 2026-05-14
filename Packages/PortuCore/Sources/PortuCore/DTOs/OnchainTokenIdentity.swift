@@ -8,6 +8,21 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
         "zapper:\(chain.rawValue):\(contractAddress)"
     }
 
+    public init?(historicalPriceID: String) {
+        let normalized = historicalPriceID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let parts = normalized.split(separator: ":", omittingEmptySubsequences: false)
+        guard
+            parts.count == 3,
+            parts[0] == "zapper",
+            let chain = Chain(rawValue: String(parts[1])),
+            let contractAddress = Self.normalizedContractAddress(String(parts[2]))
+        else {
+            return nil
+        }
+        self.chain = chain
+        self.contractAddress = contractAddress
+    }
+
     public init?(chain: Chain?, contractAddress: String?) {
         guard let chain, let normalized = Self.normalizedContractAddress(contractAddress) else {
             return nil

@@ -233,6 +233,33 @@ struct AppFeatureTests {
         }
     }
 
+    @Test func `price polling ids split coingecko ids from zapper identities`() {
+        let baseToken = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        let ethToken = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xToken")
+
+        let request = PricePollingIDResolver.split([
+            " Bitcoin ",
+            baseToken.historicalPriceID,
+            "bitcoin",
+            ethToken.historicalPriceID,
+            "",
+            baseToken.historicalPriceID
+        ])
+
+        #expect(request.coinGeckoIDs == ["bitcoin"])
+        #expect(request.zapperIdentities == [baseToken, ethToken])
+    }
+
+    @Test func `price polling updates merge coingecko and zapper results`() {
+        let update = PricePollingIDResolver.merge([
+            PriceUpdate(prices: ["bitcoin": 70000], changes24h: ["bitcoin": 0.02]),
+            PriceUpdate(prices: ["zapper:base:0xtoken": 3], changes24h: ["zapper:base:0xtoken": -0.01])
+        ])
+
+        #expect(update.prices == ["bitcoin": 70000, "zapper:base:0xtoken": 3])
+        #expect(update.changes24h == ["bitcoin": 0.02, "zapper:base:0xtoken": -0.01])
+    }
+
     // MARK: - PriceServiceClient invalidateCache
 
     @Test func `priceServiceClient invalidateCache is callable`() async {

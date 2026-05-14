@@ -90,7 +90,19 @@ enum ExposureFeature {
         coinGeckoId: String?,
         usdValue: Decimal,
         prices: [String: Decimal]) -> Decimal {
-        if let cgId = coinGeckoId, let livePrice = prices[cgId] {
+        resolveTokenUSDValue(
+            amount: amount,
+            priceID: TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId),
+            usdValue: usdValue,
+            prices: prices)
+    }
+
+    static func resolveTokenUSDValue(
+        amount: Decimal,
+        priceID: String?,
+        usdValue: Decimal,
+        prices: [String: Decimal]) -> Decimal {
+        if let priceID, let livePrice = prices[priceID] {
             return amount * livePrice
         }
         return usdValue
@@ -104,7 +116,8 @@ enum ExposureFeature {
         for token in tokens {
             if token.role.isReward { continue }
             let value = resolveTokenUSDValue(
-                amount: token.amount, coinGeckoId: token.coinGeckoId,
+                amount: token.amount,
+                priceID: TokenSettingsFeature.resolvedPriceID(token: token, override: nil),
                 usdValue: token.usdValue, prices: prices)
             let bucket = token.portfolioCategory
             var entry = buckets[bucket] ?? (0, 0)
@@ -147,7 +160,8 @@ enum ExposureFeature {
         for token in tokens {
             if token.role.isReward { continue }
             let value = resolveTokenUSDValue(
-                amount: token.amount, coinGeckoId: token.coinGeckoId,
+                amount: token.amount,
+                priceID: TokenSettingsFeature.resolvedPriceID(token: token, override: nil),
                 usdValue: token.usdValue, prices: prices)
             var entry = assetMap[token.assetId] ?? AssetAggregate(
                 symbol: token.symbol,
@@ -216,13 +230,12 @@ enum ExposureFeature {
             let override = overrideMap[token.assetId]
             let dashboardToken = TokenSettingsFeature.dashboardAdjustedToken(from: token, override: override)
             if
-                let coinGeckoId = dashboardPollingCoinGeckoID(
+                let priceID = dashboardPollingPriceID(
                     token: token,
-                    dashboardToken: dashboardToken,
                     prices: prices,
                     override: override,
                     settings: settings) {
-                pollingIDs.insert(coinGeckoId)
+                pollingIDs.insert(priceID)
             }
 
             guard
@@ -235,7 +248,7 @@ enum ExposureFeature {
 
             let value = resolveTokenUSDValue(
                 amount: dashboardToken.amount,
-                coinGeckoId: dashboardToken.coinGeckoId,
+                priceID: TokenSettingsFeature.resolvedPriceID(token: dashboardToken, override: nil),
                 usdValue: dashboardToken.usdValue,
                 prices: prices)
 
@@ -295,15 +308,14 @@ enum ExposureFeature {
             pollingIDs: Array(pollingIDs).sorted())
     }
 
-    private static func dashboardPollingCoinGeckoID(
+    private static func dashboardPollingPriceID(
         token: TokenEntry,
-        dashboardToken: TokenEntry,
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
         settings: TokenDashboardSettings) -> String? {
-        guard dashboardToken.amount > 0 else { return nil }
-        guard dashboardToken.role.isPositive || dashboardToken.role.isBorrow else { return nil }
-        guard let coinGeckoId = dashboardToken.coinGeckoId else { return nil }
+        guard token.amount > 0 else { return nil }
+        guard token.role.isPositive || token.role.isBorrow else { return nil }
+        guard let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override) else { return nil }
 
         if
             TokenSettingsFeature.isDashboardEligible(
@@ -311,7 +323,7 @@ enum ExposureFeature {
                 prices: prices,
                 override: override,
                 settings: settings) {
-            return coinGeckoId
+            return priceID
         }
 
         guard override?.isIgnored != true else { return nil }
@@ -322,7 +334,7 @@ enum ExposureFeature {
                 override: override) == nil
         else { return nil }
 
-        return coinGeckoId
+        return priceID
     }
 
     static func computeSummary(from categories: [CategoryExposure]) -> ExposureSummary {
@@ -347,7 +359,7 @@ enum ExposureFeature {
         overrideMap: [UUID: TokenPricingOverrideSnapshot]) -> [String] {
         let ids = tokens.compactMap { token -> String? in
             guard token.amount > 0, token.role.isPositive || token.role.isBorrow else { return nil }
-            return TokenSettingsFeature.resolvedCoinGeckoID(
+            return TokenSettingsFeature.resolvedPriceID(
                 token: token,
                 override: overrideMap[token.assetId])
         }

@@ -191,6 +191,18 @@ extension ZapperProvider {
       }
     }
     """
+
+    static let tokenPriceBatchQuery = """
+    query PortuTokenPriceBatch($tokens: [FungibleTokenInputV2!]!) {
+      fungibleTokenBatchV2(tokens: $tokens) {
+        address
+        priceData {
+          price
+          priceChange24h
+        }
+      }
+    }
+    """
 }
 
 // MARK: - Request Types
@@ -267,6 +279,15 @@ struct TokenPriceTicksVariables: Encodable, Sendable {
     let chainId: Int
     let currency: String
     let timeFrame: String
+}
+
+struct TokenPriceBatchVariables: Encodable, Sendable {
+    let tokens: [FungibleTokenInputV2]
+}
+
+struct FungibleTokenInputV2: Encodable, Sendable {
+    let address: String
+    let chainId: Int
 }
 
 // MARK: - Response Types
@@ -465,12 +486,19 @@ struct TokenPriceTicksData: Decodable, Sendable {
     let fungibleTokenV2: ZapperFungibleTokenV2?
 }
 
+struct TokenPriceBatchData: Decodable, Sendable {
+    let fungibleTokenBatchV2: [ZapperFungibleTokenV2?]
+}
+
 struct ZapperFungibleTokenV2: Decodable, Sendable {
+    let address: String?
     let priceData: ZapperTokenPriceData?
 }
 
 struct ZapperTokenPriceData: Decodable, Sendable {
-    let priceTicks: [ZapperPriceTick]
+    let price: Double?
+    let priceChange24h: Double?
+    let priceTicks: [ZapperPriceTick]?
 }
 
 struct ZapperPriceTick: Decodable, Sendable {

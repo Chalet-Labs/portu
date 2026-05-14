@@ -65,6 +65,70 @@ struct HistoricalPriceBackfillFeatureTests {
         ])
     }
 
+    @Test func `candidate selection uses cached identity mappings before zapper fallback`() {
+        let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
+        let mapped = token(
+            assetId: uuid(1),
+            symbol: "MAP",
+            amount: 1,
+            usdValue: 10,
+            onchainIdentity: mappedIdentity)
+        let mapping = TokenIdentityMappingSnapshot(identity: mappedIdentity, coinGeckoId: " cached-token ")
+
+        let candidates = HistoricalBackfillCandidateResolver.candidates(
+            tokens: [mapped],
+            overrides: [],
+            mappings: [mapping])
+        let unresolved = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
+            tokens: [mapped],
+            overrides: [],
+            mappings: [mapping])
+
+        #expect(candidates.map(\.historicalPriceID) == ["cached-token"])
+        #expect(candidates.map(\.source) == [.coingecko("cached-token")])
+        #expect(unresolved.isEmpty)
+    }
+
+    @Test func `candidate selection skips dashboard ignored dust and unpriced tokens`() {
+        let visible = token(assetId: uuid(1), symbol: "VISIBLE", coinGeckoId: "visible-token", amount: 2, usdValue: 4)
+        let dust = token(assetId: uuid(2), symbol: "DUST", coinGeckoId: "dust-token", amount: 1, usdValue: 0.50)
+        let ignored = token(assetId: uuid(3), symbol: "IGNORED", coinGeckoId: "ignored-token", amount: 1, usdValue: 10)
+        let unpriced = token(assetId: uuid(4), symbol: "UNPRICED", coinGeckoId: "unpriced-token", amount: 1, usdValue: 0)
+        let pinnedDust = token(assetId: uuid(5), symbol: "PINNED", coinGeckoId: "pinned-dust", amount: 1, usdValue: 0.25)
+
+        let candidates = HistoricalBackfillCandidateResolver.candidates(
+            tokens: [visible, dust, ignored, unpriced, pinnedDust],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true),
+                TokenPricingOverrideSnapshot(assetId: pinnedDust.assetId, alwaysShow: true)
+            ])
+
+        #expect(candidates.map(\.historicalPriceID) == ["pinned-dust", "visible-token"])
+        #expect(candidates.map(\.assetIds) == [[pinnedDust.assetId], [visible.assetId]])
+    }
+
+    @Test func `onchain resolution skips dashboard ignored dust and unpriced tokens`() {
+        let visibleIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xVisible")
+        let dustIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xDust")
+        let ignoredIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xIgnored")
+        let unpricedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xUnpriced")
+        let pinnedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xPinned")
+        let visible = token(assetId: uuid(1), symbol: "VISIBLE", amount: 1, usdValue: 4, onchainIdentity: visibleIdentity)
+        let dust = token(assetId: uuid(2), symbol: "DUST", amount: 1, usdValue: 0.50, onchainIdentity: dustIdentity)
+        let ignored = token(assetId: uuid(3), symbol: "IGNORED", amount: 1, usdValue: 10, onchainIdentity: ignoredIdentity)
+        let unpriced = token(assetId: uuid(4), symbol: "UNPRICED", amount: 1, usdValue: 0, onchainIdentity: unpricedIdentity)
+        let pinnedDust = token(assetId: uuid(5), symbol: "PINNED", amount: 1, usdValue: 0.25, onchainIdentity: pinnedIdentity)
+
+        let identities = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
+            tokens: [visible, dust, ignored, unpriced, pinnedDust],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true),
+                TokenPricingOverrideSnapshot(assetId: pinnedDust.assetId, alwaysShow: true)
+            ])
+
+        #expect(identities == [pinnedIdentity, visibleIdentity])
+    }
+
     @Test func `cache writer upserts by coin gecko id and day`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext

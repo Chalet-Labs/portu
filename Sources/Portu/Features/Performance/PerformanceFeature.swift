@@ -49,6 +49,7 @@ struct HistoricalEstimateSnapshotEntry: Equatable {
     var onchainIdentity: OnchainTokenIdentity?
     let amount: Decimal
     let borrowAmount: Decimal
+    let netUSDValue: Decimal?
 
     init(
         accountId: UUID,
@@ -58,7 +59,8 @@ struct HistoricalEstimateSnapshotEntry: Equatable {
         coinGeckoIdOverride: String?,
         onchainIdentity: OnchainTokenIdentity? = nil,
         amount: Decimal,
-        borrowAmount: Decimal) {
+        borrowAmount: Decimal,
+        netUSDValue: Decimal? = nil) {
         self.accountId = accountId
         self.assetId = assetId
         self.timestamp = timestamp
@@ -67,6 +69,7 @@ struct HistoricalEstimateSnapshotEntry: Equatable {
         self.onchainIdentity = onchainIdentity
         self.amount = amount
         self.borrowAmount = borrowAmount
+        self.netUSDValue = netUSDValue
     }
 }
 
@@ -335,7 +338,8 @@ struct PerformanceFeature {
                     accountId: snapshot.accountId,
                     assetId: snapshot.assetId,
                     coinGeckoId: coinGeckoId,
-                    amount: netAmount)
+                    amount: netAmount,
+                    fallbackUSDValue: snapshot.netUSDValue)
             }
     }
 

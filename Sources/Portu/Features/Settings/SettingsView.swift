@@ -364,9 +364,29 @@ enum HistoricalBackfillStatusFormatter {
             + "updated \(result.updatedPoints), skipped \(result.skippedAssets)."
         guard !result.failedCoinGeckoIDs.isEmpty else { return baseMessage }
 
-        let visibleIDs = result.failedCoinGeckoIDs.prefix(3).joined(separator: ", ")
-        let overflow = result.failedCoinGeckoIDs.count > 3 ? ", ..." : ""
-        return baseMessage + " Partial success: failed \(result.failedCoinGeckoIDs.count) (\(visibleIDs)\(overflow))."
+        if result.fetchedAssets == 0, result.insertedPoints == 0, result.updatedPoints == 0 {
+            return "No prices fetched; failed \(result.failedCoinGeckoIDs.count) assets. Check provider access."
+        }
+
+        if result.failedCoinGeckoIDs.count == 1, let id = result.failedCoinGeckoIDs.first {
+            return baseMessage + " Partial success: failed 1 asset (\(displayIdentifier(id)))."
+        }
+
+        return baseMessage
+            + " Partial success: failed \(result.failedCoinGeckoIDs.count) assets. Check provider access."
+    }
+
+    private static func displayIdentifier(_ id: String) -> String {
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > 24 else { return trimmed }
+
+        let parts = trimmed.split(separator: ":", omittingEmptySubsequences: false)
+        if parts.count >= 3 {
+            let head = parts.dropLast().joined(separator: ":")
+            let tail = String(parts.last ?? "")
+            return "\(head):\(tail.prefix(6))...\(tail.suffix(4))"
+        }
+        return "\(trimmed.prefix(12))...\(trimmed.suffix(8))"
     }
 }
 

@@ -75,6 +75,37 @@ struct HistoricalPortfolioEstimatorTests {
         #expect(points.isEmpty)
     }
 
+    @Test func `estimator scales first snapshot value by historical price ratio`() {
+        let account = uuid(1)
+        let day = date(2024, 1, 1)
+        let firstReal = date(2024, 1, 2)
+
+        let points = HistoricalPortfolioEstimator.estimatedValues(
+            holdings: [
+                HistoricalEstimateHolding(
+                    accountId: account,
+                    assetId: uuid(10),
+                    coinGeckoId: "bitcoin",
+                    amount: 1,
+                    fallbackUSDValue: 2_000),
+                HistoricalEstimateHolding(
+                    accountId: account,
+                    assetId: uuid(11),
+                    coinGeckoId: "unmapped",
+                    amount: 1,
+                    fallbackUSDValue: 500)
+            ],
+            prices: [
+                HistoricalPriceEntry(coinGeckoId: "bitcoin", day: day, usdPrice: 40_000),
+                HistoricalPriceEntry(coinGeckoId: "bitcoin", day: firstReal, usdPrice: 20_000)
+            ],
+            startDate: day,
+            firstRealSnapshotDate: firstReal,
+            accountId: nil)
+
+        #expect(points.map(\.value) == [4_500])
+    }
+
     @Test func `estimator normalizes coin gecko ids and skips empty ids`() {
         let account = uuid(1)
         let day = date(2024, 1, 1)

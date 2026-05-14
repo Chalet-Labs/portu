@@ -99,6 +99,54 @@ struct ZapperProviderTests {
     }
 
     @Test
+    func `fetch price update reads Zapper batch prices by onchain identity`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        let base = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        let ethereum = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xOther")
+        ZapperMockURLProtocol.requestHandler = { request in
+            let body = try graphQLBody(from: request)
+            #expect((body["query"] as? String)?.contains("fungibleTokenBatchV2") == true)
+            let variables = try #require(body["variables"] as? [String: Any])
+            let tokens = try #require(variables["tokens"] as? [[String: Any]])
+            #expect(tokens.count == 2)
+            #expect(tokens[0]["address"] as? String == "0xtoken")
+            #expect(tokens[0]["chainId"] as? Int == 8453)
+            #expect(tokens[1]["address"] as? String == "0xother")
+            #expect(tokens[1]["chainId"] as? Int == 1)
+            return (Data("""
+            {
+              "data": {
+                "fungibleTokenBatchV2": [
+                  {
+                    "address": "0xtoken",
+                    "priceData": {
+                      "price": 1.25,
+                      "priceChange24h": 5.5
+                    }
+                  },
+                  {
+                    "address": "0xother",
+                    "priceData": {
+                      "price": 2.5,
+                      "priceChange24h": -1.25
+                    }
+                  }
+                ]
+              }
+            }
+            """.utf8), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        let update = try await provider.fetchPriceUpdate(for: [base, ethereum])
+
+        #expect(update.prices[base.historicalPriceID] == Decimal(string: "1.25"))
+        #expect(update.prices[ethereum.historicalPriceID] == Decimal(string: "2.5"))
+        #expect(update.changes24h[base.historicalPriceID] == Decimal(string: "0.055"))
+        #expect(update.changes24h[ethereum.historicalPriceID] == Decimal(string: "-0.0125"))
+    }
+
+    @Test
     func `fetchBalances maps Zapper chain id 100 to Gnosis`() async throws {
         defer { ZapperMockURLProtocol.reset() }
         ZapperMockURLProtocol.requestHandler = { _ in

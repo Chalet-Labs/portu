@@ -358,6 +358,19 @@ struct OverviewFeatureTests {
         #expect(ids == ["unpriced"])
     }
 
+    @Test func `price polling ids include zapper key for eligible unmapped onchain holdings`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+        let local = token(symbol: "LOCAL", amount: 2, usdValue: 8, onchainIdentity: identity)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [local],
+            prices: [:],
+            watchlistIDs: [],
+            overrides: [])
+
+        #expect(ids == [identity.historicalPriceID])
+    }
+
     @Test func `price polling ids use token pricing overrides`() {
         let mapped = token(symbol: "MAP", coinGeckoId: "old-map", amount: 1, usdValue: 10)
 
@@ -370,6 +383,23 @@ struct OverviewFeatureTests {
             ])
 
         #expect(ids == ["new-map"])
+    }
+
+    @Test func `price rows use zapper live price and change for unmapped onchain holdings`() throws {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+        let local = token(symbol: "LOCAL", amount: 4, usdValue: 20, onchainIdentity: identity)
+
+        let rows = OverviewFeature.priceRows(
+            tokens: [local],
+            assetsByCoinGeckoId: [:],
+            prices: [identity.historicalPriceID: 3],
+            changes24h: [identity.historicalPriceID: 0.12],
+            watchlistIDs: [])
+
+        let row = try #require(rows.first)
+        #expect(row.symbol == "LOCAL")
+        #expect(row.price == 3)
+        #expect(row.change24h == 0.12)
     }
 
     @Test func `overview position visibility excludes ignored dashboard tokens`() {
@@ -446,13 +476,15 @@ struct OverviewFeatureTests {
         coinGeckoId: String? = nil,
         role: TokenRole = .balance,
         amount: Decimal,
-        usdValue: Decimal) -> TokenEntry {
+        usdValue: Decimal,
+        onchainIdentity: OnchainTokenIdentity? = nil) -> TokenEntry {
         TokenEntry(
             assetId: assetId,
             symbol: symbol,
             name: symbol,
             category: category,
             coinGeckoId: coinGeckoId,
+            onchainIdentity: onchainIdentity,
             role: role,
             amount: amount,
             usdValue: usdValue)

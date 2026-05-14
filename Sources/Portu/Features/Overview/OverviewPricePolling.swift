@@ -11,7 +11,7 @@ extension OverviewFeature {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var ids = tokens.compactMap { token -> String? in
             let override = overrideMap[token.assetId]
-            return pollingCoinGeckoID(
+            return pollingPriceID(
                 token: token,
                 prices: prices,
                 override: override,
@@ -22,13 +22,16 @@ extension OverviewFeature {
         return OverviewWatchlistStore.normalizedUniqueIDs(ids).sorted()
     }
 
-    private static func pollingCoinGeckoID(
+    private static func pollingPriceID(
         token: TokenEntry,
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
         settings: TokenDashboardSettings) -> String? {
-        let dashboardToken = TokenSettingsFeature.dashboardAdjustedToken(from: token, override: override)
-        guard let coinGeckoId = dashboardToken.coinGeckoId else { return nil }
+        guard
+            let priceID = TokenSettingsFeature.resolvedPriceID(
+                token: token,
+                override: override)
+        else { return nil }
 
         if
             TokenSettingsFeature.isDashboardEligible(
@@ -36,7 +39,7 @@ extension OverviewFeature {
                 prices: prices,
                 override: override,
                 settings: settings) {
-            return coinGeckoId
+            return priceID
         }
 
         guard token.amount > 0 else { return nil }
@@ -48,6 +51,6 @@ extension OverviewFeature {
                 prices: prices,
                 override: override) == nil
         else { return nil }
-        return coinGeckoId
+        return priceID
     }
 }

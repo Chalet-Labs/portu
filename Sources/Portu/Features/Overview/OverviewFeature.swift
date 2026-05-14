@@ -182,6 +182,7 @@ enum OverviewFeature {
         var category: AssetCategory
         var portfolioCategory: PortfolioCategorySnapshot
         var coinGeckoId: String?
+        var priceID: String?
         var value: Decimal
         var amount: Decimal
 
@@ -321,7 +322,8 @@ enum OverviewFeature {
         var portfolioCoinGeckoIDs: Set<String> = []
 
         for aggregate in sortedAssetAggregates(from: tokens, prices: prices).prefix(max(portfolioLimit, 0)) {
-            let coinGeckoId = OverviewWatchlistStore.normalizedID(aggregate.coinGeckoId)
+            let priceID = TokenIdentityMappingFeature.normalizedProviderID(aggregate.priceID)
+            let coinGeckoId = TokenIdentityMappingFeature.nonZapperPriceID(priceID)
             let rowID = aggregate.assetId.uuidString
             guard !seenRowIDs.contains(rowID) else {
                 continue
@@ -336,8 +338,8 @@ enum OverviewFeature {
                 symbol: aggregate.symbol,
                 name: aggregate.name,
                 coinGeckoId: coinGeckoId,
-                price: coinGeckoId.flatMap { prices[$0] } ?? aggregate.fallbackPrice,
-                change24h: coinGeckoId.flatMap { changes24h[$0] },
+                price: priceID.flatMap { prices[$0] } ?? aggregate.fallbackPrice,
+                change24h: priceID.flatMap { changes24h[$0] },
                 isWatchlisted: coinGeckoId.map { watchlistSet.contains($0) } ?? false))
         }
 
@@ -400,9 +402,11 @@ enum OverviewFeature {
                 category: token.category,
                 portfolioCategory: token.portfolioCategory,
                 coinGeckoId: OverviewWatchlistStore.normalizedID(token.coinGeckoId),
+                priceID: TokenSettingsFeature.resolvedPriceID(token: token, override: nil),
                 value: 0,
                 amount: 0)
             aggregate.coinGeckoId = aggregate.coinGeckoId ?? OverviewWatchlistStore.normalizedID(token.coinGeckoId)
+            aggregate.priceID = aggregate.priceID ?? TokenSettingsFeature.resolvedPriceID(token: token, override: nil)
             aggregate.value += resolvedValue(for: token, prices: prices)
             if token.amount > 0 {
                 aggregate.amount += token.amount
@@ -442,7 +446,7 @@ enum OverviewFeature {
     private static func resolvedValue(
         for token: TokenEntry,
         prices: [String: Decimal]) -> Decimal {
-        if let coinGeckoId = OverviewWatchlistStore.normalizedID(token.coinGeckoId), let price = prices[coinGeckoId] {
+        if let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: nil), let price = prices[priceID] {
             return token.amount * price
         }
         return token.usdValue

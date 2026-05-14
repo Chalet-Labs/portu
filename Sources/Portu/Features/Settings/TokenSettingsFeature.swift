@@ -23,6 +23,14 @@ struct TokenDashboardSettings: Equatable {
         self.hideUnpriced = hideUnpriced
         self.hideDust = hideDust
     }
+
+    static func fromDefaults(_ defaults: UserDefaults = .standard) -> Self {
+        let storedMinimum = defaults.object(forKey: minimumDashboardValueKey) as? NSNumber
+        return TokenDashboardSettings(
+            minimumDashboardValue: storedMinimum.map { Decimal($0.doubleValue) } ?? defaultMinimumDashboardValue,
+            hideUnpriced: defaults.object(forKey: hideUnpricedKey) as? Bool ?? true,
+            hideDust: defaults.object(forKey: hideDustKey) as? Bool ?? true)
+    }
 }
 
 struct TokenPricingOverrideSnapshot: Equatable, Identifiable {
@@ -173,6 +181,27 @@ enum TokenSettingsFeature {
         }
     }
 
+    static func applyIdentityMappings(
+        to tokens: [TokenEntry],
+        mappings: [TokenIdentityMappingSnapshot],
+        overrides: [TokenPricingOverrideSnapshot]) -> [TokenEntry] {
+        let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
+        let overrideMap = overridesByAssetId(overrides)
+
+        return tokens.map { token in
+            let override = overrideMap[token.assetId]
+            let coinGeckoId = resolvedCoinGeckoID(token: token, override: override)
+                ?? TokenIdentityMappingFeature.mappedCoinGeckoID(
+                    for: token.onchainIdentity,
+                    mappingsByIdentity: mappingMap)
+            guard coinGeckoId != token.coinGeckoId else { return token }
+            return tokenEntry(
+                from: token,
+                coinGeckoId: coinGeckoId,
+                usdValue: token.usdValue)
+        }
+    }
+
     static func dashboardEligibleTokens(
         tokens: [TokenEntry],
         prices: [String: Decimal],
@@ -259,6 +288,17 @@ enum TokenSettingsFeature {
         normalizedCoinGeckoID(override?.coinGeckoIdOverride) ?? normalizedCoinGeckoID(token.coinGeckoId)
     }
 
+    static func resolvedPriceID(
+        token: TokenEntry,
+        override: TokenPricingOverrideSnapshot?) -> String? {
+        if sanitizedManualPrice(override?.manualPriceUSD) != nil {
+            return nil
+        }
+        return TokenIdentityMappingFeature.priceID(
+            coinGeckoId: resolvedCoinGeckoID(token: token, override: override),
+            onchainIdentity: token.onchainIdentity)
+    }
+
     static func resolvedPrice(
         token: TokenEntry,
         prices: [String: Decimal],
@@ -267,8 +307,8 @@ enum TokenSettingsFeature {
             return manualPrice
         }
         if
-            let coinGeckoId = resolvedCoinGeckoID(token: token, override: override),
-            let price = prices[coinGeckoId] {
+            let priceID = resolvedPriceID(token: token, override: override),
+            let price = prices[priceID] {
             return price
         }
         guard token.amount != 0, token.usdValue != 0 else { return nil }
@@ -341,8 +381,8 @@ enum TokenSettingsFeature {
             return .manual
         }
         if
-            let coinGeckoId = resolvedCoinGeckoID(token: token, override: override),
-            prices[coinGeckoId] != nil {
+            let priceID = resolvedPriceID(token: token, override: override),
+            prices[priceID] != nil {
             return .live
         }
         if token.amount != 0, token.usdValue != 0 {
@@ -423,6 +463,7 @@ enum TokenSettingsFeature {
             return tokenEntry(
                 from: token,
                 coinGeckoId: nil,
+                preserveOnchainIdentity: false,
                 usdValue: token.amount * manualPrice)
         }
         return tokenEntry(
@@ -435,6 +476,7 @@ enum TokenSettingsFeature {
         from token: TokenEntry,
         coinGeckoId: String?,
         onchainIdentity: OnchainTokenIdentity? = nil,
+        preserveOnchainIdentity: Bool = true,
         amount: Decimal? = nil,
         usdValue: Decimal,
         logoURL: String? = nil) -> TokenEntry {
@@ -445,7 +487,7 @@ enum TokenSettingsFeature {
             category: token.category,
             portfolioCategory: token.portfolioCategory,
             coinGeckoId: coinGeckoId,
-            onchainIdentity: onchainIdentity ?? token.onchainIdentity,
+            onchainIdentity: preserveOnchainIdentity ? (onchainIdentity ?? token.onchainIdentity) : onchainIdentity,
             role: token.role,
             amount: amount ?? token.amount,
             usdValue: usdValue,

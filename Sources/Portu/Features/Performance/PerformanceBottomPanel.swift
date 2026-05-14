@@ -86,7 +86,8 @@ struct PerformanceBottomPanel: View {
                 coinGeckoIdOverride: overridesByAssetId[snapshot.assetId]?.coinGeckoIdOverride,
                 onchainIdentity: OnchainTokenIdentity(chain: asset?.upsertChain, contractAddress: asset?.upsertContract),
                 amount: snapshot.amount,
-                borrowAmount: snapshot.borrowAmount)
+                borrowAmount: snapshot.borrowAmount,
+                netUSDValue: snapshot.usdValue - snapshot.borrowUsdValue)
         }
     }
 

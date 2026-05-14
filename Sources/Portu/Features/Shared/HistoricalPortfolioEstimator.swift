@@ -22,6 +22,20 @@ struct HistoricalEstimateHolding: Equatable, Sendable {
     let assetId: UUID
     let coinGeckoId: String
     let amount: Decimal
+    let fallbackUSDValue: Decimal?
+
+    init(
+        accountId: UUID,
+        assetId: UUID,
+        coinGeckoId: String,
+        amount: Decimal,
+        fallbackUSDValue: Decimal? = nil) {
+        self.accountId = accountId
+        self.assetId = assetId
+        self.coinGeckoId = coinGeckoId
+        self.amount = amount
+        self.fallbackUSDValue = fallbackUSDValue
+    }
 }
 
 struct HistoricalPriceEntry: Equatable, Sendable {
@@ -45,13 +59,13 @@ enum HistoricalPortfolioEstimator {
                 accountId: holding.accountId,
                 assetId: holding.assetId,
                 coinGeckoId: coinGeckoId,
-                amount: holding.amount)
+                amount: holding.amount,
+                fallbackUSDValue: holding.fallbackUSDValue)
         }
         guard !scopedHoldings.isEmpty else { return [] }
 
         let startDay = utcStartOfDay(for: startDate)
         let firstRealDay = utcStartOfDay(for: firstRealSnapshotDate)
-        let requiredIDs = Set(scopedHoldings.map(\.coinGeckoId))
         var pricesByDay: [Date: [String: Decimal]] = [:]
 
         let normalizedPrices = prices.compactMap { price -> HistoricalPriceEntry? in
@@ -59,6 +73,7 @@ enum HistoricalPortfolioEstimator {
             guard !coinGeckoId.isEmpty else { return nil }
             return HistoricalPriceEntry(coinGeckoId: coinGeckoId, day: price.day, usdPrice: price.usdPrice)
         }
+        let referencePrices = referencePricesByID(prices: normalizedPrices, firstRealDay: firstRealDay)
         // HistoricalPriceEntry has no fetchedAt metadata. Sorting by day, id, then price
         // makes duplicate day/id rows deterministic; the highest price wins for exact duplicates.
         for price in normalizedPrices.sorted(by: priceSort) {
@@ -71,10 +86,31 @@ enum HistoricalPortfolioEstimator {
 
         return pricesByDay.keys.sorted().compactMap { day in
             let dayPrices = pricesByDay[day, default: [:]]
-            guard requiredIDs.allSatisfy({ dayPrices[$0] != nil }) else { return nil }
-            let value = scopedHoldings.reduce(Decimal.zero) { partial, holding in
-                partial + holding.amount * (dayPrices[holding.coinGeckoId] ?? 0)
+            var usedHistoricalPrice = false
+            var canEstimateDay = true
+            var value = Decimal.zero
+            for holding in scopedHoldings {
+                if
+                    let fallbackUSDValue = holding.fallbackUSDValue,
+                    let price = dayPrices[holding.coinGeckoId],
+                    let referencePrice = referencePrices[holding.coinGeckoId],
+                    referencePrice > 0 {
+                    usedHistoricalPrice = true
+                    value += fallbackUSDValue * price / referencePrice
+                    continue
+                }
+                if let price = dayPrices[holding.coinGeckoId] {
+                    usedHistoricalPrice = true
+                    value += holding.amount * price
+                    continue
+                }
+                guard let fallbackUSDValue = holding.fallbackUSDValue else {
+                    canEstimateDay = false
+                    break
+                }
+                value += fallbackUSDValue
             }
+            guard canEstimateDay, usedHistoricalPrice else { return nil }
             return HistoricalPortfolioValuePoint(date: day, value: value, kind: .estimated)
         }
     }
@@ -100,6 +136,23 @@ enum HistoricalPortfolioEstimator {
         if lhsDay != rhsDay { return lhsDay < rhsDay }
         if lhs.coinGeckoId != rhs.coinGeckoId { return lhs.coinGeckoId < rhs.coinGeckoId }
         return lhs.usdPrice < rhs.usdPrice
+    }
+
+    private static func referencePricesByID(
+        prices: [HistoricalPriceEntry],
+        firstRealDay: Date) -> [String: Decimal] {
+        var latestByID: [String: (day: Date, price: Decimal)] = [:]
+        for price in prices {
+            let day = utcStartOfDay(for: price.day)
+            guard day <= firstRealDay, price.usdPrice > 0 else { continue }
+            if let existing = latestByID[price.coinGeckoId] {
+                guard day > existing.day || (day == existing.day && price.usdPrice > existing.price) else {
+                    continue
+                }
+            }
+            latestByID[price.coinGeckoId] = (day, price.usdPrice)
+        }
+        return latestByID.mapValues(\.price)
     }
 
     private static func normalizedID(_ id: String) -> String {

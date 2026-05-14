@@ -15,6 +15,7 @@ struct ExposureView: View {
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
     @AppStorage(TokenDashboardSettings.hideUnpricedKey)
@@ -32,6 +33,17 @@ struct ExposureView: View {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
     }
 
+    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
+        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
+    }
+
+    private var mappedTokenEntries: [TokenEntry] {
+        TokenSettingsFeature.applyIdentityMappings(
+            to: tokenEntries,
+            mappings: mappingSnapshots,
+            overrides: overrideSnapshots)
+    }
+
     private var dashboardSettings: TokenDashboardSettings {
         TokenDashboardSettings(
             minimumDashboardValue: Decimal(minimumDashboardValue),
@@ -41,7 +53,7 @@ struct ExposureView: View {
 
     var body: some View {
         let data = ExposureFeature.computeDashboardData(
-            tokens: tokenEntries,
+            tokens: mappedTokenEntries,
             prices: store.prices,
             overrides: overrideSnapshots,
             settings: dashboardSettings)

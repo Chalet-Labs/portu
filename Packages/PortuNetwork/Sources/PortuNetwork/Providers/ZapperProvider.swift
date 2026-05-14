@@ -414,6 +414,45 @@ public actor ZapperProvider: PortfolioDataProvider {
 }
 
 public extension ZapperProvider {
+    func fetchPriceUpdate(for identities: [OnchainTokenIdentity]) async throws -> PriceUpdate {
+        let uniqueIdentities = Array(Set(identities)).sorted {
+            if $0.chain.rawValue != $1.chain.rawValue { return $0.chain.rawValue < $1.chain.rawValue }
+            return $0.contractAddress < $1.contractAddress
+        }
+        guard !uniqueIdentities.isEmpty else {
+            return PriceUpdate(prices: [:], changes24h: [:])
+        }
+
+        var prices: [String: Decimal] = [:]
+        var changes24h: [String: Decimal] = [:]
+
+        for chunk in uniqueIdentities.chunked(size: 100) {
+            let inputs = try chunk.map { identity -> FungibleTokenInputV2 in
+                guard let chainId = Self.chainIds[identity.chain] else {
+                    throw ZapperError.unsupportedChain(identity.chain)
+                }
+                return FungibleTokenInputV2(address: identity.contractAddress, chainId: chainId)
+            }
+            let response: GraphQLResponse<TokenPriceBatchData> = try await performGraphQL(
+                query: Self.tokenPriceBatchQuery,
+                variables: TokenPriceBatchVariables(tokens: inputs))
+            let rows = try response.payload().fungibleTokenBatchV2
+
+            for (identity, row) in zip(chunk, rows) {
+                guard let priceData = row?.priceData else { continue }
+                let key = identity.historicalPriceID
+                if let price = priceData.price, price.isFinite, price > 0 {
+                    prices[key] = NSNumber(value: price).decimalValue
+                }
+                if let change = priceData.priceChange24h, change.isFinite {
+                    changes24h[key] = NSNumber(value: change).decimalValue / 100
+                }
+            }
+        }
+
+        return PriceUpdate(prices: prices, changes24h: changes24h)
+    }
+
     func fetchHistoricalPrices(
         identity: OnchainTokenIdentity,
         days: Int) async throws -> [HistoricalPriceDTO] {
@@ -482,5 +521,20 @@ public enum ZapperError: Error, LocalizedError, Sendable {
         case let .unsupportedChain(chain):
             "Zapper does not support explicit chain filter: \(chain.rawValue)"
         }
+    }
+}
+
+private extension Array {
+    func chunked(size: Int) -> [[Element]] {
+        guard size > 0 else { return [self] }
+        var chunks: [[Element]] = []
+        chunks.reserveCapacity((count + size - 1) / size)
+        var index = startIndex
+        while index < endIndex {
+            let nextIndex = Swift.min(index + size, endIndex)
+            chunks.append(Array(self[index ..< nextIndex]))
+            index = nextIndex
+        }
+        return chunks
     }
 }

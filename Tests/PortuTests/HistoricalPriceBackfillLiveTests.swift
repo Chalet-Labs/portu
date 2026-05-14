@@ -102,6 +102,68 @@ struct HistoricalPriceBackfillLiveTests {
         #expect(rows.map(\.coinGeckoId) == ["sold-token"])
     }
 
+    @Test func `live backfill skips dashboard ignored dust and unpriced assets before network requests`() async throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
+        let visibleAsset = Asset(id: uuid(21), symbol: "VISIBLE", name: "Visible", coinGeckoId: "visible-token")
+        let dustAsset = Asset(id: uuid(22), symbol: "DUST", name: "Dust", coinGeckoId: "dust-token")
+        let ignoredAsset = Asset(id: uuid(23), symbol: "IGNORED", name: "Ignored", coinGeckoId: "ignored-token")
+        let unpricedAsset = Asset(id: uuid(24), symbol: "UNPRICED", name: "Unpriced", coinGeckoId: "unpriced-token")
+        let pinnedDustAsset = Asset(id: uuid(25), symbol: "PINNED", name: "Pinned", coinGeckoId: "pinned-dust")
+        let snapshotDustAsset = Asset(id: uuid(26), symbol: "SNAPDUST", name: "Snapshot Dust", coinGeckoId: "snapshot-dust")
+        let position = Position(
+            positionType: .idle,
+            tokens: [
+                PositionToken(role: .balance, amount: 2, usdValue: 4, asset: visibleAsset),
+                PositionToken(role: .balance, amount: 1, usdValue: 0.50, asset: dustAsset),
+                PositionToken(role: .balance, amount: 1, usdValue: 10, asset: ignoredAsset),
+                PositionToken(role: .balance, amount: 1, usdValue: 0, asset: unpricedAsset),
+                PositionToken(role: .balance, amount: 1, usdValue: 0.25, asset: pinnedDustAsset)
+            ],
+            account: account)
+        account.positions = [position]
+        context.insert(account)
+        context.insert(snapshotDustAsset)
+        context.insert(AssetSnapshot(
+            syncBatchId: uuid(102),
+            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+            accountId: uuid(202),
+            assetId: snapshotDustAsset.id,
+            symbol: snapshotDustAsset.symbol,
+            category: .other,
+            amount: 1,
+            usdValue: 0.40))
+        context.insert(TokenPricingOverride(assetId: ignoredAsset.id, isIgnored: true))
+        context.insert(TokenPricingOverride(assetId: pinnedDustAsset.id, alwaysShow: true))
+        try context.save()
+
+        let requestedIDs = SendableArray<String>()
+        let client = HistoricalPriceBackfillClient.live(
+            modelContext: context,
+            priceService: PriceServiceClient(
+                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                fetchHistoricalPrices: { coinGeckoId, _ in
+                    requestedIDs.append(coinGeckoId)
+                    return [
+                        HistoricalPriceDTO(
+                            coinGeckoId: coinGeckoId,
+                            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+                            usdPrice: 1)
+                    ]
+                },
+                invalidateCache: {}),
+            requestSpacing: .zero,
+            sleep: { _ in })
+
+        let result = try await client.run()
+
+        #expect(requestedIDs.values == ["pinned-dust", "visible-token"])
+        #expect(result.requestedAssets == 2)
+        #expect(result.fetchedAssets == 2)
+        #expect(result.skippedAssets == 0)
+    }
+
     @Test func `live backfill resolves missing coingecko ids and uses zapper fallback for unmapped onchain assets`() async throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
@@ -167,6 +229,7 @@ struct HistoricalPriceBackfillLiveTests {
         let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
             .sorted { $0.coinGeckoId < $1.coinGeckoId }
         let overrides = try context.fetch(FetchDescriptor<TokenPricingOverride>())
+        let mappings = try context.fetch(FetchDescriptor<TokenIdentityMapping>())
 
         #expect(result.requestedAssets == 2)
         #expect(result.fetchedAssets == 2)
@@ -174,9 +237,104 @@ struct HistoricalPriceBackfillLiveTests {
         #expect(coinGeckoRequests.values == ["mapped-token"])
         #expect(zapperRequests.values == [fallbackIdentity])
         #expect(rows.map(\.coinGeckoId) == ["mapped-token", fallbackIdentity.historicalPriceID])
-        #expect(overrides.count == 1)
-        #expect(overrides.first?.assetId == mappedAsset.id)
-        #expect(overrides.first?.coinGeckoIdOverride == "mapped-token")
+        #expect(overrides.isEmpty)
+        #expect(mappings.count == 1)
+        #expect(mappings.first?.onchainIdentity == mappedIdentity)
+        #expect(mappings.first?.coinGeckoId == "mapped-token")
+    }
+
+    @Test func `live backfill reuses cached identity mappings without resolving again`() async throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
+        let asset = Asset(
+            id: uuid(45),
+            symbol: "MAP",
+            name: "Mapped",
+            upsertChain: identity.chain,
+            upsertContract: identity.contractAddress)
+        let position = Position(
+            positionType: .idle,
+            tokens: [PositionToken(role: .balance, amount: 1, usdValue: 10, asset: asset)],
+            account: account)
+        account.positions = [position]
+        context.insert(account)
+        context.insert(TokenIdentityMapping(identity: identity, coinGeckoId: "cached-token"))
+        try context.save()
+
+        let coinGeckoRequests = SendableArray<String>()
+        let client = HistoricalPriceBackfillClient.live(
+            modelContext: context,
+            priceService: PriceServiceClient(
+                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                fetchHistoricalPrices: { coinGeckoId, _ in
+                    coinGeckoRequests.append(coinGeckoId)
+                    return [
+                        HistoricalPriceDTO(
+                            coinGeckoId: coinGeckoId,
+                            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+                            usdPrice: 5)
+                    ]
+                },
+                resolveCoinGeckoIDs: { identities in
+                    #expect(identities.isEmpty)
+                    return [:]
+                },
+                invalidateCache: {}),
+            requestSpacing: .zero,
+            sleep: { _ in })
+
+        let result = try await client.run()
+
+        #expect(result.requestedAssets == 1)
+        #expect(result.fetchedAssets == 1)
+        #expect(coinGeckoRequests.values == ["cached-token"])
+    }
+
+    @Test func `live backfill skips zapper fallback candidates when zapper provider is unavailable`() async throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xFallback")
+        let asset = Asset(
+            id: uuid(51),
+            symbol: "LOCAL",
+            name: "Local",
+            upsertChain: identity.chain,
+            upsertContract: identity.contractAddress)
+        let position = Position(
+            positionType: .idle,
+            tokens: [PositionToken(role: .balance, amount: 2, usdValue: 20, asset: asset)],
+            account: account)
+        account.positions = [position]
+        context.insert(account)
+        try context.save()
+
+        var slept: [Duration] = []
+        let zapperRequests = SendableArray<OnchainTokenIdentity>()
+        let client = HistoricalPriceBackfillClient.live(
+            modelContext: context,
+            priceService: PriceServiceClient(
+                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                fetchHistoricalPrices: { _, _ in [] },
+                resolveCoinGeckoIDs: { _ in [:] },
+                fetchZapperHistoricalPrices: { identity, _ in
+                    zapperRequests.append(identity)
+                    return []
+                },
+                canFetchZapperHistoricalPrices: { false },
+                invalidateCache: {}),
+            requestSpacing: .seconds(8),
+            sleep: { duration in slept.append(duration) })
+
+        let result = try await client.run()
+
+        #expect(result.requestedAssets == 1)
+        #expect(result.fetchedAssets == 0)
+        #expect(result.failedCoinGeckoIDs == [identity.historicalPriceID])
+        #expect(zapperRequests.values.isEmpty)
+        #expect(slept.isEmpty)
     }
 
     @Test func `live backfill spaces requests between candidates`() async throws {

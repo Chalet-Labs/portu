@@ -57,11 +57,13 @@ struct PortuApp: App {
         self.store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
             AppFeature()
         } withDependencies: {
+            $0.continuousClock = ContinuousClock()
             $0.syncEngine = .live(engine: syncEngine)
             $0.priceService = priceServiceClient
             $0.historicalPriceBackfill = .live(
                 modelContext: modelContext,
-                priceService: priceServiceClient)
+                priceService: priceServiceClient,
+                dashboardSettings: { TokenDashboardSettings.fromDefaults() })
         }
 
         // Bridge: features can trigger sync via AppState until migrated to TCA
@@ -119,7 +121,17 @@ struct PortuApp: App {
         session: URLSession) -> PriceServiceClient {
         PriceServiceClient(
             fetchPrices: { coinIds in
-                try await priceService.fetchPriceUpdate(for: coinIds)
+                let request = PricePollingIDResolver.split(coinIds)
+                let coinGeckoUpdate = try await priceService.fetchPriceUpdate(for: request.coinGeckoIDs)
+                guard
+                    !request.zapperIdentities.isEmpty,
+                    let apiKey = zapperAPIKey(from: secretStore)
+                else {
+                    return coinGeckoUpdate
+                }
+                let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
+                let zapperUpdate = try await zapperProvider.fetchPriceUpdate(for: request.zapperIdentities)
+                return PricePollingIDResolver.merge([coinGeckoUpdate, zapperUpdate])
             },
             fetchHistoricalPrices: { coinId, days in
                 try await priceService.fetchHistoricalPrices(for: coinId, days: days)
@@ -134,12 +146,13 @@ struct PortuApp: App {
                 let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
                 return try await zapperProvider.fetchHistoricalPrices(identity: identity, days: days)
             },
+            canFetchZapperHistoricalPrices: { zapperAPIKey(from: secretStore) != nil },
             invalidateCache: { await priceService.invalidateCache() })
     }
 
-    nonisolated private static func zapperAPIKey(from secretStore: KeychainService) -> String? {
+    nonisolated static func zapperAPIKey(from secretStore: any SecretStore) -> String? {
         do {
-            let apiKey = try secretStore.get(key: .serviceAPIKey("zapper"))?
+            let apiKey = try secretStore.get(key: .providerAPIKey(.zapper))?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             return apiKey?.isEmpty == false ? apiKey : nil
         } catch {

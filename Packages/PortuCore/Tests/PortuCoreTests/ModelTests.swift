@@ -13,6 +13,7 @@ func makeTestContainer() throws -> ModelContainer {
         PositionToken.self,
         Asset.self,
         TokenPricingOverride.self,
+        TokenIdentityMapping.self,
         HistoricalPricePoint.self,
         PortfolioSnapshot.self,
         AccountSnapshot.self,
@@ -250,6 +251,47 @@ struct ModelTests {
         let sendable: any Sendable = dto
         #expect(sendable is HistoricalPriceDTO)
         #expect(dto.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
+    }
+
+    @Test func `onchain identity parses local zapper historical price id`() throws {
+        let identity = try #require(OnchainTokenIdentity(historicalPriceID: " zapper:base:0xABCDEF "))
+
+        #expect(identity.chain == .base)
+        #expect(identity.contractAddress == "0xabcdef")
+        #expect(identity.historicalPriceID == "zapper:base:0xabcdef")
+        #expect(OnchainTokenIdentity(historicalPriceID: "coingecko:ethereum") == nil)
+        #expect(OnchainTokenIdentity(historicalPriceID: "zapper:unknown:0xabc") == nil)
+    }
+
+    @Test func `token identity mapping stores provider ids under canonical chain address key`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xABCDEF")
+        let createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let updatedAt = Date(timeIntervalSince1970: 1_700_000_600)
+
+        let mapping = TokenIdentityMapping(
+            identity: identity,
+            coinGeckoId: " Base-Token ",
+            zapperId: "zapper-token-id",
+            coinGeckoResolvedAt: createdAt,
+            zapperResolvedAt: updatedAt,
+            createdAt: createdAt,
+            updatedAt: updatedAt)
+
+        context.insert(mapping)
+        try context.save()
+
+        let fetched = try #require(try context.fetch(FetchDescriptor<TokenIdentityMapping>()).first)
+        #expect(fetched.canonicalKey == "base:0xabcdef")
+        #expect(fetched.chain == .base)
+        #expect(fetched.contractAddress == "0xabcdef")
+        #expect(fetched.coinGeckoId == "base-token")
+        #expect(fetched.zapperId == "zapper-token-id")
+        #expect(fetched.coinGeckoResolvedAt == createdAt)
+        #expect(fetched.zapperResolvedAt == updatedAt)
+        #expect(fetched.createdAt == createdAt)
+        #expect(fetched.updatedAt == updatedAt)
     }
 
     @Test func `account is active by default`() {

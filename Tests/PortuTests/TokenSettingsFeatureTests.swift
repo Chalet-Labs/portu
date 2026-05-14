@@ -107,6 +107,42 @@ struct TokenSettingsFeatureTests {
         #expect(row.visibilityStatus == .visible)
     }
 
+    @Test func `identity mappings apply coingecko ids without writing user overrides`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+        let local = token(symbol: "LOCAL", amount: 2, usdValue: 4, onchainIdentity: identity)
+        let mapping = TokenIdentityMappingSnapshot(
+            identity: identity,
+            coinGeckoId: " mapped-token ")
+
+        let entries = TokenSettingsFeature.applyIdentityMappings(
+            to: [local],
+            mappings: [mapping],
+            overrides: [])
+
+        #expect(entries.first?.coinGeckoId == "mapped-token")
+        #expect(entries.first?.onchainIdentity == identity)
+    }
+
+    @Test func `settings rows use zapper live price for unmapped onchain tokens`() throws {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+        let local = token(symbol: "LOCAL", amount: 2, usdValue: 0, onchainIdentity: identity)
+
+        let result = TokenSettingsFeature.rows(
+            tokens: [local],
+            prices: [identity.historicalPriceID: decimal("1.50")],
+            overrides: [],
+            settings: .defaults,
+            filter: .all,
+            searchText: "",
+            limit: 100)
+
+        let row = try #require(result.rows.first)
+        #expect(row.price == decimal("1.50"))
+        #expect(row.value == 3)
+        #expect(row.pricingSource == .live)
+        #expect(row.visibilityStatus == .visible)
+    }
+
     @Test func `settings rows apply search and cap displayed matches to one hundred`() {
         let tokens = (0 ..< 120).map { index in
             token(
@@ -397,7 +433,8 @@ struct TokenSettingsFeatureTests {
         coinGeckoId: String? = nil,
         role: TokenRole = .balance,
         amount: Decimal,
-        usdValue: Decimal) -> TokenEntry {
+        usdValue: Decimal,
+        onchainIdentity: OnchainTokenIdentity? = nil) -> TokenEntry {
         TokenEntry(
             assetId: assetId,
             symbol: symbol,
@@ -405,6 +442,7 @@ struct TokenSettingsFeatureTests {
             category: category,
             portfolioCategory: portfolioCategory,
             coinGeckoId: coinGeckoId,
+            onchainIdentity: onchainIdentity,
             role: role,
             amount: amount,
             usdValue: usdValue)

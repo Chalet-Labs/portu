@@ -9,6 +9,7 @@ struct PriceWatchlist: View {
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
@@ -28,9 +29,16 @@ struct PriceWatchlist: View {
             categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
     }
 
+    private var mappedTokenEntries: [TokenEntry] {
+        TokenSettingsFeature.applyIdentityMappings(
+            to: tokenEntries,
+            mappings: mappingSnapshots,
+            overrides: overrideSnapshots)
+    }
+
     private var dashboardTokenEntries: [TokenEntry] {
         TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: tokenEntries,
+            tokens: mappedTokenEntries,
             prices: appState.prices,
             overrides: overrideSnapshots,
             settings: dashboardSettings)
@@ -59,6 +67,10 @@ struct PriceWatchlist: View {
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
+        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
     }
 
     private var dashboardSettings: TokenDashboardSettings {

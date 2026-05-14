@@ -58,11 +58,14 @@ enum OverviewPositionPricing {
         if let manualPrice = override?.manualPriceUSD, manualPrice > 0 {
             return 0
         }
-        return change24h(
-            coinGeckoId: TokenSettingsFeature.resolvedCoinGeckoID(token: token, override: override),
-            amount: token.amount,
-            prices: prices,
-            changes24h: changes24h)
+        guard
+            let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override),
+            let price = prices[priceID],
+            let changePercent = changes24h[priceID]
+        else {
+            return 0
+        }
+        return token.amount * price * changePercent
     }
 
     private static func normalizedPrice(
