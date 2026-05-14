@@ -43,20 +43,7 @@ public struct KeychainService: SecretStore {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]) { _, new in new }
 
-        if let value = try string(matching: query) {
-            return value
-        }
-
-        let legacyQuery = legacyBaseQuery(for: key).merging([
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]) { _, new in new }
-        guard let legacyValue = try string(matching: legacyQuery) else {
-            return nil
-        }
-
-        try set(key: key, value: legacyValue)
-        return legacyValue
+        return try string(matching: query)
     }
 
     public func set(key: KeychainKey, value: String) throws(KeychainError) {
@@ -76,7 +63,7 @@ public struct KeychainService: SecretStore {
 
         switch addStatus {
         case errSecSuccess:
-            try? deleteLegacy(key: key)
+            break
         case errSecDuplicateItem:
             let updateStatus = update(
                 baseQuery as CFDictionary,
@@ -86,7 +73,7 @@ public struct KeychainService: SecretStore {
                 ] as CFDictionary)
             switch updateStatus {
             case errSecSuccess:
-                try? deleteLegacy(key: key)
+                break
             case errSecInteractionNotAllowed: throw .interactionNotAllowed
             default: throw .unexpectedStatus(updateStatus)
             }
@@ -98,36 +85,10 @@ public struct KeychainService: SecretStore {
     }
 
     public func delete(key: KeychainKey) throws(KeychainError) {
-        var firstError: KeychainError?
-
-        do {
-            try delete(matching: baseQuery(for: key))
-        } catch {
-            firstError = error
-        }
-
-        do {
-            try deleteLegacy(key: key)
-        } catch {
-            if firstError == nil {
-                firstError = error
-            }
-        }
-
-        if let firstError {
-            throw firstError
-        }
+        try delete(matching: baseQuery(for: key))
     }
 
     private func baseQuery(for key: KeychainKey) -> [String: Any] {
-        keychainQuery(for: key, useDataProtectionKeychain: true)
-    }
-
-    private func legacyBaseQuery(for key: KeychainKey) -> [String: Any] {
-        keychainQuery(for: key, useDataProtectionKeychain: false)
-    }
-
-    private func keychainQuery(for key: KeychainKey, useDataProtectionKeychain: Bool) -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -135,9 +96,7 @@ public struct KeychainService: SecretStore {
         ]
 
         #if os(macOS)
-            if useDataProtectionKeychain {
-                query[kSecUseDataProtectionKeychain as String] = true
-            }
+            query[kSecUseDataProtectionKeychain as String] = true
         #endif
 
         return query
@@ -163,10 +122,6 @@ public struct KeychainService: SecretStore {
         default:
             throw .unexpectedStatus(status)
         }
-    }
-
-    private func deleteLegacy(key: KeychainKey) throws(KeychainError) {
-        try delete(matching: legacyBaseQuery(for: key))
     }
 
     private func delete(matching query: [String: Any]) throws(KeychainError) {

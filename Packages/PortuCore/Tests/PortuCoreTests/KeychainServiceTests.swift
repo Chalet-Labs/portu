@@ -72,12 +72,16 @@ struct SecretStoreTests {
 }
 
 struct KeychainServiceTests {
-    @Test func `set stores values in data protection keychain`() throws {
+    @Test func `set stores values only in data protection keychain`() throws {
         let recorder = KeychainOperationRecorder()
         let store = KeychainService(
             service: "com.portu.tests",
             add: { attributes, _ in
                 recorder.appendAdded(attributes.dictionaryValue)
+                return errSecSuccess
+            },
+            delete: { query in
+                recorder.appendDeleted(query.dictionaryValue)
                 return errSecSuccess
             })
 
@@ -86,9 +90,10 @@ struct KeychainServiceTests {
         let addQuery = try #require(recorder.addedQueries.first)
         #expect(addQuery.usesDataProtectionKeychain)
         #expect(addQuery[kSecAttrAccessible as String] as? String == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
+        #expect(recorder.deletedQueries.isEmpty)
     }
 
-    @Test func `get reads data protection keychain before migrating legacy item`() throws {
+    @Test func `get reads only data protection keychain`() throws {
         let legacyValue = "legacy-zapper-token"
         let legacyData = try #require(legacyValue.data(using: .utf8))
         let recorder = KeychainOperationRecorder()
@@ -98,7 +103,7 @@ struct KeychainServiceTests {
             copyMatching: { query, result in
                 let copyCount = recorder.appendCopy(query.dictionaryValue)
 
-                guard copyCount == 2 else {
+                guard copyCount > 1 else {
                     return errSecItemNotFound
                 }
 
@@ -116,15 +121,12 @@ struct KeychainServiceTests {
 
         let value = try store.get(key: .providerAPIKey(.zapper))
         let copyQueries = recorder.copyQueries
-        let addedQueries = recorder.addedQueries
-        let deletedQueries = recorder.deletedQueries
 
-        #expect(value == legacyValue)
-        #expect(copyQueries.count == 2)
+        #expect(value == nil)
+        #expect(copyQueries.count == 1)
         #expect(copyQueries[0].usesDataProtectionKeychain)
-        #expect(!copyQueries[1].usesDataProtectionKeychain)
-        #expect(try #require(addedQueries.first).usesDataProtectionKeychain)
-        #expect(try !#require(deletedQueries.first).usesDataProtectionKeychain)
+        #expect(recorder.addedQueries.isEmpty)
+        #expect(recorder.deletedQueries.isEmpty)
     }
 }
 
