@@ -4,10 +4,37 @@ import Security
 /// Wraps Security.framework keychain APIs. Items are scoped to the kSecAttrService value
 /// (defaults to bundle identifier).
 public struct KeychainService: SecretStore {
+    typealias CopyMatching = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    typealias Add = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
+    typealias Update = @Sendable (CFDictionary, CFDictionary) -> OSStatus
+    typealias Delete = @Sendable (CFDictionary) -> OSStatus
+
     private let service: String
+    private let copyMatching: CopyMatching
+    private let add: Add
+    private let update: Update
+    private let delete: Delete
 
     public init(service: String = Bundle.main.bundleIdentifier ?? "com.portu.app") {
+        self.init(
+            service: service,
+            copyMatching: SecItemCopyMatching,
+            add: SecItemAdd,
+            update: SecItemUpdate,
+            delete: SecItemDelete)
+    }
+
+    init(
+        service: String,
+        copyMatching: @escaping CopyMatching = SecItemCopyMatching,
+        add: @escaping Add = SecItemAdd,
+        update: @escaping Update = SecItemUpdate,
+        delete: @escaping Delete = SecItemDelete) {
         self.service = service
+        self.copyMatching = copyMatching
+        self.add = add
+        self.update = update
+        self.delete = delete
     }
 
     public func get(key: KeychainKey) throws(KeychainError) -> String? {
@@ -28,10 +55,7 @@ public struct KeychainService: SecretStore {
             return nil
         }
 
-        do {
-            try set(key: key, value: legacyValue)
-            try deleteLegacy(key: key)
-        } catch {}
+        try set(key: key, value: legacyValue)
         return legacyValue
     }
 
@@ -43,7 +67,7 @@ public struct KeychainService: SecretStore {
         let baseQuery = baseQuery(for: key)
 
         // Add-first upsert: attempt add, then update on duplicate
-        let addStatus = SecItemAdd(
+        let addStatus = add(
             baseQuery.merging([
                 kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
                 kSecValueData as String: data
@@ -54,7 +78,7 @@ public struct KeychainService: SecretStore {
         case errSecSuccess:
             try? deleteLegacy(key: key)
         case errSecDuplicateItem:
-            let updateStatus = SecItemUpdate(
+            let updateStatus = update(
                 baseQuery as CFDictionary,
                 [
                     kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
@@ -96,22 +120,32 @@ public struct KeychainService: SecretStore {
     }
 
     private func baseQuery(for key: KeychainKey) -> [String: Any] {
-        [
+        keychainQuery(for: key, useDataProtectionKeychain: true)
+    }
+
+    private func legacyBaseQuery(for key: KeychainKey) -> [String: Any] {
+        keychainQuery(for: key, useDataProtectionKeychain: false)
+    }
+
+    private func keychainQuery(for key: KeychainKey, useDataProtectionKeychain: Bool) -> [String: Any] {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key.rawKey
         ]
-    }
 
-    private func legacyBaseQuery(for key: KeychainKey) -> [String: Any] {
-        baseQuery(for: key).merging([
-            kSecUseDataProtectionKeychain as String: true
-        ]) { _, new in new }
+        #if os(macOS)
+            if useDataProtectionKeychain {
+                query[kSecUseDataProtectionKeychain as String] = true
+            }
+        #endif
+
+        return query
     }
 
     private func string(matching query: [String: Any]) throws(KeychainError) -> String? {
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        var result: CFTypeRef?
+        let status = copyMatching(query as CFDictionary, &result)
 
         switch status {
         case errSecSuccess:
@@ -136,7 +170,7 @@ public struct KeychainService: SecretStore {
     }
 
     private func delete(matching query: [String: Any]) throws(KeychainError) {
-        let status = SecItemDelete(query as CFDictionary)
+        let status = delete(query as CFDictionary)
         switch status {
         case errSecSuccess, errSecItemNotFound: break
         case errSecInteractionNotAllowed: throw .interactionNotAllowed
