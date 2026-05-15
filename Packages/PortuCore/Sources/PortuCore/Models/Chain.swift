@@ -1,3 +1,5 @@
+import Foundation
+
 public enum Chain: String, Codable, CaseIterable, Sendable {
     case ethereum
     case polygon
@@ -27,4 +29,11 @@ public enum Chain: String, Codable, CaseIterable, Sendable {
     case avalanche
     case monad
     case katana
+}
+
+public extension Chain {
+    static func normalized(rawValue: String) -> Chain? {
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return allCases.first { $0.rawValue.lowercased() == normalized }
+    }
 }

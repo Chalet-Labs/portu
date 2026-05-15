@@ -73,6 +73,7 @@ struct OverviewPriceRowData: Equatable, Identifiable {
 enum OverviewPriceDisplay {
     static let assetLabelMaxLength = 6
     private static let priceLocale = Locale(identifier: "en_US_POSIX")
+    private static let compactCurrencyThreshold = 1_000_000.0
 
     static func assetLabel(_ symbol: String) -> String {
         let trimmed = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -83,12 +84,63 @@ enum OverviewPriceDisplay {
         "$ \(formattedNumber(price))"
     }
 
+    static func currency(_ value: Decimal) -> String {
+        let number = NSDecimalNumber(decimal: value).doubleValue
+        let sign = number < 0 ? "-$ " : "$ "
+        return sign + formattedMagnitude(abs(number), compactFractionDigits: 1)
+    }
+
+    static func axisCurrency(_ value: Double) -> String {
+        let sign = value < 0 ? "-$ " : "$ "
+        return sign + standardNumber(abs(value), maximumFractionDigits: 0)
+    }
+
+    static func amount(_ value: Decimal) -> String {
+        let number = NSDecimalNumber(decimal: value).doubleValue
+        let sign = number < 0 ? "-" : ""
+        return sign + formattedMagnitude(abs(number), compactFractionDigits: 2)
+    }
+
     private static func formattedNumber(_ price: Decimal) -> String {
         let number = NSDecimalNumber(decimal: price).doubleValue
-        return number.formatted(.number
+        return standardNumber(abs(number), maximumFractionDigits: maximumFractionDigits(for: abs(number)))
+    }
+
+    private static func formattedMagnitude(
+        _ absoluteValue: Double,
+        compactFractionDigits: Int) -> String {
+        if absoluteValue >= 1_000_000_000_000 {
+            return compactNumber(absoluteValue / 1_000_000_000_000, suffix: "T", maximumFractionDigits: compactFractionDigits)
+        }
+        if absoluteValue >= 1_000_000_000 {
+            return compactNumber(absoluteValue / 1_000_000_000, suffix: "B", maximumFractionDigits: compactFractionDigits)
+        }
+        if absoluteValue >= compactCurrencyThreshold {
+            return compactNumber(absoluteValue / compactCurrencyThreshold, suffix: "M", maximumFractionDigits: compactFractionDigits)
+        }
+        return standardNumber(absoluteValue, maximumFractionDigits: absoluteValue >= 100 ? 0 : 2)
+    }
+
+    private static func compactNumber(
+        _ value: Double,
+        suffix: String,
+        maximumFractionDigits: Int) -> String {
+        value.formatted(.number
             .locale(priceLocale)
             .grouping(.automatic)
-            .precision(.fractionLength(0 ... maximumFractionDigits(for: abs(number)))))
+            .precision(.fractionLength(0 ... maximumFractionDigits))) + suffix
+    }
+
+    private static func standardNumber(
+        _ value: Double,
+        maximumFractionDigits: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = priceLocale
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = maximumFractionDigits
+        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 
     private static func maximumFractionDigits(for absoluteValue: Double) -> Int {
@@ -338,7 +390,7 @@ enum OverviewFeature {
                 symbol: aggregate.symbol,
                 name: aggregate.name,
                 coinGeckoId: coinGeckoId,
-                price: priceID.flatMap { prices[$0] } ?? aggregate.fallbackPrice,
+                price: displayPrice(for: aggregate, prices: prices),
                 change24h: priceID.flatMap { changes24h[$0] },
                 isWatchlisted: coinGeckoId.map { watchlistSet.contains($0) } ?? false))
         }
@@ -446,10 +498,24 @@ enum OverviewFeature {
     private static func resolvedValue(
         for token: TokenEntry,
         prices: [String: Decimal]) -> Decimal {
-        if let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: nil), let price = prices[priceID] {
-            return token.amount * price
+        OverviewPositionPricing.tokenValue(token: token, prices: prices, override: nil)
+    }
+
+    private static func displayPrice(
+        for aggregate: AssetAggregate,
+        prices: [String: Decimal]) -> Decimal? {
+        guard
+            let priceID = TokenIdentityMappingFeature.normalizedProviderID(aggregate.priceID),
+            let price = prices[priceID]
+        else {
+            return aggregate.fallbackPrice
         }
-        return token.usdValue
+        if
+            OnchainTokenIdentity(historicalPriceID: priceID) == nil
+                || OverviewPositionPricing.isPlausible(price: price, amount: aggregate.amount, usdValue: aggregate.value) {
+            return price
+        }
+        return aggregate.fallbackPrice
     }
 
     private static func displayPercentages(for values: [Decimal]) -> [Int] {

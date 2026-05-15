@@ -123,7 +123,15 @@ struct PortfolioValueChart: View {
                     }
                 }
                 .chartYAxis {
-                    AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))
+                    AxisMarks(position: .trailing) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel {
+                            if let amount = value.as(Double.self) {
+                                Text(OverviewPriceDisplay.axisCurrency(amount))
+                            }
+                        }
+                    }
                 }
                 .chartXAxis {
                     AxisMarks()

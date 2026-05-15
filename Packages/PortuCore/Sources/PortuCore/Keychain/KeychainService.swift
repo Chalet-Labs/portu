@@ -56,7 +56,6 @@ public struct KeychainService: SecretStore {
         // Add-first upsert: attempt add, then update on duplicate
         let addStatus = add(
             baseQuery.merging([
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
                 kSecValueData as String: data
             ]) { _, new in new } as CFDictionary,
             nil)
@@ -68,7 +67,6 @@ public struct KeychainService: SecretStore {
             let updateStatus = update(
                 baseQuery as CFDictionary,
                 [
-                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
                     kSecValueData as String: data
                 ] as CFDictionary)
             switch updateStatus {
@@ -89,17 +87,11 @@ public struct KeychainService: SecretStore {
     }
 
     private func baseQuery(for key: KeychainKey) -> [String: Any] {
-        var query: [String: Any] = [
+        [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key.rawKey
         ]
-
-        #if os(macOS)
-            query[kSecUseDataProtectionKeychain as String] = true
-        #endif
-
-        return query
     }
 
     private func string(matching query: [String: Any]) throws(KeychainError) -> String? {

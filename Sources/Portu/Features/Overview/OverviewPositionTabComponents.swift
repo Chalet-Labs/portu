@@ -87,12 +87,12 @@ struct OverviewPositionGroupCard: View {
 
             Spacer(minLength: 10)
 
-            Text(groupValue, format: .currency(code: "USD").precision(.fractionLength(0)))
+            Text(OverviewPriceDisplay.currency(groupValue))
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
 
-            Text(groupChange, format: .currency(code: "USD").precision(.fractionLength(0)))
+            Text(OverviewPriceDisplay.currency(groupChange))
                 .font(.system(size: 12, weight: .medium, design: .monospaced))
                 .foregroundStyle(groupChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
                 .lineLimit(1)
@@ -155,12 +155,12 @@ private struct OverviewPositionTokenRow: View {
             .frame(width: 90, alignment: .leading)
 
             HStack(spacing: 8) {
-                Text(price, format: .currency(code: "USD").precision(.fractionLength(0 ... 5)))
+                Text(OverviewPriceDisplay.price(price))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
 
-                Text(change24h, format: .currency(code: "USD").precision(.fractionLength(0)))
+                Text(OverviewPriceDisplay.currency(change24h))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(OverviewPositionChangeTone.tone(for: token.role, change: change24h).color)
                     .lineLimit(1)
@@ -168,7 +168,7 @@ private struct OverviewPositionTokenRow: View {
             .frame(width: 140, alignment: .trailing)
 
             HStack(spacing: 8) {
-                Text(token.amount, format: .number.precision(.fractionLength(2 ... 6)))
+                Text(OverviewPriceDisplay.amount(token.amount))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)

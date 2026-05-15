@@ -5,7 +5,7 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
     public let contractAddress: String
 
     public var historicalPriceID: String {
-        "zapper:\(chain.rawValue):\(contractAddress)"
+        "zapper:\(chain.rawValue.lowercased()):\(contractAddress)"
     }
 
     public init?(historicalPriceID: String) {
@@ -14,7 +14,7 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
         guard
             parts.count == 3,
             parts[0] == "zapper",
-            let chain = Chain(rawValue: String(parts[1])),
+            let chain = Chain.normalized(rawValue: String(parts[1])),
             let contractAddress = Self.normalizedContractAddress(String(parts[2]))
         else {
             return nil

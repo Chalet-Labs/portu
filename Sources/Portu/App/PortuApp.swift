@@ -41,7 +41,7 @@ struct PortuApp: App {
             let session: URLSession = .shared
         #endif
 
-        let secretStore = KeychainService()
+        let secretStore = LocalSecretStore()
         let modelContext = container.mainContext
         let syncEngine = SyncEngine(
             modelContext: modelContext,
@@ -117,7 +117,7 @@ struct PortuApp: App {
 
     private static func makePriceServiceClient(
         priceService: PriceService,
-        secretStore: KeychainService,
+        secretStore: any SecretStore,
         session: URLSession) -> PriceServiceClient {
         PriceServiceClient(
             fetchPrices: { coinIds in

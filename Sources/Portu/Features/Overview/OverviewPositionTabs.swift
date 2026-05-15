@@ -12,6 +12,7 @@ struct OverviewPositionTabs: View {
     private var categoryRules: [CategorySymbolRule]
     @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
     private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
     @AppStorage(TokenDashboardSettings.hideUnpricedKey)
@@ -107,6 +108,10 @@ struct OverviewPositionTabs: View {
 
     private var overrideMap: [UUID: TokenPricingOverrideSnapshot] {
         TokenSettingsFeature.overridesByAssetId(tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
+    }
+
+    private var mappingMap: [OnchainTokenIdentity: TokenIdentityMappingSnapshot] {
+        TokenIdentityMappingFeature.mappingsByIdentity(tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init))
     }
 
     private var dashboardSettings: TokenDashboardSettings {
@@ -260,13 +265,19 @@ struct OverviewPositionTabs: View {
 
     private func tokenEntry(for token: PositionToken) -> TokenEntry? {
         guard let asset = token.asset else { return nil }
+        let identity = OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract)
+        let coinGeckoId = OverviewWatchlistStore.normalizedID(asset.coinGeckoId)
+            ?? TokenIdentityMappingFeature.mappedCoinGeckoID(
+                for: identity,
+                mappingsByIdentity: mappingMap)
         return TokenEntry(
             assetId: asset.id,
             symbol: asset.symbol,
             name: asset.name,
             category: asset.category,
             portfolioCategory: categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
-            coinGeckoId: asset.coinGeckoId,
+            coinGeckoId: coinGeckoId,
+            onchainIdentity: identity,
             role: token.role,
             amount: token.amount,
             usdValue: token.usdValue,

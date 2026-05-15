@@ -263,6 +263,16 @@ struct ModelTests {
         #expect(OnchainTokenIdentity(historicalPriceID: "zapper:unknown:0xabc") == nil)
     }
 
+    @Test func `onchain identity parses camel case chain ids case insensitively`() throws {
+        let polygon = try #require(OnchainTokenIdentity(historicalPriceID: "zapper:polygonzkevm:0xABCDEF"))
+        let immutable = try #require(OnchainTokenIdentity(historicalPriceID: "zapper:immutablex:0xABCDEF"))
+
+        #expect(polygon.chain == .polygonZkEVM)
+        #expect(polygon.historicalPriceID == "zapper:polygonzkevm:0xabcdef")
+        #expect(immutable.chain == .immutableX)
+        #expect(immutable.historicalPriceID == "zapper:immutablex:0xabcdef")
+    }
+
     @Test func `token identity mapping stores provider ids under canonical chain address key`() throws {
         let container = try makeTestContainer()
         let context = container.mainContext

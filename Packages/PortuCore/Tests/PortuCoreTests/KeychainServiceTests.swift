@@ -69,10 +69,27 @@ struct SecretStoreTests {
         #expect(KeychainKey.exchangeAPISecret(id).rawKey == "portu.exchange.\(id.uuidString).apiSecret")
         #expect(KeychainKey.exchangePassphrase(id).rawKey == "portu.exchange.\(id.uuidString).passphrase")
     }
+
+    @Test func `local secret store persists without keychain`() throws {
+        let suiteName = "com.portu.tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = LocalSecretStore(suiteName: suiteName, keyPrefix: "test.")
+
+        try store.set(key: .providerAPIKey(.zapper), value: "zapper-token")
+
+        #expect(defaults.string(forKey: "test.portu.provider.zapper.apiKey") == "zapper-token")
+        #expect(try store.get(key: .providerAPIKey(.zapper)) == "zapper-token")
+
+        try store.delete(key: .providerAPIKey(.zapper))
+
+        #expect(try store.get(key: .providerAPIKey(.zapper)) == nil)
+    }
 }
 
 struct KeychainServiceTests {
-    @Test func `set stores values only in data protection keychain`() throws {
+    @Test func `set stores values in standard keychain`() throws {
         let recorder = KeychainOperationRecorder()
         let store = KeychainService(
             service: "com.portu.tests",
@@ -88,26 +105,21 @@ struct KeychainServiceTests {
         try store.set(key: .providerAPIKey(.zapper), value: "zapper-token")
 
         let addQuery = try #require(recorder.addedQueries.first)
-        #expect(addQuery.usesDataProtectionKeychain)
-        #expect(addQuery[kSecAttrAccessible as String] as? String == kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
+        #expect(!addQuery.usesDataProtectionKeychain)
+        #expect(addQuery[kSecAttrAccessible as String] == nil)
         #expect(recorder.deletedQueries.isEmpty)
     }
 
-    @Test func `get reads only data protection keychain`() throws {
-        let legacyValue = "legacy-zapper-token"
-        let legacyData = try #require(legacyValue.data(using: .utf8))
+    @Test func `get reads standard keychain`() throws {
+        let storedValue = "zapper-token"
+        let storedData = try #require(storedValue.data(using: .utf8))
         let recorder = KeychainOperationRecorder()
 
         let store = KeychainService(
             service: "com.portu.tests",
             copyMatching: { query, result in
-                let copyCount = recorder.appendCopy(query.dictionaryValue)
-
-                guard copyCount > 1 else {
-                    return errSecItemNotFound
-                }
-
-                result?.pointee = legacyData as CFData
+                _ = recorder.appendCopy(query.dictionaryValue)
+                result?.pointee = storedData as CFData
                 return errSecSuccess
             },
             add: { attributes, _ in
@@ -122,9 +134,9 @@ struct KeychainServiceTests {
         let value = try store.get(key: .providerAPIKey(.zapper))
         let copyQueries = recorder.copyQueries
 
-        #expect(value == nil)
+        #expect(value == storedValue)
         #expect(copyQueries.count == 1)
-        #expect(copyQueries[0].usesDataProtectionKeychain)
+        #expect(!copyQueries[0].usesDataProtectionKeychain)
         #expect(recorder.addedQueries.isEmpty)
         #expect(recorder.deletedQueries.isEmpty)
     }

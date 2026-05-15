@@ -173,29 +173,29 @@ struct APIKeysViewModelTests {
 
     // MARK: - Error Handling
 
-    @Test func `load surfaces keychain error`() {
+    @Test func `load surfaces local storage error`() {
         let vm = APIKeysViewModel(secretStore: FailingSecretStore())
         vm.load()
 
-        #expect(vm.keychainError != nil)
+        #expect(vm.secretStoreError != nil)
         #expect(vm.zapperAPIKey.isEmpty)
     }
 
-    @Test func `save surfaces keychain error`() {
+    @Test func `save surfaces local storage error`() {
         let vm = APIKeysViewModel(secretStore: FailingSecretStore())
         vm.zapperAPIKey = "some-key"
         vm.save()
 
-        #expect(vm.keychainError != nil)
+        #expect(vm.secretStoreError != nil)
     }
 
     @Test func `successful operations clear error`() {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
-        vm.keychainError = "stale error"
+        vm.secretStoreError = "stale error"
 
         vm.load()
 
-        #expect(vm.keychainError == nil)
+        #expect(vm.secretStoreError == nil)
     }
 }

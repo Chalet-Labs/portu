@@ -9,6 +9,9 @@ struct SidebarView: View {
 
     @Environment(AppState.self) private var appState
     @Query private var positions: [Position]
+    @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
+    private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @State private var searchText = ""
 
     private var activePositions: [Position] {
@@ -20,24 +23,12 @@ struct SidebarView: View {
     }
 
     private var change24h: Decimal {
-        var total: Decimal = 0
-        for position in activePositions {
-            for token in position.tokens {
-                guard
-                    let asset = token.asset,
-                    let coinGeckoId = asset.coinGeckoId,
-                    let price = appState.prices[coinGeckoId],
-                    let changePct = appState.priceChanges24h[coinGeckoId] else { continue }
-
-                let contribution = token.amount * price * changePct
-                if token.role.isPositive {
-                    total += contribution
-                } else if token.role.isBorrow {
-                    total -= contribution
-                }
-            }
-        }
-        return total
+        OverviewPriceChangeFeature.portfolioChange24h(
+            tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
+            prices: appState.prices,
+            changes24h: appState.priceChanges24h,
+            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
+            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init))
     }
 
     private var filteredSections: [SidebarLayoutSection] {
@@ -113,13 +104,13 @@ private struct SidebarPortfolioHeader: View {
             .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(totalValue, format: .currency(code: "USD").precision(.fractionLength(0)))
+                Text(OverviewPriceDisplay.currency(totalValue))
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 HStack(spacing: 4) {
-                    Text(change24h, format: .currency(code: "USD").precision(.fractionLength(0)))
+                    Text(OverviewPriceDisplay.currency(change24h))
                     Text("24h")
                 }
                 .font(.system(size: 10, weight: .medium, design: .monospaced))

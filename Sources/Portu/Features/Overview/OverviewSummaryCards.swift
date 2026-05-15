@@ -109,7 +109,7 @@ struct OverviewSummaryCards: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Spacer()
-                        Text(value, format: .currency(code: "USD"))
+                        Text(OverviewPriceDisplay.currency(value))
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(PortuTheme.dashboardText)
                             .lineLimit(1)

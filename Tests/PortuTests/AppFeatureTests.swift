@@ -236,18 +236,20 @@ struct AppFeatureTests {
     @Test func `price polling ids split coingecko ids from zapper identities`() {
         let baseToken = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
         let ethToken = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xToken")
+        let polygonZkToken = OnchainTokenIdentity(chain: .polygonZkEVM, contractAddress: "0xToken")
 
         let request = PricePollingIDResolver.split([
             " Bitcoin ",
             baseToken.historicalPriceID,
             "bitcoin",
             ethToken.historicalPriceID,
+            "zapper:polygonzkevm:0xToken",
             "",
             baseToken.historicalPriceID
         ])
 
         #expect(request.coinGeckoIDs == ["bitcoin"])
-        #expect(request.zapperIdentities == [baseToken, ethToken])
+        #expect(request.zapperIdentities == [baseToken, ethToken, polygonZkToken])
     }
 
     @Test func `price polling updates merge coingecko and zapper results`() {

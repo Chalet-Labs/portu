@@ -272,6 +272,36 @@ struct OverviewFeatureTests {
         #expect(price == "$ 0.00000012")
     }
 
+    @Test func `overview currency display uses dollar prefix and compact huge values`() throws {
+        let normal = try OverviewPriceDisplay.currency(#require(Decimal(
+            string: "8889",
+            locale: Locale(identifier: "en_US_POSIX"))))
+        let huge = try OverviewPriceDisplay.currency(#require(Decimal(
+            string: "-64842460574880",
+            locale: Locale(identifier: "en_US_POSIX"))))
+
+        #expect(normal == "$ 8,889")
+        #expect(huge == "-$ 64.8T")
+        #expect(!normal.contains("US$"))
+        #expect(!normal.contains("'"))
+    }
+
+    @Test func `overview axis currency display uses fixed dollar formatting`() {
+        let label = OverviewPriceDisplay.axisCurrency(20_000)
+
+        #expect(label == "$ 20,000")
+        #expect(!label.contains("US$"))
+        #expect(!label.contains("'"))
+    }
+
+    @Test func `overview amount display compacts very large token balances`() throws {
+        let amount = try OverviewPriceDisplay.amount(#require(Decimal(
+            string: "9990000000000",
+            locale: Locale(identifier: "en_US_POSIX"))))
+
+        #expect(amount == "9.99T")
+    }
+
     @Test func `price countdown derives remaining seconds from last update`() {
         let lastUpdate = Date(timeIntervalSince1970: 100)
 
@@ -400,6 +430,88 @@ struct OverviewFeatureTests {
         #expect(row.symbol == "LOCAL")
         #expect(row.price == 3)
         #expect(row.change24h == 0.12)
+    }
+
+    @Test func `price rows fall back to local implied price when live price is implausible`() throws {
+        let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xBad")
+        let local = token(symbol: "BAD", amount: 1_000_000, usdValue: 10, onchainIdentity: identity)
+
+        let rows = OverviewFeature.priceRows(
+            tokens: [local],
+            assetsByCoinGeckoId: [:],
+            prices: [identity.historicalPriceID: 1_000_000],
+            changes24h: [identity.historicalPriceID: 0.10],
+            watchlistIDs: [])
+
+        let row = try #require(rows.first)
+        #expect(row.price == 0.00001)
+        #expect(row.change24h == 0.10)
+    }
+
+    @Test func `token change uses local value when live price is implausible`() {
+        let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xBad")
+        let local = token(symbol: "BAD", amount: 1_000_000, usdValue: 10, onchainIdentity: identity)
+
+        let change = OverviewPositionPricing.change24h(
+            token: local,
+            prices: [identity.historicalPriceID: 1_000_000],
+            changes24h: [identity.historicalPriceID: 0.10],
+            override: nil)
+
+        #expect(change == 1)
+    }
+
+    @Test func `portfolio change uses cached coingecko mappings and zapper fallback ids`() {
+        let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
+        let zapperIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xZapper")
+        let borrowIdentity = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xBorrow")
+        let mapped = token(symbol: "MAP", amount: 2, usdValue: 20, onchainIdentity: mappedIdentity)
+        let zapper = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: zapperIdentity)
+        let borrow = token(symbol: "DEBT", role: .borrow, amount: 4, usdValue: 16, onchainIdentity: borrowIdentity)
+
+        let change = OverviewPriceChangeFeature.portfolioChange24h(
+            tokens: [mapped, zapper, borrow],
+            prices: [
+                "mapped-token": 10,
+                zapperIdentity.historicalPriceID: 5,
+                borrowIdentity.historicalPriceID: 4
+            ],
+            changes24h: [
+                "mapped-token": 0.10,
+                zapperIdentity.historicalPriceID: -0.20,
+                borrowIdentity.historicalPriceID: 0.25
+            ],
+            overrides: [],
+            mappings: [
+                TokenIdentityMappingSnapshot(identity: mappedIdentity, coinGeckoId: "mapped-token")
+            ])
+
+        #expect(change == -5)
+    }
+
+    @Test func `key change tokens include mapped coingecko and zapper priced holdings`() {
+        let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
+        let zapperIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xZapper")
+        let mapped = token(symbol: "MAP", amount: 2, usdValue: 20, onchainIdentity: mappedIdentity)
+        let zapper = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: zapperIdentity)
+
+        let changes = OverviewPriceChangeFeature.keyChangeTokens(
+            tokens: [mapped, zapper],
+            prices: [
+                "mapped-token": 10,
+                zapperIdentity.historicalPriceID: 5
+            ],
+            changes24h: [
+                "mapped-token": 0.10,
+                zapperIdentity.historicalPriceID: -0.20
+            ],
+            overrides: [],
+            mappings: [
+                TokenIdentityMappingSnapshot(identity: mappedIdentity, coinGeckoId: "mapped-token")
+            ])
+
+        #expect(changes.map(\.token.symbol) == ["ZAP", "MAP"])
+        #expect(changes.map(\.change) == [-3, 2])
     }
 
     @Test func `overview position visibility excludes ignored dashboard tokens`() {
