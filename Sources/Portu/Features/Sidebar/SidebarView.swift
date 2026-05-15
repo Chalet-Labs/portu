@@ -8,14 +8,11 @@ struct SidebarView: View {
     let store: StoreOf<AppFeature>
 
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
     @Query private var positions: [Position]
     @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
     private var tokenPricingOverrides: [TokenPricingOverride]
     @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @Query
-    private var historicalPrices: [HistoricalPricePoint]
-    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
-    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
     @AppStorage(TokenDashboardSettings.hideUnpricedKey)
@@ -26,10 +23,6 @@ struct SidebarView: View {
 
     init(store: StoreOf<AppFeature>) {
         self.store = store
-        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: ChartTimeRange.oneMonth.startDate)
-        _historicalPrices = Query(
-            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
-            sort: \.day)
     }
 
     private var activePositions: [Position] {
@@ -53,13 +46,7 @@ struct SidebarView: View {
     private var priceChanges24h: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedChanges24h(
             live: appState.priceChanges24h,
-            historical: historicalBackfillEnabled ? historicalChanges24h : [:])
-    }
-
-    private var historicalChanges24h: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.changes24h(from: historicalPrices.map {
-            HistoricalPriceEntry(coinGeckoId: $0.coinGeckoId, day: $0.day, usdPrice: $0.usdPrice)
-        })
+            historical: historicalPriceChanges24h)
     }
 
     private var dashboardSettings: TokenDashboardSettings {
@@ -81,10 +68,13 @@ struct SidebarView: View {
     }
 
     var body: some View {
+        let currentTotalValue = totalValue
+        let currentChange24h = change24h
+
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    SidebarPortfolioHeader(totalValue: totalValue, change24h: change24h)
+                    SidebarPortfolioHeader(totalValue: currentTotalValue, change24h: currentChange24h)
 
                     DashboardSearchField(placeholder: "Search", text: $searchText)
 

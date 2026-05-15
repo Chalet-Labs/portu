@@ -1,9 +1,11 @@
+// swiftlint:disable file_length
+
 import Foundation
 @testable import Portu
 import PortuCore
 import Testing
 
-struct OverviewFeatureTests {
+struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
     @Test func `top assets aggregate by asset and put residual into other`() throws {
         let btc = UUID()
         let eth = UUID()
@@ -43,6 +45,25 @@ struct OverviewFeatureTests {
 
         #expect(slices.map(\.id) == [aave.uuidString, bridgedAave.uuidString])
         #expect(Set(slices.map(\.id)).count == slices.count)
+    }
+
+    @Test func `top asset slices merge native eth from multiple chains`() throws {
+        let mainnet = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0x0000000000000000000000000000000000000000")
+        let base = OnchainTokenIdentity(chain: .base, contractAddress: "0x0000000000000000000000000000000000000000")
+        let tokens = [
+            token(symbol: "ETH", name: "Ether", amount: 1, usdValue: 2000, onchainIdentity: mainnet),
+            token(symbol: "ETH", name: "Ethereum", amount: 0.5, usdValue: 1000, onchainIdentity: base)
+        ]
+
+        let slices = OverviewFeature.topAssetSlices(
+            from: tokens,
+            prices: ["ethereum": 2300],
+            limit: 5)
+
+        let slice = try #require(slices.first)
+        #expect(slices.count == 1)
+        #expect(slice.label == "ETH")
+        #expect(slice.value == 3450)
     }
 
     @Test func `category slices round display percentages to exactly one hundred`() {
@@ -213,6 +234,52 @@ struct OverviewFeatureTests {
         #expect(row.coinGeckoId == nil)
     }
 
+    @Test func `price rows merge native eth from multiple chains`() throws {
+        let mainnet = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0x0000000000000000000000000000000000000000")
+        let base = OnchainTokenIdentity(chain: .base, contractAddress: "0x0000000000000000000000000000000000000000")
+        let tokens = [
+            token(symbol: "ETH", name: "Ether", amount: 1, usdValue: 2000, onchainIdentity: mainnet),
+            token(symbol: "ETH", name: "Ethereum", amount: 0.5, usdValue: 1000, onchainIdentity: base)
+        ]
+
+        let rows = OverviewFeature.priceRows(
+            tokens: tokens,
+            assetsByCoinGeckoId: [:],
+            prices: ["ethereum": 2300],
+            changes24h: ["ethereum": 0.03],
+            watchlistIDs: [])
+
+        let row = try #require(rows.first)
+        #expect(rows.count == 1)
+        #expect(row.symbol == "ETH")
+        #expect(row.price == 2300)
+        #expect(row.change24h == 0.03)
+        #expect(row.coinGeckoId == "ethereum")
+    }
+
+    @Test func `price rows do not show sync time unit price when provider price is missing`() throws {
+        let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0x3e5a801830d63bfd3feb2885533e27648dbc17a7")
+        let tokens = [
+            token(
+                symbol: "BTC",
+                name: "HarryPotterObamaSatoshi1Meme",
+                amount: 259_014_540,
+                usdValue: 1166.53082792,
+                onchainIdentity: identity)
+        ]
+
+        let rows = OverviewFeature.priceRows(
+            tokens: tokens,
+            assetsByCoinGeckoId: [:],
+            prices: [:],
+            changes24h: [:],
+            watchlistIDs: [])
+
+        let row = try #require(rows.first)
+        #expect(row.symbol == "HarryPotterObamaSatoshi1Meme")
+        #expect(row.price == nil)
+    }
+
     @Test func `asset candidates are pre grouped by normalized coin gecko id`() throws {
         let preferred = asset(symbol: "AAVE", coinGeckoId: " aave ")
         let later = asset(symbol: "ZAAVE", coinGeckoId: "AAVE")
@@ -287,7 +354,7 @@ struct OverviewFeatureTests {
     }
 
     @Test func `overview axis currency display uses fixed dollar formatting`() {
-        let label = OverviewPriceDisplay.axisCurrency(20_000)
+        let label = OverviewPriceDisplay.axisCurrency(20000)
 
         #expect(label == "$ 20,000")
         #expect(!label.contains("US$"))
@@ -584,6 +651,7 @@ struct OverviewFeatureTests {
     private func token(
         assetId: UUID = UUID(),
         symbol: String,
+        name: String? = nil,
         category: AssetCategory = .major,
         coinGeckoId: String? = nil,
         role: TokenRole = .balance,
@@ -593,7 +661,7 @@ struct OverviewFeatureTests {
         TokenEntry(
             assetId: assetId,
             symbol: symbol,
-            name: symbol,
+            name: name ?? symbol,
             category: category,
             coinGeckoId: coinGeckoId,
             onchainIdentity: onchainIdentity,

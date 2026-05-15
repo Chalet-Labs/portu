@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import ComposableArchitecture
 import Foundation
 import PortuCore
@@ -286,15 +288,21 @@ enum HistoricalBackfillCandidateResolver {
             return
         }
         guard let onchainIdentity = asset.onchainIdentity else { return }
-        if let resolvedID = TokenIdentityMappingFeature.mappedCoinGeckoID(
-            for: onchainIdentity,
-            mappingsByIdentity: mappingsByIdentity) ?? normalizedID(resolvedCoinGeckoIDs[onchainIdentity]) {
+        if let nativeID = TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) {
+            grouped[HistoricalBackfillCandidateKey(source: .coingecko(nativeID)), default: []].insert(asset.assetId)
+            return
+        }
+        if
+            let resolvedID = TokenIdentityMappingFeature.mappedCoinGeckoID(
+                for: onchainIdentity,
+                mappingsByIdentity: mappingsByIdentity) ?? normalizedID(resolvedCoinGeckoIDs[onchainIdentity]) {
             grouped[HistoricalBackfillCandidateKey(source: .coingecko(resolvedID)), default: []].insert(asset.assetId)
         } else {
             grouped[HistoricalBackfillCandidateKey(source: .zapper(onchainIdentity)), default: []].insert(asset.assetId)
         }
     }
 
+    // swiftlint:disable:next function_parameter_count
     private static func addUnresolvedIdentity(
         assetId _: UUID,
         coinGeckoId: String?,
@@ -305,9 +313,13 @@ enum HistoricalBackfillCandidateResolver {
         guard shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity else {
             return
         }
-        guard TokenIdentityMappingFeature.mappedCoinGeckoID(
-            for: onchainIdentity,
-            mappingsByIdentity: mappingsByIdentity) == nil
+        guard TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil else {
+            return
+        }
+        guard
+            TokenIdentityMappingFeature.mappedCoinGeckoID(
+                for: onchainIdentity,
+                mappingsByIdentity: mappingsByIdentity) == nil
         else {
             return
         }
@@ -321,6 +333,9 @@ enum HistoricalBackfillCandidateResolver {
         override: TokenPricingOverrideSnapshot?,
         result: inout [OnchainTokenIdentity: Set<UUID>]) {
         guard shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity else {
+            return
+        }
+        guard TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil else {
             return
         }
         result[onchainIdentity, default: []].insert(assetId)
@@ -487,7 +502,7 @@ struct HistoricalPriceBackfillFeature {
                 lhsResult == rhsResult
             case (.clearCacheButtonTapped, .clearCacheButtonTapped):
                 true
-            case let (.clearCacheCompleted(.success), .clearCacheCompleted(.success)):
+            case (.clearCacheCompleted(.success), .clearCacheCompleted(.success)):
                 true
             case let (.clearCacheCompleted(.failure(lhsError)), .clearCacheCompleted(.failure(rhsError))):
                 lhsError == rhsError

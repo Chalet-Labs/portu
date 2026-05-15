@@ -38,6 +38,8 @@ struct TokenIdentityMappingSnapshot: Equatable, Identifiable {
 }
 
 enum TokenIdentityMappingFeature {
+    private static let nativeAssetAddress = "0x0000000000000000000000000000000000000000"
+
     static func mappingsByIdentity(
         _ mappings: [TokenIdentityMappingSnapshot]) -> [OnchainTokenIdentity: TokenIdentityMappingSnapshot] {
         var result: [OnchainTokenIdentity: TokenIdentityMappingSnapshot] = [:]
@@ -62,7 +64,24 @@ enum TokenIdentityMappingFeature {
     static func priceID(
         coinGeckoId: String?,
         onchainIdentity: OnchainTokenIdentity?) -> String? {
-        normalizedProviderID(coinGeckoId) ?? onchainIdentity?.historicalPriceID
+        normalizedProviderID(coinGeckoId) ?? nativeCoinGeckoID(for: onchainIdentity) ?? onchainIdentity?.historicalPriceID
+    }
+
+    static func nativeCoinGeckoID(for identity: OnchainTokenIdentity?) -> String? {
+        guard
+            let identity,
+            identity.contractAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == nativeAssetAddress
+        else {
+            return nil
+        }
+
+        switch identity.chain {
+        case .ethereum, .arbitrum, .optimism, .base, .unichain, .zksync, .linea, .blast, .taiko, .scroll, .zora, .mode:
+            return "ethereum"
+        case .polygon, .bsc, .gnosis, .berachain, .sonic, .polygonZkEVM, .moonbeam, .ronin, .mantle, .immutableX,
+             .hyperliquid, .solana, .bitcoin, .avalanche, .monad, .katana:
+            return nil
+        }
     }
 
     static func nonZapperPriceID(_ id: String?) -> String? {

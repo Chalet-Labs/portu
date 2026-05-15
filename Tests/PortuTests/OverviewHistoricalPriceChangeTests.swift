@@ -37,6 +37,14 @@ struct OverviewHistoricalPriceChangeTests {
         #expect(changes["ignored"] == nil)
     }
 
+    @Test func `historical price change query starts at utc day two days before now`() {
+        let now = Date(timeIntervalSince1970: 172_800 + 43200)
+
+        let startDate = OverviewHistoricalPriceChangeFeature.queryStartDate(now: now)
+
+        #expect(startDate == Date(timeIntervalSince1970: 0))
+    }
+
     @Test func `historical price changes backfill overview key changes when live changes are missing`() {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xZapper")
         let token = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: identity)

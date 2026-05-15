@@ -9,8 +9,10 @@ struct ContentView: View {
     @State private var assetNavigationPath = NavigationPath()
 
     var body: some View {
-        mainDashboard
-            .frame(minWidth: 900, minHeight: 600)
+        HistoricalPriceChanges24hProvider {
+            mainDashboard
+        }
+        .frame(minWidth: 900, minHeight: 600)
     }
 
     private var mainDashboard: some View {

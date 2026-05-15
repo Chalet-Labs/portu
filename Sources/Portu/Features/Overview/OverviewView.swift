@@ -62,25 +62,36 @@ struct OverviewView: View {
         GeometryReader { proxy in
             let isWide = proxy.size.width >= 1080
 
-            VStack(alignment: .leading, spacing: 0) {
-                pageHeader
-                    .padding(.horizontal, DashboardStyle.pagePadding)
-                    .padding(.top, DashboardStyle.pagePadding)
-                    .padding(.bottom, 10)
-
+            Group {
                 if isWide {
                     HStack(alignment: .top, spacing: 0) {
-                        mainScrollColumn
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        VStack(alignment: .leading, spacing: 0) {
+                            pageHeader
+                                .padding(.horizontal, DashboardStyle.pagePadding)
+                                .padding(.top, DashboardStyle.pagePadding)
+                                .padding(.bottom, 10)
+
+                            mainScrollColumn
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                         InspectorPanel(store: store)
                             .frame(width: PortuTheme.dashboardInspectorWidth + OverviewLayout.inspectorRailWidthAdjustment)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    compactScrollColumn
+                    VStack(alignment: .leading, spacing: 0) {
+                        pageHeader
+                            .padding(.horizontal, DashboardStyle.pagePadding)
+                            .padding(.top, DashboardStyle.pagePadding)
+                            .padding(.bottom, 10)
+
+                        compactScrollColumn
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(PortuTheme.dashboardBackground)
         }
         .dashboardPage()

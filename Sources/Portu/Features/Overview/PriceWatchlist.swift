@@ -6,12 +6,11 @@ import SwiftUI
 
 struct PriceWatchlist: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
     @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @Query
-    private var historicalPrices: [HistoricalPricePoint]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
@@ -23,16 +22,7 @@ struct PriceWatchlist: View {
     private var hideUnpriced = true
     @AppStorage(TokenDashboardSettings.hideDustKey)
     private var hideDust = true
-    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
-    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
     @State private var searchText = ""
-
-    init() {
-        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: ChartTimeRange.oneMonth.startDate)
-        _historicalPrices = Query(
-            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
-            sort: \.day)
-    }
 
     private var tokenEntries: [TokenEntry] {
         TokenEntry.fromActiveTokens(
@@ -79,13 +69,7 @@ struct PriceWatchlist: View {
     private var priceChanges24h: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedChanges24h(
             live: appState.priceChanges24h,
-            historical: historicalBackfillEnabled ? historicalChanges24h : [:])
-    }
-
-    private var historicalChanges24h: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.changes24h(from: historicalPrices.map {
-            HistoricalPriceEntry(coinGeckoId: $0.coinGeckoId, day: $0.day, usdPrice: $0.usdPrice)
-        })
+            historical: historicalPriceChanges24h)
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
@@ -111,6 +95,9 @@ struct PriceWatchlist: View {
     }
 
     var body: some View {
+        let currentRows = rows
+        let currentMatchingAssets = matchingAssets
+
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Prices")
@@ -128,8 +115,8 @@ struct PriceWatchlist: View {
 
             watchlistSearchField
 
-            if !matchingAssets.isEmpty {
-                suggestionList
+            if !currentMatchingAssets.isEmpty {
+                suggestionList(currentMatchingAssets)
             }
 
             VStack(spacing: 0) {
@@ -139,14 +126,14 @@ struct PriceWatchlist: View {
                     .fill(PortuTheme.dashboardStroke)
                     .frame(height: 1)
 
-                if rows.isEmpty {
+                if currentRows.isEmpty {
                     Text("No priced assets")
                         .font(.caption)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
                 } else {
-                    ForEach(rows) { row in
+                    ForEach(currentRows) { row in
                         PriceWatchlistRow(row: row, remove: removeFromWatchlist)
 
                         Rectangle()
@@ -198,9 +185,9 @@ struct PriceWatchlist: View {
                 .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
     }
 
-    private var suggestionList: some View {
+    private func suggestionList(_ assets: [OverviewAssetCandidate]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(matchingAssets) { asset in
+            ForEach(assets) { asset in
                 Button {
                     addToWatchlist(asset.coinGeckoId)
                 } label: {

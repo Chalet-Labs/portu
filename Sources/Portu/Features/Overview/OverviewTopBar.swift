@@ -6,26 +6,16 @@ import SwiftUI
 
 struct OverviewTopBar: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
     @Query private var positions: [Position]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
     @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @Query
-    private var historicalPrices: [HistoricalPricePoint]
-    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
-    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
     @AppStorage(TokenDashboardSettings.hideUnpricedKey)
     private var hideUnpriced = true
     @AppStorage(TokenDashboardSettings.hideDustKey)
     private var hideDust = true
-
-    init() {
-        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: ChartTimeRange.oneMonth.startDate)
-        _historicalPrices = Query(
-            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
-            sort: \.day)
-    }
 
     /// Only positions from active accounts
     private var activePositions: [Position] {
@@ -49,16 +39,10 @@ struct OverviewTopBar: View {
     private var priceChanges24h: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedChanges24h(
             live: appState.priceChanges24h,
-            historical: historicalBackfillEnabled ? historicalChanges24h : [:])
+            historical: historicalPriceChanges24h)
     }
 
-    private var historicalChanges24h: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.changes24h(from: historicalPrices.map {
-            HistoricalPriceEntry(coinGeckoId: $0.coinGeckoId, day: $0.day, usdPrice: $0.usdPrice)
-        })
-    }
-
-    private var changePct: Decimal {
+    private func changePct(totalValue: Decimal, change24h: Decimal) -> Decimal {
         let prev = totalValue - change24h
         guard prev != 0 else { return 0 }
         return change24h / prev
@@ -72,8 +56,12 @@ struct OverviewTopBar: View {
     }
 
     var body: some View {
+        let currentTotalValue = totalValue
+        let currentChange24h = change24h
+        let currentChangePct = changePct(totalValue: currentTotalValue, change24h: currentChange24h)
+
         VStack(alignment: .leading, spacing: 18) {
-            Text(OverviewPriceDisplay.currency(totalValue))
+            Text(OverviewPriceDisplay.currency(currentTotalValue))
                 .font(DashboardStyle.heroValueFont)
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
@@ -81,26 +69,26 @@ struct OverviewTopBar: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {
-                    Text(OverviewPriceDisplay.currency(change24h))
+                    Text(OverviewPriceDisplay.currency(currentChange24h))
                         .lineLimit(1)
                     Spacer()
                     Text("$ change 24h")
                         .foregroundStyle(PortuTheme.dashboardTertiaryText)
                         .lineLimit(1)
                 }
-                .foregroundStyle(PortuTheme.changeColor(for: change24h))
+                .foregroundStyle(PortuTheme.changeColor(for: currentChange24h))
 
                 HStack(spacing: 4) {
-                    Image(systemName: changePct >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                    Image(systemName: currentChangePct >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
                         .font(.caption2)
-                    Text(changePct, format: .percent.precision(.fractionLength(2)))
+                    Text(currentChangePct, format: .percent.precision(.fractionLength(2)))
                         .lineLimit(1)
                     Spacer()
                     Text("% change 24h")
                         .foregroundStyle(PortuTheme.dashboardTertiaryText)
                         .lineLimit(1)
                 }
-                .foregroundStyle(PortuTheme.changeColor(for: changePct))
+                .foregroundStyle(PortuTheme.changeColor(for: currentChangePct))
             }
             .font(.system(size: 13, weight: .medium, design: .monospaced))
         }

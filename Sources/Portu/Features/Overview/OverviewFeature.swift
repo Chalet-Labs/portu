@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import Foundation
 import PortuCore
 
@@ -145,9 +147,19 @@ enum OverviewWatchlistStore {
 enum OverviewFeature {
     private static let assetResidualSliceID = "asset-residual"
     private static let categoryResidualSliceID = "category-residual"
+    private static let reservedMarketSymbols: [String: Set<String>] = [
+        "BTC": ["bitcoin"],
+        "ETH": ["ether", "ethereum"],
+        "USDC": ["usd coin", "usdc"],
+        "USDT": ["tether", "tether usd", "usdt"],
+        "DAI": ["dai"],
+        "SOL": ["solana"],
+        "BNB": ["bnb", "binance coin"]
+    ]
 
     private struct AssetAggregate {
-        let assetId: UUID
+        let key: String
+        var assetIds: Set<UUID>
         var symbol: String
         var name: String
         var category: AssetCategory
@@ -161,6 +173,17 @@ enum OverviewFeature {
             guard amount > 0 else { return nil }
             return value / amount
         }
+
+        var assetId: UUID {
+            guard let id = assetIds.min(by: { $0.uuidString < $1.uuidString }) else {
+                preconditionFailure("AssetAggregate requires at least one asset id")
+            }
+            return id
+        }
+
+        var rowID: String {
+            assetIds.count == 1 ? assetId.uuidString : key
+        }
     }
 
     static func topAssetSlices(
@@ -170,7 +193,7 @@ enum OverviewFeature {
         let aggregates = sortedAssetAggregates(from: tokens, prices: prices)
         let visibleCount = max(limit, 0)
         var sliceInputs = aggregates.prefix(visibleCount).map {
-            SliceInput(id: $0.assetId.uuidString, label: $0.symbol, value: $0.value)
+            SliceInput(id: $0.rowID, label: $0.symbol, value: $0.value)
         }
 
         let otherValue = aggregates.dropFirst(visibleCount).reduce(Decimal.zero) { $0 + $1.value }
@@ -295,7 +318,7 @@ enum OverviewFeature {
         for aggregate in sortedAssetAggregates(from: tokens, prices: prices).prefix(max(portfolioLimit, 0)) {
             let priceID = TokenIdentityMappingFeature.normalizedProviderID(aggregate.priceID)
             let coinGeckoId = TokenIdentityMappingFeature.nonZapperPriceID(priceID)
-            let rowID = aggregate.assetId.uuidString
+            let rowID = aggregate.rowID
             guard !seenRowIDs.contains(rowID) else {
                 continue
             }
@@ -363,26 +386,33 @@ enum OverviewFeature {
     private static func sortedAssetAggregates(
         from tokens: [TokenEntry],
         prices: [String: Decimal]) -> [AssetAggregate] {
-        var aggregates: [UUID: AssetAggregate] = [:]
+        var aggregates: [String: AssetAggregate] = [:]
 
         for token in tokens where token.role.isPositive {
-            var aggregate = aggregates[token.assetId] ?? AssetAggregate(
-                assetId: token.assetId,
-                symbol: token.symbol,
+            let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: nil)
+            let key = assetAggregateKey(for: token, priceID: priceID)
+            var aggregate = aggregates[key] ?? AssetAggregate(
+                key: key,
+                assetIds: [token.assetId],
+                symbol: displayLabel(symbol: token.symbol, name: token.name, priceID: priceID),
                 name: token.name,
                 category: token.category,
                 portfolioCategory: token.portfolioCategory,
-                coinGeckoId: OverviewWatchlistStore.normalizedID(token.coinGeckoId),
-                priceID: TokenSettingsFeature.resolvedPriceID(token: token, override: nil),
+                coinGeckoId: OverviewWatchlistStore.normalizedID(token.coinGeckoId)
+                    ?? TokenIdentityMappingFeature.nonZapperPriceID(priceID),
+                priceID: priceID,
                 value: 0,
                 amount: 0)
-            aggregate.coinGeckoId = aggregate.coinGeckoId ?? OverviewWatchlistStore.normalizedID(token.coinGeckoId)
-            aggregate.priceID = aggregate.priceID ?? TokenSettingsFeature.resolvedPriceID(token: token, override: nil)
+            aggregate.assetIds.insert(token.assetId)
+            aggregate.coinGeckoId = aggregate.coinGeckoId
+                ?? OverviewWatchlistStore.normalizedID(token.coinGeckoId)
+                ?? TokenIdentityMappingFeature.nonZapperPriceID(priceID)
+            aggregate.priceID = aggregate.priceID ?? priceID
             aggregate.value += resolvedValue(for: token, prices: prices)
             if token.amount > 0 {
                 aggregate.amount += token.amount
             }
-            aggregates[token.assetId] = aggregate
+            aggregates[key] = aggregate
         }
 
         return aggregates.values
@@ -399,10 +429,20 @@ enum OverviewFeature {
                         return nameOrder == .orderedAscending
                     }
 
-                    return $0.assetId.uuidString < $1.assetId.uuidString
+                    return $0.rowID < $1.rowID
                 }
                 return $0.value > $1.value
             }
+    }
+
+    private static func assetAggregateKey(
+        for token: TokenEntry,
+        priceID: String?) -> String {
+        let normalizedSymbol = token.symbol.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let priceID = TokenIdentityMappingFeature.normalizedProviderID(priceID) {
+            return "price:\(priceID):symbol:\(normalizedSymbol)"
+        }
+        return "asset:\(token.assetId.uuidString)"
     }
 
     private static func preferredAssetCandidate(
@@ -423,18 +463,38 @@ enum OverviewFeature {
     private static func displayPrice(
         for aggregate: AssetAggregate,
         prices: [String: Decimal]) -> Decimal? {
-        guard
-            let priceID = TokenIdentityMappingFeature.normalizedProviderID(aggregate.priceID),
-            let price = prices[priceID]
-        else {
+        guard let priceID = TokenIdentityMappingFeature.normalizedProviderID(aggregate.priceID) else {
             return aggregate.fallbackPrice
         }
+        guard let price = prices[priceID] else { return nil }
         if
             OnchainTokenIdentity(historicalPriceID: priceID) == nil
             || OverviewPositionPricing.isPlausible(price: price, amount: aggregate.amount, usdValue: aggregate.value) {
             return price
         }
         return aggregate.fallbackPrice
+    }
+
+    private static func displayLabel(
+        symbol: String,
+        name: String,
+        priceID: String?) -> String {
+        let trimmedSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSymbol = trimmedSymbol.uppercased()
+        guard
+            TokenIdentityMappingFeature.nonZapperPriceID(priceID) == nil,
+            let canonicalNames = reservedMarketSymbols[normalizedSymbol],
+            !trimmedName.isEmpty
+        else {
+            return trimmedSymbol.isEmpty ? trimmedName : trimmedSymbol
+        }
+
+        let normalizedName = trimmedName.lowercased()
+        if canonicalNames.contains(normalizedName) || normalizedName == normalizedSymbol.lowercased() {
+            return trimmedSymbol
+        }
+        return trimmedName
     }
 
     private static func displayPercentages(for values: [Decimal]) -> [Int] {

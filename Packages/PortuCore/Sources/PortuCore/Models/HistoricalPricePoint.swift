@@ -8,6 +8,8 @@ public enum HistoricalPriceSource: String, Codable, Sendable, Equatable {
 
 @Model
 public final class HistoricalPricePoint {
+    #Index<HistoricalPricePoint>([\.day], [\.coinGeckoId, \.day])
+
     @Attribute(.unique) public var id: UUID
     public var coinGeckoId: String
     public var day: Date

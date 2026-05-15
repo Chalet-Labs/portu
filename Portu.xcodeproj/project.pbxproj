@@ -37,6 +37,7 @@
 		39E54F71C03B1DF44496843A /* PortfolioCategoryResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 187BA85D9D8DD15A770F50DA /* PortfolioCategoryResolverTests.swift */; };
 		3B7F98D703DC7FC11BC01686 /* PricePollingIDResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F65FF1713209FB3D1DDB9C2 /* PricePollingIDResolver.swift */; };
 		3E9FAAECCAB6AD25EDF404CE /* TokenSettingsFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97271DF343FF3BCB2234A40D /* TokenSettingsFeature.swift */; };
+		41D3D4320D5DBB104D837166 /* HistoricalPriceChanges24hProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE9024AF502998B64A46F8AC /* HistoricalPriceChanges24hProvider.swift */; };
 		44652004FEA936D651446318 /* PerformanceHistoricalPriceChangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F4BE776CC6D1B2E9953432 /* PerformanceHistoricalPriceChangeTests.swift */; };
 		446DB5318394D5247E6A5316 /* TokenPricingOverrideWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C5B647C18FB90D4BF98BB5E /* TokenPricingOverrideWriter.swift */; };
 		4544E119D1FB01F324F42387 /* CSVDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF666281E56D489791E155DE /* CSVDocument.swift */; };
@@ -253,6 +254,7 @@
 		BB6CA054F3A64E61E608548C /* PerformanceFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceFeature.swift; sourceTree = "<group>"; };
 		BD13B1599F995F29139DFB24 /* AddPositionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPositionSheet.swift; sourceTree = "<group>"; };
 		BD13FDD77A649AA0A7CBEA62 /* AppFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureTests.swift; sourceTree = "<group>"; };
+		BE9024AF502998B64A46F8AC /* HistoricalPriceChanges24hProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceChanges24hProvider.swift; sourceTree = "<group>"; };
 		BEA37039B203CA0B14A05EFD /* OverviewPositionTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPositionTabs.swift; sourceTree = "<group>"; };
 		C1E06309E68FBD62B4957310 /* PortfolioCategorySeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioCategorySeeder.swift; sourceTree = "<group>"; };
 		C30F8524EBB19474FFA3871C /* AssetPriceChartTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetPriceChartTests.swift; sourceTree = "<group>"; };
@@ -332,6 +334,7 @@
 				DF666281E56D489791E155DE /* CSVDocument.swift */,
 				6E73BD66578FD9C7009C3632 /* DashboardStyle.swift */,
 				8489FFB3B14202D63DFC5284 /* HistoricalPortfolioEstimator.swift */,
+				BE9024AF502998B64A46F8AC /* HistoricalPriceChanges24hProvider.swift */,
 				B4CF024449593948154682D9 /* TokenIdentityMappingFeature.swift */,
 			);
 			path = Shared;
@@ -730,6 +733,7 @@
 				F265F29CAD907EE12E1AFA6B /* HistoricalPriceBackfillClient.swift in Sources */,
 				DBC48C3423CDC2298E35A2BB /* HistoricalPriceBackfillFeature.swift in Sources */,
 				81210B84C4D9C2AAE588C929 /* HistoricalPriceBackfillSettings.swift in Sources */,
+				41D3D4320D5DBB104D837166 /* HistoricalPriceChanges24hProvider.swift in Sources */,
 				2E1ECF2FEFF79728EE7CA698 /* InspectorPanel.swift in Sources */,
 				52A6CFFFCF82E2F1F98C0C35 /* MainWindowPlacement.swift in Sources */,
 				911345DDA176D415CF7662CE /* ModelContainerFactory.swift in Sources */,

@@ -93,25 +93,28 @@ enum OverviewPriceChangeFeature {
 }
 
 enum OverviewHistoricalPriceChangeFeature {
+    static func queryStartDate(now: Date = .now) -> Date {
+        HistoricalPriceCalendar.utcStartOfDay(for: now)
+            .addingTimeInterval(-2 * 86400)
+    }
+
     static func changes24h(from prices: [HistoricalPriceEntry]) -> [String: Decimal] {
-        var latestByIDAndDay: [String: [Date: Decimal]] = [:]
+        var latestPairs: [String: HistoricalPriceChangePair] = [:]
         for price in prices {
             guard
                 let id = TokenIdentityMappingFeature.normalizedProviderID(price.coinGeckoId),
                 price.usdPrice > 0
             else { continue }
             let day = HistoricalPriceCalendar.utcStartOfDay(for: price.day)
-            latestByIDAndDay[id, default: [:]][day] = price.usdPrice
+            latestPairs[id, default: HistoricalPriceChangePair()]
+                .update(day: day, price: price.usdPrice)
         }
 
         var changes: [String: Decimal] = [:]
-        for (id, pricesByDay) in latestByIDAndDay {
-            let orderedDays = pricesByDay.keys.sorted()
+        for (id, pair) in latestPairs {
             guard
-                let latestDay = orderedDays.last,
-                let previousDay = orderedDays.dropLast().last,
-                let latestPrice = pricesByDay[latestDay],
-                let previousPrice = pricesByDay[previousDay],
+                let latestPrice = pair.latestPrice,
+                let previousPrice = pair.previousPrice,
                 previousPrice > 0
             else { continue }
             changes[id] = (latestPrice - previousPrice) / previousPrice
@@ -132,6 +135,35 @@ enum OverviewHistoricalPriceChangeFeature {
             merged[normalizedID] = change
         }
         return merged
+    }
+}
+
+private struct HistoricalPriceChangePair {
+    var latestDay: Date?
+    var latestPrice: Decimal?
+    var previousDay: Date?
+    var previousPrice: Decimal?
+
+    mutating func update(day: Date, price: Decimal) {
+        guard let currentLatestDay = latestDay else {
+            latestDay = day
+            latestPrice = price
+            return
+        }
+
+        if day > currentLatestDay {
+            previousDay = currentLatestDay
+            previousPrice = latestPrice
+            latestDay = day
+            latestPrice = price
+        } else if day == currentLatestDay {
+            latestPrice = price
+        } else if previousDay == nil || day > previousDay! {
+            previousDay = day
+            previousPrice = price
+        } else if day == previousDay {
+            previousPrice = price
+        }
     }
 }
 
