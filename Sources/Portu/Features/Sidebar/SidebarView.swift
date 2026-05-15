@@ -12,7 +12,25 @@ struct SidebarView: View {
     @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
     private var tokenPricingOverrides: [TokenPricingOverride]
     @Query private var tokenIdentityMappings: [TokenIdentityMapping]
+    @Query
+    private var historicalPrices: [HistoricalPricePoint]
+    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
+    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
     @State private var searchText = ""
+
+    init(store: StoreOf<AppFeature>) {
+        self.store = store
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: ChartTimeRange.oneMonth.startDate)
+        _historicalPrices = Query(
+            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+    }
 
     private var activePositions: [Position] {
         positions.filter { $0.account?.isActive == true }
@@ -26,9 +44,29 @@ struct SidebarView: View {
         OverviewPriceChangeFeature.portfolioChange24h(
             tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
             prices: appState.prices,
-            changes24h: appState.priceChanges24h,
+            changes24h: priceChanges24h,
             overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
-            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init))
+            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
+            settings: dashboardSettings)
+    }
+
+    private var priceChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
+            live: appState.priceChanges24h,
+            historical: historicalBackfillEnabled ? historicalChanges24h : [:])
+    }
+
+    private var historicalChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.changes24h(from: historicalPrices.map {
+            HistoricalPriceEntry(coinGeckoId: $0.coinGeckoId, day: $0.day, usdPrice: $0.usdPrice)
+        })
+    }
+
+    private var dashboardSettings: TokenDashboardSettings {
+        TokenDashboardSettings(
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust)
     }
 
     private var filteredSections: [SidebarLayoutSection] {

@@ -13,9 +13,19 @@ enum OverviewPriceChangeFeature {
         prices: [String: Decimal],
         changes24h: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot],
-        mappings: [TokenIdentityMappingSnapshot]) -> Decimal {
+        mappings: [TokenIdentityMappingSnapshot],
+        settings: TokenDashboardSettings? = nil) -> Decimal {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        return mappedTokens(tokens, mappings: mappings, overrides: overrides).reduce(Decimal.zero) { total, token in
+        let mapped = mappedTokens(tokens, mappings: mappings, overrides: overrides)
+        let changeTokens = settings.map {
+            TokenSettingsFeature.dashboardEligibleTokens(
+                tokens: mapped,
+                prices: prices,
+                overrideMap: overrideMap,
+                settings: $0)
+        } ?? mapped
+
+        return changeTokens.reduce(Decimal.zero) { total, token in
             total + signedChange24h(
                 token: token,
                 prices: prices,
@@ -79,6 +89,49 @@ enum OverviewPriceChangeFeature {
             to: tokens,
             mappings: mappings,
             overrides: overrides)
+    }
+}
+
+enum OverviewHistoricalPriceChangeFeature {
+    static func changes24h(from prices: [HistoricalPriceEntry]) -> [String: Decimal] {
+        var latestByIDAndDay: [String: [Date: Decimal]] = [:]
+        for price in prices {
+            guard
+                let id = TokenIdentityMappingFeature.normalizedProviderID(price.coinGeckoId),
+                price.usdPrice > 0
+            else { continue }
+            let day = HistoricalPriceCalendar.utcStartOfDay(for: price.day)
+            latestByIDAndDay[id, default: [:]][day] = price.usdPrice
+        }
+
+        var changes: [String: Decimal] = [:]
+        for (id, pricesByDay) in latestByIDAndDay {
+            let orderedDays = pricesByDay.keys.sorted()
+            guard
+                let latestDay = orderedDays.last,
+                let previousDay = orderedDays.dropLast().last,
+                let latestPrice = pricesByDay[latestDay],
+                let previousPrice = pricesByDay[previousDay],
+                previousPrice > 0
+            else { continue }
+            changes[id] = (latestPrice - previousPrice) / previousPrice
+        }
+        return changes
+    }
+
+    static func mergedChanges24h(
+        live: [String: Decimal],
+        historical: [String: Decimal]) -> [String: Decimal] {
+        var merged: [String: Decimal] = [:]
+        for (id, change) in historical {
+            guard let normalizedID = TokenIdentityMappingFeature.normalizedProviderID(id) else { continue }
+            merged[normalizedID] = change
+        }
+        for (id, change) in live {
+            guard let normalizedID = TokenIdentityMappingFeature.normalizedProviderID(id) else { continue }
+            merged[normalizedID] = change
+        }
+        return merged
     }
 }
 

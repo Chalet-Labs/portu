@@ -155,15 +155,19 @@ private struct OverviewPositionTokenRow: View {
             .frame(width: 90, alignment: .leading)
 
             HStack(spacing: 8) {
-                Text(OverviewPriceDisplay.price(price))
+                Text(OverviewPriceDisplay.compactPrice(price))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
+                    .allowsTightening(true)
+                    .minimumScaleFactor(0.8)
 
                 Text(OverviewPriceDisplay.currency(change24h))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(OverviewPositionChangeTone.tone(for: token.role, change: change24h).color)
                     .lineLimit(1)
+                    .allowsTightening(true)
+                    .minimumScaleFactor(0.8)
             }
             .frame(width: 140, alignment: .trailing)
 

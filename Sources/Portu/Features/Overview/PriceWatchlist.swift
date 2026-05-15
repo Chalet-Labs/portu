@@ -10,6 +10,8 @@ struct PriceWatchlist: View {
     @Query private var tokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
     @Query private var tokenIdentityMappings: [TokenIdentityMapping]
+    @Query
+    private var historicalPrices: [HistoricalPricePoint]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
@@ -21,7 +23,16 @@ struct PriceWatchlist: View {
     private var hideUnpriced = true
     @AppStorage(TokenDashboardSettings.hideDustKey)
     private var hideDust = true
+    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
+    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
     @State private var searchText = ""
+
+    init() {
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: ChartTimeRange.oneMonth.startDate)
+        _historicalPrices = Query(
+            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+    }
 
     private var tokenEntries: [TokenEntry] {
         TokenEntry.fromActiveTokens(
@@ -61,8 +72,20 @@ struct PriceWatchlist: View {
             tokens: dashboardTokenEntries,
             assetsByCoinGeckoId: assetCandidatesByCoinGeckoId,
             prices: appState.prices,
-            changes24h: appState.priceChanges24h,
+            changes24h: priceChanges24h,
             watchlistIDs: watchlistIDs)
+    }
+
+    private var priceChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
+            live: appState.priceChanges24h,
+            historical: historicalBackfillEnabled ? historicalChanges24h : [:])
+    }
+
+    private var historicalChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.changes24h(from: historicalPrices.map {
+            HistoricalPriceEntry(coinGeckoId: $0.coinGeckoId, day: $0.day, usdPrice: $0.usdPrice)
+        })
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {

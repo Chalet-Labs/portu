@@ -9,6 +9,23 @@ struct OverviewTopBar: View {
     @Query private var positions: [Position]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
     @Query private var tokenIdentityMappings: [TokenIdentityMapping]
+    @Query
+    private var historicalPrices: [HistoricalPricePoint]
+    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
+    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
+
+    init() {
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: ChartTimeRange.oneMonth.startDate)
+        _historicalPrices = Query(
+            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+    }
 
     /// Only positions from active accounts
     private var activePositions: [Position] {
@@ -23,15 +40,35 @@ struct OverviewTopBar: View {
         OverviewPriceChangeFeature.portfolioChange24h(
             tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
             prices: appState.prices,
-            changes24h: appState.priceChanges24h,
+            changes24h: priceChanges24h,
             overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
-            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init))
+            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
+            settings: dashboardSettings)
+    }
+
+    private var priceChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
+            live: appState.priceChanges24h,
+            historical: historicalBackfillEnabled ? historicalChanges24h : [:])
+    }
+
+    private var historicalChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.changes24h(from: historicalPrices.map {
+            HistoricalPriceEntry(coinGeckoId: $0.coinGeckoId, day: $0.day, usdPrice: $0.usdPrice)
+        })
     }
 
     private var changePct: Decimal {
         let prev = totalValue - change24h
         guard prev != 0 else { return 0 }
         return change24h / prev
+    }
+
+    private var dashboardSettings: TokenDashboardSettings {
+        TokenDashboardSettings(
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust)
     }
 
     var body: some View {

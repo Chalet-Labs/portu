@@ -13,14 +13,25 @@ struct OverviewPositionTabs: View {
     @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
     private var tokenPricingOverrides: [TokenPricingOverride]
     @Query private var tokenIdentityMappings: [TokenIdentityMapping]
+    @Query
+    private var historicalPrices: [HistoricalPricePoint]
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
     @AppStorage(TokenDashboardSettings.hideUnpricedKey)
     private var hideUnpriced = true
     @AppStorage(TokenDashboardSettings.hideDustKey)
     private var hideDust = true
+    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
+    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
 
     @State private var selectedTab: OverviewTab = .keyChanges
+
+    init() {
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: ChartTimeRange.oneMonth.startDate)
+        _historicalPrices = Query(
+            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+    }
 
     private var positions: [Position] {
         allPositions.filter { $0.account?.isActive == true }
@@ -121,6 +132,18 @@ struct OverviewPositionTabs: View {
             hideDust: hideDust)
     }
 
+    private var priceChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
+            live: appState.priceChanges24h,
+            historical: historicalBackfillEnabled ? historicalChanges24h : [:])
+    }
+
+    private var historicalChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.changes24h(from: historicalPrices.map {
+            HistoricalPriceEntry(coinGeckoId: $0.coinGeckoId, day: $0.day, usdPrice: $0.usdPrice)
+        })
+    }
+
     private var keyChangeTokens: [(PositionToken, Position)] {
         visibleActiveTokens
             .filter(\.0.role.isPositive)
@@ -167,7 +190,7 @@ struct OverviewPositionTabs: View {
         return OverviewPositionPricing.change24h(
             token: entry,
             prices: appState.prices,
-            changes24h: appState.priceChanges24h,
+            changes24h: priceChanges24h,
             override: overrideMap[entry.assetId])
     }
 
