@@ -6,6 +6,7 @@ import SwiftUI
 struct OverviewPositionTabs: View {
     @Environment(AppState.self) private var appState
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var allPositions: [Position]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -39,6 +40,7 @@ struct OverviewPositionTabs: View {
     var body: some View {
         let context = positionContext
         let visibleTokens = visibleActiveTokens(context: context)
+        let changeVisibleTokens = changeVisibleActiveTokens(context: context)
 
         VStack(alignment: .leading, spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -60,7 +62,7 @@ struct OverviewPositionTabs: View {
                 switch selectedTab {
                 case .keyChanges:
                     positionCards(
-                        tokens: keyChangeTokens(from: visibleTokens, context: context),
+                        tokens: keyChangeTokens(from: changeVisibleTokens, context: context),
                         emptyTitle: "No key changes",
                         context: context)
                 case .idleStables:
@@ -115,6 +117,12 @@ struct OverviewPositionTabs: View {
         }
     }
 
+    private func changeVisibleActiveTokens(context: OverviewPositionContext) -> [(PositionToken, Position)] {
+        allActiveTokens.filter { token, _ in
+            isDashboardChangeVisible(token, context: context)
+        }
+    }
+
     private var categoryResolver: PortfolioCategoryResolver {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
     }
@@ -136,12 +144,18 @@ struct OverviewPositionTabs: View {
 
     private var positionContext: OverviewPositionContext {
         OverviewPositionContext(
-            prices: appState.prices,
+            prices: displayPrices,
             changes24h: priceChanges24h,
             overrideMap: overrideMap,
             mappingMap: mappingMap,
             categoryResolver: categoryResolver,
             dashboardSettings: dashboardSettings)
+    }
+
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: appState.prices,
+            historical: historicalPricesUSD)
     }
 
     private var priceChanges24h: [String: Decimal] {
@@ -297,6 +311,16 @@ struct OverviewPositionTabs: View {
             settings: context.dashboardSettings)
     }
 
+    private func isDashboardChangeVisible(_ token: PositionToken, context: OverviewPositionContext) -> Bool {
+        guard let entry = tokenEntry(for: token, context: context) else { return false }
+        return OverviewPriceChangeFeature.isDashboardEligibleForChange(
+            token: entry,
+            prices: context.prices,
+            changes24h: context.changes24h,
+            override: context.overrideMap[entry.assetId],
+            settings: context.dashboardSettings)
+    }
+
     private func tokenEntry(for token: PositionToken, context: OverviewPositionContext) -> TokenEntry? {
         guard let asset = token.asset else { return nil }
         let identity = OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract)
@@ -328,9 +352,17 @@ struct OverviewPositionTabs: View {
 
     private func tokenValue(_ token: PositionToken, context: OverviewPositionContext) -> Decimal {
         guard let entry = tokenEntry(for: token, context: context) else { return 0 }
-        return OverviewPositionPricing.tokenValue(
+        let resolvedValue = OverviewPositionPricing.tokenValue(
             token: entry,
             prices: context.prices,
+            override: context.overrideMap[entry.assetId])
+        if resolvedValue != 0 {
+            return resolvedValue
+        }
+        return OverviewPositionPricing.changeReferenceValue(
+            token: entry,
+            prices: context.prices,
+            changes24h: context.changes24h,
             override: context.overrideMap[entry.assetId])
     }
 }

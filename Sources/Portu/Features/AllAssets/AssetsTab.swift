@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 
 struct AssetsTab: View {
     let store: StoreOf<AppFeature>
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -34,12 +35,18 @@ struct AssetsTab: View {
 
         let dashboardEntries = TokenSettingsFeature.dashboardEligibleTokens(
             tokens: entries,
-            prices: store.prices,
+            prices: displayPrices,
             overrides: overrideSnapshots,
             settings: dashboardSettings)
-        let aggregated = AllAssetsFeature.aggregateRows(tokens: dashboardEntries, prices: store.prices)
+        let aggregated = AllAssetsFeature.aggregateRows(tokens: dashboardEntries, prices: displayPrices)
         let filtered = AllAssetsFeature.filterRows(aggregated, searchText: store.allAssets.searchText)
         return sortRows(filtered)
+    }
+
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: store.prices,
+            historical: historicalPricesUSD)
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {

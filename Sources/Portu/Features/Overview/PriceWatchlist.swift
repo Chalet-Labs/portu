@@ -7,6 +7,7 @@ import SwiftUI
 struct PriceWatchlist: View {
     @Environment(AppState.self) private var appState
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
@@ -40,7 +41,7 @@ struct PriceWatchlist: View {
     private var dashboardTokenEntries: [TokenEntry] {
         TokenSettingsFeature.dashboardEligibleTokens(
             tokens: mappedTokenEntries,
-            prices: appState.prices,
+            prices: displayPrices,
             overrides: overrideSnapshots,
             settings: dashboardSettings)
     }
@@ -61,9 +62,16 @@ struct PriceWatchlist: View {
         OverviewFeature.priceRows(
             tokens: dashboardTokenEntries,
             assetsByCoinGeckoId: assetCandidatesByCoinGeckoId,
-            prices: appState.prices,
+            prices: displayPrices,
             changes24h: priceChanges24h,
-            watchlistIDs: watchlistIDs)
+            watchlistIDs: watchlistIDs,
+            overrides: overrideSnapshots)
+    }
+
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: appState.prices,
+            historical: historicalPricesUSD)
     }
 
     private var priceChanges24h: [String: Decimal] {
@@ -192,6 +200,9 @@ struct PriceWatchlist: View {
                     addToWatchlist(asset.coinGeckoId)
                 } label: {
                     HStack(spacing: 8) {
+                        AssetLogoView(symbol: asset.symbol, logoURL: asset.logoURL)
+                            .frame(width: 16, height: 16)
+
                         Text(asset.symbol)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(PortuTheme.dashboardText)
@@ -283,7 +294,8 @@ private struct PriceWatchlistRow: View {
     var body: some View {
         HStack(spacing: 6) {
             HStack(spacing: 7) {
-                assetDot
+                AssetLogoView(symbol: row.symbol, logoURL: row.logoURL)
+                    .frame(width: 16, height: 16)
                 Text(OverviewPriceDisplay.assetLabel(row.symbol))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(PortuTheme.dashboardText)
@@ -332,17 +344,6 @@ private struct PriceWatchlistRow: View {
             }
         }
         .frame(height: 38)
-    }
-
-    private var assetDot: some View {
-        ZStack {
-            Circle()
-                .fill(PortuTheme.dashboardGoldMuted)
-            Text(String(row.symbol.prefix(1)))
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(PortuTheme.dashboardText)
-        }
-        .frame(width: 16, height: 16)
     }
 
     @ViewBuilder

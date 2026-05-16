@@ -23,7 +23,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
 
         let slices = OverviewFeature.topAssetSlices(
             from: tokens,
-            prices: ["bitcoin": 70000, "ethereum": 3000],
+            prices: ["bitcoin": 70000, "ethereum": 3000, "solana": 100, "usd-coin": 1, "dogecoin": 0.2],
             limit: 3)
 
         #expect(slices.map(\.label) == ["BTC", "ETH", "SOL", "other"])
@@ -41,10 +41,30 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             token(assetId: bridgedAave, symbol: "AAVE.e", coinGeckoId: "aave", amount: 1, usdValue: 90)
         ]
 
-        let slices = OverviewFeature.topAssetSlices(from: tokens, prices: [:], limit: 2)
+        let slices = OverviewFeature.topAssetSlices(from: tokens, prices: ["aave": 100], limit: 2)
 
         #expect(slices.map(\.id) == [aave.uuidString, bridgedAave.uuidString])
         #expect(Set(slices.map(\.id)).count == slices.count)
+    }
+
+    @Test func `top asset slices exclude sync time values when no price is available`() throws {
+        let priced = UUID()
+        let syncOnly = UUID()
+        let tokens = [
+            token(assetId: syncOnly, symbol: "SYNC", amount: 1, usdValue: 10000),
+            token(assetId: priced, symbol: "PRICED", coinGeckoId: "priced", amount: 2, usdValue: 2)
+        ]
+
+        let slices = OverviewFeature.topAssetSlices(
+            from: tokens,
+            prices: ["priced": 3],
+            limit: 5)
+
+        let slice = try #require(slices.first)
+        #expect(slices.count == 1)
+        #expect(slice.id == priced.uuidString)
+        #expect(slice.label == "PRICED")
+        #expect(slice.value == 6)
     }
 
     @Test func `top asset slices merge native eth from multiple chains`() throws {
@@ -66,14 +86,30 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(slice.value == 3450)
     }
 
-    @Test func `category slices round display percentages to exactly one hundred`() {
+    @Test func `top asset slices carry asset logo urls`() throws {
+        let stg = UUID()
+        let tokenLogoURL = "https://img.example/stg.png"
         let tokens = [
-            token(symbol: "BTC", category: .major, amount: 1, usdValue: 34),
-            token(symbol: "ETH", category: .major, amount: 1, usdValue: 33),
-            token(symbol: "USDC", category: .stablecoin, amount: 1, usdValue: 33)
+            token(assetId: stg, symbol: "STG", coinGeckoId: "stargate-finance", amount: 10, usdValue: 2, logoURL: tokenLogoURL)
         ]
 
-        let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
+        let slices = OverviewFeature.topAssetSlices(
+            from: tokens,
+            prices: ["stargate-finance": 0.20],
+            limit: 5)
+
+        let slice = try #require(slices.first)
+        #expect(slice.logoURL == tokenLogoURL)
+    }
+
+    @Test func `category slices round display percentages to exactly one hundred`() {
+        let tokens = [
+            token(symbol: "BTC", category: .major, coinGeckoId: "btc", amount: 1, usdValue: 34),
+            token(symbol: "ETH", category: .major, coinGeckoId: "eth", amount: 1, usdValue: 33),
+            token(symbol: "USDC", category: .stablecoin, coinGeckoId: "usdc", amount: 1, usdValue: 33)
+        ]
+
+        let slices = OverviewFeature.categorySlices(from: tokens, prices: ["btc": 34, "eth": 33, "usdc": 33], limit: 6)
 
         #expect(slices.map(\.displayPercent).reduce(0, +) == 100)
         #expect(slices.first?.label == "BTC")
@@ -82,18 +118,21 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
 
     @Test func `category slices preserve omitted values in other bucket`() throws {
         let tokens = [
-            token(symbol: "BTC", category: .major, amount: 1, usdValue: 120),
-            token(symbol: "ETH", category: .major, amount: 1, usdValue: 100),
-            token(symbol: "OTHER", category: .other, amount: 1, usdValue: 90),
-            token(symbol: "STABLE", category: .stablecoin, amount: 1, usdValue: 80),
-            token(symbol: "DEFI", category: .defi, amount: 1, usdValue: 70),
-            token(symbol: "MEME", category: .meme, amount: 1, usdValue: 60),
-            token(symbol: "PRIV", category: .privacy, amount: 1, usdValue: 5),
-            token(symbol: "FIAT", category: .fiat, amount: 1, usdValue: 4),
-            token(symbol: "SOL", category: .major, amount: 1, usdValue: 3)
+            token(symbol: "BTC", category: .major, coinGeckoId: "btc", amount: 1, usdValue: 120),
+            token(symbol: "ETH", category: .major, coinGeckoId: "eth", amount: 1, usdValue: 100),
+            token(symbol: "OTHER", category: .other, coinGeckoId: "other", amount: 1, usdValue: 90),
+            token(symbol: "STABLE", category: .stablecoin, coinGeckoId: "stable", amount: 1, usdValue: 80),
+            token(symbol: "DEFI", category: .defi, coinGeckoId: "defi", amount: 1, usdValue: 70),
+            token(symbol: "MEME", category: .meme, coinGeckoId: "meme", amount: 1, usdValue: 60),
+            token(symbol: "PRIV", category: .privacy, coinGeckoId: "priv", amount: 1, usdValue: 5),
+            token(symbol: "FIAT", category: .fiat, coinGeckoId: "fiat", amount: 1, usdValue: 4),
+            token(symbol: "SOL", category: .major, coinGeckoId: "sol", amount: 1, usdValue: 3)
         ]
 
-        let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
+        let slices = OverviewFeature.categorySlices(
+            from: tokens,
+            prices: ["btc": 120, "eth": 100, "other": 90, "stable": 80, "defi": 70, "meme": 60, "priv": 5, "fiat": 4, "sol": 3],
+            limit: 6)
 
         #expect(slices.map(\.label) == ["BTC", "ETH", "Other Tokens", "Stablecoins", "DeFi", "Meme", "other"])
         #expect(try #require(slices.last).value == 12)
@@ -102,17 +141,20 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
 
     @Test func `category residual bucket does not collide with visible other category`() {
         let tokens = [
-            token(symbol: "OTHER", category: .other, amount: 1, usdValue: 90),
-            token(symbol: "MAJOR", category: .major, amount: 1, usdValue: 80),
-            token(symbol: "STABLE", category: .stablecoin, amount: 1, usdValue: 70),
-            token(symbol: "DEFI", category: .defi, amount: 1, usdValue: 60),
-            token(symbol: "MEME", category: .meme, amount: 1, usdValue: 50),
-            token(symbol: "PRIV", category: .privacy, amount: 1, usdValue: 40),
-            token(symbol: "BTC", category: .major, amount: 1, usdValue: 35),
-            token(symbol: "ETH", category: .major, amount: 1, usdValue: 20)
+            token(symbol: "OTHER", category: .other, coinGeckoId: "other", amount: 1, usdValue: 90),
+            token(symbol: "MAJOR", category: .major, coinGeckoId: "major", amount: 1, usdValue: 80),
+            token(symbol: "STABLE", category: .stablecoin, coinGeckoId: "stable", amount: 1, usdValue: 70),
+            token(symbol: "DEFI", category: .defi, coinGeckoId: "defi", amount: 1, usdValue: 60),
+            token(symbol: "MEME", category: .meme, coinGeckoId: "meme", amount: 1, usdValue: 50),
+            token(symbol: "PRIV", category: .privacy, coinGeckoId: "priv", amount: 1, usdValue: 40),
+            token(symbol: "BTC", category: .major, coinGeckoId: "btc", amount: 1, usdValue: 35),
+            token(symbol: "ETH", category: .major, coinGeckoId: "eth", amount: 1, usdValue: 20)
         ]
 
-        let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 6)
+        let slices = OverviewFeature.categorySlices(
+            from: tokens,
+            prices: ["other": 90, "major": 80, "stable": 70, "defi": 60, "meme": 50, "priv": 40, "btc": 35, "eth": 20],
+            limit: 6)
 
         #expect(slices.map(\.id).contains(PortfolioCategoryDefaults.fallbackCategoryID.uuidString))
         #expect(slices.map(\.id).contains("category-residual"))
@@ -148,6 +190,31 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(rows[0].isWatchlisted)
         #expect(!rows[1].isWatchlisted)
         #expect(rows[2].change24h == 0.02)
+    }
+
+    @Test func `price rows carry portfolio and watchlist logo urls`() throws {
+        let stg = UUID()
+        let portfolioLogoURL = "https://img.example/stg.png"
+        let watchlistLogoURL = "https://img.example/gno.png"
+        let tokens = [
+            token(assetId: stg, symbol: "STG", coinGeckoId: "stargate-finance", amount: 10, usdValue: 2, logoURL: portfolioLogoURL)
+        ]
+        let assets = [
+            asset(symbol: "GNO", coinGeckoId: "gnosis", logoURL: watchlistLogoURL)
+        ]
+
+        let rows = OverviewFeature.priceRows(
+            tokens: tokens,
+            assets: assets,
+            prices: ["stargate-finance": 0.20, "gnosis": 120],
+            changes24h: [:],
+            watchlistIDs: ["gnosis"],
+            portfolioLimit: 10)
+
+        let portfolioRow = try #require(rows.first { $0.symbol == "STG" })
+        let watchlistRow = try #require(rows.first { $0.symbol == "GNO" })
+        #expect(portfolioRow.logoURL == portfolioLogoURL)
+        #expect(watchlistRow.logoURL == watchlistLogoURL)
     }
 
     @Test func `price rows normalize portfolio coin gecko ids for lookups and watchlist state`() throws {
@@ -213,7 +280,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(row.isWatchlisted)
     }
 
-    @Test func `price rows include top portfolio assets without coin gecko ids`() throws {
+    @Test func `price rows exclude portfolio assets without prices`() {
         let localAsset = UUID()
         let tokens = [
             token(assetId: localAsset, symbol: "LOCAL", amount: 4, usdValue: 100)
@@ -227,11 +294,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             watchlistIDs: [],
             portfolioLimit: 10)
 
-        let row = try #require(rows.first)
-        #expect(rows.count == 1)
-        #expect(row.symbol == "LOCAL")
-        #expect(row.price == 25)
-        #expect(row.coinGeckoId == nil)
+        #expect(rows.isEmpty)
     }
 
     @Test func `price rows merge native eth from multiple chains`() throws {
@@ -257,7 +320,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(row.coinGeckoId == "ethereum")
     }
 
-    @Test func `price rows do not show sync time unit price when provider price is missing`() throws {
+    @Test func `price rows exclude sync time values when provider price is missing`() {
         let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0x3e5a801830d63bfd3feb2885533e27648dbc17a7")
         let tokens = [
             token(
@@ -275,9 +338,24 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             changes24h: [:],
             watchlistIDs: [])
 
-        let row = try #require(rows.first)
-        #expect(row.symbol == "HarryPotterObamaSatoshi1Meme")
-        #expect(row.price == nil)
+        #expect(rows.isEmpty)
+    }
+
+    @Test func `portfolio total excludes sync time values without live or manual prices`() {
+        let manualId = UUID()
+        let syncOnly = token(symbol: "SYNC", amount: 1, usdValue: 10000)
+        let live = token(symbol: "LIVE", coinGeckoId: "live", amount: 2, usdValue: 2)
+        let borrow = token(symbol: "DEBT", coinGeckoId: "debt", role: .borrow, amount: 3, usdValue: 300)
+        let manual = token(assetId: manualId, symbol: "MANUAL", amount: 4, usdValue: 0)
+
+        let total = OverviewFeature.portfolioTotalValue(
+            tokens: [syncOnly, live, borrow, manual],
+            prices: ["live": 5, "debt": 2],
+            overrides: [TokenPricingOverrideSnapshot(assetId: manualId, manualPriceUSD: 7)],
+            mappings: [],
+            settings: .defaults)
+
+        #expect(total == 32)
     }
 
     @Test func `asset candidates are pre grouped by normalized coin gecko id`() throws {
@@ -423,7 +501,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             watchlistIDs: ["solana", " Bitcoin ", "monero"],
             overrides: [])
 
-        #expect(ids == ["bitcoin", "borrow-token", "ethereum", "monero", "solana", "zero-token"])
+        #expect(ids == ["bitcoin", "ethereum", "borrow-token", "zero-token", "solana", "monero"])
     }
 
     @Test func `price polling ids exclude ignored dust and unpriceable portfolio tokens`() throws {
@@ -440,7 +518,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
                 TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true)
             ])
 
-        #expect(ids == ["bitcoin", "visible"])
+        #expect(ids == ["visible", "bitcoin"])
     }
 
     @Test func `price polling ids keep resolvable unpriced holdings for recovery`() {
@@ -466,6 +544,86 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             overrides: [])
 
         #expect(ids == [identity.historicalPriceID])
+    }
+
+    @Test func `price polling ids use canonical asset keys for known contract mappings`() {
+        let usdcIdentity = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xAf88d065e77c8cC2239327C5EDb3A432268e5831")
+        let usdc = token(symbol: "USDC", amount: 390, usdValue: 390, onchainIdentity: usdcIdentity)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [usdc],
+            prices: [:],
+            watchlistIDs: [],
+            overrides: [])
+
+        #expect(ids == [usdcIdentity.historicalPriceID])
+    }
+
+    @Test func `price polling ids prioritize larger unpriced onchain holdings`() {
+        let lowIdentity = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0x1111")
+        let usdcIdentity = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xAf88d065e77c8cC2239327C5EDb3A432268e5831")
+        let lowValue = token(symbol: "LOW", amount: 1, usdValue: 2, onchainIdentity: lowIdentity)
+        let usdc = token(symbol: "USDC", amount: 390, usdValue: 390, onchainIdentity: usdcIdentity)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [lowValue, usdc],
+            prices: [:],
+            watchlistIDs: [],
+            overrides: [],
+            settings: TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true))
+
+        #expect(ids == [usdcIdentity.historicalPriceID, lowIdentity.historicalPriceID])
+    }
+
+    @Test func `price polling ids cap portfolio recovery candidates but keep watchlist ids`() {
+        let high = token(symbol: "HIGH", coinGeckoId: "high", amount: 1, usdValue: 100)
+        let mid = token(symbol: "MID", coinGeckoId: "mid", amount: 1, usdValue: 50)
+        let low = token(symbol: "LOW", coinGeckoId: "low", amount: 1, usdValue: 10)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [low, high, mid],
+            prices: [:],
+            watchlistIDs: ["watch", "high"],
+            overrides: [],
+            portfolioLimit: 2)
+
+        #expect(ids == ["high", "mid", "watch"])
+    }
+
+    @Test func `price polling ids do not prioritize implausible onchain prices over larger holdings`() {
+        let nativeETH = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0x0000000000000000000000000000000000000000")
+        let badIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xBadPrice")
+        let eth = token(symbol: "ETH", amount: 1, usdValue: 3000, onchainIdentity: nativeETH)
+        let bad = token(symbol: "BAD", amount: 1_000_000, usdValue: 10, onchainIdentity: badIdentity)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [bad, eth],
+            prices: [badIdentity.historicalPriceID: 1_000_000],
+            watchlistIDs: [],
+            overrides: [],
+            portfolioLimit: 1)
+
+        #expect(ids == ["ethereum"])
+    }
+
+    @Test func `price polling ids exclude dust unmapped onchain recovery candidates`() throws {
+        let dustIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xDust")
+        let visibleIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xVisible")
+        let dust = try token(
+            symbol: "DUST",
+            amount: 2,
+            usdValue: #require(Decimal(string: "0.25")),
+            onchainIdentity: dustIdentity)
+        let visible = token(symbol: "VISIBLE", amount: 2, usdValue: 8, onchainIdentity: visibleIdentity)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [dust, visible],
+            prices: [:],
+            watchlistIDs: [],
+            overrides: [],
+            settings: TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true))
+
+        #expect(ids == [visibleIdentity.historicalPriceID])
     }
 
     @Test func `price polling ids use token pricing overrides`() {
@@ -499,7 +657,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(row.change24h == 0.12)
     }
 
-    @Test func `price rows fall back to local implied price when live price is implausible`() throws {
+    @Test func `price rows exclude implausible onchain live prices`() {
         let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xBad")
         let local = token(symbol: "BAD", amount: 1_000_000, usdValue: 10, onchainIdentity: identity)
 
@@ -510,12 +668,10 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             changes24h: [identity.historicalPriceID: 0.10],
             watchlistIDs: [])
 
-        let row = try #require(rows.first)
-        #expect(row.price == 0.00001)
-        #expect(row.change24h == 0.10)
+        #expect(rows.isEmpty)
     }
 
-    @Test func `token change uses local value when live price is implausible`() {
+    @Test func `token change ignores implausible onchain live prices`() {
         let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xBad")
         let local = token(symbol: "BAD", amount: 1_000_000, usdValue: 10, onchainIdentity: identity)
 
@@ -525,7 +681,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             changes24h: [identity.historicalPriceID: 0.10],
             override: nil)
 
-        #expect(change == 1)
+        #expect(change == 0)
     }
 
     @Test func `portfolio change uses cached coingecko mappings and zapper fallback ids`() {
@@ -539,12 +695,12 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         let change = OverviewPriceChangeFeature.portfolioChange24h(
             tokens: [mapped, zapper, borrow],
             prices: [
-                "mapped-token": 10,
+                mappedIdentity.historicalPriceID: 10,
                 zapperIdentity.historicalPriceID: 5,
                 borrowIdentity.historicalPriceID: 4
             ],
             changes24h: [
-                "mapped-token": 0.10,
+                mappedIdentity.historicalPriceID: 0.10,
                 zapperIdentity.historicalPriceID: -0.20,
                 borrowIdentity.historicalPriceID: 0.25
             ],
@@ -565,11 +721,11 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         let changes = OverviewPriceChangeFeature.keyChangeTokens(
             tokens: [mapped, zapper],
             prices: [
-                "mapped-token": 10,
+                mappedIdentity.historicalPriceID: 10,
                 zapperIdentity.historicalPriceID: 5
             ],
             changes24h: [
-                "mapped-token": 0.10,
+                mappedIdentity.historicalPriceID: 0.10,
                 zapperIdentity.historicalPriceID: -0.20
             ],
             overrides: [],
@@ -657,7 +813,8 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         role: TokenRole = .balance,
         amount: Decimal,
         usdValue: Decimal,
-        onchainIdentity: OnchainTokenIdentity? = nil) -> TokenEntry {
+        onchainIdentity: OnchainTokenIdentity? = nil,
+        logoURL: String? = nil) -> TokenEntry {
         TokenEntry(
             assetId: assetId,
             symbol: symbol,
@@ -667,19 +824,22 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             onchainIdentity: onchainIdentity,
             role: role,
             amount: amount,
-            usdValue: usdValue)
+            usdValue: usdValue,
+            logoURL: logoURL)
     }
 
     private func asset(
         id: UUID = UUID(),
         symbol: String,
         category: AssetCategory = .major,
-        coinGeckoId: String) -> OverviewAssetCandidate {
+        coinGeckoId: String,
+        logoURL: String? = nil) -> OverviewAssetCandidate {
         OverviewAssetCandidate(
             id: id,
             symbol: symbol,
             name: symbol,
             category: category,
-            coinGeckoId: coinGeckoId)
+            coinGeckoId: coinGeckoId,
+            logoURL: logoURL)
     }
 }

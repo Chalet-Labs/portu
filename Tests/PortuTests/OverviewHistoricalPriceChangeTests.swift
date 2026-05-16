@@ -21,7 +21,7 @@ struct OverviewHistoricalPriceChangeTests {
     }
 
     @Test func `historical price cache derives latest daily price changes`() {
-        let id = "zapper:base:0xabc"
+        let id = "asset:base:0xabc"
         let oldDay = Date(timeIntervalSince1970: 0)
         let previousDay = Date(timeIntervalSince1970: 86400)
         let latestDay = Date(timeIntervalSince1970: 172_800)
@@ -35,6 +35,44 @@ struct OverviewHistoricalPriceChangeTests {
 
         #expect(changes[id] == 0.5)
         #expect(changes["ignored"] == nil)
+    }
+
+    @Test func `historical price cache normalizes legacy zapper ids to canonical asset ids`() {
+        let previousDay = Date(timeIntervalSince1970: 86400)
+        let latestDay = Date(timeIntervalSince1970: 172_800)
+        let canonicalID = "asset:base:0xabc"
+
+        let changes = OverviewHistoricalPriceChangeFeature.changes24h(from: [
+            HistoricalPriceEntry(coinGeckoId: "zapper:base:0xabc", day: previousDay, usdPrice: 2),
+            HistoricalPriceEntry(coinGeckoId: "zapper:base:0xabc", day: latestDay, usdPrice: 3)
+        ])
+
+        #expect(changes[canonicalID] == 0.5)
+        #expect(changes["zapper:base:0xabc"] == nil)
+    }
+
+    @Test func `latest historical prices prefer newest row and canonicalize onchain ids`() {
+        let oldDay = Date(timeIntervalSince1970: 0)
+        let latestDay = Date(timeIntervalSince1970: 172_800)
+
+        let prices = OverviewHistoricalPriceChangeFeature.latestPrices(from: [
+            HistoricalPriceEntry(coinGeckoId: "zapper:base:0xabc", day: oldDay, usdPrice: 1),
+            HistoricalPriceEntry(coinGeckoId: "zapper:base:0xabc", day: latestDay, usdPrice: 3),
+            HistoricalPriceEntry(coinGeckoId: "bitcoin", day: latestDay, usdPrice: 100)
+        ])
+
+        #expect(prices["asset:base:0xabc"] == 3)
+        #expect(prices["zapper:base:0xabc"] == nil)
+        #expect(prices["bitcoin"] == 100)
+    }
+
+    @Test func `merged price cache lets live prices override historical fallback`() {
+        let merged = OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: ["ethereum": 2200],
+            historical: ["ethereum": 2100, "asset:base:0xabc": 3])
+
+        #expect(merged["ethereum"] == 2200)
+        #expect(merged["asset:base:0xabc"] == 3)
     }
 
     @Test func `historical price change query starts at utc day two days before now`() {

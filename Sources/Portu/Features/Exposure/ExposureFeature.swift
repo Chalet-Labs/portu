@@ -246,11 +246,11 @@ enum ExposureFeature {
                     settings: settings)
             else { continue }
 
-            let value = resolveTokenUSDValue(
-                amount: dashboardToken.amount,
-                priceID: TokenSettingsFeature.resolvedPriceID(token: dashboardToken, override: nil),
-                usdValue: dashboardToken.usdValue,
-                prices: prices)
+            let value = dashboardResolvedValue(
+                token: token,
+                dashboardToken: dashboardToken,
+                prices: prices,
+                override: override)
 
             var categoryEntry = categoryBuckets[dashboardToken.portfolioCategory] ?? (0, 0)
             var assetEntry = assetMap[dashboardToken.assetId] ?? AssetAggregate(
@@ -306,6 +306,15 @@ enum ExposureFeature {
             assetRows: assetRows,
             summary: summary,
             pollingIDs: Array(pollingIDs).sorted())
+    }
+
+    private static func dashboardResolvedValue(
+        token: TokenEntry,
+        dashboardToken: TokenEntry,
+        prices: [String: Decimal],
+        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        TokenSettingsFeature.resolvedValue(token: token, prices: prices, override: override)
+            ?? dashboardToken.usdValue
     }
 
     private static func dashboardPollingPriceID(

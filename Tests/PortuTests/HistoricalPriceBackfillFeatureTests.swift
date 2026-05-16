@@ -57,11 +57,11 @@ struct HistoricalPriceBackfillFeatureTests {
             overrides: [],
             resolvedCoinGeckoIDs: [mappedIdentity: "mapped-token"])
 
-        #expect(candidates.map(\.historicalPriceID) == ["mapped-token", fallbackIdentity.historicalPriceID])
-        #expect(candidates.map(\.assetIds) == [[mapped.assetId], [fallback.assetId]])
+        #expect(candidates.map(\.historicalPriceID) == [fallbackIdentity.historicalPriceID, mappedIdentity.historicalPriceID])
+        #expect(candidates.map(\.assetIds) == [[fallback.assetId], [mapped.assetId]])
         #expect(candidates.map(\.source) == [
-            .coingecko("mapped-token"),
-            .zapper(fallbackIdentity)
+            .zapper(fallbackIdentity),
+            .coingecko("mapped-token")
         ])
     }
 
@@ -84,9 +84,25 @@ struct HistoricalPriceBackfillFeatureTests {
             overrides: [],
             mappings: [mapping])
 
-        #expect(candidates.map(\.historicalPriceID) == ["cached-token"])
+        #expect(candidates.map(\.historicalPriceID) == [mappedIdentity.historicalPriceID])
         #expect(candidates.map(\.source) == [.coingecko("cached-token")])
         #expect(unresolved.isEmpty)
+    }
+
+    @Test func `candidate selection stores onchain token history under canonical asset key`() {
+        let identity = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xAf88d065e77c8cC2239327C5EDb3A432268e5831")
+        let token = token(
+            assetId: uuid(1),
+            symbol: "USDC",
+            coinGeckoId: "usd-coin",
+            amount: 390,
+            usdValue: 390,
+            onchainIdentity: identity)
+
+        let candidates = HistoricalBackfillCandidateResolver.candidates(tokens: [token], overrides: [])
+
+        #expect(candidates.map(\.historicalPriceID) == [identity.historicalPriceID])
+        #expect(candidates.map(\.source) == [.coingecko("usd-coin")])
     }
 
     @Test func `candidate selection skips dashboard ignored dust and unpriced tokens`() {

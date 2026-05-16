@@ -9,6 +9,7 @@ struct SidebarView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var positions: [Position]
     @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
     private var tokenPricingOverrides: [TokenPricingOverride]
@@ -30,17 +31,28 @@ struct SidebarView: View {
     }
 
     private var totalValue: Decimal {
-        activePositions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
+        OverviewFeature.portfolioTotalValue(
+            tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
+            prices: displayPrices,
+            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
+            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
+            settings: dashboardSettings)
     }
 
     private var change24h: Decimal {
         OverviewPriceChangeFeature.portfolioChange24h(
             tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
-            prices: appState.prices,
+            prices: displayPrices,
             changes24h: priceChanges24h,
             overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
             mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
             settings: dashboardSettings)
+    }
+
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: appState.prices,
+            historical: historicalPricesUSD)
     }
 
     private var priceChanges24h: [String: Decimal] {

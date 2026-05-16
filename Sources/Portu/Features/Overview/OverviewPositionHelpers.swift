@@ -18,9 +18,10 @@ enum OverviewPriceChangeFeature {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         let mapped = mappedTokens(tokens, mappings: mappings, overrides: overrides)
         let changeTokens = settings.map {
-            TokenSettingsFeature.dashboardEligibleTokens(
+            dashboardEligibleTokensForChanges(
                 tokens: mapped,
                 prices: prices,
+                changes24h: changes24h,
                 overrideMap: overrideMap,
                 settings: $0)
         } ?? mapped
@@ -81,6 +82,47 @@ enum OverviewPriceChangeFeature {
         return token.role.isPositive ? change : 0
     }
 
+    static func isDashboardEligibleForChange(
+        token: TokenEntry,
+        prices: [String: Decimal],
+        changes24h: [String: Decimal],
+        override: TokenPricingOverrideSnapshot?,
+        settings: TokenDashboardSettings) -> Bool {
+        guard token.amount > 0 else { return false }
+        guard token.role.isPositive || token.role.isBorrow else { return false }
+        guard override?.isIgnored != true else { return false }
+        if override?.alwaysShow == true { return true }
+
+        let value = OverviewPositionPricing.changeReferenceValue(
+            token: token,
+            prices: prices,
+            changes24h: changes24h,
+            override: override)
+        if value == 0 {
+            return !settings.hideUnpriced
+        }
+        if abs(value) < normalizedThreshold(settings.minimumDashboardValue) {
+            return !settings.hideDust
+        }
+        return true
+    }
+
+    static func dashboardEligibleTokensForChanges(
+        tokens: [TokenEntry],
+        prices: [String: Decimal],
+        changes24h: [String: Decimal],
+        overrideMap: [UUID: TokenPricingOverrideSnapshot],
+        settings: TokenDashboardSettings) -> [TokenEntry] {
+        tokens.filter { token in
+            isDashboardEligibleForChange(
+                token: token,
+                prices: prices,
+                changes24h: changes24h,
+                override: overrideMap[token.assetId],
+                settings: settings)
+        }
+    }
+
     private static func mappedTokens(
         _ tokens: [TokenEntry],
         mappings: [TokenIdentityMappingSnapshot],
@@ -98,11 +140,45 @@ enum OverviewHistoricalPriceChangeFeature {
             .addingTimeInterval(-2 * 86400)
     }
 
+    static func latestPrices(from prices: [HistoricalPriceEntry]) -> [String: Decimal] {
+        var latestByID: [String: HistoricalLatestPrice] = [:]
+        for price in prices {
+            guard
+                let id = normalizedHistoricalPriceID(price.coinGeckoId),
+                price.usdPrice > 0
+            else { continue }
+            let day = HistoricalPriceCalendar.utcStartOfDay(for: price.day)
+            guard let existing = latestByID[id] else {
+                latestByID[id] = HistoricalLatestPrice(day: day, price: price.usdPrice)
+                continue
+            }
+            if day > existing.day || (day == existing.day && price.usdPrice > existing.price) {
+                latestByID[id] = HistoricalLatestPrice(day: day, price: price.usdPrice)
+            }
+        }
+        return latestByID.mapValues(\.price)
+    }
+
+    static func mergedPrices(
+        live: [String: Decimal],
+        historical: [String: Decimal]) -> [String: Decimal] {
+        var merged: [String: Decimal] = [:]
+        for (id, price) in historical where price > 0 {
+            guard let normalizedID = normalizedHistoricalPriceID(id) else { continue }
+            merged[normalizedID] = price
+        }
+        for (id, price) in live where price > 0 {
+            guard let normalizedID = normalizedHistoricalPriceID(id) else { continue }
+            merged[normalizedID] = price
+        }
+        return merged
+    }
+
     static func changes24h(from prices: [HistoricalPriceEntry]) -> [String: Decimal] {
         var latestPairs: [String: HistoricalPriceChangePair] = [:]
         for price in prices {
             guard
-                let id = TokenIdentityMappingFeature.normalizedProviderID(price.coinGeckoId),
+                let id = normalizedHistoricalPriceID(price.coinGeckoId),
                 price.usdPrice > 0
             else { continue }
             let day = HistoricalPriceCalendar.utcStartOfDay(for: price.day)
@@ -127,15 +203,24 @@ enum OverviewHistoricalPriceChangeFeature {
         historical: [String: Decimal]) -> [String: Decimal] {
         var merged: [String: Decimal] = [:]
         for (id, change) in historical {
-            guard let normalizedID = TokenIdentityMappingFeature.normalizedProviderID(id) else { continue }
+            guard let normalizedID = normalizedHistoricalPriceID(id) else { continue }
             merged[normalizedID] = change
         }
         for (id, change) in live {
-            guard let normalizedID = TokenIdentityMappingFeature.normalizedProviderID(id) else { continue }
+            guard let normalizedID = normalizedHistoricalPriceID(id) else { continue }
             merged[normalizedID] = change
         }
         return merged
     }
+
+    private static func normalizedHistoricalPriceID(_ id: String?) -> String? {
+        TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
+    }
+}
+
+private struct HistoricalLatestPrice {
+    var day: Date
+    var price: Decimal
 }
 
 private struct HistoricalPriceChangePair {
@@ -173,20 +258,18 @@ enum OverviewPositionPricing {
 
     static func price(
         coinGeckoId: String?,
-        amount: Decimal,
-        usdValue: Decimal,
+        amount _: Decimal,
+        usdValue _: Decimal,
         prices: [String: Decimal]) -> Decimal {
-        normalizedPrice(coinGeckoId: coinGeckoId, prices: prices)
-            ?? (amount > 0 ? usdValue / amount : 0)
+        normalizedPrice(coinGeckoId: coinGeckoId, prices: prices) ?? 0
     }
 
     static func tokenValue(
         coinGeckoId: String?,
         amount: Decimal,
-        usdValue: Decimal,
+        usdValue _: Decimal,
         prices: [String: Decimal]) -> Decimal {
-        normalizedPrice(coinGeckoId: coinGeckoId, prices: prices).map { amount * $0 }
-            ?? usdValue
+        normalizedPrice(coinGeckoId: coinGeckoId, prices: prices).map { amount * $0 } ?? 0
     }
 
     static func price(
@@ -197,15 +280,15 @@ enum OverviewPositionPricing {
             return manualPrice
         }
         guard let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override) else {
-            return localUnitPrice(amount: token.amount, usdValue: token.usdValue) ?? 0
+            return 0
         }
         guard let price = prices[priceID] else {
-            return localUnitPrice(amount: token.amount, usdValue: token.usdValue) ?? 0
+            return 0
         }
         if OnchainTokenIdentity(historicalPriceID: priceID) == nil || isPlausible(price: price, amount: token.amount, usdValue: token.usdValue) {
             return price
         }
-        return localUnitPrice(amount: token.amount, usdValue: token.usdValue) ?? price
+        return 0
     }
 
     static func tokenValue(
@@ -216,15 +299,15 @@ enum OverviewPositionPricing {
             return token.amount * manualPrice
         }
         guard let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override) else {
-            return token.usdValue
+            return 0
         }
         guard let price = prices[priceID] else {
-            return token.usdValue
+            return 0
         }
         if OnchainTokenIdentity(historicalPriceID: priceID) == nil || isPlausible(price: price, amount: token.amount, usdValue: token.usdValue) {
             return token.amount * price
         }
-        return token.usdValue
+        return 0
     }
 
     static func change24h(
@@ -256,7 +339,36 @@ enum OverviewPositionPricing {
         else {
             return 0
         }
-        return tokenValue(token: token, prices: prices, override: override) * changePercent
+        return changeReferenceValue(
+            token: token,
+            prices: prices,
+            changes24h: changes24h,
+            override: override) * changePercent
+    }
+
+    static func changeReferenceValue(
+        token: TokenEntry,
+        prices: [String: Decimal],
+        changes24h: [String: Decimal],
+        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        if let manualPrice = override?.manualPriceUSD, manualPrice > 0 {
+            return 0
+        }
+        guard
+            let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override),
+            changes24h[priceID] != nil
+        else {
+            return 0
+        }
+
+        if prices[priceID] != nil {
+            return tokenValue(token: token, prices: prices, override: override)
+        }
+        let resolvedValue = tokenValue(token: token, prices: prices, override: override)
+        if resolvedValue != 0 {
+            return resolvedValue
+        }
+        return token.usdValue > 0 ? token.usdValue : 0
     }
 
     static func isPlausible(
@@ -276,11 +388,10 @@ enum OverviewPositionPricing {
         prices: [String: Decimal]) -> Decimal? {
         OverviewWatchlistStore.normalizedID(coinGeckoId).flatMap { prices[$0] }
     }
+}
 
-    private static func localUnitPrice(amount: Decimal, usdValue: Decimal) -> Decimal? {
-        guard amount > 0, usdValue > 0 else { return nil }
-        return usdValue / amount
-    }
+private func normalizedThreshold(_ value: Decimal) -> Decimal {
+    value < 0 ? 0 : value
 }
 
 enum OverviewPositionChangeTone: Equatable {

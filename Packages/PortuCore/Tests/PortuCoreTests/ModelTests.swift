@@ -253,12 +253,13 @@ struct ModelTests {
         #expect(dto.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
     }
 
-    @Test func `onchain identity parses local zapper historical price id`() throws {
+    @Test func `onchain identity uses canonical asset price id and parses legacy zapper id`() throws {
         let identity = try #require(OnchainTokenIdentity(historicalPriceID: " zapper:base:0xABCDEF "))
 
         #expect(identity.chain == .base)
         #expect(identity.contractAddress == "0xabcdef")
-        #expect(identity.historicalPriceID == "zapper:base:0xabcdef")
+        #expect(identity.historicalPriceID == "asset:base:0xabcdef")
+        #expect(OnchainTokenIdentity(historicalPriceID: " asset:base:0xABCDEF ") == identity)
         #expect(OnchainTokenIdentity(historicalPriceID: "coingecko:ethereum") == nil)
         #expect(OnchainTokenIdentity(historicalPriceID: "zapper:unknown:0xabc") == nil)
     }
@@ -268,9 +269,18 @@ struct ModelTests {
         let immutable = try #require(OnchainTokenIdentity(historicalPriceID: "zapper:immutablex:0xABCDEF"))
 
         #expect(polygon.chain == .polygonZkEVM)
-        #expect(polygon.historicalPriceID == "zapper:polygonzkevm:0xabcdef")
+        #expect(polygon.historicalPriceID == "asset:polygonzkevm:0xabcdef")
         #expect(immutable.chain == .immutableX)
-        #expect(immutable.historicalPriceID == "zapper:immutablex:0xabcdef")
+        #expect(immutable.historicalPriceID == "asset:immutablex:0xabcdef")
+    }
+
+    @Test func `chain exposes coingecko asset platform ids`() {
+        #expect(Chain.ethereum.coinGeckoAssetPlatformID == "ethereum")
+        #expect(Chain.polygon.coinGeckoAssetPlatformID == "polygon-pos")
+        #expect(Chain.arbitrum.coinGeckoAssetPlatformID == "arbitrum-one")
+        #expect(Chain.base.coinGeckoAssetPlatformID == "base")
+        #expect(Chain.monad.coinGeckoAssetPlatformID == "monad")
+        #expect(Chain.bitcoin.coinGeckoAssetPlatformID == nil)
     }
 
     @Test func `token identity mapping stores provider ids under canonical chain address key`() throws {

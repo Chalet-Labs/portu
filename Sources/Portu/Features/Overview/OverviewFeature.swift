@@ -9,6 +9,7 @@ struct OverviewAssetCandidate: Equatable, Identifiable {
     let name: String
     let category: AssetCategory
     let coinGeckoId: String
+    let logoURL: String?
 
     @MainActor
     static func fromAssets(_ assets: [Asset]) -> [OverviewAssetCandidate] {
@@ -30,7 +31,8 @@ struct OverviewAssetCandidate: Equatable, Identifiable {
                 symbol: asset.symbol,
                 name: asset.name,
                 category: asset.category,
-                coinGeckoId: coinGeckoId)
+                coinGeckoId: coinGeckoId,
+                logoURL: asset.logoURL)
         }
     }
 }
@@ -59,6 +61,7 @@ struct OverviewAssetSlice: Equatable, Identifiable {
     let value: Decimal
     let displayPercent: Int
     let colorIndex: Int
+    let logoURL: String?
 }
 
 struct OverviewPriceRowData: Equatable, Identifiable {
@@ -70,6 +73,7 @@ struct OverviewPriceRowData: Equatable, Identifiable {
     let price: Decimal?
     let change24h: Decimal?
     let isWatchlisted: Bool
+    let logoURL: String?
 }
 
 enum OverviewPriceCountdown {
@@ -168,6 +172,7 @@ enum OverviewFeature {
         var priceID: String?
         var value: Decimal
         var amount: Decimal
+        var logoURL: String?
 
         var fallbackPrice: Decimal? {
             guard amount > 0 else { return nil }
@@ -189,16 +194,17 @@ enum OverviewFeature {
     static func topAssetSlices(
         from tokens: [TokenEntry],
         prices: [String: Decimal],
+        overrides: [TokenPricingOverrideSnapshot] = [],
         limit: Int = 5) -> [OverviewAssetSlice] {
-        let aggregates = sortedAssetAggregates(from: tokens, prices: prices)
+        let aggregates = sortedAssetAggregates(from: tokens, prices: prices, overrides: overrides)
         let visibleCount = max(limit, 0)
         var sliceInputs = aggregates.prefix(visibleCount).map {
-            SliceInput(id: $0.rowID, label: $0.symbol, value: $0.value)
+            SliceInput(id: $0.rowID, label: $0.symbol, value: $0.value, logoURL: $0.logoURL)
         }
 
         let otherValue = aggregates.dropFirst(visibleCount).reduce(Decimal.zero) { $0 + $1.value }
         if otherValue > 0 {
-            sliceInputs.append(SliceInput(id: assetResidualSliceID, label: "other", value: otherValue))
+            sliceInputs.append(SliceInput(id: assetResidualSliceID, label: "other", value: otherValue, logoURL: nil))
         }
 
         return makeSlices(from: sliceInputs)
@@ -207,10 +213,15 @@ enum OverviewFeature {
     static func categorySlices(
         from tokens: [TokenEntry],
         prices: [String: Decimal],
+        overrides: [TokenPricingOverrideSnapshot] = [],
         limit: Int = 6) -> [OverviewAssetSlice] {
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var values: [PortfolioCategorySnapshot: Decimal] = [:]
         for token in tokens where token.role.isPositive {
-            values[token.portfolioCategory, default: 0] += resolvedValue(for: token, prices: prices)
+            values[token.portfolioCategory, default: 0] += resolvedValue(
+                for: token,
+                prices: prices,
+                override: overrideMap[token.assetId])
         }
 
         let sortedValues = values
@@ -229,12 +240,12 @@ enum OverviewFeature {
         var inputs = sortedValues
             .prefix(visibleCount)
             .map { category, value in
-                SliceInput(id: category.id.uuidString, label: category.name, value: value)
+                SliceInput(id: category.id.uuidString, label: category.name, value: value, logoURL: nil)
             }
 
         let otherValue = sortedValues.dropFirst(visibleCount).reduce(Decimal.zero) { $0 + $1.value }
         if otherValue > 0 {
-            inputs.append(SliceInput(id: categoryResidualSliceID, label: "other", value: otherValue))
+            inputs.append(SliceInput(id: categoryResidualSliceID, label: "other", value: otherValue, logoURL: nil))
         }
 
         return makeSlices(from: inputs)
@@ -285,12 +296,42 @@ enum OverviewFeature {
             .map(\.self)
     }
 
+    static func portfolioTotalValue(
+        tokens: [TokenEntry],
+        prices: [String: Decimal],
+        overrides: [TokenPricingOverrideSnapshot],
+        mappings: [TokenIdentityMappingSnapshot],
+        settings: TokenDashboardSettings = .defaults) -> Decimal {
+        let mappedTokens = TokenSettingsFeature.applyIdentityMappings(
+            to: tokens,
+            mappings: mappings,
+            overrides: overrides)
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        let dashboardTokens = TokenSettingsFeature.dashboardEligibleTokens(
+            tokens: mappedTokens,
+            prices: prices,
+            overrideMap: overrideMap,
+            settings: settings)
+
+        return dashboardTokens.reduce(Decimal.zero) { total, token in
+            let value = OverviewPositionPricing.tokenValue(
+                token: token,
+                prices: prices,
+                override: overrideMap[token.assetId])
+            if token.role.isBorrow {
+                return total - value
+            }
+            return token.role.isPositive ? total + value : total
+        }
+    }
+
     static func priceRows(
         tokens: [TokenEntry],
         assets: [OverviewAssetCandidate],
         prices: [String: Decimal],
         changes24h: [String: Decimal],
         watchlistIDs: [String],
+        overrides: [TokenPricingOverrideSnapshot] = [],
         portfolioLimit: Int = 10) -> [OverviewPriceRowData] {
         priceRows(
             tokens: tokens,
@@ -298,6 +339,7 @@ enum OverviewFeature {
             prices: prices,
             changes24h: changes24h,
             watchlistIDs: watchlistIDs,
+            overrides: overrides,
             portfolioLimit: portfolioLimit)
     }
 
@@ -307,6 +349,7 @@ enum OverviewFeature {
         prices: [String: Decimal],
         changes24h: [String: Decimal],
         watchlistIDs: [String],
+        overrides: [TokenPricingOverrideSnapshot] = [],
         portfolioLimit: Int = 10) -> [OverviewPriceRowData] {
         let watchlist = OverviewWatchlistStore.normalizedUniqueIDs(watchlistIDs)
         let watchlistSet = Set(watchlist)
@@ -315,7 +358,7 @@ enum OverviewFeature {
         var seenRowIDs: Set<String> = []
         var portfolioCoinGeckoIDs: Set<String> = []
 
-        for aggregate in sortedAssetAggregates(from: tokens, prices: prices).prefix(max(portfolioLimit, 0)) {
+        for aggregate in sortedAssetAggregates(from: tokens, prices: prices, overrides: overrides).prefix(max(portfolioLimit, 0)) {
             let priceID = TokenIdentityMappingFeature.normalizedProviderID(aggregate.priceID)
             let coinGeckoId = TokenIdentityMappingFeature.nonZapperPriceID(priceID)
             let rowID = aggregate.rowID
@@ -334,7 +377,8 @@ enum OverviewFeature {
                 coinGeckoId: coinGeckoId,
                 price: displayPrice(for: aggregate, prices: prices),
                 change24h: priceID.flatMap { changes24h[$0] },
-                isWatchlisted: coinGeckoId.map { watchlistSet.contains($0) } ?? false))
+                isWatchlisted: coinGeckoId.map { watchlistSet.contains($0) } ?? false,
+                logoURL: aggregate.logoURL))
         }
 
         for coinGeckoId in watchlist where !portfolioCoinGeckoIDs.contains(coinGeckoId) && !seenRowIDs.contains(coinGeckoId) {
@@ -348,7 +392,8 @@ enum OverviewFeature {
                     coinGeckoId: coinGeckoId,
                     price: prices[coinGeckoId],
                     change24h: changes24h[coinGeckoId],
-                    isWatchlisted: true))
+                    isWatchlisted: true,
+                    logoURL: asset.logoURL))
             } else {
                 rows.append(OverviewPriceRowData(
                     id: coinGeckoId,
@@ -358,7 +403,8 @@ enum OverviewFeature {
                     coinGeckoId: coinGeckoId,
                     price: prices[coinGeckoId],
                     change24h: changes24h[coinGeckoId],
-                    isWatchlisted: true))
+                    isWatchlisted: true,
+                    logoURL: nil))
             }
         }
 
@@ -369,6 +415,7 @@ enum OverviewFeature {
         let id: String
         let label: String
         let value: Decimal
+        let logoURL: String?
     }
 
     private static func makeSlices(from inputs: [SliceInput]) -> [OverviewAssetSlice] {
@@ -379,17 +426,21 @@ enum OverviewFeature {
                 label: input.label,
                 value: input.value,
                 displayPercent: percentages[index],
-                colorIndex: index)
+                colorIndex: index,
+                logoURL: input.logoURL)
         }
     }
 
     private static func sortedAssetAggregates(
         from tokens: [TokenEntry],
-        prices: [String: Decimal]) -> [AssetAggregate] {
+        prices: [String: Decimal],
+        overrides: [TokenPricingOverrideSnapshot] = []) -> [AssetAggregate] {
+        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var aggregates: [String: AssetAggregate] = [:]
 
         for token in tokens where token.role.isPositive {
-            let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: nil)
+            let override = overrideMap[token.assetId]
+            let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override)
             let key = assetAggregateKey(for: token, priceID: priceID)
             var aggregate = aggregates[key] ?? AssetAggregate(
                 key: key,
@@ -402,13 +453,15 @@ enum OverviewFeature {
                     ?? TokenIdentityMappingFeature.nonZapperPriceID(priceID),
                 priceID: priceID,
                 value: 0,
-                amount: 0)
+                amount: 0,
+                logoURL: token.logoURL)
             aggregate.assetIds.insert(token.assetId)
             aggregate.coinGeckoId = aggregate.coinGeckoId
                 ?? OverviewWatchlistStore.normalizedID(token.coinGeckoId)
                 ?? TokenIdentityMappingFeature.nonZapperPriceID(priceID)
             aggregate.priceID = aggregate.priceID ?? priceID
-            aggregate.value += resolvedValue(for: token, prices: prices)
+            aggregate.logoURL = aggregate.logoURL ?? token.logoURL
+            aggregate.value += resolvedValue(for: token, prices: prices, override: override)
             if token.amount > 0 {
                 aggregate.amount += token.amount
             }
@@ -456,8 +509,9 @@ enum OverviewFeature {
 
     private static func resolvedValue(
         for token: TokenEntry,
-        prices: [String: Decimal]) -> Decimal {
-        OverviewPositionPricing.tokenValue(token: token, prices: prices, override: nil)
+        prices: [String: Decimal],
+        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        OverviewPositionPricing.tokenValue(token: token, prices: prices, override: override)
     }
 
     private static func displayPrice(

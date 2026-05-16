@@ -87,7 +87,7 @@ struct HistoricalPortfolioEstimatorTests {
                     assetId: uuid(10),
                     coinGeckoId: "bitcoin",
                     amount: 1,
-                    fallbackUSDValue: 2_000),
+                    fallbackUSDValue: 2000),
                 HistoricalEstimateHolding(
                     accountId: account,
                     assetId: uuid(11),
@@ -96,14 +96,14 @@ struct HistoricalPortfolioEstimatorTests {
                     fallbackUSDValue: 500)
             ],
             prices: [
-                HistoricalPriceEntry(coinGeckoId: "bitcoin", day: day, usdPrice: 40_000),
-                HistoricalPriceEntry(coinGeckoId: "bitcoin", day: firstReal, usdPrice: 20_000)
+                HistoricalPriceEntry(coinGeckoId: "bitcoin", day: day, usdPrice: 40000),
+                HistoricalPriceEntry(coinGeckoId: "bitcoin", day: firstReal, usdPrice: 20000)
             ],
             startDate: day,
             firstRealSnapshotDate: firstReal,
             accountId: nil)
 
-        #expect(points.map(\.value) == [4_500])
+        #expect(points.map(\.value) == [4500])
     }
 
     @Test func `estimator normalizes coin gecko ids and skips empty ids`() {
@@ -125,6 +125,33 @@ struct HistoricalPortfolioEstimatorTests {
             accountId: nil)
 
         #expect(points.map(\.value) == [80000])
+    }
+
+    @Test func `estimator normalizes zapper historical rows to canonical asset ids`() {
+        let account = uuid(1)
+        let asset = uuid(10)
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+        let day = date(2024, 1, 1)
+        let firstReal = date(2024, 1, 2)
+
+        let points = HistoricalPortfolioEstimator.estimatedValues(
+            holdings: [
+                HistoricalEstimateHolding(
+                    accountId: account,
+                    assetId: asset,
+                    coinGeckoId: identity.historicalPriceID,
+                    amount: 2)
+            ],
+            prices: [
+                HistoricalPriceEntry(coinGeckoId: "zapper:base:0xlocal", day: day, usdPrice: 3)
+            ],
+            startDate: day,
+            firstRealSnapshotDate: firstReal,
+            accountId: nil)
+
+        #expect(points == [
+            HistoricalPortfolioValuePoint(date: day, value: 6, kind: .estimated)
+        ])
     }
 
     @Test func `duplicate price rows produce same estimate regardless of input order`() {

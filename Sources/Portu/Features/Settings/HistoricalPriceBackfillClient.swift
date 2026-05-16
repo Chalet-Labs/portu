@@ -62,6 +62,22 @@ extension HistoricalPriceBackfillClient {
 }
 
 @MainActor
+private struct HistoricalBackfillSourceData {
+    let tokens: [TokenEntry]
+    let snapshots: [HistoricalBackfillSnapshotEntry]
+    let overrides: [TokenPricingOverrideSnapshot]
+    let mappings: [TokenIdentityMappingSnapshot]
+    let liveMappings: [TokenIdentityMapping]
+}
+
+private struct HistoricalBackfillFetchResult {
+    var inserted = 0
+    var updated = 0
+    var fetched = 0
+    var failures: [String] = []
+}
+
+@MainActor
 private struct BackfillRunner {
     let modelContext: ModelContext
     let priceService: PriceServiceClient
@@ -73,6 +89,44 @@ private struct BackfillRunner {
 
     func run() async throws -> HistoricalBackfillResult {
         let settings = dashboardSettings()
+        let sourceData = try loadSourceData()
+        let identitiesNeedingResolution = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
+            tokens: sourceData.tokens,
+            snapshots: sourceData.snapshots,
+            overrides: sourceData.overrides,
+            mappings: sourceData.mappings,
+            dashboardSettings: settings)
+        let resolvedCoinGeckoIDs = try await resolveCoinGeckoIDs(for: identitiesNeedingResolution)
+        try persistResolvedCoinGeckoIDs(
+            resolvedCoinGeckoIDs,
+            existingMappings: sourceData.liveMappings)
+        let candidates = HistoricalBackfillCandidateResolver.candidates(
+            tokens: sourceData.tokens,
+            snapshots: sourceData.snapshots,
+            overrides: sourceData.overrides,
+            mappings: sourceData.mappings,
+            dashboardSettings: settings,
+            resolvedCoinGeckoIDs: resolvedCoinGeckoIDs)
+        let sourceAssetCount = HistoricalBackfillCandidateResolver.sourceAssetIDs(
+            tokens: sourceData.tokens,
+            snapshots: sourceData.snapshots,
+            overrides: sourceData.overrides,
+            dashboardSettings: settings).count
+        let requested = candidates.reduce(0) { total, candidate in
+            total + candidate.assetIds.count
+        }
+        let fetchResult = try await fetchCandidates(candidates)
+
+        return HistoricalBackfillResult(
+            requestedAssets: requested,
+            fetchedAssets: fetchResult.fetched,
+            skippedAssets: max(0, sourceAssetCount - candidates.flatMap(\.assetIds).count),
+            insertedPoints: fetchResult.inserted,
+            updatedPoints: fetchResult.updated,
+            failedCoinGeckoIDs: fetchResult.failures)
+    }
+
+    private func loadSourceData() throws -> HistoricalBackfillSourceData {
         let tokens = try modelContext.fetch(FetchDescriptor<PositionToken>())
         let assets = try modelContext.fetch(FetchDescriptor<Asset>())
         let assetSnapshots = try modelContext.fetch(FetchDescriptor<AssetSnapshot>())
@@ -93,42 +147,26 @@ private struct BackfillRunner {
         }
         let overrideSnapshots = overrides.map(TokenPricingOverrideSnapshot.init)
         let mappingSnapshots = mappings.map(TokenIdentityMappingSnapshot.init)
-        let identitiesNeedingResolution = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
-            tokens: entries,
-            snapshots: snapshotEntries,
-            overrides: overrideSnapshots,
-            mappings: mappingSnapshots,
-            dashboardSettings: settings)
-        let resolvedCoinGeckoIDs: [OnchainTokenIdentity: String]
-        do {
-            resolvedCoinGeckoIDs = try await priceService.resolveCoinGeckoIDs(identitiesNeedingResolution)
-        } catch {
-            resolvedCoinGeckoIDs = [:]
-        }
-        try persistResolvedCoinGeckoIDs(
-            resolvedCoinGeckoIDs,
-            existingMappings: mappings)
-        let candidates = HistoricalBackfillCandidateResolver.candidates(
-            tokens: entries,
-            snapshots: snapshotEntries,
-            overrides: overrideSnapshots,
-            mappings: mappingSnapshots,
-            dashboardSettings: settings,
-            resolvedCoinGeckoIDs: resolvedCoinGeckoIDs)
 
-        var inserted = 0
-        var updated = 0
-        var fetched = 0
-        var failures: [String] = []
-        let sourceAssetCount = HistoricalBackfillCandidateResolver.sourceAssetIDs(
+        return HistoricalBackfillSourceData(
             tokens: entries,
             snapshots: snapshotEntries,
             overrides: overrideSnapshots,
-            dashboardSettings: settings).count
-        let skipped = max(0, sourceAssetCount - candidates.flatMap(\.assetIds).count)
-        let requested = candidates.reduce(0) { total, candidate in
-            total + candidate.assetIds.count
+            mappings: mappingSnapshots,
+            liveMappings: mappings)
+    }
+
+    private func resolveCoinGeckoIDs(
+        for identities: [OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String] {
+        do {
+            return try await priceService.resolveCoinGeckoIDs(identities)
+        } catch {
+            return [:]
         }
+    }
+
+    private func fetchCandidates(_ candidates: [HistoricalBackfillCandidate]) async throws -> HistoricalBackfillFetchResult {
+        var result = HistoricalBackfillFetchResult()
         let canFetchZapperHistoricalPrices = priceService.canFetchZapperHistoricalPrices()
         let unavailableZapperCandidates = canFetchZapperHistoricalPrices
             ? []
@@ -144,7 +182,7 @@ private struct BackfillRunner {
             }
 
         var hasRequestedCandidate = false
-        failures.append(contentsOf: unavailableZapperCandidates.map(\.historicalPriceID))
+        result.failures.append(contentsOf: unavailableZapperCandidates.map(\.historicalPriceID))
         for candidate in runnableCandidates {
             let prices: [HistoricalPriceDTO]
             do {
@@ -157,26 +195,22 @@ private struct BackfillRunner {
                 if error is CancellationError {
                     throw error
                 }
-                failures.append(candidate.historicalPriceID)
-                if failures.count == candidates.count {
+                result.failures.append(candidate.historicalPriceID)
+                if result.failures.count == candidates.count {
                     throw error
                 }
                 continue
             }
 
-            let write = try HistoricalPriceCacheWriter.upsert(prices, in: modelContext, fetchedAt: now())
-            inserted += write.inserted
-            updated += write.updated
-            fetched += candidate.assetIds.count
+            let write = try HistoricalPriceCacheWriter.upsert(
+                prices.rekeyed(to: candidate.historicalPriceID),
+                in: modelContext,
+                fetchedAt: now())
+            result.inserted += write.inserted
+            result.updated += write.updated
+            result.fetched += candidate.assetIds.count
         }
-
-        return HistoricalBackfillResult(
-            requestedAssets: requested,
-            fetchedAssets: fetched,
-            skippedAssets: skipped,
-            insertedPoints: inserted,
-            updatedPoints: updated,
-            failedCoinGeckoIDs: failures)
+        return result
     }
 
     private func fetchHistoricalPrices(for candidate: HistoricalBackfillCandidate) async throws -> [HistoricalPriceDTO] {
@@ -261,5 +295,17 @@ enum TokenIdentityMappingWriter {
         }
 
         try context.save()
+    }
+}
+
+private extension [HistoricalPriceDTO] {
+    func rekeyed(to priceID: String) -> [HistoricalPriceDTO] {
+        map {
+            HistoricalPriceDTO(
+                coinGeckoId: priceID,
+                timestamp: $0.timestamp,
+                usdPrice: $0.usdPrice,
+                source: $0.source)
+        }
     }
 }

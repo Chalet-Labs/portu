@@ -8,22 +8,28 @@ struct PricePollingRequest: Equatable {
 
 enum PricePollingIDResolver {
     static func split(_ ids: [String]) -> PricePollingRequest {
-        var coinGeckoIDs: Set<String> = []
-        var zapperIdentities: Set<OnchainTokenIdentity> = []
+        var coinGeckoIDs: [String] = []
+        var seenCoinGeckoIDs: Set<String> = []
+        var zapperIdentities: [OnchainTokenIdentity] = []
+        var seenZapperIdentities: Set<OnchainTokenIdentity> = []
 
         for id in ids {
             let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard !normalized.isEmpty else { continue }
             if let identity = OnchainTokenIdentity(historicalPriceID: normalized) {
-                zapperIdentities.insert(identity)
+                guard !seenZapperIdentities.contains(identity) else { continue }
+                seenZapperIdentities.insert(identity)
+                zapperIdentities.append(identity)
             } else {
-                coinGeckoIDs.insert(normalized)
+                guard !seenCoinGeckoIDs.contains(normalized) else { continue }
+                seenCoinGeckoIDs.insert(normalized)
+                coinGeckoIDs.append(normalized)
             }
         }
 
         return PricePollingRequest(
-            coinGeckoIDs: coinGeckoIDs.sorted(),
-            zapperIdentities: zapperIdentities.sorted(by: sortIdentities))
+            coinGeckoIDs: coinGeckoIDs,
+            zapperIdentities: zapperIdentities)
     }
 
     static func merge(_ updates: [PriceUpdate]) -> PriceUpdate {
@@ -40,14 +46,5 @@ enum PricePollingIDResolver {
 
     static var emptyUpdate: PriceUpdate {
         PriceUpdate(prices: [:], changes24h: [:])
-    }
-
-    private static func sortIdentities(
-        _ lhs: OnchainTokenIdentity,
-        _ rhs: OnchainTokenIdentity) -> Bool {
-        if lhs.chain.rawValue != rhs.chain.rawValue {
-            return lhs.chain.rawValue < rhs.chain.rawValue
-        }
-        return lhs.contractAddress < rhs.contractAddress
     }
 }

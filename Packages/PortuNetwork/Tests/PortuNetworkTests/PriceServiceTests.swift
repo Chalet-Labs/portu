@@ -140,6 +140,159 @@ struct PriceServiceTests {
         #expect(try #require(update.changes24h["ethereum"]) > 0)
     }
 
+    @Test func `fetch token price update uses coingecko platform address endpoint`() async throws {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        var capturedURL: URL?
+        MockURLProtocol.requestHandler = { request in
+            capturedURL = request.url
+            return (Data("""
+            {
+              "0xtoken": {
+                "usd": 3.50,
+                "usd_24h_change": 2.5
+              }
+            }
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let update = try await service.fetchTokenPriceUpdate(for: [identity])
+
+        #expect(capturedURL?.path == "/api/v3/simple/token_price/base")
+        #expect(capturedURL?.query?.contains("contract_addresses=0xtoken") == true)
+        #expect(capturedURL?.query?.contains("vs_currencies=usd") == true)
+        #expect(capturedURL?.query?.contains("include_24hr_change=true") == true)
+        #expect(update.prices[identity.historicalPriceID] == Decimal(string: "3.5"))
+        #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "0.025"))
+    }
+
+    @Test func `fetch token price update keeps partial results when rate limited`() async throws {
+        let base = OnchainTokenIdentity(chain: .base, contractAddress: "0xBase")
+        let ethereum = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xEth")
+        var requestCount = 0
+        MockURLProtocol.requestHandler = { _ in
+            requestCount += 1
+            if requestCount == 1 {
+                return (Data("""
+                {
+                  "0xbase": {
+                    "usd": 3.50,
+                    "usd_24h_change": 2.5
+                  }
+                }
+                """.utf8), 200)
+            }
+            return (nil, 429)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let update = try await service.fetchTokenPriceUpdate(for: [base, ethereum])
+
+        #expect(update.prices[base.historicalPriceID] == Decimal(string: "3.5"))
+        #expect(update.changes24h[base.historicalPriceID] == Decimal(string: "0.025"))
+        #expect(update.prices[ethereum.historicalPriceID] == nil)
+    }
+
+    @Test func `fetch token price update splits rejected batches and keeps valid tokens`() async throws {
+        let valid = OnchainTokenIdentity(chain: .base, contractAddress: "0xValid")
+        let rejected = OnchainTokenIdentity(chain: .base, contractAddress: "0xRejected")
+        MockURLProtocol.requestHandler = { request in
+            guard let url = request.url else { return (nil, 400) }
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let addresses = query.first { $0.name == "contract_addresses" }?.value ?? ""
+            if addresses.contains(",") {
+                return (nil, 400)
+            }
+            if addresses == "0xvalid" {
+                return (Data("""
+                {
+                  "0xvalid": {
+                    "usd": 4.25,
+                    "usd_24h_change": -1.0
+                  }
+                }
+                """.utf8), 200)
+            }
+            return (nil, 400)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let update = try await service.fetchTokenPriceUpdate(for: [valid, rejected])
+
+        #expect(update.prices[valid.historicalPriceID] == Decimal(string: "4.25"))
+        #expect(update.changes24h[valid.historicalPriceID] == Decimal(string: "-0.01"))
+        #expect(update.prices[rejected.historicalPriceID] == nil)
+    }
+
+    @Test func `fetch token price update preserves caller priority when splitting rejected batches`() async throws {
+        let priority = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xPriority")
+        let lowerPriority = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xAaaa")
+        var singleRequestCount = 0
+        MockURLProtocol.requestHandler = { request in
+            guard let url = request.url else { return (nil, 400) }
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let addresses = query.first { $0.name == "contract_addresses" }?.value ?? ""
+            if addresses.contains(",") {
+                return (nil, 400)
+            }
+
+            singleRequestCount += 1
+            if singleRequestCount == 1, addresses == "0xpriority" {
+                return (Data("""
+                {
+                  "0xpriority": {
+                    "usd": 1.00,
+                    "usd_24h_change": 0.5
+                  }
+                }
+                """.utf8), 200)
+            }
+            return (nil, 429)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let update = try await service.fetchTokenPriceUpdate(for: [priority, lowerPriority])
+
+        #expect(update.prices[priority.historicalPriceID] == 1)
+        #expect(update.prices[lowerPriority.historicalPriceID] == nil)
+    }
+
+    @Test func `fetch token price update does not let one chain starve later priority identities`() async throws {
+        let rejectedEthereum = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xRejected")
+        let priorityArbitrum = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xPriority")
+        let rateLimitedEthereum = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xRateLimited")
+        MockURLProtocol.requestHandler = { request in
+            guard let url = request.url else { return (nil, 400) }
+            if url.path == "/api/v3/simple/token_price/arbitrum-one" {
+                return (Data("""
+                {
+                  "0xpriority": {
+                    "usd": 1.00,
+                    "usd_24h_change": 0.5
+                  }
+                }
+                """.utf8), 200)
+            }
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let addresses = query.first { $0.name == "contract_addresses" }?.value ?? ""
+            if addresses == "0xratelimited" {
+                return (nil, 429)
+            }
+            return (nil, 400)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let update = try await service.fetchTokenPriceUpdate(for: [
+            rejectedEthereum,
+            priorityArbitrum,
+            rateLimitedEthereum
+        ])
+
+        #expect(update.prices[priorityArbitrum.historicalPriceID] == 1)
+        #expect(update.prices[rejectedEthereum.historicalPriceID] == nil)
+        #expect(update.prices[rateLimitedEthereum.historicalPriceID] == nil)
+    }
+
     @Test func `fetch historical prices builds market chart request and dedupes by utc day`() async throws {
         var capturedURL: URL?
         MockURLProtocol.requestHandler = { request in

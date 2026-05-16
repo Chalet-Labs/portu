@@ -21,6 +21,26 @@ struct PerformanceHistoricalPriceChangeTests {
         #expect(changes[1].percentChange == Decimal(string: "-0.1")!)
     }
 
+    @Test func `applies asset display names to period price changes`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+        let changes = [
+            AssetPricePeriodChange(
+                coinGeckoId: identity.historicalPriceID,
+                startPrice: 1,
+                endPrice: 2,
+                percentChange: 1)
+        ]
+
+        let named = PerformanceFeature.applyAssetDisplayNames(
+            changes: changes,
+            namesByHistoricalPriceID: [
+                "zapper:base:0xlocal": "Local Token"
+            ])
+
+        #expect(named.first?.coinGeckoId == identity.historicalPriceID)
+        #expect(named.first?.name == "Local Token")
+    }
+
     @Test func `filters historical price rows to held ids for selected account`() {
         let account = UUID()
         let other = UUID()
@@ -108,6 +128,36 @@ struct PerformanceHistoricalPriceChangeTests {
             isHistoricalBackfillEnabled: true)
 
         #expect(filtered.map(\.coinGeckoId) == [identity.historicalPriceID])
+    }
+
+    @Test func `filters legacy zapper historical rows to canonical held asset ids`() {
+        let account = UUID()
+        let asset = UUID()
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+        let startDate = date(2024, 1, 1)
+
+        let filtered = PerformanceFeature.historicalPriceEntriesForHeldAssets(
+            rows: [
+                HistoricalPriceEntry(coinGeckoId: "zapper:base:0xlocal", day: startDate, usdPrice: 1.5)
+            ],
+            holdings: [
+                HistoricalEstimateSnapshotEntry(
+                    accountId: account,
+                    assetId: asset,
+                    timestamp: startDate,
+                    coinGeckoId: nil,
+                    coinGeckoIdOverride: nil,
+                    onchainIdentity: identity,
+                    amount: 2,
+                    borrowAmount: 0)
+            ],
+            startDate: startDate,
+            accountId: account,
+            isHistoricalBackfillEnabled: true)
+
+        #expect(filtered == [
+            HistoricalPriceEntry(coinGeckoId: identity.historicalPriceID, day: startDate, usdPrice: 1.5)
+        ])
     }
 
     @Test func `earliest estimate holdings use zapper id when coin gecko id is absent`() {

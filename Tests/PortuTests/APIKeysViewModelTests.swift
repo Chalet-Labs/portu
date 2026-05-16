@@ -88,7 +88,7 @@ struct APIKeysViewModelTests {
         #expect(try store.get(key: .serviceAPIKey("coingecko")) == "cg-ghi")
     }
 
-    @Test func `historical backfill reads zapper key saved by settings`() throws {
+    @Test func `historical backfill reads zapper key saved by settings`() {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
         vm.zapperAPIKey = "zap-backfill"

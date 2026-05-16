@@ -249,6 +249,58 @@ struct PerformanceCategoryChangeTests {
         #expect(stable?.percentChange == 0)
     }
 
+    @Test func `category changes can be scoped to dashboard visible assets`() throws {
+        let cal = Calendar.current
+        let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
+        let day2 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 12)))
+
+        let acct = UUID()
+        let hiddenBTC = UUID()
+        let visibleETH = UUID()
+        let entries: [CategorySnapshotEntry] = [
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: hiddenBTC,
+                timestamp: day1,
+                category: .major,
+                categoryID: "btc",
+                categoryName: "BTC",
+                usdValue: 1000),
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: hiddenBTC,
+                timestamp: day2,
+                category: .major,
+                categoryID: "btc",
+                categoryName: "BTC",
+                usdValue: 1200),
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: visibleETH,
+                timestamp: day1,
+                category: .major,
+                categoryID: "eth",
+                categoryName: "ETH",
+                usdValue: 2000),
+            CategorySnapshotEntry(
+                accountId: acct,
+                assetId: visibleETH,
+                timestamp: day2,
+                category: .major,
+                categoryID: "eth",
+                categoryName: "ETH",
+                usdValue: 2200)
+        ]
+
+        let changes = PerformanceFeature.computeCategoryChanges(
+            entries: entries,
+            visibleAssetIDs: [visibleETH])
+
+        #expect(changes.map(\.name) == ["ETH"])
+        #expect(changes.first?.startValue == 2000)
+        #expect(changes.first?.endValue == 2200)
+    }
+
     @Test func `uses resolved portfolio category names`() throws {
         let cal = Calendar.current
         let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))

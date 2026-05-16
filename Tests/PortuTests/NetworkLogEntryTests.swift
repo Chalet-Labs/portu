@@ -36,6 +36,11 @@ struct NetworkLogEntryTests {
         #expect(redacted["x-zapper-api-key"] == "***")
     }
 
+    @Test func `redacts CoinGecko demo API key header`() {
+        let redacted = NetworkLogEntry.redactHeaders(["x-cg-demo-api-key": "my-secret-key"])
+        #expect(redacted["x-cg-demo-api-key"] == "***")
+    }
+
     @Test func `redacts API sign header`() {
         let redacted = NetworkLogEntry.redactHeaders(["API-Sign": "hmac-signature"])
         #expect(redacted["API-Sign"] == "***")

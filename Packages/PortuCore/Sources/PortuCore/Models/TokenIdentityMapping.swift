@@ -74,9 +74,9 @@ public final class TokenIdentityMapping {
 
     public func updateCoinGeckoId(_ coinGeckoId: String?, resolvedAt: Date) {
         self.coinGeckoId = Self.normalizedProviderID(coinGeckoId)
-        self.coinGeckoResolvedAt = resolvedAt
-        self.lastCoinGeckoFailureAt = nil
-        self.updatedAt = resolvedAt
+        coinGeckoResolvedAt = resolvedAt
+        lastCoinGeckoFailureAt = nil
+        updatedAt = resolvedAt
     }
 
     public static func canonicalKey(for identity: OnchainTokenIdentity) -> String {

@@ -32,10 +32,11 @@ struct TokenSettingsFeatureTests {
         let zeroAmount = token(symbol: "ZERO", coinGeckoId: "zero", amount: 0, usdValue: 10)
         let ignored = token(symbol: "IGNORED", coinGeckoId: "ignored", amount: 1, usdValue: 10)
         let unpriced = token(symbol: "UNPRICED", amount: 1, usdValue: 0)
+        let syncOnly = token(symbol: "SYNC", amount: 1, usdValue: 1000)
         let dust = token(symbol: "DUST", coinGeckoId: "dust", amount: 1, usdValue: 0.50)
 
         let eligible = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: [visible, zeroAmount, ignored, unpriced, dust],
+            tokens: [visible, zeroAmount, ignored, unpriced, syncOnly, dust],
             prices: ["visible": 2, "zero": 10, "ignored": 10, "dust": 0.50],
             overrides: [
                 TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true)
@@ -43,6 +44,25 @@ struct TokenSettingsFeatureTests {
             settings: .defaults)
 
         #expect(eligible.map(\.symbol) == ["VISIBLE"])
+    }
+
+    @Test func `settings rows treat sync time value without live or manual price as unpriced`() throws {
+        let syncOnly = token(symbol: "SYNC", amount: 2, usdValue: 1000)
+
+        let result = TokenSettingsFeature.rows(
+            tokens: [syncOnly],
+            prices: [:],
+            overrides: [],
+            settings: .defaults,
+            filter: .all,
+            searchText: "",
+            limit: 100)
+
+        let row = try #require(result.rows.first)
+        #expect(row.price == 0)
+        #expect(row.value == 0)
+        #expect(row.pricingSource == .unpriced)
+        #expect(row.visibilityStatus == .unpriced)
     }
 
     @Test func `manual price and always show make low value tokens dashboard eligible`() {
@@ -141,6 +161,26 @@ struct TokenSettingsFeatureTests {
         #expect(row.value == 3)
         #expect(row.pricingSource == .live)
         #expect(row.visibilityStatus == .visible)
+    }
+
+    @Test func `settings rows treat implausible onchain live prices as unpriced`() throws {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0x000000000000000000000000000000000000dead")
+        let local = token(symbol: "LOCAL", amount: 1_000_000_000_000_000_000, usdValue: 5, onchainIdentity: identity)
+
+        let result = TokenSettingsFeature.rows(
+            tokens: [local],
+            prices: [identity.historicalPriceID: 1],
+            overrides: [],
+            settings: .defaults,
+            filter: .all,
+            searchText: "",
+            limit: 100)
+
+        let row = try #require(result.rows.first)
+        #expect(row.price == 0)
+        #expect(row.value == 0)
+        #expect(row.pricingSource == .unpriced)
+        #expect(row.visibilityStatus == .unpriced)
     }
 
     @Test func `settings rows apply search and cap displayed matches to one hundred`() {
@@ -282,149 +322,6 @@ struct TokenSettingsFeatureTests {
         #expect(row.value == 24000)
     }
 
-    @Test func `override draft changes when override fields change with the same id`() {
-        let id = UUID()
-        let assetId = UUID()
-        let first = TokenPricingOverrideSnapshot(
-            id: id,
-            assetId: assetId,
-            manualPriceUSD: 1,
-            coinGeckoIdOverride: "old",
-            notes: "first")
-        let second = TokenPricingOverrideSnapshot(
-            id: id,
-            assetId: assetId,
-            manualPriceUSD: 2,
-            coinGeckoIdOverride: "new",
-            notes: "second")
-
-        #expect(TokenSettingsOverrideDraft(override: first) != TokenSettingsOverrideDraft(override: second))
-    }
-
-    @MainActor
-    @Test func `override upsert rolls back existing override without discarding unrelated edits`() throws {
-        let container = try ModelContainerFactory().makeInMemory()
-        let context = container.mainContext
-        let assetId = UUID()
-        let override = TokenPricingOverride(assetId: assetId, manualPriceUSD: 1)
-        let category = PortfolioCategory(name: "Original", sortOrder: 0)
-        context.insert(override)
-        context.insert(category)
-        try context.save()
-        category.name = "Unsaved edit"
-
-        do {
-            try TokenPricingOverrideWriter.upsert(
-                assetId: assetId,
-                overrides: [override],
-                in: context) {
-                    throw TestSaveError.expected
-                } update: { existing in
-                    existing.manualPriceUSD = 42
-                }
-            Issue.record("Expected override upsert to rethrow the save failure.")
-        } catch let error as TestSaveError {
-            #expect(error == .expected)
-            let fetched = try #require(try context.fetch(FetchDescriptor<TokenPricingOverride>()).first)
-            #expect(fetched.manualPriceUSD == 1)
-            #expect(category.name == "Unsaved edit")
-        } catch {
-            Issue.record("Unexpected error: \(error)")
-        }
-    }
-
-    @MainActor
-    @Test func `override upsert collapses duplicate overrides for an asset`() throws {
-        let container = try ModelContainerFactory().makeInMemory()
-        let context = container.mainContext
-        let assetId = UUID()
-        let canonical = TokenPricingOverride(assetId: assetId, manualPriceUSD: 1, notes: "canonical")
-        let duplicate = TokenPricingOverride(assetId: assetId, manualPriceUSD: 2, notes: "duplicate")
-        context.insert(canonical)
-        context.insert(duplicate)
-
-        try TokenPricingOverrideWriter.upsert(
-            assetId: assetId,
-            overrides: [canonical, duplicate],
-            in: context) {
-                // Avoid SwiftData's uniqueness save path here; the writer behavior under test is the in-context collapse.
-            } update: { override in
-                override.manualPriceUSD = 3
-                override.notes = "updated"
-            }
-
-        let overrides = try context.fetch(FetchDescriptor<TokenPricingOverride>())
-            .filter { $0.assetId == assetId }
-        #expect(overrides.count == 1)
-        #expect(overrides.first?.manualPriceUSD == 3)
-        #expect(overrides.first?.notes == "updated")
-    }
-
-    @MainActor
-    @Test func `override upsert restores duplicate overrides when save fails`() throws {
-        let container = try ModelContainerFactory().makeInMemory()
-        let context = container.mainContext
-        let assetId = UUID()
-        let canonical = TokenPricingOverride(assetId: assetId, manualPriceUSD: 1, notes: "canonical")
-        let duplicate = TokenPricingOverride(assetId: assetId, manualPriceUSD: 2, notes: "duplicate")
-        context.insert(canonical)
-        context.insert(duplicate)
-
-        do {
-            try TokenPricingOverrideWriter.upsert(
-                assetId: assetId,
-                overrides: [canonical, duplicate],
-                in: context) {
-                    throw TestSaveError.expected
-                } update: { override in
-                    override.manualPriceUSD = 3
-                    override.notes = "updated"
-                }
-            Issue.record("Expected duplicate override save failure to be rethrown.")
-        } catch let error as TestSaveError {
-            #expect(error == .expected)
-            let overrides = try context.fetch(FetchDescriptor<TokenPricingOverride>())
-                .filter { $0.assetId == assetId }
-                .sorted { $0.notes < $1.notes }
-            #expect(overrides.count == 2)
-            #expect(overrides.map(\.manualPriceUSD) == [1, 2])
-            #expect(overrides.map(\.notes) == ["canonical", "duplicate"])
-        } catch {
-            Issue.record("Unexpected error: \(error)")
-        }
-    }
-
-    @MainActor
-    @Test func `override remove restores override without discarding unrelated edits`() throws {
-        let container = try ModelContainerFactory().makeInMemory()
-        let context = container.mainContext
-        let assetId = UUID()
-        let override = TokenPricingOverride(assetId: assetId, manualPriceUSD: 1)
-        let category = PortfolioCategory(name: "Original", sortOrder: 0)
-        context.insert(override)
-        context.insert(category)
-        try context.save()
-        category.name = "Unsaved edit"
-
-        do {
-            try TokenPricingOverrideWriter.remove(
-                assetId: assetId,
-                overrides: [override],
-                in: context) {
-                    throw TestSaveError.expected
-                }
-            Issue.record("Expected override remove to rethrow the save failure.")
-        } catch let error as TestSaveError {
-            #expect(error == .expected)
-            let fetched = try #require(try context.fetch(FetchDescriptor<TokenPricingOverride>()).first)
-            #expect(fetched.assetId == assetId)
-            #expect(fetched.manualPriceUSD == 1)
-            #expect(category.name == "Unsaved edit")
-        } catch {
-            Issue.record("Unexpected error: \(error)")
-        }
-    }
-
     private func token(
         assetId: UUID = UUID(),
         symbol: String,
@@ -454,9 +351,5 @@ struct TokenSettingsFeatureTests {
 
     private func uuid(_ index: Int) -> UUID {
         UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index)) ?? UUID()
-    }
-
-    private enum TestSaveError: Error, Equatable {
-        case expected
     }
 }

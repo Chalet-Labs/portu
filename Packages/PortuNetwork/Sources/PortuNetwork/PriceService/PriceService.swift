@@ -112,18 +112,36 @@ public actor PriceService {
         return try CoinGeckoMarketChartResponse(coinGeckoId: normalized, data: data).prices
     }
 
+    public func fetchTokenPriceUpdate(
+        for identities: [OnchainTokenIdentity]) async throws(PriceServiceError) -> PriceUpdate {
+        let uniqueIdentities = Self.uniqueIdentitiesPreservingOrder(identities)
+        guard !uniqueIdentities.isEmpty else {
+            return PriceUpdate(prices: [:], changes24h: [:])
+        }
+
+        var prices: [String: Decimal] = [:]
+        var changes24h: [String: Decimal] = [:]
+        for batch in Self.tokenPriceBatchesPreservingPriority(uniqueIdentities) {
+            let result = try await fetchTokenPriceChunk(platformID: batch.platformID, identities: batch.identities)
+            prices.merge(result.update.prices) { _, new in new }
+            changes24h.merge(result.update.changes24h) { _, new in new }
+            if result.didHitRateLimit {
+                return PriceUpdate(prices: prices, changes24h: changes24h)
+            }
+        }
+
+        return PriceUpdate(prices: prices, changes24h: changes24h)
+    }
+
     public func resolveCoinGeckoIDs(
         for identities: [OnchainTokenIdentity]) async throws(PriceServiceError) -> [OnchainTokenIdentity: String] {
-        let uniqueIdentities = Array(Set(identities)).sorted {
-            if $0.chain.rawValue != $1.chain.rawValue { return $0.chain.rawValue < $1.chain.rawValue }
-            return $0.contractAddress < $1.contractAddress
-        }
+        let uniqueIdentities = Array(Set(identities)).sorted(by: Self.sortIdentities)
         guard !uniqueIdentities.isEmpty else { return [:] }
 
         let grouped = Dictionary(grouping: uniqueIdentities) { $0.chain }
         var resolved: [OnchainTokenIdentity: String] = [:]
         for chain in grouped.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
-            guard let networkID = Self.coinGeckoOnchainNetworkID(for: chain) else {
+            guard let networkID = chain.coinGeckoOnchainNetworkID else {
                 continue
             }
             let identitiesForChain = grouped[chain, default: []]
@@ -141,6 +159,138 @@ public actor PriceService {
             }
         }
         return resolved
+    }
+
+    private static func sortIdentities(
+        _ lhs: OnchainTokenIdentity,
+        _ rhs: OnchainTokenIdentity) -> Bool {
+        if lhs.chain.rawValue != rhs.chain.rawValue { return lhs.chain.rawValue < rhs.chain.rawValue }
+        return lhs.contractAddress < rhs.contractAddress
+    }
+
+    private static func uniqueIdentitiesPreservingOrder(
+        _ identities: [OnchainTokenIdentity]) -> [OnchainTokenIdentity] {
+        var seen: Set<OnchainTokenIdentity> = []
+        var result: [OnchainTokenIdentity] = []
+        for identity in identities where !seen.contains(identity) {
+            seen.insert(identity)
+            result.append(identity)
+        }
+        return result
+    }
+
+    private struct TokenPriceBatch {
+        var platformID: String
+        var identities: [OnchainTokenIdentity]
+    }
+
+    private static func tokenPriceBatchesPreservingPriority(
+        _ identities: [OnchainTokenIdentity],
+        chunkSize: Int = 100) -> [TokenPriceBatch] {
+        var batches: [TokenPriceBatch] = []
+        var currentChain: Chain?
+        var currentIdentities: [OnchainTokenIdentity] = []
+
+        func flushCurrentBatch() {
+            guard
+                let chain = currentChain,
+                let platformID = chain.coinGeckoAssetPlatformID,
+                !currentIdentities.isEmpty
+            else {
+                currentChain = nil
+                currentIdentities.removeAll()
+                return
+            }
+
+            for chunk in currentIdentities.chunked(size: chunkSize) {
+                batches.append(TokenPriceBatch(platformID: platformID, identities: chunk))
+            }
+            currentChain = nil
+            currentIdentities.removeAll()
+        }
+
+        for identity in identities {
+            guard identity.chain.coinGeckoAssetPlatformID != nil else { continue }
+            if currentChain == identity.chain {
+                currentIdentities.append(identity)
+            } else {
+                flushCurrentBatch()
+                currentChain = identity.chain
+                currentIdentities = [identity]
+            }
+        }
+        flushCurrentBatch()
+
+        return batches
+    }
+
+    private struct TokenPriceFetchResult {
+        var update: PriceUpdate
+        var didHitRateLimit: Bool
+    }
+
+    private func fetchTokenPriceChunk(
+        platformID: String,
+        identities: [OnchainTokenIdentity]) async throws(PriceServiceError) -> TokenPriceFetchResult {
+        let addresses = identities.map(\.contractAddress).joined(separator: ",")
+        do {
+            let data = try await rateLimitedFetch(
+                pathComponents: ["simple", "token_price", platformID],
+                queryItems: [
+                    URLQueryItem(name: "contract_addresses", value: addresses),
+                    URLQueryItem(name: "vs_currencies", value: "usd"),
+                    URLQueryItem(name: "include_24hr_change", value: "true")
+                ])
+            return try TokenPriceFetchResult(
+                update: tokenPriceUpdate(from: data, identities: identities),
+                didHitRateLimit: false)
+        } catch PriceServiceError.rateLimited {
+            return TokenPriceFetchResult(
+                update: PriceUpdate(prices: [:], changes24h: [:]),
+                didHitRateLimit: true)
+        } catch let PriceServiceError.invalidResponse(statusCode) where statusCode == 400 {
+            guard identities.count > 1 else {
+                return TokenPriceFetchResult(
+                    update: PriceUpdate(prices: [:], changes24h: [:]),
+                    didHitRateLimit: false)
+            }
+            let midpoint = identities.count / 2
+            let left = try await fetchTokenPriceChunk(
+                platformID: platformID,
+                identities: Array(identities[..<midpoint]))
+            if left.didHitRateLimit { return left }
+            let right = try await fetchTokenPriceChunk(
+                platformID: platformID,
+                identities: Array(identities[midpoint...]))
+            return TokenPriceFetchResult(
+                update: Self.merge(left.update, right.update),
+                didHitRateLimit: right.didHitRateLimit)
+        }
+    }
+
+    private func tokenPriceUpdate(
+        from data: Data,
+        identities: [OnchainTokenIdentity]) throws(PriceServiceError) -> PriceUpdate {
+        let parsed = try CoinGeckoTokenPriceResponse(data: data)
+        var prices: [String: Decimal] = [:]
+        var changes24h: [String: Decimal] = [:]
+        for identity in identities {
+            let address = identity.contractAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let priceID = identity.historicalPriceID
+            if let price = parsed.pricesByAddress[address] {
+                prices[priceID] = price
+            }
+            if let change = parsed.changes24hByAddress[address] {
+                changes24h[priceID] = change
+            }
+        }
+        return PriceUpdate(prices: prices, changes24h: changes24h)
+    }
+
+    private static func merge(_ lhs: PriceUpdate, _ rhs: PriceUpdate) -> PriceUpdate {
+        PriceUpdate(
+            prices: lhs.prices.merging(rhs.prices) { _, new in new },
+            changes24h: lhs.changes24h.merging(rhs.changes24h) { _, new in new })
     }
 
     /// Shared rate limiting, stamping, network call, and HTTP status validation.
@@ -269,37 +419,6 @@ public actor PriceService {
         lastFetchDate = nil
         updateCache = nil
         lastUpdateFetchDate = nil
-    }
-
-    private static let coinGeckoOnchainNetworkIDs: [Chain: String] = [
-        .ethereum: "eth",
-        .polygon: "polygon_pos",
-        .arbitrum: "arbitrum",
-        .optimism: "optimism",
-        .base: "base",
-        .bsc: "bsc",
-        .gnosis: "xdai",
-        .avalanche: "avax",
-        .solana: "solana",
-        .zksync: "zksync",
-        .linea: "linea",
-        .scroll: "scroll",
-        .blast: "blast",
-        .mantle: "mantle",
-        .ronin: "ronin",
-        .mode: "mode",
-        .zora: "zora",
-        .taiko: "taiko",
-        .moonbeam: "moonbeam",
-        .polygonZkEVM: "polygon-zkevm",
-        .immutableX: "immutablex",
-        .unichain: "unichain",
-        .berachain: "berachain",
-        .sonic: "sonic"
-    ]
-
-    private static func coinGeckoOnchainNetworkID(for chain: Chain) -> String? {
-        coinGeckoOnchainNetworkIDs[chain]
     }
 }
 

@@ -309,10 +309,12 @@ enum TokenSettingsFeature {
         if
             let priceID = resolvedPriceID(token: token, override: override),
             let price = prices[priceID] {
+            guard isPlausible(price: price, priceID: priceID, token: token) else {
+                return nil
+            }
             return price
         }
-        guard token.amount != 0, token.usdValue != 0 else { return nil }
-        return token.usdValue / token.amount
+        return nil
     }
 
     static func resolvedValue(
@@ -382,11 +384,9 @@ enum TokenSettingsFeature {
         }
         if
             let priceID = resolvedPriceID(token: token, override: override),
-            prices[priceID] != nil {
+            let price = prices[priceID],
+            isPlausible(price: price, priceID: priceID, token: token) {
             return .live
-        }
-        if token.amount != 0, token.usdValue != 0 {
-            return .syncTime
         }
         return .unpriced
     }
@@ -470,46 +470,5 @@ enum TokenSettingsFeature {
             from: token,
             coinGeckoId: resolvedCoinGeckoID(token: token, override: override),
             usdValue: token.usdValue)
-    }
-
-    private static func tokenEntry(
-        from token: TokenEntry,
-        coinGeckoId: String?,
-        onchainIdentity: OnchainTokenIdentity? = nil,
-        preserveOnchainIdentity: Bool = true,
-        amount: Decimal? = nil,
-        usdValue: Decimal,
-        logoURL: String? = nil) -> TokenEntry {
-        TokenEntry(
-            assetId: token.assetId,
-            symbol: token.symbol,
-            name: token.name,
-            category: token.category,
-            portfolioCategory: token.portfolioCategory,
-            coinGeckoId: coinGeckoId,
-            onchainIdentity: preserveOnchainIdentity ? (onchainIdentity ?? token.onchainIdentity) : onchainIdentity,
-            role: token.role,
-            amount: amount ?? token.amount,
-            usdValue: usdValue,
-            logoURL: logoURL ?? token.logoURL)
-    }
-
-    private static func normalizedCoinGeckoID(_ id: String?) -> String? {
-        guard let id else { return nil }
-        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.isEmpty ? nil : normalized
-    }
-
-    private static func sanitizedManualPrice(_ price: Decimal?) -> Decimal? {
-        guard let price, price > 0 else { return nil }
-        return price
-    }
-
-    private static func normalizedThreshold(_ value: Decimal) -> Decimal {
-        value < 0 ? 0 : value
-    }
-
-    private static func absolute(_ value: Decimal) -> Decimal {
-        value < 0 ? -value : value
     }
 }

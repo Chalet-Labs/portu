@@ -6,6 +6,7 @@ import SwiftUI
 
 struct OverviewSummaryCards: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var allPositions: [Position]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -42,6 +43,9 @@ struct OverviewSummaryCards: View {
                         category: asset.category,
                         portfolioCategory: resolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
                         coinGeckoId: asset.coinGeckoId,
+                        onchainIdentity: OnchainTokenIdentity(
+                            chain: asset.upsertChain,
+                            contractAddress: asset.upsertContract),
                         role: token.role,
                         amount: token.amount,
                         usdValue: token.usdValue,
@@ -65,7 +69,7 @@ struct OverviewSummaryCards: View {
     private var idleBreakdown: [(String, Decimal)] {
         OverviewSummaryCardsFeature.idleBreakdown(
             tokens: summaryTokens,
-            prices: appState.prices,
+            prices: displayPrices,
             overrides: overrideSnapshots,
             settings: dashboardSettings,
             categories: categoryResolver.categories)
@@ -74,9 +78,15 @@ struct OverviewSummaryCards: View {
     private var deployedBreakdown: [(String, Decimal)] {
         OverviewSummaryCardsFeature.deployedBreakdown(
             tokens: summaryTokens,
-            prices: appState.prices,
+            prices: displayPrices,
             overrides: overrideSnapshots,
             settings: dashboardSettings)
+    }
+
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: appState.prices,
+            historical: historicalPricesUSD)
     }
 
     var body: some View {
@@ -208,15 +218,15 @@ enum OverviewSummaryCardsFeature {
         settings: TokenDashboardSettings) -> TokenEntry? {
         let override = overrideMap[token.assetId]
         guard token.role.isPositive else { return nil }
-        guard
-            TokenSettingsFeature.isDashboardEligible(
-                token: token,
-                prices: prices,
-                override: override,
-                settings: settings)
-        else {
-            return nil
+        guard override?.isIgnored != true else { return nil }
+
+        let value = OverviewPositionPricing.tokenValue(token: token, prices: prices, override: override)
+        if value == 0 {
+            guard override?.alwaysShow == true || !settings.hideUnpriced else { return nil }
+        } else if abs(value) < normalizedThreshold(settings.minimumDashboardValue) {
+            guard override?.alwaysShow == true || !settings.hideDust else { return nil }
         }
+
         let adjusted = TokenSettingsFeature.dashboardAdjustedToken(from: token, override: override)
         return TokenEntry(
             assetId: adjusted.assetId,
@@ -225,9 +235,14 @@ enum OverviewSummaryCardsFeature {
             category: adjusted.category,
             portfolioCategory: adjusted.portfolioCategory,
             coinGeckoId: adjusted.coinGeckoId,
+            onchainIdentity: adjusted.onchainIdentity,
             role: adjusted.role,
             amount: adjusted.amount,
-            usdValue: TokenSettingsFeature.resolvedValue(token: token, prices: prices, override: override) ?? adjusted.usdValue,
+            usdValue: value,
             logoURL: adjusted.logoURL)
     }
+}
+
+private func normalizedThreshold(_ value: Decimal) -> Decimal {
+    value < 0 ? 0 : value
 }

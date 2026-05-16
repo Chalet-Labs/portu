@@ -121,17 +121,18 @@ struct PortuApp: App {
         session: URLSession) -> PriceServiceClient {
         PriceServiceClient(
             fetchPrices: { coinIds in
-                let request = PricePollingIDResolver.split(coinIds)
-                let coinGeckoUpdate = try await priceService.fetchPriceUpdate(for: request.coinGeckoIDs)
-                guard
-                    !request.zapperIdentities.isEmpty,
-                    let apiKey = zapperAPIKey(from: secretStore)
-                else {
-                    return coinGeckoUpdate
-                }
-                let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
-                let zapperUpdate = try await zapperProvider.fetchPriceUpdate(for: request.zapperIdentities)
-                return PricePollingIDResolver.merge([coinGeckoUpdate, zapperUpdate])
+                try await LivePriceUpdateBuilder.fetchPrices(
+                    coinIds: coinIds,
+                    priceService: priceService) { identities in
+                        guard
+                            !identities.isEmpty,
+                            let apiKey = zapperAPIKey(from: secretStore)
+                        else {
+                            return PricePollingIDResolver.emptyUpdate
+                        }
+                        let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
+                        return try await zapperProvider.fetchPriceUpdate(for: identities)
+                    }
             },
             fetchHistoricalPrices: { coinId, days in
                 try await priceService.fetchHistoricalPrices(for: coinId, days: days)

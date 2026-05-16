@@ -240,11 +240,22 @@ enum HistoricalBackfillCandidateResolver {
         override: TokenPricingOverrideSnapshot?,
         prices: [String: Decimal],
         dashboardSettings: TokenDashboardSettings) -> Bool {
-        TokenSettingsFeature.isDashboardEligible(
+        guard token.amount > 0 else { return false }
+        guard token.role.isPositive || token.role.isBorrow else { return false }
+        guard override?.isIgnored != true else { return false }
+        if override?.alwaysShow == true { return true }
+
+        let value = TokenSettingsFeature.resolvedValue(
             token: token,
             prices: prices,
-            override: override,
-            settings: dashboardSettings)
+            override: override) ?? token.usdValue
+        if value == 0 {
+            return !dashboardSettings.hideUnpriced
+        }
+        if absolute(value) < normalizedThreshold(dashboardSettings.minimumDashboardValue) {
+            return !dashboardSettings.hideDust
+        }
+        return true
     }
 
     private static func shouldIncludeSnapshot(
@@ -283,22 +294,51 @@ enum HistoricalBackfillCandidateResolver {
         if asset.override?.manualPriceUSD != nil, normalizedID(asset.override?.coinGeckoIdOverride) == nil {
             return
         }
-        if let resolvedID = normalizedID(asset.override?.coinGeckoIdOverride) ?? normalizedID(asset.coinGeckoId) {
-            grouped[HistoricalBackfillCandidateKey(source: .coingecko(resolvedID)), default: []].insert(asset.assetId)
+
+        let explicitCoinGeckoID = normalizedID(asset.override?.coinGeckoIdOverride)
+            ?? normalizedID(asset.coinGeckoId)
+        guard let onchainIdentity = asset.onchainIdentity else {
+            if let explicitCoinGeckoID {
+                grouped[
+                    HistoricalBackfillCandidateKey(
+                        historicalPriceID: explicitCoinGeckoID,
+                        source: .coingecko(explicitCoinGeckoID)),
+                    default: []
+                ].insert(asset.assetId)
+            }
             return
         }
-        guard let onchainIdentity = asset.onchainIdentity else { return }
+
         if let nativeID = TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) {
-            grouped[HistoricalBackfillCandidateKey(source: .coingecko(nativeID)), default: []].insert(asset.assetId)
+            grouped[
+                HistoricalBackfillCandidateKey(
+                    historicalPriceID: nativeID,
+                    source: .coingecko(nativeID)),
+                default: []
+            ].insert(asset.assetId)
             return
         }
-        if
-            let resolvedID = TokenIdentityMappingFeature.mappedCoinGeckoID(
+
+        let providerCoinGeckoID = explicitCoinGeckoID
+            ?? TokenIdentityMappingFeature.mappedCoinGeckoID(
                 for: onchainIdentity,
-                mappingsByIdentity: mappingsByIdentity) ?? normalizedID(resolvedCoinGeckoIDs[onchainIdentity]) {
-            grouped[HistoricalBackfillCandidateKey(source: .coingecko(resolvedID)), default: []].insert(asset.assetId)
+                mappingsByIdentity: mappingsByIdentity)
+            ?? normalizedID(resolvedCoinGeckoIDs[onchainIdentity])
+            ?? TokenIdentityMappingFeature.knownContractCoinGeckoID(for: onchainIdentity)
+        if let providerCoinGeckoID {
+            grouped[
+                HistoricalBackfillCandidateKey(
+                    historicalPriceID: onchainIdentity.historicalPriceID,
+                    source: .coingecko(providerCoinGeckoID)),
+                default: []
+            ].insert(asset.assetId)
         } else {
-            grouped[HistoricalBackfillCandidateKey(source: .zapper(onchainIdentity)), default: []].insert(asset.assetId)
+            grouped[
+                HistoricalBackfillCandidateKey(
+                    historicalPriceID: onchainIdentity.historicalPriceID,
+                    source: .zapper(onchainIdentity)),
+                default: []
+            ].insert(asset.assetId)
         }
     }
 
@@ -313,7 +353,9 @@ enum HistoricalBackfillCandidateResolver {
         guard shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity else {
             return
         }
-        guard TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil else {
+        guard
+            TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil
+        else {
             return
         }
         guard
@@ -335,7 +377,9 @@ enum HistoricalBackfillCandidateResolver {
         guard shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity else {
             return
         }
-        guard TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil else {
+        guard
+            TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil
+        else {
             return
         }
         result[onchainIdentity, default: []].insert(assetId)
@@ -369,14 +413,9 @@ private struct HistoricalBackfillCandidateKey: Hashable {
     let historicalPriceID: String
     let source: HistoricalBackfillPriceSource
 
-    init(source: HistoricalBackfillPriceSource) {
+    init(historicalPriceID: String, source: HistoricalBackfillPriceSource) {
+        self.historicalPriceID = historicalPriceID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         self.source = source
-        switch source {
-        case let .coingecko(id):
-            self.historicalPriceID = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        case let .zapper(identity):
-            self.historicalPriceID = identity.historicalPriceID
-        }
     }
 }
 

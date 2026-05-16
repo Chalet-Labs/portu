@@ -78,6 +78,33 @@ nonisolated struct CoinGeckoMarketChartResponse {
     }
 }
 
+nonisolated struct CoinGeckoTokenPriceResponse {
+    let pricesByAddress: [String: Decimal]
+    let changes24hByAddress: [String: Decimal]
+
+    init(data: Data) throws(PriceServiceError) {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
+            throw .decodingFailed
+        }
+
+        var prices: [String: Decimal] = [:]
+        var changes: [String: Decimal] = [:]
+        for (address, values) in json {
+            let normalizedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !normalizedAddress.isEmpty else { continue }
+            if let usd = values["usd"] as? NSNumber {
+                prices[normalizedAddress] = usd.decimalValue
+            }
+            if let change = values["usd_24h_change"] as? NSNumber {
+                changes[normalizedAddress] = change.decimalValue / 100
+            }
+        }
+
+        self.pricesByAddress = prices
+        self.changes24hByAddress = changes
+    }
+}
+
 nonisolated struct CoinGeckoOnchainTokenMapResponse {
     let coinGeckoIDsByAddress: [String: String]
 

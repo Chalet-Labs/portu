@@ -64,7 +64,13 @@ enum TokenIdentityMappingFeature {
     static func priceID(
         coinGeckoId: String?,
         onchainIdentity: OnchainTokenIdentity?) -> String? {
-        normalizedProviderID(coinGeckoId) ?? nativeCoinGeckoID(for: onchainIdentity) ?? onchainIdentity?.historicalPriceID
+        if let nativeID = nativeCoinGeckoID(for: onchainIdentity) {
+            return nativeID
+        }
+        if let onchainIdentity {
+            return onchainIdentity.historicalPriceID
+        }
+        return normalizedProviderID(coinGeckoId)
     }
 
     static func nativeCoinGeckoID(for identity: OnchainTokenIdentity?) -> String? {
@@ -84,6 +90,11 @@ enum TokenIdentityMappingFeature {
         }
     }
 
+    static func knownContractCoinGeckoID(for identity: OnchainTokenIdentity?) -> String? {
+        guard let identity else { return nil }
+        return knownContractCoinGeckoIDs[TokenIdentityMapping.canonicalKey(for: identity)]
+    }
+
     static func nonZapperPriceID(_ id: String?) -> String? {
         guard let id = normalizedProviderID(id), OnchainTokenIdentity(historicalPriceID: id) == nil else {
             return nil
@@ -91,11 +102,43 @@ enum TokenIdentityMappingFeature {
         return id
     }
 
+    static func normalizedHistoricalPriceID(_ id: String?) -> String? {
+        guard let normalizedID = normalizedProviderID(id) else { return nil }
+        if let identity = OnchainTokenIdentity(historicalPriceID: normalizedID) {
+            return identity.historicalPriceID
+        }
+        return normalizedID
+    }
+
     static func normalizedProviderID(_ id: String?) -> String? {
         guard let id else { return nil }
         let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized.isEmpty ? nil : normalized
     }
+
+    private static let knownContractCoinGeckoIDs: [String: String] = [
+        TokenIdentityMapping.canonicalKey(
+            chain: .ethereum,
+            contractAddress: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"): "usd-coin",
+        TokenIdentityMapping.canonicalKey(
+            chain: .arbitrum,
+            contractAddress: "0xaf88d065e77c8cc2239327c5edb3a432268e5831"): "usd-coin",
+        TokenIdentityMapping.canonicalKey(
+            chain: .base,
+            contractAddress: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"): "usd-coin",
+        TokenIdentityMapping.canonicalKey(
+            chain: .optimism,
+            contractAddress: "0x0b2c639c533813f4aa9d7837caf62653d097ff85"): "usd-coin",
+        TokenIdentityMapping.canonicalKey(
+            chain: .polygon,
+            contractAddress: "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359"): "usd-coin",
+        TokenIdentityMapping.canonicalKey(
+            chain: .bsc,
+            contractAddress: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"): "usd-coin",
+        TokenIdentityMapping.canonicalKey(
+            chain: .scroll,
+            contractAddress: "0x06efdbff2a14a7c8e15944d1f4a48f9f95f663a4"): "usd-coin"
+    ]
 
     private static func preferred(
         _ candidate: TokenIdentityMappingSnapshot,

@@ -146,7 +146,8 @@ private struct OverviewPositionTokenRow: View {
                 .frame(width: 250, alignment: .leading)
 
             HStack(spacing: 7) {
-                assetDot
+                AssetLogoView(symbol: token.asset?.symbol ?? "?", logoURL: token.asset?.logoURL)
+                    .frame(width: 16, height: 16)
                 Text(token.asset?.symbol ?? "???")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(PortuTheme.dashboardText)
@@ -225,17 +226,6 @@ private struct OverviewPositionTokenRow: View {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(PortuTheme.dashboardGoldMuted.opacity(0.35)))
         }
-    }
-
-    private var assetDot: some View {
-        ZStack {
-            Circle()
-                .fill(PortuTheme.dashboardGoldMuted)
-            Text(String((token.asset?.symbol ?? "?").prefix(1)))
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(PortuTheme.dashboardText)
-        }
-        .frame(width: 16, height: 16)
     }
 
     private var positionLabel: String {

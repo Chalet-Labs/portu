@@ -34,9 +34,23 @@ struct AssetPricePeriodChange: Identifiable, Equatable {
     }
 
     let coinGeckoId: String
+    let name: String
     let startPrice: Decimal
     let endPrice: Decimal
     let percentChange: Decimal
+
+    init(
+        coinGeckoId: String,
+        name: String? = nil,
+        startPrice: Decimal,
+        endPrice: Decimal,
+        percentChange: Decimal) {
+        self.coinGeckoId = coinGeckoId
+        self.name = name ?? coinGeckoId
+        self.startPrice = startPrice
+        self.endPrice = endPrice
+        self.percentChange = percentChange
+    }
 }
 
 /// Snapshot input used for estimated history and held-price filtering.
@@ -269,10 +283,14 @@ struct PerformanceFeature {
 
     /// Compute category start/end/change from snapshot entries.
     static func computeCategoryChanges(
-        entries: [CategorySnapshotEntry]) -> [CategoryChange] {
-        guard !entries.isEmpty else { return [] }
+        entries: [CategorySnapshotEntry],
+        visibleAssetIDs: Set<UUID>? = nil) -> [CategoryChange] {
+        let scopedEntries = visibleAssetIDs.map { ids in
+            entries.filter { ids.contains($0.assetId) }
+        } ?? entries
+        guard !scopedEntries.isEmpty else { return [] }
         let cal = Calendar.current
-        let sorted = entries.sorted { $0.timestamp < $1.timestamp }
+        let sorted = scopedEntries.sorted { $0.timestamp < $1.timestamp }
         let firstDay = cal.startOfDay(for: sorted.first!.timestamp)
         let lastDay = cal.startOfDay(for: sorted.last!.timestamp)
         let deduped = deduplicateByDayAndAsset(sorted)
@@ -306,7 +324,11 @@ struct PerformanceFeature {
 
     static func computeHistoricalPriceChanges(
         rows: [HistoricalPriceEntry]) -> [AssetPricePeriodChange] {
-        let grouped = Dictionary(grouping: rows) { $0.coinGeckoId }
+        let normalizedRows = rows.compactMap { row -> HistoricalPriceEntry? in
+            guard let coinGeckoId = normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
+            return HistoricalPriceEntry(coinGeckoId: coinGeckoId, day: row.day, usdPrice: row.usdPrice)
+        }
+        let grouped = Dictionary(grouping: normalizedRows) { $0.coinGeckoId }
         return grouped.keys.sorted().compactMap { coinGeckoId in
             let sorted = grouped[coinGeckoId, default: []].sorted {
                 if $0.day != $1.day { return $0.day < $1.day }
@@ -322,6 +344,28 @@ struct PerformanceFeature {
                 startPrice: first.usdPrice,
                 endPrice: last.usdPrice,
                 percentChange: (last.usdPrice - first.usdPrice) / first.usdPrice)
+        }
+    }
+
+    static func applyAssetDisplayNames(
+        changes: [AssetPricePeriodChange],
+        namesByHistoricalPriceID: [String: String]) -> [AssetPricePeriodChange] {
+        let normalizedNames = Dictionary(
+            namesByHistoricalPriceID.compactMap { id, name -> (String, String)? in
+                guard let normalizedID = normalizedHistoricalPriceID(id) else { return nil }
+                let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmedName.isEmpty else { return nil }
+                return (normalizedID, trimmedName)
+            },
+            uniquingKeysWith: { lhs, _ in lhs })
+
+        return changes.map { change in
+            AssetPricePeriodChange(
+                coinGeckoId: change.coinGeckoId,
+                name: normalizedNames[change.coinGeckoId] ?? change.name,
+                startPrice: change.startPrice,
+                endPrice: change.endPrice,
+                percentChange: change.percentChange)
         }
     }
 
@@ -358,7 +402,7 @@ struct PerformanceFeature {
         guard heldIDs.isEmpty == false else { return [] }
 
         return rows.compactMap { row in
-            let coinGeckoId = normalizedCoinGeckoID(row.coinGeckoId)
+            guard let coinGeckoId = normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
             guard row.day >= startDay, heldIDs.contains(coinGeckoId) else { return nil }
             return HistoricalPriceEntry(
                 coinGeckoId: coinGeckoId,
@@ -411,13 +455,11 @@ struct PerformanceFeature {
     }
 
     private static func normalizedOptionalCoinGeckoID(_ id: String?) -> String? {
-        guard let id else { return nil }
-        let normalized = normalizedCoinGeckoID(id)
-        return normalized.isEmpty ? nil : normalized
+        normalizedHistoricalPriceID(id)
     }
 
-    private static func normalizedCoinGeckoID(_ id: String) -> String {
-        id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    private static func normalizedHistoricalPriceID(_ id: String?) -> String? {
+        TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
     }
 
     private static func utcStartOfDay(for date: Date) -> Date {

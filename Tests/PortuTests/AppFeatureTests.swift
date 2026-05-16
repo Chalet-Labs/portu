@@ -2,6 +2,7 @@ import ComposableArchitecture
 import Foundation
 @testable import Portu
 import PortuCore
+import PortuNetwork
 import Testing
 
 @MainActor
@@ -145,7 +146,7 @@ struct AppFeatureTests {
         } withDependencies: {
             $0.priceService.fetchPrices = { _ in expectedUpdate }
             $0.continuousClock = testClock
-            $0.date = .constant(testDate)
+            $0.currentDate.now = { testDate }
         }
 
         await store.send(.startPricePolling(["bitcoin"])) {
@@ -176,7 +177,7 @@ struct AppFeatureTests {
             }
             $0.pricePollingSettings.refreshInterval = { .seconds(5) }
             $0.continuousClock = testClock
-            $0.date = .constant(testDate)
+            $0.currentDate.now = { testDate }
         }
 
         await store.send(.startPricePolling(["bitcoin"])) {
@@ -243,7 +244,7 @@ struct AppFeatureTests {
             baseToken.historicalPriceID,
             "bitcoin",
             ethToken.historicalPriceID,
-            "zapper:polygonzkevm:0xToken",
+            "asset:polygonzkevm:0xToken",
             "",
             baseToken.historicalPriceID
         ])
@@ -252,14 +253,27 @@ struct AppFeatureTests {
         #expect(request.zapperIdentities == [baseToken, ethToken, polygonZkToken])
     }
 
+    @Test func `price polling id split preserves first seen identity priority`() {
+        let priority = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xPriority")
+        let lowerPriority = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xAaaa")
+
+        let request = PricePollingIDResolver.split([
+            priority.historicalPriceID,
+            lowerPriority.historicalPriceID,
+            priority.historicalPriceID
+        ])
+
+        #expect(request.zapperIdentities == [priority, lowerPriority])
+    }
+
     @Test func `price polling updates merge coingecko and zapper results`() {
         let update = PricePollingIDResolver.merge([
             PriceUpdate(prices: ["bitcoin": 70000], changes24h: ["bitcoin": 0.02]),
-            PriceUpdate(prices: ["zapper:base:0xtoken": 3], changes24h: ["zapper:base:0xtoken": -0.01])
+            PriceUpdate(prices: ["asset:base:0xtoken": 3], changes24h: ["asset:base:0xtoken": -0.01])
         ])
 
-        #expect(update.prices == ["bitcoin": 70000, "zapper:base:0xtoken": 3])
-        #expect(update.changes24h == ["bitcoin": 0.02, "zapper:base:0xtoken": -0.01])
+        #expect(update.prices == ["bitcoin": 70000, "asset:base:0xtoken": 3])
+        #expect(update.changes24h == ["bitcoin": 0.02, "asset:base:0xtoken": -0.01])
     }
 
     // MARK: - PriceServiceClient invalidateCache
@@ -325,7 +339,7 @@ struct AppFeatureTests {
                 prices: ["bitcoin": 60000, "ethereum": 3000])) {
             AppFeature()
         } withDependencies: {
-            $0.date = .constant(testDate)
+            $0.currentDate.now = { testDate }
         }
 
         await store.send(.pricesReceived(PriceUpdate(
@@ -335,5 +349,106 @@ struct AppFeatureTests {
                 $0.priceChanges24h = ["bitcoin": 2.5]
                 $0.lastPriceUpdate = testDate
             }
+    }
+}
+
+nonisolated final class AppPriceMockURLProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var requestHandler: ((URLRequest) -> (Data?, Int))?
+
+    override static func canInit(with _: URLRequest) -> Bool {
+        true
+    }
+
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        let (data, statusCode) = Self.requestHandler?(request) ?? (nil, 500)
+        guard let url = request.url else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badURL))
+            return
+        }
+        let response = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        if let data {
+            client?.urlProtocol(self, didLoad: data)
+        }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+@Suite(.serialized)
+struct LivePriceUpdateBuilderTests {
+    @Test func `zapper fallback failure preserves coingecko prices`() async throws {
+        struct ZapperUnavailable: Error {}
+
+        let identity = OnchainTokenIdentity(
+            chain: .base,
+            contractAddress: "0x4200000000000000000000000000000000000006")
+        AppPriceMockURLProtocol.requestHandler = { request in
+            guard let url = request.url else { return (nil, 500) }
+            if url.path == "/api/v3/simple/price" {
+                return (Data("""
+                {"ethereum":{"usd":2220.5,"usd_24h_change":1.2}}
+                """.utf8), 200)
+            }
+            if url.path == "/api/v3/simple/token_price/base" {
+                return (Data("{}".utf8), 200)
+            }
+            return (nil, 500)
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AppPriceMockURLProtocol.self]
+        let service = PriceService(session: URLSession(configuration: configuration), cacheTTL: 0)
+
+        let update = try await LivePriceUpdateBuilder.fetchPrices(
+            coinIds: ["ethereum", identity.historicalPriceID],
+            priceService: service,
+            fetchZapperUpdate: { identities in
+                #expect(identities == [identity])
+                throw ZapperUnavailable()
+            })
+
+        #expect(update.prices["ethereum"] == Decimal(string: "2220.5"))
+        #expect(update.changes24h["ethereum"] == Decimal(string: "0.012"))
+        #expect(update.prices[identity.historicalPriceID] == nil)
+    }
+
+    @Test func `contract address fallback still runs when coingecko id request fails`() async throws {
+        let identity = OnchainTokenIdentity(
+            chain: .base,
+            contractAddress: "0x4200000000000000000000000000000000000006")
+        AppPriceMockURLProtocol.requestHandler = { request in
+            guard let url = request.url else { return (nil, 500) }
+            if url.path == "/api/v3/simple/price" {
+                return (nil, 429)
+            }
+            if url.path == "/api/v3/simple/token_price/base" {
+                return (Data("""
+                {"0x4200000000000000000000000000000000000006":{"usd":2220.5,"usd_24h_change":1.2}}
+                """.utf8), 200)
+            }
+            return (nil, 500)
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AppPriceMockURLProtocol.self]
+        let service = PriceService(session: URLSession(configuration: configuration), cacheTTL: 0)
+
+        let update = try await LivePriceUpdateBuilder.fetchPrices(
+            coinIds: ["ethereum", identity.historicalPriceID],
+            priceService: service,
+            fetchZapperUpdate: { identities in
+                #expect(identities.isEmpty)
+                return PricePollingIDResolver.emptyUpdate
+            })
+
+        #expect(update.prices["ethereum"] == nil)
+        #expect(update.prices[identity.historicalPriceID] == Decimal(string: "2220.5"))
+        #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "0.012"))
     }
 }
