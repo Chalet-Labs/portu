@@ -1,9 +1,12 @@
 import Foundation
+import os
 import PortuCore
 
 /// Fetches and caches cryptocurrency prices from CoinGecko's free API.
 /// Rate limit and cache TTL are configurable (see init).
 public actor PriceService {
+    private static let logger = Logger(subsystem: "com.portu.network", category: "PriceService")
+
     private let session: URLSession
     private let baseURL = URL(string: "https://api.coingecko.com/api/v3")!
     private var cache: [String: Decimal] = [:]
@@ -121,11 +124,22 @@ public actor PriceService {
 
         var prices: [String: Decimal] = [:]
         var changes24h: [String: Decimal] = [:]
-        for batch in Self.tokenPriceBatchesPreservingPriority(uniqueIdentities) {
+        let batches = Self.tokenPriceBatchesPreservingPriority(uniqueIdentities)
+        for (index, batch) in batches.enumerated() {
             let result = try await fetchTokenPriceChunk(platformID: batch.platformID, identities: batch.identities)
             prices.merge(result.update.prices) { _, new in new }
             changes24h.merge(result.update.changes24h) { _, new in new }
             if result.didHitRateLimit {
+                let remaining = batches[(index + 1)...].reduce(0) { $0 + $1.identities.count }
+                if remaining > 0 {
+                    let batchNumber = index + 1
+                    Self.logger.warning(
+                        """
+                        Token price update truncated by rate limit after batch \
+                        \(batchNumber, privacy: .public)/\(batches.count, privacy: .public); \
+                        \(remaining, privacy: .public) identities skipped this tick.
+                        """)
+                }
                 return PriceUpdate(prices: prices, changes24h: changes24h)
             }
         }
@@ -250,6 +264,12 @@ public actor PriceService {
                 didHitRateLimit: true)
         } catch let PriceServiceError.invalidResponse(statusCode) where statusCode == 400 {
             guard identities.count > 1 else {
+                // Single-identity 400 means CoinGecko rejected this specific contract.
+                // Log so the user can spot it; the empty result keeps the rest of the run alive.
+                if let lone = identities.first {
+                    Self.logger.warning(
+                        "CoinGecko returned 400 for token \(lone.historicalPriceID, privacy: .public); dropping for this tick.")
+                }
                 return TokenPriceFetchResult(
                     update: PriceUpdate(prices: [:], changes24h: [:]),
                     didHitRateLimit: false)
@@ -388,13 +408,18 @@ public actor PriceService {
                     let prices = try await fetchPrices(for: coinIds)
                     continuation.yield(prices)
                 } catch PriceServiceError.rateLimited {
-                    // Transient — skip this tick, retry next
+                    // All three branches are transient (rate-limit, offline, upstream 5xx); skip
+                    // the tick so the user keeps seeing the last good prices instead of an empty
+                    // chart. Logged so a persistent outage is discoverable from Console.
+                    Self.logger.notice("Price polling tick skipped: rate limited by CoinGecko.")
                 } catch PriceServiceError.networkUnavailable {
-                    // Transient — skip this tick, retry next
+                    Self.logger.notice("Price polling tick skipped: network unavailable.")
                 } catch let PriceServiceError.invalidResponse(code) where code >= 500 {
-                    // Transient server error — skip this tick, retry next
+                    Self.logger.notice("Price polling tick skipped: CoinGecko returned \(code, privacy: .public).")
                 } catch {
-                    // Non-transient (decoding, 4xx auth errors) — terminate
+                    // Non-transient (decoding, 4xx auth errors) — terminate the stream.
+                    Self.logger.error(
+                        "Price polling stream terminated: \(String(describing: error), privacy: .public)")
                     continuation.finish(throwing: error)
                     return
                 }

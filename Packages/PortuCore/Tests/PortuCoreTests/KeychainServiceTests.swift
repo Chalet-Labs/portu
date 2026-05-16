@@ -89,7 +89,7 @@ struct SecretStoreTests {
 }
 
 struct KeychainServiceTests {
-    @Test func `set stores values in standard keychain`() throws {
+    @Test func `set stores values in standard keychain with ThisDeviceOnly accessibility`() throws {
         let recorder = KeychainOperationRecorder()
         let store = KeychainService(
             service: "com.portu.tests",
@@ -106,8 +106,25 @@ struct KeychainServiceTests {
 
         let addQuery = try #require(recorder.addedQueries.first)
         #expect(!addQuery.usesDataProtectionKeychain)
-        #expect(addQuery[kSecAttrAccessible as String] == nil)
+        #expect(addQuery.accessibility == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
         #expect(recorder.deletedQueries.isEmpty)
+    }
+
+    @Test func `set update path also pins ThisDeviceOnly accessibility`() throws {
+        let recorder = KeychainOperationRecorder()
+        let store = KeychainService(
+            service: "com.portu.tests",
+            add: { _, _ in errSecDuplicateItem },
+            update: { _, attributes in
+                recorder.appendAdded(attributes.dictionaryValue)
+                return errSecSuccess
+            },
+            delete: { _ in errSecSuccess })
+
+        try store.set(key: .providerAPIKey(.zapper), value: "zapper-token")
+
+        let updateAttributes = try #require(recorder.addedQueries.first)
+        #expect(updateAttributes.accessibility == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
     }
 
     @Test func `get reads standard keychain`() throws {
@@ -189,5 +206,9 @@ private extension CFDictionary {
 private extension [String: Any] {
     var usesDataProtectionKeychain: Bool {
         self[kSecUseDataProtectionKeychain as String] as? Bool == true
+    }
+
+    var accessibility: String? {
+        self[kSecAttrAccessible as String] as? String
     }
 }

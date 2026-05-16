@@ -47,7 +47,7 @@ struct PortuApp: App {
             modelContext: modelContext,
             providerFactory: ProviderFactory(secretStore: secretStore, session: session))
         let priceService = PriceService(session: session) {
-            try? secretStore.get(key: .serviceAPIKey("coingecko"))
+            Self.coinGeckoAPIKey(from: secretStore)
         }
         let priceServiceClient = Self.makePriceServiceClient(
             priceService: priceService,
@@ -152,11 +152,31 @@ struct PortuApp: App {
     }
 
     nonisolated static func zapperAPIKey(from secretStore: any SecretStore) -> String? {
+        readAPIKey(named: "Zapper", from: secretStore, key: .providerAPIKey(.zapper))
+    }
+
+    nonisolated static func coinGeckoAPIKey(from secretStore: any SecretStore) -> String? {
+        readAPIKey(named: "CoinGecko", from: secretStore, key: .serviceAPIKey("coingecko"))
+    }
+
+    private static let keychainAccessLogger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app",
+        category: "KeychainAccess")
+
+    nonisolated private static func readAPIKey(
+        named provider: String,
+        from secretStore: any SecretStore,
+        key: KeychainKey) -> String? {
         do {
-            let apiKey = try secretStore.get(key: .providerAPIKey(.zapper))?
+            let value = try secretStore.get(key: key)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            return apiKey?.isEmpty == false ? apiKey : nil
+            return value?.isEmpty == false ? value : nil
         } catch {
+            // Important: distinguish "no key configured" (returns nil, no log) from
+            // "keychain retrieval failed" (returns nil, but log so users can diagnose
+            // locked-keychain or migration scenarios).
+            keychainAccessLogger.error(
+                "Failed to read \(provider, privacy: .public) API key from keychain: \(String(describing: error), privacy: .public)")
             return nil
         }
     }

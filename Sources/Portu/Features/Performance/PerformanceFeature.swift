@@ -27,33 +27,38 @@ struct CategoryChange: Identifiable, Equatable {
     let percentChange: Decimal
 }
 
-/// Price change for one cached CoinGecko asset over a period.
+/// Period price change keyed by historical price ID. The ID is `<coinGeckoId>` for
+/// CoinGecko-priced assets and `zapper:<chain>:<contract>` for onchain assets whose
+/// prices come from Zapper, matching the cache's `HistoricalPricePoint.coinGeckoId`
+/// convention.
 struct AssetPricePeriodChange: Identifiable, Equatable {
     var id: String {
-        coinGeckoId
+        historicalPriceID
     }
 
-    let coinGeckoId: String
+    let historicalPriceID: String
     let name: String
     let startPrice: Decimal
     let endPrice: Decimal
     let percentChange: Decimal
 
     init(
-        coinGeckoId: String,
+        historicalPriceID: String,
         name: String? = nil,
         startPrice: Decimal,
         endPrice: Decimal,
         percentChange: Decimal) {
-        self.coinGeckoId = coinGeckoId
-        self.name = name ?? coinGeckoId
+        self.historicalPriceID = historicalPriceID
+        self.name = name ?? historicalPriceID
         self.startPrice = startPrice
         self.endPrice = endPrice
         self.percentChange = percentChange
     }
 }
 
-/// Snapshot input used for estimated history and held-price filtering.
+/// Per-(account, asset) snapshot used to derive earliest holdings and to feed
+/// the pre-snapshot value estimator that backfills chart data before the first
+/// real local snapshot.
 struct HistoricalEstimateSnapshotEntry: Equatable {
     let accountId: UUID
     let assetId: UUID
@@ -195,9 +200,9 @@ struct PerformanceFeature {
 
     /// Deduplicate snapshot entries: for each (day, accountId, assetId), keep only the latest timestamp.
     /// Category is excluded from the key so a mid-day category change doesn't cause double-counting.
+    /// Uses UTC day boundaries to align with the historical price cache.
     private static func deduplicateByDayAndAsset(
         _ entries: [CategorySnapshotEntry]) -> [CategorySnapshotEntry] {
-        let cal = Calendar.current
         struct DedupKey: Hashable {
             let day: Date
             let accountId: UUID
@@ -206,7 +211,7 @@ struct PerformanceFeature {
         var latest: [DedupKey: CategorySnapshotEntry] = [:]
         for entry in entries {
             let key = DedupKey(
-                day: cal.startOfDay(for: entry.timestamp),
+                day: utcStartOfDay(for: entry.timestamp),
                 accountId: entry.accountId, assetId: entry.assetId)
             if let existing = latest[key], existing.timestamp >= entry.timestamp {
                 continue
@@ -216,16 +221,17 @@ struct PerformanceFeature {
         return Array(latest.values)
     }
 
-    /// Keep only the last value per calendar day, sorted ascending.
+    /// Keep only the last value per UTC day, sorted ascending. UTC bucketing keeps
+    /// real-snapshot points aligned with historical-price-derived estimated points
+    /// when they share a chart.
     static func lastPerDay(_ values: [(Date, Decimal)]) -> [(Date, Decimal)] {
-        let cal = Calendar.current
-        var byDay: [DateComponents: (Date, Decimal)] = [:]
+        var byDay: [Date: (Date, Decimal)] = [:]
         for (date, value) in values {
-            let comps = cal.dateComponents([.year, .month, .day], from: date)
-            if let existing = byDay[comps] {
-                if date > existing.0 { byDay[comps] = (date, value) }
+            let day = utcStartOfDay(for: date)
+            if let existing = byDay[day] {
+                if date > existing.0 { byDay[day] = (date, value) }
             } else {
-                byDay[comps] = (date, value)
+                byDay[day] = (date, value)
             }
         }
         return byDay.values.sorted { $0.0 < $1.0 }
@@ -251,14 +257,14 @@ struct PerformanceFeature {
     /// Aggregate category snapshots by day — one chart point per (day, category).
     /// Deduplicates by taking the latest snapshot per (day, accountId, assetId),
     /// then sums across unique (accountId, assetId) combinations per (day, category).
+    /// Uses UTC day boundaries to align with the historical price cache.
     static func aggregateCategorySnapshots(
         entries: [CategorySnapshotEntry]) -> [CategoryChartPoint] {
-        let cal = Calendar.current
         let deduped = deduplicateByDayAndAsset(entries)
 
         var grouped: [Date: [String: (name: String, value: Decimal)]] = [:]
         for entry in deduped {
-            let day = cal.startOfDay(for: entry.timestamp)
+            let day = utcStartOfDay(for: entry.timestamp)
             var category = grouped[day, default: [:]][entry.categoryID] ?? (entry.categoryName, 0)
             category.value += entry.usdValue
             grouped[day, default: [:]][entry.categoryID] = category
@@ -289,10 +295,9 @@ struct PerformanceFeature {
             entries.filter { ids.contains($0.assetId) }
         } ?? entries
         guard !scopedEntries.isEmpty else { return [] }
-        let cal = Calendar.current
         let sorted = scopedEntries.sorted { $0.timestamp < $1.timestamp }
-        let firstDay = cal.startOfDay(for: sorted.first!.timestamp)
-        let lastDay = cal.startOfDay(for: sorted.last!.timestamp)
+        let firstDay = utcStartOfDay(for: sorted.first!.timestamp)
+        let lastDay = utcStartOfDay(for: sorted.last!.timestamp)
         let deduped = deduplicateByDayAndAsset(sorted)
 
         var namesByID: [String: String] = [:]
@@ -300,7 +305,7 @@ struct PerformanceFeature {
         var endValues: [String: Decimal] = [:]
 
         for entry in deduped {
-            let day = cal.startOfDay(for: entry.timestamp)
+            let day = utcStartOfDay(for: entry.timestamp)
             namesByID[entry.categoryID] = entry.categoryName
             if day == firstDay { startValues[entry.categoryID, default: 0] += entry.usdValue }
             if day == lastDay { endValues[entry.categoryID, default: 0] += entry.usdValue }
@@ -325,12 +330,12 @@ struct PerformanceFeature {
     static func computeHistoricalPriceChanges(
         rows: [HistoricalPriceEntry]) -> [AssetPricePeriodChange] {
         let normalizedRows = rows.compactMap { row -> HistoricalPriceEntry? in
-            guard let coinGeckoId = normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
-            return HistoricalPriceEntry(coinGeckoId: coinGeckoId, day: row.day, usdPrice: row.usdPrice)
+            guard let historicalPriceID = normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
+            return HistoricalPriceEntry(coinGeckoId: historicalPriceID, day: row.day, usdPrice: row.usdPrice)
         }
         let grouped = Dictionary(grouping: normalizedRows) { $0.coinGeckoId }
-        return grouped.keys.sorted().compactMap { coinGeckoId in
-            let sorted = grouped[coinGeckoId, default: []].sorted {
+        return grouped.keys.sorted().compactMap { historicalPriceID in
+            let sorted = grouped[historicalPriceID, default: []].sorted {
                 if $0.day != $1.day { return $0.day < $1.day }
                 return $0.usdPrice < $1.usdPrice
             }
@@ -340,7 +345,7 @@ struct PerformanceFeature {
                 first.usdPrice > 0
             else { return nil }
             return AssetPricePeriodChange(
-                coinGeckoId: coinGeckoId,
+                historicalPriceID: historicalPriceID,
                 startPrice: first.usdPrice,
                 endPrice: last.usdPrice,
                 percentChange: (last.usdPrice - first.usdPrice) / first.usdPrice)
@@ -361,8 +366,8 @@ struct PerformanceFeature {
 
         return changes.map { change in
             AssetPricePeriodChange(
-                coinGeckoId: change.coinGeckoId,
-                name: normalizedNames[change.coinGeckoId] ?? change.name,
+                historicalPriceID: change.historicalPriceID,
+                name: normalizedNames[change.historicalPriceID] ?? change.name,
                 startPrice: change.startPrice,
                 endPrice: change.endPrice,
                 percentChange: change.percentChange)
@@ -463,9 +468,6 @@ struct PerformanceFeature {
     }
 
     private static func utcStartOfDay(for date: Date) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
-        calendar.locale = Locale(identifier: "en_US_POSIX")
-        return calendar.startOfDay(for: date)
+        HistoricalPriceCalendar.utcStartOfDay(for: date)
     }
 }

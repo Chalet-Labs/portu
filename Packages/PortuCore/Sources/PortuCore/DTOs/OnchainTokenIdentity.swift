@@ -35,9 +35,20 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
         self.contractAddress = normalized
     }
 
+    /// Non-failable initializer for call sites that already hold a known-valid
+    /// contract address (e.g. one previously round-tripped through SwiftData). Traps
+    /// in debug builds on empty/whitespace input — earlier code silently kept the
+    /// unnormalized string, which broke `Hashable` and `canonicalPriceID` parity.
     public init(chain: Chain, contractAddress: String) {
+        guard let normalized = Self.normalizedContractAddress(contractAddress) else {
+            assertionFailure(
+                "OnchainTokenIdentity requires a non-empty contract address; got \(contractAddress.debugDescription)")
+            self.chain = chain
+            self.contractAddress = ""
+            return
+        }
         self.chain = chain
-        self.contractAddress = Self.normalizedContractAddress(contractAddress) ?? contractAddress
+        self.contractAddress = normalized
     }
 
     private static func normalizedContractAddress(_ address: String?) -> String? {

@@ -2,7 +2,10 @@ import Foundation
 import Security
 
 /// Wraps Security.framework keychain APIs. Items are scoped to the kSecAttrService value
-/// (defaults to bundle identifier).
+/// (defaults to the host bundle identifier; falls back to "com.portu.app" when none is set).
+///
+/// Items are written with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so they
+/// cannot sync to iCloud Keychain and stay tied to this device.
 public struct KeychainService: SecretStore {
     typealias CopyMatching = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
     typealias Add = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
@@ -53,10 +56,10 @@ public struct KeychainService: SecretStore {
 
         let baseQuery = baseQuery(for: key)
 
-        // Add-first upsert: attempt add, then update on duplicate
         let addStatus = add(
             baseQuery.merging([
-                kSecValueData as String: data
+                kSecValueData as String: data,
+                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             ]) { _, new in new } as CFDictionary,
             nil)
 
@@ -67,7 +70,8 @@ public struct KeychainService: SecretStore {
             let updateStatus = update(
                 baseQuery as CFDictionary,
                 [
-                    kSecValueData as String: data
+                    kSecValueData as String: data,
+                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
                 ] as CFDictionary)
             switch updateStatus {
             case errSecSuccess:

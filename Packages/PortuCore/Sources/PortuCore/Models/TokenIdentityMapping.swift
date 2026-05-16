@@ -79,6 +79,17 @@ public final class TokenIdentityMapping {
         updatedAt = resolvedAt
     }
 
+    /// Atomically replace `chain` and `contractAddress` while keeping the denormalized
+    /// `canonicalKey` (which backs the unique index) in sync. Always prefer this over
+    /// assigning `chain` or `contractAddress` directly — those properties have to be
+    /// `var` for SwiftData, but mutating them in isolation desynchronizes the index.
+    public func updateIdentity(_ identity: OnchainTokenIdentity) {
+        let normalizedContract = Self.normalizedContractAddress(identity.contractAddress)
+        chain = identity.chain
+        contractAddress = normalizedContract
+        canonicalKey = Self.canonicalKey(chain: identity.chain, contractAddress: normalizedContract)
+    }
+
     public static func canonicalKey(for identity: OnchainTokenIdentity) -> String {
         canonicalKey(chain: identity.chain, contractAddress: identity.contractAddress)
     }

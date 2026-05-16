@@ -442,7 +442,10 @@ struct PerformanceCategoryChangeTests {
     }
 
     @Test func `uses only latest snapshot per asset per day not sum of all syncs`() throws {
-        let cal = Calendar.current
+        // UTC-pinned because PerformanceFeature.deduplicateByDayAndAsset uses UTC day buckets.
+        // Without pinning, hours like 8/20 land in different UTC days depending on locale.
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = try #require(TimeZone(secondsFromGMT: 0))
         let acct = UUID()
         let btc = UUID()
 

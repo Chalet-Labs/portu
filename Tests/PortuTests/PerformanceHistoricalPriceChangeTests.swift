@@ -16,7 +16,7 @@ struct PerformanceHistoricalPriceChangeTests {
                 HistoricalPriceEntry(coinGeckoId: "ethereum", day: day2, usdPrice: 1800)
             ])
 
-        #expect(changes.map(\.coinGeckoId) == ["bitcoin", "ethereum"])
+        #expect(changes.map(\.historicalPriceID) == ["bitcoin", "ethereum"])
         #expect(changes[0].percentChange == Decimal(string: "0.1")!)
         #expect(changes[1].percentChange == Decimal(string: "-0.1")!)
     }
@@ -25,7 +25,7 @@ struct PerformanceHistoricalPriceChangeTests {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
         let changes = [
             AssetPricePeriodChange(
-                coinGeckoId: identity.historicalPriceID,
+                historicalPriceID: identity.historicalPriceID,
                 startPrice: 1,
                 endPrice: 2,
                 percentChange: 1)
@@ -37,7 +37,7 @@ struct PerformanceHistoricalPriceChangeTests {
                 "zapper:base:0xlocal": "Local Token"
             ])
 
-        #expect(named.first?.coinGeckoId == identity.historicalPriceID)
+        #expect(named.first?.historicalPriceID == identity.historicalPriceID)
         #expect(named.first?.name == "Local Token")
     }
 

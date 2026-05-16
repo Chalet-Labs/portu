@@ -302,6 +302,49 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(clearCallCount == 0)
     }
 
+    @Test func `backfill tap is ignored while backfill is running`() async {
+        var runCallCount = 0
+        let store = TestStore(initialState: HistoricalPriceBackfillFeature.State(status: .running)) {
+            HistoricalPriceBackfillFeature()
+        } withDependencies: {
+            $0.historicalPriceBackfill.run = {
+                runCallCount += 1
+                return HistoricalBackfillResult(
+                    requestedAssets: 0,
+                    fetchedAssets: 0,
+                    skippedAssets: 0,
+                    insertedPoints: 0,
+                    updatedPoints: 0,
+                    failedCoinGeckoIDs: [])
+            }
+        }
+
+        await store.send(.backfillButtonTapped)
+
+        #expect(store.state.status == .running)
+        #expect(runCallCount == 0)
+    }
+
+    @Test func `preflight unavailable error round trips its kind through the reducer`() async {
+        let preflight = HistoricalBackfillError(
+            message: "Configure a Zapper API key.",
+            kind: .preflightUnavailable)
+        #expect(preflight.kind == .preflightUnavailable)
+
+        let store = TestStore(initialState: HistoricalPriceBackfillFeature.State()) {
+            HistoricalPriceBackfillFeature()
+        } withDependencies: {
+            $0.historicalPriceBackfill.run = { throw preflight }
+        }
+
+        await store.send(.backfillButtonTapped) {
+            $0.status = .running
+        }
+        await store.receive(\.backfillCompleted) {
+            $0.status = .failed("Configure a Zapper API key.")
+        }
+    }
+
     private func token(
         assetId: UUID,
         symbol: String,

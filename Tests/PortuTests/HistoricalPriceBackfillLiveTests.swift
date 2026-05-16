@@ -348,7 +348,7 @@ struct HistoricalPriceBackfillLiveTests {
         #expect(coinGeckoRequests.values == ["cached-token"])
     }
 
-    @Test func `live backfill skips zapper fallback candidates when zapper provider is unavailable`() async throws {
+    @Test func `live backfill throws preflightUnavailable when only zapper candidates exist and provider is unavailable`() async throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
         let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
@@ -384,11 +384,13 @@ struct HistoricalPriceBackfillLiveTests {
             requestSpacing: .seconds(8),
             sleep: { duration in slept.append(duration) })
 
-        let result = try await client.run()
-
-        #expect(result.requestedAssets == 1)
-        #expect(result.fetchedAssets == 0)
-        #expect(result.failedCoinGeckoIDs == [identity.historicalPriceID])
+        var thrown: HistoricalBackfillError?
+        do {
+            _ = try await client.run()
+        } catch let error as HistoricalBackfillError {
+            thrown = error
+        }
+        #expect(thrown?.kind == .preflightUnavailable)
         #expect(zapperRequests.values.isEmpty)
         #expect(slept.isEmpty)
     }

@@ -1,8 +1,13 @@
 import ComposableArchitecture
 import Foundation
+import os
 import PortuCore
 import PortuNetwork
 import SwiftData
+
+private let backfillLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app",
+    category: "HistoricalPriceBackfill")
 
 struct HistoricalPriceBackfillClient {
     typealias Sleep = @MainActor @Sendable (Duration) async throws -> Void
@@ -158,9 +163,23 @@ private struct BackfillRunner {
 
     private func resolveCoinGeckoIDs(
         for identities: [OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String] {
+        guard !identities.isEmpty else { return [:] }
         do {
             return try await priceService.resolveCoinGeckoIDs(identities)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch PriceServiceError.rateLimited {
+            try await sleep(rateLimitRetryDelay)
+            do {
+                return try await priceService.resolveCoinGeckoIDs(identities)
+            } catch {
+                backfillLogger.warning(
+                    "Identity resolution retry failed; falling back to Zapper where possible: \(String(describing: error), privacy: .public)")
+                return [:]
+            }
         } catch {
+            backfillLogger.warning(
+                "Identity resolution failed; falling back to Zapper where possible: \(String(describing: error), privacy: .public)")
             return [:]
         }
     }
@@ -181,8 +200,20 @@ private struct BackfillRunner {
                 return true
             }
 
-        var hasRequestedCandidate = false
+        let totalCandidateCount = candidates.count
         result.failures.append(contentsOf: unavailableZapperCandidates.map(\.historicalPriceID))
+
+        // If every candidate is pre-classified as a failure (typically: all-Zapper with no key)
+        // surface that as an explicit error rather than a "succeeded with N failures" run.
+        if totalCandidateCount > 0, runnableCandidates.isEmpty {
+            backfillLogger.warning(
+                "Backfill blocked: \(unavailableZapperCandidates.count, privacy: .public) onchain candidate(s) require a Zapper API key.")
+            throw HistoricalBackfillError(
+                message: "No backfill candidates can be fetched. Configure a Zapper API key in Settings → API Keys to backfill onchain tokens.",
+                kind: .preflightUnavailable)
+        }
+
+        var hasRequestedCandidate = false
         for candidate in runnableCandidates {
             let prices: [HistoricalPriceDTO]
             do {
@@ -196,7 +227,11 @@ private struct BackfillRunner {
                     throw error
                 }
                 result.failures.append(candidate.historicalPriceID)
-                if result.failures.count == candidates.count {
+                backfillLogger.warning(
+                    "Historical fetch failed for \(candidate.historicalPriceID, privacy: .public): \(String(describing: error), privacy: .public)")
+                // Surface the underlying error only when every candidate (runnable + pre-seeded
+                // unavailable) has failed; otherwise keep going and let the result list partial failures.
+                if result.failures.count == totalCandidateCount {
                     throw error
                 }
                 continue
@@ -244,27 +279,42 @@ private struct BackfillRunner {
         _ resolvedCoinGeckoIDs: [OnchainTokenIdentity: String],
         existingMappings: [TokenIdentityMapping]) throws {
         guard !resolvedCoinGeckoIDs.isEmpty else { return }
+        var workingMappings = existingMappings
+        var anyMutation = false
         for (identity, coinGeckoID) in resolvedCoinGeckoIDs {
-            try TokenIdentityMappingWriter.upsert(
+            let mutated = TokenIdentityMappingWriter.upsertWithoutSaving(
                 identity: identity,
                 coinGeckoId: coinGeckoID,
-                mappings: existingMappings,
+                mappings: &workingMappings,
                 in: modelContext,
                 now: now())
+            anyMutation = anyMutation || mutated
+        }
+        if anyMutation {
+            do {
+                try modelContext.save()
+            } catch {
+                modelContext.rollback()
+                throw error
+            }
         }
     }
 }
 
 enum TokenIdentityMappingWriter {
+    /// Inserts or updates the mapping in the context without saving. Returns true if
+    /// `mappings` (and the underlying context) actually changed. Callers MUST save the
+    /// context once after batching.
     @MainActor
-    static func upsert(
+    @discardableResult
+    static func upsertWithoutSaving(
         identity: OnchainTokenIdentity,
         coinGeckoId: String,
-        mappings: [TokenIdentityMapping],
+        mappings: inout [TokenIdentityMapping],
         in context: ModelContext,
-        now: Date = .now) throws {
+        now: Date = .now) -> Bool {
         guard let normalizedID = TokenIdentityMapping.normalizedProviderID(coinGeckoId) else {
-            return
+            return false
         }
 
         let canonicalKey = TokenIdentityMapping.canonicalKey(for: identity)
@@ -278,23 +328,24 @@ enum TokenIdentityMappingWriter {
             }
 
         if let mapping = matches.first {
-            mapping.chain = identity.chain
-            mapping.contractAddress = identity.contractAddress
-            mapping.canonicalKey = canonicalKey
+            mapping.updateIdentity(identity)
             mapping.updateCoinGeckoId(normalizedID, resolvedAt: now)
             for duplicate in matches.dropFirst() {
                 context.delete(duplicate)
+                mappings.removeAll { $0.id == duplicate.id }
             }
         } else {
-            context.insert(TokenIdentityMapping(
+            let new = TokenIdentityMapping(
                 identity: identity,
                 coinGeckoId: normalizedID,
                 coinGeckoResolvedAt: now,
                 createdAt: now,
-                updatedAt: now))
+                updatedAt: now)
+            context.insert(new)
+            mappings.append(new)
         }
 
-        try context.save()
+        return true
     }
 }
 

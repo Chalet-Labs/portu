@@ -73,7 +73,28 @@ enum HistoricalBackfillStatus: Equatable {
 }
 
 struct HistoricalBackfillError: LocalizedError, Equatable {
+    /// Discriminator for failure category — lets the UI offer category-appropriate
+    /// guidance (configure key vs retry vs unlock keychain) instead of just an
+    /// opaque message.
+    enum Kind: Equatable {
+        /// CoinGecko/Zapper returned 429 and the runner exhausted its retry.
+        case rateLimited
+        /// Provider rejected our credentials (or none were configured).
+        case unauthorized(provider: String)
+        /// Backfill couldn't be started because nothing was fetchable — for example
+        /// every candidate is onchain but no Zapper key is configured.
+        case preflightUnavailable
+        /// Uncategorized failure; the message is the only signal.
+        case other
+    }
+
     let message: String
+    let kind: Kind
+
+    init(message: String, kind: Kind = .other) {
+        self.message = message
+        self.kind = kind
+    }
 
     var errorDescription: String? {
         message
@@ -445,12 +466,17 @@ enum HistoricalPriceCacheWriter {
         let incomingKeys = dtos.map {
             HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day)
         }
-        let coinGeckoIDs = Array(Set(incomingKeys.map(\.coinGeckoId)))
-        let days = Array(Set(incomingKeys.map(\.day)))
-        let existing = try context.fetch(FetchDescriptor<HistoricalPricePoint>(
-            predicate: #Predicate { row in
-                coinGeckoIDs.contains(row.coinGeckoId) && days.contains(row.day)
-            }))
+        let daysByCoinGeckoID = Dictionary(grouping: incomingKeys, by: \.coinGeckoId)
+            .mapValues { Array(Set($0.map(\.day))) }
+        var existing: [HistoricalPricePoint] = []
+        // Scope per coinGeckoId so we never fetch (token A day, token B day) cross-matches.
+        for (coinGeckoID, daysForID) in daysByCoinGeckoID {
+            let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>(
+                predicate: #Predicate { row in
+                    row.coinGeckoId == coinGeckoID && daysForID.contains(row.day)
+                }))
+            existing.append(contentsOf: rows)
+        }
         do {
             // SwiftData only enforces id uniqueness for this model; cache uniqueness
             // for (coinGeckoId, day) is enforced here by scoped upsert and dedupe.
