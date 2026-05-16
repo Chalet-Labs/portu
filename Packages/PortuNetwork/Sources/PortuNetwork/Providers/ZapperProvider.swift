@@ -8,7 +8,7 @@ public actor ZapperProvider: PortfolioDataProvider {
     private let baseURL: URL
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
-    private static let logger = Logger(subsystem: "com.portu.network", category: "ZapperProvider")
+    static let logger = Logger(subsystem: "com.portu.network", category: "ZapperProvider")
 
     nonisolated public var capabilities: ProviderCapabilities {
         ProviderCapabilities(
@@ -174,7 +174,7 @@ public actor ZapperProvider: PortfolioDataProvider {
         return contexts
     }
 
-    private func performGraphQL<Payload: Decodable & Sendable>(
+    func performGraphQL<Payload: Decodable & Sendable>(
         query: String,
         variables: some Encodable & Sendable) async throws -> GraphQLResponse<Payload> {
         var request = URLRequest(url: baseURL)
@@ -366,7 +366,7 @@ public actor ZapperProvider: PortfolioDataProvider {
 
     private static let posixLocale = Locale(identifier: "en_US_POSIX")
 
-    private static let chainIds: [Chain: Int] = [
+    static let chainIds: [Chain: Int] = [
         .ethereum: 1,
         .polygon: 137,
         .arbitrum: 42161,
@@ -398,143 +398,4 @@ public actor ZapperProvider: PortfolioDataProvider {
 
     private static let chainsById: [Int: Chain] = Dictionary(
         uniqueKeysWithValues: chainIds.map { ($0.value, $0.key) })
-
-    private static func timeFrame(for days: Int) -> String {
-        switch max(days, 1) {
-        case 1:
-            "DAY"
-        case 2 ... 7:
-            "WEEK"
-        case 8 ... 31:
-            "MONTH"
-        default:
-            "YEAR"
-        }
-    }
-}
-
-public extension ZapperProvider {
-    func fetchPriceUpdate(for identities: [OnchainTokenIdentity]) async throws -> PriceUpdate {
-        let uniqueIdentities = Array(Set(identities)).sorted {
-            if $0.chain.rawValue != $1.chain.rawValue { return $0.chain.rawValue < $1.chain.rawValue }
-            return $0.contractAddress < $1.contractAddress
-        }
-        guard !uniqueIdentities.isEmpty else {
-            return PriceUpdate(prices: [:], changes24h: [:])
-        }
-
-        var prices: [String: Decimal] = [:]
-        var changes24h: [String: Decimal] = [:]
-
-        for chunk in uniqueIdentities.chunked(size: 100) {
-            let inputs = try chunk.map { identity -> FungibleTokenInputV2 in
-                guard let chainId = Self.chainIds[identity.chain] else {
-                    throw ZapperError.unsupportedChain(identity.chain)
-                }
-                return FungibleTokenInputV2(address: identity.contractAddress, chainId: chainId)
-            }
-            let response: GraphQLResponse<TokenPriceBatchData> = try await performGraphQL(
-                query: Self.tokenPriceBatchQuery,
-                variables: TokenPriceBatchVariables(tokens: inputs))
-            let rows = try response.payload().fungibleTokenBatchV2
-
-            for (identity, row) in zip(chunk, rows) {
-                guard let priceData = row?.priceData else { continue }
-                let key = identity.historicalPriceID
-                if let price = priceData.price, price.isFinite, price > 0 {
-                    prices[key] = NSNumber(value: price).decimalValue
-                }
-                if let change = priceData.priceChange24h, change.isFinite {
-                    changes24h[key] = NSNumber(value: change).decimalValue / 100
-                }
-            }
-        }
-
-        return PriceUpdate(prices: prices, changes24h: changes24h)
-    }
-
-    func fetchHistoricalPrices(
-        identity: OnchainTokenIdentity,
-        days: Int) async throws -> [HistoricalPriceDTO] {
-        guard let chainId = Self.chainIds[identity.chain] else {
-            throw ZapperError.unsupportedChain(identity.chain)
-        }
-        let variables = TokenPriceTicksVariables(
-            address: identity.contractAddress,
-            chainId: chainId,
-            currency: "USD",
-            timeFrame: Self.timeFrame(for: days))
-        let response: GraphQLResponse<TokenPriceTicksData> = try await performGraphQL(
-            query: Self.tokenPriceTicksQuery,
-            variables: variables)
-        let ticks = try response.payload().fungibleTokenV2?.priceData?.priceTicks ?? []
-        let dtos = ticks.compactMap { tick -> HistoricalPriceDTO? in
-            guard tick.close.isFinite, tick.close > 0, tick.timestamp.isFinite else { return nil }
-            let timestamp = Date(timeIntervalSince1970: tick.timestamp / 1000)
-            return HistoricalPriceDTO(
-                coinGeckoId: identity.historicalPriceID,
-                timestamp: timestamp,
-                usdPrice: NSNumber(value: tick.close).decimalValue,
-                source: .zapper)
-        }
-
-        var latestByDay: [Date: HistoricalPriceDTO] = [:]
-        for dto in dtos {
-            if let existing = latestByDay[dto.day], existing.timestamp >= dto.timestamp {
-                continue
-            }
-            latestByDay[dto.day] = dto
-        }
-        return latestByDay.values.sorted {
-            if $0.day != $1.day { return $0.day < $1.day }
-            return $0.timestamp < $1.timestamp
-        }
-    }
-}
-
-public enum ZapperError: Error, LocalizedError, Sendable {
-    case invalidResponse
-    case rateLimited
-    case unauthorized
-    case httpError(statusCode: Int)
-    case decodingFailed
-    case schemaChanged(context: String)
-    case graphQLError(String)
-    case unsupportedChain(Chain)
-
-    public var errorDescription: String? {
-        switch self {
-        case .invalidResponse:
-            "Invalid response from Zapper API"
-        case .rateLimited:
-            "Zapper API rate limit exceeded"
-        case .unauthorized:
-            "Invalid Zapper API key"
-        case let .httpError(code):
-            "Zapper API returned HTTP \(code)"
-        case .decodingFailed:
-            "Failed to parse Zapper API response"
-        case let .schemaChanged(ctx):
-            "Zapper API schema may have changed: \(ctx)"
-        case let .graphQLError(message):
-            "Zapper GraphQL error: \(message)"
-        case let .unsupportedChain(chain):
-            "Zapper does not support explicit chain filter: \(chain.rawValue)"
-        }
-    }
-}
-
-private extension Array {
-    func chunked(size: Int) -> [[Element]] {
-        guard size > 0 else { return [self] }
-        var chunks: [[Element]] = []
-        chunks.reserveCapacity((count + size - 1) / size)
-        var index = startIndex
-        while index < endIndex {
-            let nextIndex = Swift.min(index + size, endIndex)
-            chunks.append(Array(self[index ..< nextIndex]))
-            index = nextIndex
-        }
-        return chunks
-    }
 }
