@@ -83,11 +83,12 @@ public final class TokenIdentityMapping {
     /// `canonicalKey` (which backs the unique index) in sync. Always prefer this over
     /// assigning `chain` or `contractAddress` directly — those properties have to be
     /// `var` for SwiftData, but mutating them in isolation desynchronizes the index.
-    public func updateIdentity(_ identity: OnchainTokenIdentity) {
+    public func updateIdentity(_ identity: OnchainTokenIdentity, at updatedAt: Date = .now) {
         let normalizedContract = Self.normalizedContractAddress(identity.contractAddress)
         chain = identity.chain
         contractAddress = normalizedContract
         canonicalKey = Self.canonicalKey(chain: identity.chain, contractAddress: normalizedContract)
+        self.updatedAt = updatedAt
     }
 
     public static func canonicalKey(for identity: OnchainTokenIdentity) -> String {
