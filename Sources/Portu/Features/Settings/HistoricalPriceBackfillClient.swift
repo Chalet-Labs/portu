@@ -172,6 +172,8 @@ private struct BackfillRunner {
             try await sleep(rateLimitRetryDelay)
             do {
                 return try await priceService.resolveCoinGeckoIDs(identities)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 backfillLogger.warning(
                     "Identity resolution retry failed; falling back to Zapper where possible: \(String(describing: error), privacy: .public)")
