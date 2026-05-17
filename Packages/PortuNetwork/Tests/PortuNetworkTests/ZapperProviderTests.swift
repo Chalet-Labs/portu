@@ -103,38 +103,50 @@ struct ZapperProviderTests {
         defer { ZapperMockURLProtocol.reset() }
         let base = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
         let ethereum = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xOther")
+        // Each request batches a single chain (issued per chain, ordered by chain.rawValue)
+        // so the response can be matched by address alone without colliding across chains —
+        // Zapper's `fungibleTokenBatchV2` does not guarantee response order.
         ZapperMockURLProtocol.requestHandler = { request in
             let body = try graphQLBody(from: request)
             #expect((body["query"] as? String)?.contains("fungibleTokenBatchV2") == true)
             let variables = try #require(body["variables"] as? [String: Any])
             let tokens = try #require(variables["tokens"] as? [[String: Any]])
-            #expect(tokens.count == 2)
-            #expect(tokens[0]["address"] as? String == "0xtoken")
-            #expect(tokens[0]["chainId"] as? Int == 8453)
-            #expect(tokens[1]["address"] as? String == "0xother")
-            #expect(tokens[1]["chainId"] as? Int == 1)
-            return (Data("""
-            {
-              "data": {
-                "fungibleTokenBatchV2": [
-                  {
-                    "address": "0xtoken",
-                    "priceData": {
-                      "price": 1.25,
-                      "priceChange24h": 5.5
-                    }
-                  },
-                  {
-                    "address": "0xother",
-                    "priceData": {
-                      "price": 2.5,
-                      "priceChange24h": -1.25
-                    }
+            #expect(tokens.count == 1)
+            let chainId = tokens[0]["chainId"] as? Int
+            let address = tokens[0]["address"] as? String
+            switch chainId {
+            case 8453:
+                #expect(address == "0xtoken")
+                return (Data("""
+                {
+                  "data": {
+                    "fungibleTokenBatchV2": [
+                      {
+                        "address": "0xtoken",
+                        "priceData": { "price": 1.25, "priceChange24h": 5.5 }
+                      }
+                    ]
                   }
-                ]
-              }
+                }
+                """.utf8), 200)
+            case 1:
+                #expect(address == "0xother")
+                return (Data("""
+                {
+                  "data": {
+                    "fungibleTokenBatchV2": [
+                      {
+                        "address": "0xother",
+                        "priceData": { "price": 2.5, "priceChange24h": -1.25 }
+                      }
+                    ]
+                  }
+                }
+                """.utf8), 200)
+            default:
+                Issue.record("Unexpected chainId in request: \(String(describing: chainId))")
+                return (Data("{}".utf8), 500)
             }
-            """.utf8), 200)
         }
 
         let provider = makeProvider(session: session)
@@ -144,6 +156,34 @@ struct ZapperProviderTests {
         #expect(update.prices[ethereum.historicalPriceID] == Decimal(string: "2.5"))
         #expect(update.changes24h[base.historicalPriceID] == Decimal(string: "0.055"))
         #expect(update.changes24h[ethereum.historicalPriceID] == Decimal(string: "-0.0125"))
+        #expect(ZapperMockURLProtocol.requests.count == 2)
+    }
+
+    @Test
+    func `fetch price update matches addresses when Zapper response is reordered`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        // Two same-chain identities; mock returns rows in reverse order to verify the
+        // implementation builds an address-keyed lookup rather than relying on input order.
+        let first = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xAAA")
+        let second = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xBBB")
+        ZapperMockURLProtocol.requestHandler = { _ in
+            (Data("""
+            {
+              "data": {
+                "fungibleTokenBatchV2": [
+                  { "address": "0xbbb", "priceData": { "price": 5.0, "priceChange24h": 1.0 } },
+                  { "address": "0xaaa", "priceData": { "price": 1.5, "priceChange24h": 2.0 } }
+                ]
+              }
+            }
+            """.utf8), 200)
+        }
+
+        let provider = makeProvider(session: session)
+        let update = try await provider.fetchPriceUpdate(for: [first, second])
+
+        #expect(update.prices[first.historicalPriceID] == Decimal(string: "1.5"))
+        #expect(update.prices[second.historicalPriceID] == Decimal(string: "5.0"))
     }
 
     @Test

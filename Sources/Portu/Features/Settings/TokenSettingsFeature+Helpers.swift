@@ -50,7 +50,7 @@ extension TokenSettingsFeature {
         guard OnchainTokenIdentity(historicalPriceID: priceID) != nil else {
             return true
         }
-        guard price > 0, token.amount > 0 else { return false }
+        guard price > 0, token.amount != 0 else { return false }
         let referenceValue = absolute(token.usdValue)
         guard referenceValue > 0 else { return true }
         let impliedValue = absolute(token.amount * price)

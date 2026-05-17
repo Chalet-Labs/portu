@@ -3,10 +3,7 @@ import PortuCore
 
 public extension ZapperProvider {
     func fetchPriceUpdate(for identities: [OnchainTokenIdentity]) async throws -> PriceUpdate {
-        let uniqueIdentities = Array(Set(identities)).sorted {
-            if $0.chain.rawValue != $1.chain.rawValue { return $0.chain.rawValue < $1.chain.rawValue }
-            return $0.contractAddress < $1.contractAddress
-        }
+        let uniqueIdentities = Array(Set(identities))
         guard !uniqueIdentities.isEmpty else {
             return PriceUpdate(prices: [:], changes24h: [:])
         }
@@ -14,26 +11,44 @@ public extension ZapperProvider {
         var prices: [String: Decimal] = [:]
         var changes24h: [String: Decimal] = [:]
 
-        for chunk in uniqueIdentities.chunked(size: 100) {
-            let inputs = try chunk.map { identity -> FungibleTokenInputV2 in
-                guard let chainId = Self.chainIds[identity.chain] else {
-                    throw ZapperError.unsupportedChain(identity.chain)
-                }
-                return FungibleTokenInputV2(address: identity.contractAddress, chainId: chainId)
+        // Issue one request per chain so each response can be matched by address alone —
+        // Zapper's `fungibleTokenBatchV2` does not guarantee response order matches input
+        // order, and the response rows only carry `address` (not chainId), so a single
+        // address could otherwise collide across chains.
+        let byChain = Dictionary(grouping: uniqueIdentities, by: \.chain)
+        for chain in byChain.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+            guard let chainId = Self.chainIds[chain] else {
+                throw ZapperError.unsupportedChain(chain)
             }
-            let response: GraphQLResponse<TokenPriceBatchData> = try await performGraphQL(
-                query: Self.tokenPriceBatchQuery,
-                variables: TokenPriceBatchVariables(tokens: inputs))
-            let rows = try response.payload().fungibleTokenBatchV2
-
-            for (identity, row) in zip(chunk, rows) {
-                guard let priceData = row?.priceData else { continue }
-                let key = identity.historicalPriceID
-                if let price = priceData.price, price.isFinite, price > 0 {
-                    prices[key] = NSNumber(value: price).decimalValue
+            let chainIdentities = byChain[chain, default: []]
+                .sorted { $0.contractAddress < $1.contractAddress }
+            for chunk in chainIdentities.chunked(size: 100) {
+                let inputs = chunk.map { identity -> FungibleTokenInputV2 in
+                    FungibleTokenInputV2(address: identity.contractAddress, chainId: chainId)
                 }
-                if let change = priceData.priceChange24h, change.isFinite {
-                    changes24h[key] = NSNumber(value: change).decimalValue / 100
+                let response: GraphQLResponse<TokenPriceBatchData> = try await performGraphQL(
+                    query: Self.tokenPriceBatchQuery,
+                    variables: TokenPriceBatchVariables(tokens: inputs))
+                let rows = try response.payload().fungibleTokenBatchV2
+
+                var rowsByAddress: [String: ZapperFungibleTokenV2] = [:]
+                for row in rows {
+                    guard let row, let address = row.address?.lowercased(), !address.isEmpty else { continue }
+                    rowsByAddress[address] = row
+                }
+
+                for identity in chunk {
+                    guard
+                        let row = rowsByAddress[identity.contractAddress],
+                        let priceData = row.priceData
+                    else { continue }
+                    let key = identity.historicalPriceID
+                    if let price = priceData.price, price.isFinite, price > 0 {
+                        prices[key] = NSNumber(value: price).decimalValue
+                    }
+                    if let change = priceData.priceChange24h, change.isFinite {
+                        changes24h[key] = NSNumber(value: change).decimalValue / 100
+                    }
                 }
             }
         }

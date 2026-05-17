@@ -589,6 +589,8 @@ struct HistoricalPriceBackfillFeature {
                     do {
                         let result = try await historicalPriceBackfill.run()
                         await send(.backfillCompleted(.success(result)))
+                    } catch is CancellationError {
+                        return
                     } catch {
                         await send(.backfillCompleted(.failure(HistoricalBackfillError(message: error.localizedDescription))))
                     }
@@ -609,6 +611,8 @@ struct HistoricalPriceBackfillFeature {
                     do {
                         try await historicalPriceBackfill.clearCache()
                         await send(.clearCacheCompleted(.success(())))
+                    } catch is CancellationError {
+                        return
                     } catch {
                         await send(.clearCacheCompleted(.failure(HistoricalBackfillError(message: error.localizedDescription))))
                     }

@@ -37,6 +37,14 @@ extension DependencyValues {
 // MARK: - PriceServiceClient
 
 struct PriceServiceClient {
+    enum ClientError: Error {
+        /// Returned by `fetchZapperHistoricalPrices` when no Zapper API key is configured.
+        /// The backfill runner's upstream pre-filter normally prevents reaching this path,
+        /// but a missing key here means the candidate cannot be fetched — surface it as a
+        /// failure instead of silently returning an empty result set.
+        case zapperProviderUnavailable
+    }
+
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
     var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
     var resolveCoinGeckoIDs: @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String]
@@ -145,7 +153,9 @@ extension PriceServiceClient: DependencyKey {
                 try await service.resolveCoinGeckoIDs(for: identities)
             },
             fetchZapperHistoricalPrices: { identity, days in
-                guard let zapperProvider else { return [] }
+                guard let zapperProvider else {
+                    throw ClientError.zapperProviderUnavailable
+                }
                 return try await zapperProvider.fetchHistoricalPrices(identity: identity, days: days)
             },
             canFetchZapperHistoricalPrices: { zapperProvider != nil },

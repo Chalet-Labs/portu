@@ -142,7 +142,7 @@ struct PortuApp: App {
             },
             fetchZapperHistoricalPrices: { identity, days in
                 guard let apiKey = zapperAPIKey(from: secretStore) else {
-                    return []
+                    throw PriceServiceClient.ClientError.zapperProviderUnavailable
                 }
                 let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
                 return try await zapperProvider.fetchHistoricalPrices(identity: identity, days: days)

@@ -335,10 +335,12 @@ struct PerformanceFeature {
         }
         let grouped = Dictionary(grouping: normalizedRows) { $0.coinGeckoId }
         return grouped.keys.sorted().compactMap { historicalPriceID in
-            let sorted = grouped[historicalPriceID, default: []].sorted {
-                if $0.day != $1.day { return $0.day < $1.day }
-                return $0.usdPrice < $1.usdPrice
-            }
+            // Dedupe per day before picking endpoints — multiple rows per (coinGeckoId, day) can
+            // exist transiently, and sorting by (day, usdPrice) would otherwise pick the lowest
+            // price on the earliest day and highest on the latest, inflating percentChange.
+            let perDay = Dictionary(grouping: grouped[historicalPriceID, default: []], by: \.day)
+                .compactMap { _, entries -> HistoricalPriceEntry? in entries.last }
+            let sorted = perDay.sorted { $0.day < $1.day }
             guard
                 let first = sorted.first,
                 let last = sorted.last,

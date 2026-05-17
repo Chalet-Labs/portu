@@ -68,6 +68,14 @@ enum TokenIdentityMappingFeature {
             return nativeID
         }
         if let onchainIdentity {
+            // For chains without a CoinGecko token platform (bitcoin, monad, katana,
+            // hyperliquid, etc.), `fetchTokenPriceUpdate` skips the identity entirely.
+            // Honor an explicit CoinGecko override so live polling still works.
+            if
+                onchainIdentity.chain.coinGeckoAssetPlatformID == nil,
+                let normalizedID = normalizedProviderID(coinGeckoId) {
+                return normalizedID
+            }
             return onchainIdentity.historicalPriceID
         }
         return normalizedProviderID(coinGeckoId)
