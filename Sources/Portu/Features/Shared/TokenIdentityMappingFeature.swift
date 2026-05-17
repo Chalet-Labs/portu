@@ -146,8 +146,14 @@ enum TokenIdentityMappingFeature {
         if existing.coinGeckoId == nil, candidate.coinGeckoId != nil {
             return candidate
         }
+        if existing.coinGeckoId != nil, candidate.coinGeckoId == nil {
+            return existing
+        }
         if existing.zapperId == nil, candidate.zapperId != nil {
             return candidate
+        }
+        if existing.zapperId != nil, candidate.zapperId == nil {
+            return existing
         }
         return candidate.id.uuidString < existing.id.uuidString ? candidate : existing
     }

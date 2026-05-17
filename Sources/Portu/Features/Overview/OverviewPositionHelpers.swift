@@ -364,10 +364,6 @@ enum OverviewPositionPricing {
         if prices[priceID] != nil {
             return tokenValue(token: token, prices: prices, override: override)
         }
-        let resolvedValue = tokenValue(token: token, prices: prices, override: override)
-        if resolvedValue != 0 {
-            return resolvedValue
-        }
         return token.usdValue > 0 ? token.usdValue : 0
     }
 

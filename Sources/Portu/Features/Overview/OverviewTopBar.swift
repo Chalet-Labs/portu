@@ -9,7 +9,8 @@ struct OverviewTopBar: View {
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
     @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var positions: [Position]
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
+    private var tokenPricingOverrides: [TokenPricingOverride]
     @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
