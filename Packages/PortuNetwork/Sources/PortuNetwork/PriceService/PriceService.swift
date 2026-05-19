@@ -8,7 +8,6 @@ public actor PriceService {
     private static let logger = Logger(subsystem: "com.portu.network", category: "PriceService")
 
     private let session: URLSession
-    private let baseURL = URL(string: "https://api.coingecko.com/api/v3")!
     private var cache: [String: Decimal] = [:]
     private var lastFetchDate: Date?
     private var updateCache: PriceUpdate?
@@ -26,6 +25,19 @@ public actor PriceService {
     private let windowDuration: TimeInterval
     private var requestTimestamps: [RequestStamp] = []
     private var activePollingTask: Task<Void, Never>?
+
+    private enum Plan {
+        case demo, pro
+        var baseURL: URL {
+            URL(string: self == .pro ? "https://pro-api.coingecko.com/api/v3" : "https://api.coingecko.com/api/v3")!
+        }
+
+        var authHeader: String {
+            self == .pro ? "x-cg-pro-api-key" : "x-cg-demo-api-key"
+        }
+    }
+
+    private var detectedPlan: Plan?
 
     public init(
         session: URLSession = .shared,
@@ -341,15 +353,19 @@ public actor PriceService {
         let stamp = RequestStamp(id: UUID(), date: .now)
         requestTimestamps.append(stamp)
 
-        var url = baseURL
+        let trimmedKey = await coinGeckoAPIKey()?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = trimmedKey?.isEmpty == false ? trimmedKey : nil
+        let plan: Plan = if let key { await detectPlan(key: key) } else { .demo }
+
+        var url = plan.baseURL
         for component in pathComponents {
             url = url.appending(component: component)
         }
         url = url.appending(queryItems: queryItems)
 
         var request = URLRequest(url: url)
-        if let key = await coinGeckoAPIKey()?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
-            request.setValue(key, forHTTPHeaderField: "x-cg-demo-api-key")
+        if let key {
+            request.setValue(key, forHTTPHeaderField: plan.authHeader)
         }
 
         let data: Data
@@ -369,6 +385,25 @@ public actor PriceService {
         case 429: throw .rateLimited
         default: throw .invalidResponse(statusCode: http.statusCode)
         }
+    }
+
+    private func detectPlan(key: String) async -> Plan {
+        if let detectedPlan { return detectedPlan }
+        var probe = URLRequest(url: Plan.pro.baseURL.appending(component: "ping"))
+        probe.setValue(key, forHTTPHeaderField: Plan.pro.authHeader)
+        let plan: Plan
+        do {
+            let (_, response) = try await session.data(for: probe)
+            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                plan = .pro
+            } else {
+                plan = .demo
+            }
+        } catch {
+            plan = .demo
+        }
+        detectedPlan = plan
+        return plan
     }
 
     /// Returns an async stream that polls prices at the given interval.

@@ -364,6 +364,10 @@ struct PriceServiceTests {
     @Test func `fetch historical prices sends demo api key header when provider returns a key`() async throws {
         var header: String?
         MockURLProtocol.requestHandler = { request in
+            // Pro probe runs first; reject it so the service falls back to demo auth.
+            if request.url?.host == "pro-api.coingecko.com", request.url?.path == "/api/v3/ping" {
+                return (nil, 401)
+            }
             header = request.value(forHTTPHeaderField: "x-cg-demo-api-key")
             return (Data("{\"prices\":[]}".utf8), 200)
         }
@@ -431,5 +435,62 @@ struct PriceServiceTests {
         await #expect(throws: PriceServiceError.rateLimited) {
             try await service.fetchPrices(for: ["bitcoin"])
         }
+    }
+
+    @Test func `pro key probe success routes subsequent fetches through pro host and header`() async throws {
+        var fetchHeader: String?
+        var fetchHost: String?
+        MockURLProtocol.requestHandler = { request in
+            if request.url?.host == "pro-api.coingecko.com", request.url?.path == "/api/v3/ping" {
+                return (Data("{\"gecko_says\":\"(V3) To the Moon!\"}".utf8), 200)
+            }
+            fetchHeader = request.value(forHTTPHeaderField: "x-cg-pro-api-key")
+            fetchHost = request.url?.host
+            return (Data("{\"bitcoin\":{\"usd\":62400}}".utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0, coinGeckoAPIKey: { "pro-key" })
+        _ = try await service.fetchPrices(for: ["bitcoin"])
+
+        #expect(fetchHeader == "pro-key")
+        #expect(fetchHost == "pro-api.coingecko.com")
+    }
+
+    @Test func `pro key probe rejection falls back to demo host and header`() async throws {
+        var fetchHeader: String?
+        var fetchHost: String?
+        MockURLProtocol.requestHandler = { request in
+            if request.url?.host == "pro-api.coingecko.com", request.url?.path == "/api/v3/ping" {
+                return (nil, 401)
+            }
+            fetchHeader = request.value(forHTTPHeaderField: "x-cg-demo-api-key")
+            fetchHost = request.url?.host
+            return (Data("{\"bitcoin\":{\"usd\":62400}}".utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0, coinGeckoAPIKey: { "demo-key" })
+        _ = try await service.fetchPrices(for: ["bitcoin"])
+
+        #expect(fetchHeader == "demo-key")
+        #expect(fetchHost == "api.coingecko.com")
+    }
+
+    @Test func `pro probe runs at most once per service lifetime`() async throws {
+        var probeCount = 0
+        MockURLProtocol.requestHandler = { request in
+            if request.url?.host == "pro-api.coingecko.com", request.url?.path == "/api/v3/ping" {
+                probeCount += 1
+                return (Data("{}".utf8), 200)
+            }
+            return (Data("{\"bitcoin\":{\"usd\":62400}}".utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0, coinGeckoAPIKey: { "pro-key" })
+        for _ in 0 ..< 3 {
+            _ = try await service.fetchPrices(for: ["bitcoin"])
+            await service.invalidateCache()
+        }
+
+        #expect(probeCount == 1)
     }
 }
