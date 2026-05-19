@@ -43,7 +43,7 @@ struct AssetDetailView: View {
 
                         if
                             let info = AssetDetailFeature.headerPriceInfo(
-                                coinGeckoId: asset.coinGeckoId,
+                                coinGeckoId: historicalPriceCoinGeckoId,
                                 prices: store.prices,
                                 changes24h: store.priceChanges24h) {
                             DashboardCard {
