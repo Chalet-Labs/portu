@@ -1,3 +1,4 @@
+import ComposableArchitecture
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
@@ -50,6 +51,7 @@ enum SettingsMetrics {
     static let minimumWidth: CGFloat = 720
     static let minimumHeight: CGFloat = 560
     static let sidebarWidth: CGFloat = 208
+    static let pageMaxWidth: CGFloat = 920
     static let pageTitleSize: CGFloat = 22
     static let sectionTitleSize: CGFloat = 15
     static let rowTitleSize: CGFloat = 14
@@ -62,6 +64,7 @@ enum SettingsMetrics {
 }
 
 struct SettingsView: View {
+    let store: StoreOf<AppFeature>
     @State private var selectedTab: SettingsTab = .general
     @State private var searchText = ""
 
@@ -103,7 +106,7 @@ struct SettingsView: View {
     private var selectedContent: some View {
         switch selectedTab {
         case .general:
-            GeneralSettingsTab()
+            GeneralSettingsTab(store: store)
         case .tokens:
             TokenSettingsTab()
         case .categories:
@@ -255,8 +258,12 @@ private struct SettingsSidebarRow: View {
 }
 
 private struct GeneralSettingsTab: View {
+    let store: StoreOf<AppFeature>
+
     @AppStorage(PricePollingSettings.refreshIntervalKey)
     private var refreshInterval = PricePollingSettings.defaultRefreshIntervalSeconds
+    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
+    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
 
     var body: some View {
         SettingsPage(tab: .general) {
@@ -279,11 +286,107 @@ private struct GeneralSettingsTab: View {
                         }
                     }
 
+                SettingsSectionCard(
+                    title: HistoricalPriceBackfillSettings.sectionTitle,
+                    subtitle: "Cache daily prices from CoinGecko and Zapper separately from Portu snapshots.",
+                    icon: .priceUpdates) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            SettingsSwitchRow(
+                                title: HistoricalPriceBackfillSettings.useBackfillTitle,
+                                subtitle: "Use cached daily prices to extend charts before the first local snapshot.",
+                                isOn: $historicalBackfillEnabled)
+
+                            HStack(spacing: 10) {
+                                Button {
+                                    store.send(.historicalPriceBackfill(.backfillButtonTapped))
+                                } label: {
+                                    Label(HistoricalPriceBackfillSettings.backfillButtonTitle, systemImage: "arrow.down.circle")
+                                }
+                                .buttonStyle(.plain)
+                                .settingsPrimaryButton(isDisabled: store.historicalPriceBackfill.status.isRunning)
+                                .disabled(store.historicalPriceBackfill.status.isRunning)
+
+                                Button {
+                                    store.send(.historicalPriceBackfill(.clearCacheButtonTapped))
+                                } label: {
+                                    Label(HistoricalPriceBackfillSettings.clearCacheButtonTitle, systemImage: "trash")
+                                }
+                                .buttonStyle(.plain)
+                                .settingsSecondaryButton(isDisabled: store.historicalPriceBackfill.status.isRunning)
+                                .disabled(store.historicalPriceBackfill.status.isRunning)
+
+                                Spacer(minLength: 0)
+                            }
+
+                            HistoricalBackfillStatusText(status: store.historicalPriceBackfill.status)
+                        }
+                    }
+
                 SettingsInfoCard(
                     title: "Auto-saved",
                     message: "This setting is stored locally with AppStorage and applies across Portu views.")
             }
         }
+    }
+}
+
+private struct HistoricalBackfillStatusText: View {
+    let status: HistoricalBackfillStatus
+
+    var body: some View {
+        HistoricalBackfillStatusRow(status: status)
+    }
+}
+
+enum HistoricalBackfillStatusFormatter {
+    static func message(for status: HistoricalBackfillStatus) -> String {
+        switch status {
+        case .idle:
+            "No historical backfill run in this session."
+        case .running:
+            "Fetching historical prices from CoinGecko and Zapper..."
+        case .clearing:
+            "Clearing historical price cache..."
+        case let .succeeded(result):
+            successMessage(for: result)
+        case let .failed(message):
+            "Backfill failed: \(message)"
+        }
+    }
+
+    private static func successMessage(for result: HistoricalBackfillResult) -> String {
+        if result.requestedAssets == 0 {
+            return "No eligible assets found for historical backfill. Skipped \(result.skippedAssets) "
+                + "local snapshot assets because they do not have CoinGecko IDs, onchain addresses, or pricing overrides."
+        }
+
+        let baseMessage = "Fetched \(result.fetchedAssets) assets, inserted \(result.insertedPoints), "
+            + "updated \(result.updatedPoints), skipped \(result.skippedAssets)."
+        guard !result.failedCoinGeckoIDs.isEmpty else { return baseMessage }
+
+        if result.fetchedAssets == 0, result.insertedPoints == 0, result.updatedPoints == 0 {
+            return "No prices fetched; failed \(result.failedCoinGeckoIDs.count) assets. Check provider access."
+        }
+
+        if result.failedCoinGeckoIDs.count == 1, let id = result.failedCoinGeckoIDs.first {
+            return baseMessage + " Partial success: failed 1 asset (\(displayIdentifier(id)))."
+        }
+
+        return baseMessage
+            + " Partial success: failed \(result.failedCoinGeckoIDs.count) assets. Check provider access."
+    }
+
+    private static func displayIdentifier(_ id: String) -> String {
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > 24 else { return trimmed }
+
+        let parts = trimmed.split(separator: ":", omittingEmptySubsequences: false)
+        if parts.count >= 3 {
+            let head = parts.dropLast().joined(separator: ":")
+            let tail = String(parts.last ?? "")
+            return "\(head):\(tail.prefix(6))...\(tail.suffix(4))"
+        }
+        return "\(trimmed.prefix(12))...\(trimmed.suffix(8))"
     }
 }
 

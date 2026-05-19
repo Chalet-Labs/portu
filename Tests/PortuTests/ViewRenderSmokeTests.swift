@@ -159,7 +159,7 @@ struct ViewRenderSmokeTests {
             $0.priceService.fetchPrices = { _ in PriceUpdate(prices: [:], changes24h: [:]) }
             $0.priceService.invalidateCache = {}
             $0.continuousClock = TestClock()
-            $0.date = .constant(Date(timeIntervalSince1970: 1_000_000))
+            $0.currentDate.now = { Date(timeIntervalSince1970: 1_000_000) }
         }
     }
 
@@ -179,6 +179,8 @@ struct ViewRenderSmokeTests {
             PositionToken.self,
             Asset.self,
             TokenPricingOverride.self,
+            TokenIdentityMapping.self,
+            HistoricalPricePoint.self,
             PortfolioCategory.self,
             CategorySymbolRule.self,
             PortfolioSnapshot.self,

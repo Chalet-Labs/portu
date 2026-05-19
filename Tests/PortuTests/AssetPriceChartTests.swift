@@ -15,6 +15,8 @@ struct AssetPriceChartQueryTests {
         let schema = Schema([
             Account.self, WalletAddress.self, Position.self,
             PositionToken.self, Asset.self, TokenPricingOverride.self,
+            TokenIdentityMapping.self,
+            HistoricalPricePoint.self,
             PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -74,5 +76,111 @@ struct AssetPriceChartQueryTests {
 
         // Prove the unfiltered load is a superset — unbounded when many assets exist
         #expect(unfiltered.count > filtered.count)
+    }
+
+    @Test func `effective historical coin gecko id prefers onchain key when identity exists`() {
+        let assetId = UUID()
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+
+        let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
+            assetCoinGeckoId: "old-id",
+            onchainIdentity: identity,
+            override: TokenPricingOverrideSnapshot(
+                assetId: assetId,
+                coinGeckoIdOverride: " New-ID "))
+
+        // Must match the cache key in HistoricalPriceBackfillFeature.addCandidate.
+        #expect(effectiveID == identity.historicalPriceID)
+    }
+
+    @Test func `effective historical coin gecko id prefers override when no onchain identity`() {
+        let assetId = UUID()
+
+        let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
+            assetCoinGeckoId: "old-id",
+            onchainIdentity: nil,
+            override: TokenPricingOverrideSnapshot(
+                assetId: assetId,
+                coinGeckoIdOverride: " New-ID "))
+
+        #expect(effectiveID == "new-id")
+    }
+
+    @Test func `effective historical coin gecko id falls back to asset id`() {
+        let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
+            assetCoinGeckoId: " Bitcoin ",
+            onchainIdentity: nil,
+            override: nil)
+
+        #expect(effectiveID == "bitcoin")
+    }
+
+    @Test func `effective historical coin gecko id falls back to zapper key for onchain assets`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+
+        let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
+            assetCoinGeckoId: nil,
+            onchainIdentity: identity,
+            override: nil)
+
+        #expect(effectiveID == identity.historicalPriceID)
+    }
+
+    @Test func `historical price rows are empty when backfill setting is disabled`() {
+        let startDate = Date(timeIntervalSince1970: 1_704_067_200)
+        let rows = [
+            HistoricalPricePoint(
+                coinGeckoId: "bitcoin",
+                day: startDate,
+                usdPrice: 40000)
+        ]
+
+        let visibleRows = AssetDetailFeature.historicalPriceRows(
+            rows,
+            startDate: startDate,
+            isHistoricalBackfillEnabled: false)
+
+        #expect(visibleRows.isEmpty)
+    }
+
+    @Test func `historical price rows include boundary utc day when range start has time component`() {
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        let rows = [
+            HistoricalPricePoint(
+                coinGeckoId: "bitcoin",
+                day: day,
+                usdPrice: 40000)
+        ]
+
+        let visibleRows = AssetDetailFeature.historicalPriceRows(
+            rows,
+            startDate: day.addingTimeInterval(12 * 3600),
+            isHistoricalBackfillEnabled: true)
+
+        #expect(visibleRows.map(\.coinGeckoId) == ["bitcoin"])
+    }
+
+    @Test func `price empty state prompts to enable backfill when disabled`() {
+        let description = AssetDetailFeature.historicalPriceEmptyDescription(
+            coinGeckoId: "bitcoin",
+            isHistoricalBackfillEnabled: false)
+
+        #expect(description == "Enable historical price backfill in Settings")
+    }
+
+    @Test func `price empty state prompts for coin gecko id when missing`() {
+        let description = AssetDetailFeature.historicalPriceEmptyDescription(
+            coinGeckoId: " ",
+            isHistoricalBackfillEnabled: true)
+
+        #expect(description == "Set a CoinGecko ID override in Settings")
+    }
+
+    @Test func `price empty state prompts to run cache when enabled and mapped`() {
+        let description = AssetDetailFeature.historicalPriceEmptyDescription(
+            coinGeckoId: "bitcoin",
+            isHistoricalBackfillEnabled: true)
+
+        #expect(description == "Run historical price cache from Settings")
     }
 }

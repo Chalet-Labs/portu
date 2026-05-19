@@ -8,7 +8,7 @@ public actor ZapperProvider: PortfolioDataProvider {
     private let baseURL: URL
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
-    private static let logger = Logger(subsystem: "com.portu.network", category: "ZapperProvider")
+    static let logger = Logger(subsystem: "com.portu.network", category: "ZapperProvider")
 
     nonisolated public var capabilities: ProviderCapabilities {
         ProviderCapabilities(
@@ -174,7 +174,7 @@ public actor ZapperProvider: PortfolioDataProvider {
         return contexts
     }
 
-    private func performGraphQL<Payload: Decodable & Sendable>(
+    func performGraphQL<Payload: Decodable & Sendable>(
         query: String,
         variables: some Encodable & Sendable) async throws -> GraphQLResponse<Payload> {
         var request = URLRequest(url: baseURL)
@@ -366,7 +366,7 @@ public actor ZapperProvider: PortfolioDataProvider {
 
     private static let posixLocale = Locale(identifier: "en_US_POSIX")
 
-    private static let chainIds: [Chain: Int] = [
+    static let chainIds: [Chain: Int] = [
         .ethereum: 1,
         .polygon: 137,
         .arbitrum: 42161,
@@ -398,36 +398,4 @@ public actor ZapperProvider: PortfolioDataProvider {
 
     private static let chainsById: [Int: Chain] = Dictionary(
         uniqueKeysWithValues: chainIds.map { ($0.value, $0.key) })
-}
-
-public enum ZapperError: Error, LocalizedError, Sendable {
-    case invalidResponse
-    case rateLimited
-    case unauthorized
-    case httpError(statusCode: Int)
-    case decodingFailed
-    case schemaChanged(context: String)
-    case graphQLError(String)
-    case unsupportedChain(Chain)
-
-    public var errorDescription: String? {
-        switch self {
-        case .invalidResponse:
-            "Invalid response from Zapper API"
-        case .rateLimited:
-            "Zapper API rate limit exceeded"
-        case .unauthorized:
-            "Invalid Zapper API key"
-        case let .httpError(code):
-            "Zapper API returned HTTP \(code)"
-        case .decodingFailed:
-            "Failed to parse Zapper API response"
-        case let .schemaChanged(ctx):
-            "Zapper API schema may have changed: \(ctx)"
-        case let .graphQLError(message):
-            "Zapper GraphQL error: \(message)"
-        case let .unsupportedChain(chain):
-            "Zapper does not support explicit chain filter: \(chain.rawValue)"
-        }
-    }
 }

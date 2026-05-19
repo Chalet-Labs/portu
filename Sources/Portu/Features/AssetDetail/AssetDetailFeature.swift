@@ -265,4 +265,43 @@ struct AssetDetailFeature {
         guard let cgId = coinGeckoId, let price = prices[cgId] else { return nil }
         return AssetPriceInfo(price: price, change24h: changes24h[cgId])
     }
+
+    static func effectiveHistoricalCoinGeckoID(
+        assetCoinGeckoId: String?,
+        onchainIdentity: OnchainTokenIdentity? = nil,
+        override: TokenPricingOverrideSnapshot?) -> String? {
+        // Read path must use the same key the backfill writer used; priceID mirrors that.
+        let coinGeckoId = override?.coinGeckoIdOverride ?? assetCoinGeckoId
+        return TokenIdentityMappingFeature.priceID(
+            coinGeckoId: coinGeckoId,
+            onchainIdentity: onchainIdentity)
+    }
+
+    @MainActor
+    static func historicalPriceRows(
+        _ rows: [HistoricalPricePoint],
+        startDate: Date,
+        isHistoricalBackfillEnabled: Bool) -> [HistoricalPricePoint] {
+        guard isHistoricalBackfillEnabled else { return [] }
+        let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        return rows.filter { $0.day >= startDay }
+    }
+
+    static func historicalPriceEmptyDescription(
+        coinGeckoId: String?,
+        isHistoricalBackfillEnabled: Bool) -> String {
+        guard isHistoricalBackfillEnabled else {
+            return "Enable historical price backfill in Settings"
+        }
+        guard normalizedHistoricalCoinGeckoID(coinGeckoId) != nil else {
+            return "Set a CoinGecko ID override in Settings"
+        }
+        return "Run historical price cache from Settings"
+    }
+
+    private static func normalizedHistoricalCoinGeckoID(_ id: String?) -> String? {
+        guard let id else { return nil }
+        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.isEmpty ? nil : normalized
+    }
 }

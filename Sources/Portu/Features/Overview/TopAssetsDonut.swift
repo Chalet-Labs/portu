@@ -9,12 +9,14 @@ import SwiftUI
 struct TopAssetsDonut: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var tokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
     @AppStorage(TokenDashboardSettings.hideUnpricedKey)
@@ -32,23 +34,48 @@ struct TopAssetsDonut: View {
 
     private var dashboardTokenEntries: [TokenEntry] {
         TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: tokenEntries,
-            prices: appState.prices,
+            tokens: mappedTokenEntries,
+            prices: displayPrices,
             overrides: overrideSnapshots,
             settings: dashboardSettings)
+    }
+
+    private var mappedTokenEntries: [TokenEntry] {
+        TokenSettingsFeature.applyIdentityMappings(
+            to: tokenEntries,
+            mappings: mappingSnapshots,
+            overrides: overrideSnapshots)
     }
 
     private var slices: [OverviewAssetSlice] {
         switch selectedMode {
         case .assets:
-            OverviewFeature.topAssetSlices(from: dashboardTokenEntries, prices: appState.prices, limit: 5)
+            OverviewFeature.topAssetSlices(
+                from: dashboardTokenEntries,
+                prices: displayPrices,
+                overrides: overrideSnapshots,
+                limit: 5)
         case .category:
-            OverviewFeature.categorySlices(from: dashboardTokenEntries, prices: appState.prices, limit: 6)
+            OverviewFeature.categorySlices(
+                from: dashboardTokenEntries,
+                prices: displayPrices,
+                overrides: overrideSnapshots,
+                limit: 6)
         }
+    }
+
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: appState.prices,
+            historical: historicalPricesUSD)
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
+        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
     }
 
     private var dashboardSettings: TokenDashboardSettings {
@@ -95,9 +122,7 @@ struct TopAssetsDonut: View {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(slices) { slice in
                             HStack(spacing: 7) {
-                                Circle()
-                                    .fill(chartColor(index: slice.colorIndex))
-                                    .frame(width: 7, height: 7)
+                                legendMarker(for: slice)
 
                                 Text(slice.label)
                                     .font(.system(size: 12, weight: .semibold))
@@ -148,6 +173,21 @@ struct TopAssetsDonut: View {
                 }
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func legendMarker(for slice: OverviewAssetSlice) -> some View {
+        if selectedMode == .assets, slice.logoURL != nil {
+            AssetLogoView(symbol: slice.label, logoURL: slice.logoURL)
+                .frame(width: 14, height: 14)
+                .overlay(
+                    Circle()
+                        .stroke(chartColor(index: slice.colorIndex), lineWidth: 1))
+        } else {
+            Circle()
+                .fill(chartColor(index: slice.colorIndex))
+                .frame(width: 7, height: 7)
+        }
     }
 }
 

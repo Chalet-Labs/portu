@@ -1,5 +1,6 @@
 import Foundation
 @testable import PortuCore
+import Security
 import Testing
 
 /// In-memory mock for testing code that depends on SecretStore.
@@ -67,5 +68,147 @@ struct SecretStoreTests {
         #expect(KeychainKey.exchangeAPIKey(id).rawKey == "portu.exchange.\(id.uuidString).apiKey")
         #expect(KeychainKey.exchangeAPISecret(id).rawKey == "portu.exchange.\(id.uuidString).apiSecret")
         #expect(KeychainKey.exchangePassphrase(id).rawKey == "portu.exchange.\(id.uuidString).passphrase")
+    }
+
+    @Test func `local secret store persists without keychain`() throws {
+        let suiteName = "com.portu.tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = LocalSecretStore(suiteName: suiteName, keyPrefix: "test.")
+
+        try store.set(key: .providerAPIKey(.zapper), value: "zapper-token")
+
+        #expect(defaults.string(forKey: "test.portu.provider.zapper.apiKey") == "zapper-token")
+        #expect(try store.get(key: .providerAPIKey(.zapper)) == "zapper-token")
+
+        try store.delete(key: .providerAPIKey(.zapper))
+
+        #expect(try store.get(key: .providerAPIKey(.zapper)) == nil)
+    }
+}
+
+struct KeychainServiceTests {
+    @Test func `set stores values in standard keychain with ThisDeviceOnly accessibility`() throws {
+        let recorder = KeychainOperationRecorder()
+        let store = KeychainService(
+            service: "com.portu.tests",
+            add: { attributes, _ in
+                recorder.appendAdded(attributes.dictionaryValue)
+                return errSecSuccess
+            },
+            delete: { query in
+                recorder.appendDeleted(query.dictionaryValue)
+                return errSecSuccess
+            })
+
+        try store.set(key: .providerAPIKey(.zapper), value: "zapper-token")
+
+        let addQuery = try #require(recorder.addedQueries.first)
+        #expect(!addQuery.usesDataProtectionKeychain)
+        #expect(addQuery.accessibility == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
+        #expect(recorder.deletedQueries.isEmpty)
+    }
+
+    @Test func `set update path also pins ThisDeviceOnly accessibility`() throws {
+        let recorder = KeychainOperationRecorder()
+        let store = KeychainService(
+            service: "com.portu.tests",
+            add: { _, _ in errSecDuplicateItem },
+            update: { _, attributes in
+                recorder.appendAdded(attributes.dictionaryValue)
+                return errSecSuccess
+            },
+            delete: { _ in errSecSuccess })
+
+        try store.set(key: .providerAPIKey(.zapper), value: "zapper-token")
+
+        let updateAttributes = try #require(recorder.addedQueries.first)
+        #expect(updateAttributes.accessibility == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
+    }
+
+    @Test func `get reads standard keychain`() throws {
+        let storedValue = "zapper-token"
+        let storedData = try #require(storedValue.data(using: .utf8))
+        let recorder = KeychainOperationRecorder()
+
+        let store = KeychainService(
+            service: "com.portu.tests",
+            copyMatching: { query, result in
+                _ = recorder.appendCopy(query.dictionaryValue)
+                result?.pointee = storedData as CFData
+                return errSecSuccess
+            },
+            add: { attributes, _ in
+                recorder.appendAdded(attributes.dictionaryValue)
+                return errSecSuccess
+            },
+            delete: { query in
+                recorder.appendDeleted(query.dictionaryValue)
+                return errSecSuccess
+            })
+
+        let value = try store.get(key: .providerAPIKey(.zapper))
+        let copyQueries = recorder.copyQueries
+
+        #expect(value == storedValue)
+        #expect(copyQueries.count == 1)
+        #expect(!copyQueries[0].usesDataProtectionKeychain)
+        #expect(recorder.addedQueries.isEmpty)
+        #expect(recorder.deletedQueries.isEmpty)
+    }
+}
+
+private final class KeychainOperationRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var copyQueryStorage: [[String: Any]] = []
+    private var addedQueryStorage: [[String: Any]] = []
+    private var deletedQueryStorage: [[String: Any]] = []
+
+    var copyQueries: [[String: Any]] {
+        lock.withLock { copyQueryStorage }
+    }
+
+    var addedQueries: [[String: Any]] {
+        lock.withLock { addedQueryStorage }
+    }
+
+    var deletedQueries: [[String: Any]] {
+        lock.withLock { deletedQueryStorage }
+    }
+
+    func appendCopy(_ query: [String: Any]) -> Int {
+        lock.withLock {
+            copyQueryStorage.append(query)
+            return copyQueryStorage.count
+        }
+    }
+
+    func appendAdded(_ query: [String: Any]) {
+        lock.withLock {
+            addedQueryStorage.append(query)
+        }
+    }
+
+    func appendDeleted(_ query: [String: Any]) {
+        lock.withLock {
+            deletedQueryStorage.append(query)
+        }
+    }
+}
+
+private extension CFDictionary {
+    var dictionaryValue: [String: Any] {
+        self as NSDictionary as? [String: Any] ?? [:]
+    }
+}
+
+private extension [String: Any] {
+    var usesDataProtectionKeychain: Bool {
+        self[kSecUseDataProtectionKeychain as String] as? Bool == true
+    }
+
+    var accessibility: String? {
+        self[kSecAttrAccessible as String] as? String
     }
 }

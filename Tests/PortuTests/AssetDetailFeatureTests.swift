@@ -400,7 +400,13 @@ struct AssetsChartAggregationTests {
     private let accountA = UUID()
     private let assetBTC = UUID()
     private let assetETH = UUID()
-    private let cal = Calendar.current
+    /// PerformanceFeature.aggregateCategorySnapshots now buckets by UTC day to align
+    /// with the historical-price cache, so tests must also pin to UTC.
+    private let cal: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
 
     @Test func `category chart dedup takes latest per day`() throws {
         let morning = try #require(cal.date(from: DateComponents(year: 2024, month: 3, day: 10, hour: 9)))

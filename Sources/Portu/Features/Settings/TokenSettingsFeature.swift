@@ -23,6 +23,14 @@ struct TokenDashboardSettings: Equatable {
         self.hideUnpriced = hideUnpriced
         self.hideDust = hideDust
     }
+
+    static func fromDefaults(_ defaults: UserDefaults = .standard) -> Self {
+        let storedMinimum = defaults.object(forKey: minimumDashboardValueKey) as? NSNumber
+        return TokenDashboardSettings(
+            minimumDashboardValue: storedMinimum.map { Decimal($0.doubleValue) } ?? defaultMinimumDashboardValue,
+            hideUnpriced: defaults.object(forKey: hideUnpricedKey) as? Bool ?? true,
+            hideDust: defaults.object(forKey: hideDustKey) as? Bool ?? true)
+    }
 }
 
 struct TokenPricingOverrideSnapshot: Equatable, Identifiable {
@@ -173,6 +181,27 @@ enum TokenSettingsFeature {
         }
     }
 
+    static func applyIdentityMappings(
+        to tokens: [TokenEntry],
+        mappings: [TokenIdentityMappingSnapshot],
+        overrides: [TokenPricingOverrideSnapshot]) -> [TokenEntry] {
+        let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
+        let overrideMap = overridesByAssetId(overrides)
+
+        return tokens.map { token in
+            let override = overrideMap[token.assetId]
+            let coinGeckoId = resolvedCoinGeckoID(token: token, override: override)
+                ?? TokenIdentityMappingFeature.mappedCoinGeckoID(
+                    for: token.onchainIdentity,
+                    mappingsByIdentity: mappingMap)
+            guard coinGeckoId != token.coinGeckoId else { return token }
+            return tokenEntry(
+                from: token,
+                coinGeckoId: coinGeckoId,
+                usdValue: token.usdValue)
+        }
+    }
+
     static func dashboardEligibleTokens(
         tokens: [TokenEntry],
         prices: [String: Decimal],
@@ -259,6 +288,17 @@ enum TokenSettingsFeature {
         normalizedCoinGeckoID(override?.coinGeckoIdOverride) ?? normalizedCoinGeckoID(token.coinGeckoId)
     }
 
+    static func resolvedPriceID(
+        token: TokenEntry,
+        override: TokenPricingOverrideSnapshot?) -> String? {
+        if sanitizedManualPrice(override?.manualPriceUSD) != nil {
+            return nil
+        }
+        return TokenIdentityMappingFeature.priceID(
+            coinGeckoId: resolvedCoinGeckoID(token: token, override: override),
+            onchainIdentity: token.onchainIdentity)
+    }
+
     static func resolvedPrice(
         token: TokenEntry,
         prices: [String: Decimal],
@@ -267,12 +307,14 @@ enum TokenSettingsFeature {
             return manualPrice
         }
         if
-            let coinGeckoId = resolvedCoinGeckoID(token: token, override: override),
-            let price = prices[coinGeckoId] {
+            let priceID = resolvedPriceID(token: token, override: override),
+            let price = prices[priceID] {
+            guard isPlausible(price: price, priceID: priceID, token: token) else {
+                return nil
+            }
             return price
         }
-        guard token.amount != 0, token.usdValue != 0 else { return nil }
-        return token.usdValue / token.amount
+        return nil
     }
 
     static func resolvedValue(
@@ -298,6 +340,7 @@ enum TokenSettingsFeature {
             tokenEntry(
                 from: aggregate.base,
                 coinGeckoId: aggregate.coinGeckoId,
+                onchainIdentity: aggregate.onchainIdentity,
                 amount: aggregate.netAmount,
                 usdValue: aggregate.netUSDValue,
                 logoURL: aggregate.logoURL)
@@ -340,12 +383,10 @@ enum TokenSettingsFeature {
             return .manual
         }
         if
-            let coinGeckoId = resolvedCoinGeckoID(token: token, override: override),
-            prices[coinGeckoId] != nil {
+            let priceID = resolvedPriceID(token: token, override: override),
+            let price = prices[priceID],
+            isPlausible(price: price, priceID: priceID, token: token) {
             return .live
-        }
-        if token.amount != 0, token.usdValue != 0 {
-            return .syncTime
         }
         return .unpriced
     }
@@ -422,49 +463,12 @@ enum TokenSettingsFeature {
             return tokenEntry(
                 from: token,
                 coinGeckoId: nil,
+                preserveOnchainIdentity: false,
                 usdValue: token.amount * manualPrice)
         }
         return tokenEntry(
             from: token,
             coinGeckoId: resolvedCoinGeckoID(token: token, override: override),
             usdValue: token.usdValue)
-    }
-
-    private static func tokenEntry(
-        from token: TokenEntry,
-        coinGeckoId: String?,
-        amount: Decimal? = nil,
-        usdValue: Decimal,
-        logoURL: String? = nil) -> TokenEntry {
-        TokenEntry(
-            assetId: token.assetId,
-            symbol: token.symbol,
-            name: token.name,
-            category: token.category,
-            portfolioCategory: token.portfolioCategory,
-            coinGeckoId: coinGeckoId,
-            role: token.role,
-            amount: amount ?? token.amount,
-            usdValue: usdValue,
-            logoURL: logoURL ?? token.logoURL)
-    }
-
-    private static func normalizedCoinGeckoID(_ id: String?) -> String? {
-        guard let id else { return nil }
-        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.isEmpty ? nil : normalized
-    }
-
-    private static func sanitizedManualPrice(_ price: Decimal?) -> Decimal? {
-        guard let price, price > 0 else { return nil }
-        return price
-    }
-
-    private static func normalizedThreshold(_ value: Decimal) -> Decimal {
-        value < 0 ? 0 : value
-    }
-
-    private static func absolute(_ value: Decimal) -> Decimal {
-        value < 0 ? -value : value
     }
 }

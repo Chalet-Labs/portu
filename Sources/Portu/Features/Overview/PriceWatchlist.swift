@@ -6,9 +6,12 @@ import SwiftUI
 
 struct PriceWatchlist: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
@@ -28,10 +31,17 @@ struct PriceWatchlist: View {
             categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
     }
 
+    private var mappedTokenEntries: [TokenEntry] {
+        TokenSettingsFeature.applyIdentityMappings(
+            to: tokenEntries,
+            mappings: mappingSnapshots,
+            overrides: overrideSnapshots)
+    }
+
     private var dashboardTokenEntries: [TokenEntry] {
         TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: tokenEntries,
-            prices: appState.prices,
+            tokens: mappedTokenEntries,
+            prices: displayPrices,
             overrides: overrideSnapshots,
             settings: dashboardSettings)
     }
@@ -52,13 +62,30 @@ struct PriceWatchlist: View {
         OverviewFeature.priceRows(
             tokens: dashboardTokenEntries,
             assetsByCoinGeckoId: assetCandidatesByCoinGeckoId,
-            prices: appState.prices,
-            changes24h: appState.priceChanges24h,
-            watchlistIDs: watchlistIDs)
+            prices: displayPrices,
+            changes24h: priceChanges24h,
+            watchlistIDs: watchlistIDs,
+            overrides: overrideSnapshots)
+    }
+
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: appState.prices,
+            historical: historicalPricesUSD)
+    }
+
+    private var priceChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
+            live: appState.priceChanges24h,
+            historical: historicalPriceChanges24h)
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
+        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
     }
 
     private var dashboardSettings: TokenDashboardSettings {
@@ -76,6 +103,9 @@ struct PriceWatchlist: View {
     }
 
     var body: some View {
+        let currentRows = rows
+        let currentMatchingAssets = matchingAssets
+
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Prices")
@@ -93,8 +123,8 @@ struct PriceWatchlist: View {
 
             watchlistSearchField
 
-            if !matchingAssets.isEmpty {
-                suggestionList
+            if !currentMatchingAssets.isEmpty {
+                suggestionList(currentMatchingAssets)
             }
 
             VStack(spacing: 0) {
@@ -104,14 +134,14 @@ struct PriceWatchlist: View {
                     .fill(PortuTheme.dashboardStroke)
                     .frame(height: 1)
 
-                if rows.isEmpty {
+                if currentRows.isEmpty {
                     Text("No priced assets")
                         .font(.caption)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
                 } else {
-                    ForEach(rows) { row in
+                    ForEach(currentRows) { row in
                         PriceWatchlistRow(row: row, remove: removeFromWatchlist)
 
                         Rectangle()
@@ -163,13 +193,16 @@ struct PriceWatchlist: View {
                 .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
     }
 
-    private var suggestionList: some View {
+    private func suggestionList(_ assets: [OverviewAssetCandidate]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(matchingAssets) { asset in
+            ForEach(assets) { asset in
                 Button {
                     addToWatchlist(asset.coinGeckoId)
                 } label: {
                     HStack(spacing: 8) {
+                        AssetLogoView(symbol: asset.symbol, logoURL: asset.logoURL)
+                            .frame(width: 16, height: 16)
+
                         Text(asset.symbol)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(PortuTheme.dashboardText)
@@ -261,7 +294,8 @@ private struct PriceWatchlistRow: View {
     var body: some View {
         HStack(spacing: 6) {
             HStack(spacing: 7) {
-                assetDot
+                AssetLogoView(symbol: row.symbol, logoURL: row.logoURL)
+                    .frame(width: 16, height: 16)
                 Text(OverviewPriceDisplay.assetLabel(row.symbol))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(PortuTheme.dashboardText)
@@ -310,17 +344,6 @@ private struct PriceWatchlistRow: View {
             }
         }
         .frame(height: 38)
-    }
-
-    private var assetDot: some View {
-        ZStack {
-            Circle()
-                .fill(PortuTheme.dashboardGoldMuted)
-            Text(String(row.symbol.prefix(1)))
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(PortuTheme.dashboardText)
-        }
-        .frame(width: 16, height: 16)
     }
 
     @ViewBuilder

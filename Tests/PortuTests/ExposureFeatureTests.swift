@@ -267,6 +267,53 @@ struct ExposureCategoryTests {
 // MARK: - Asset Exposure
 
 struct ExposureAssetTests {
+    @Test func `dashboard exposure excludes implausible onchain live prices`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0x000000000000000000000000000000000000dead")
+        let token = TokenEntry(
+            assetId: UUID(),
+            symbol: "BONK2.0",
+            name: "BONK2.0",
+            category: .meme,
+            coinGeckoId: nil,
+            onchainIdentity: identity,
+            role: .balance,
+            amount: 1_000_000_000_000_000_000,
+            usdValue: 5)
+
+        let data = ExposureFeature.computeDashboardData(
+            tokens: [token],
+            prices: [identity.historicalPriceID: 1],
+            overrides: [])
+
+        #expect(data.summary.totalSpot == 0)
+        #expect(data.categoryRows.isEmpty)
+        #expect(data.assetRows.isEmpty)
+    }
+
+    @Test func `dashboard exposure falls back to sync value when showing implausible onchain prices`() throws {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0x000000000000000000000000000000000000dead")
+        let token = TokenEntry(
+            assetId: UUID(),
+            symbol: "BONK2.0",
+            name: "BONK2.0",
+            category: .meme,
+            coinGeckoId: nil,
+            onchainIdentity: identity,
+            role: .balance,
+            amount: 1_000_000_000_000_000_000,
+            usdValue: 5)
+
+        let data = ExposureFeature.computeDashboardData(
+            tokens: [token],
+            prices: [identity.historicalPriceID: 1],
+            overrides: [],
+            settings: TokenDashboardSettings(minimumDashboardValue: 0, hideUnpriced: false, hideDust: false))
+
+        let row = try #require(data.assetRows.first)
+        #expect(data.summary.totalSpot == 5)
+        #expect(row.spotAssets == 5)
+    }
+
     @Test func `asset exposure carries logo url and share of spot`() throws {
         let assetId = UUID()
         let tokens = [

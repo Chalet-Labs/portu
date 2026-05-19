@@ -5,6 +5,8 @@ import SwiftUI
 
 struct OverviewPositionTabs: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var allPositions: [Position]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -12,6 +14,7 @@ struct OverviewPositionTabs: View {
     private var categoryRules: [CategorySymbolRule]
     @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
     private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
     @AppStorage(TokenDashboardSettings.hideUnpricedKey)
@@ -35,6 +38,10 @@ struct OverviewPositionTabs: View {
     }
 
     var body: some View {
+        let context = positionContext
+        let visibleTokens = visibleActiveTokens(context: context)
+        let changeVisibleTokens = changeVisibleActiveTokens(context: context)
+
         VStack(alignment: .leading, spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 24) {
@@ -54,13 +61,22 @@ struct OverviewPositionTabs: View {
             VStack(alignment: .leading, spacing: 12) {
                 switch selectedTab {
                 case .keyChanges:
-                    positionCards(tokens: keyChangeTokens, emptyTitle: "No key changes")
+                    positionCards(
+                        tokens: keyChangeTokens(from: changeVisibleTokens, context: context),
+                        emptyTitle: "No key changes",
+                        context: context)
                 case .idleStables:
-                    positionCards(tokens: idleStableTokens, emptyTitle: "No idle stables")
+                    positionCards(
+                        tokens: idleStableTokens(from: visibleTokens, context: context),
+                        emptyTitle: "No idle stables",
+                        context: context)
                 case .idleMajors:
-                    positionCards(tokens: idleMajorTokens, emptyTitle: "No idle BTC / ETH / SOL")
+                    positionCards(
+                        tokens: idleMajorTokens(from: visibleTokens, context: context),
+                        emptyTitle: "No idle BTC / ETH / SOL",
+                        context: context)
                 case .borrowing:
-                    borrowingView
+                    borrowingView(context: context)
                 case .futures, .options:
                     emptyState("No deployed positions")
                 }
@@ -95,9 +111,15 @@ struct OverviewPositionTabs: View {
         }
     }
 
-    private var visibleActiveTokens: [(PositionToken, Position)] {
+    private func visibleActiveTokens(context: OverviewPositionContext) -> [(PositionToken, Position)] {
         allActiveTokens.filter { token, _ in
-            isDashboardVisible(token)
+            isDashboardVisible(token, context: context)
+        }
+    }
+
+    private func changeVisibleActiveTokens(context: OverviewPositionContext) -> [(PositionToken, Position)] {
+        allActiveTokens.filter { token, _ in
+            isDashboardChangeVisible(token, context: context)
         }
     }
 
@@ -109,6 +131,10 @@ struct OverviewPositionTabs: View {
         TokenSettingsFeature.overridesByAssetId(tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
     }
 
+    private var mappingMap: [OnchainTokenIdentity: TokenIdentityMappingSnapshot] {
+        TokenIdentityMappingFeature.mappingsByIdentity(tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init))
+    }
+
     private var dashboardSettings: TokenDashboardSettings {
         TokenDashboardSettings(
             minimumDashboardValue: Decimal(minimumDashboardValue),
@@ -116,11 +142,35 @@ struct OverviewPositionTabs: View {
             hideDust: hideDust)
     }
 
-    private var keyChangeTokens: [(PositionToken, Position)] {
-        visibleActiveTokens
+    private var positionContext: OverviewPositionContext {
+        OverviewPositionContext(
+            prices: displayPrices,
+            changes24h: priceChanges24h,
+            overrideMap: overrideMap,
+            mappingMap: mappingMap,
+            categoryResolver: categoryResolver,
+            dashboardSettings: dashboardSettings)
+    }
+
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: appState.prices,
+            historical: historicalPricesUSD)
+    }
+
+    private var priceChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
+            live: appState.priceChanges24h,
+            historical: historicalPriceChanges24h)
+    }
+
+    private func keyChangeTokens(
+        from visibleTokens: [(PositionToken, Position)],
+        context: OverviewPositionContext) -> [(PositionToken, Position)] {
+        visibleTokens
             .filter(\.0.role.isPositive)
             .compactMap { token, position -> TokenChangeCandidate? in
-                let change = tokenChange24h(token)
+                let change = tokenChange24h(token, context: context)
                 guard change != 0 else { return nil }
                 return TokenChangeCandidate(token: token, position: position, change: change)
             }
@@ -136,41 +186,44 @@ struct OverviewPositionTabs: View {
             .map { ($0.token, $0.position) }
     }
 
-    private var idleStableTokens: [(PositionToken, Position)] {
-        let resolver = categoryResolver
-        return visibleActiveTokens
+    private func idleStableTokens(
+        from visibleTokens: [(PositionToken, Position)],
+        context: OverviewPositionContext) -> [(PositionToken, Position)] {
+        visibleTokens
             .filter { token, position in
                 guard position.positionType == .idle, token.role.isPositive, let asset = token.asset else { return false }
-                return resolver
+                return context.categoryResolver
                     .resolve(symbol: asset.symbol, legacyCategory: asset.category)
                     .semanticRole == .stablecoin
             }
     }
 
-    private var idleMajorTokens: [(PositionToken, Position)] {
-        let resolver = categoryResolver
-        return visibleActiveTokens
+    private func idleMajorTokens(
+        from visibleTokens: [(PositionToken, Position)],
+        context: OverviewPositionContext) -> [(PositionToken, Position)] {
+        visibleTokens
             .filter { token, position in
                 guard position.positionType == .idle, token.role.isPositive, let asset = token.asset else { return false }
-                let category = resolver.resolve(symbol: asset.symbol, legacyCategory: asset.category)
+                let category = context.categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category)
                 return PortfolioCategoryDefaults.majorCategoryIDs.contains(category.id)
             }
     }
 
-    private func tokenChange24h(_ token: PositionToken) -> Decimal {
-        guard let entry = tokenEntry(for: token) else { return 0 }
+    private func tokenChange24h(_ token: PositionToken, context: OverviewPositionContext) -> Decimal {
+        guard let entry = tokenEntry(for: token, context: context) else { return 0 }
         return OverviewPositionPricing.change24h(
             token: entry,
-            prices: appState.prices,
-            changes24h: appState.priceChanges24h,
-            override: overrideMap[entry.assetId])
+            prices: context.prices,
+            changes24h: context.changes24h,
+            override: context.overrideMap[entry.assetId])
     }
 
     // MARK: - Position cards
 
     private func positionCards(
         tokens: [(PositionToken, Position)],
-        emptyTitle: String) -> some View {
+        emptyTitle: String,
+        context: OverviewPositionContext) -> some View {
         Group {
             if tokens.isEmpty {
                 emptyState(emptyTitle)
@@ -179,9 +232,9 @@ struct OverviewPositionTabs: View {
                     ForEach(groupedTokens(tokens)) { group in
                         OverviewPositionGroupCard(
                             group: group,
-                            price: price,
-                            tokenValue: tokenValue,
-                            tokenChange24h: tokenChange24h)
+                            price: { price($0, context: context) },
+                            tokenValue: { tokenValue($0, context: context) },
+                            tokenChange24h: { tokenChange24h($0, context: context) })
                     }
                 }
             }
@@ -220,10 +273,10 @@ struct OverviewPositionTabs: View {
     // MARK: - Borrowing
 
     @ViewBuilder
-    private var borrowingView: some View {
+    private func borrowingView(context: OverviewPositionContext) -> some View {
         let borrowPositions = positions.compactMap { position -> OverviewPositionGroupData? in
             let tokens = position.tokens.filter { token in
-                token.role.isBorrow && isDashboardVisible(token)
+                token.role.isBorrow && isDashboardVisible(token, context: context)
             }
             guard !tokens.isEmpty else { return nil }
             return OverviewPositionGroupData(
@@ -239,9 +292,9 @@ struct OverviewPositionTabs: View {
                 ForEach(borrowPositions, id: \.id) { group in
                     OverviewPositionGroupCard(
                         group: group,
-                        price: price,
-                        tokenValue: tokenValue,
-                        tokenChange24h: tokenChange24h)
+                        price: { price($0, context: context) },
+                        tokenValue: { tokenValue($0, context: context) },
+                        tokenChange24h: { tokenChange24h($0, context: context) })
                 }
             }
         }
@@ -249,43 +302,76 @@ struct OverviewPositionTabs: View {
 
     // MARK: - Helpers
 
-    private func isDashboardVisible(_ token: PositionToken) -> Bool {
-        guard let entry = tokenEntry(for: token) else { return false }
+    private func isDashboardVisible(_ token: PositionToken, context: OverviewPositionContext) -> Bool {
+        guard let entry = tokenEntry(for: token, context: context) else { return false }
         return OverviewPositionVisibility.isVisible(
             token: entry,
-            prices: appState.prices,
-            overrideMap: overrideMap,
-            settings: dashboardSettings)
+            prices: context.prices,
+            overrideMap: context.overrideMap,
+            settings: context.dashboardSettings)
     }
 
-    private func tokenEntry(for token: PositionToken) -> TokenEntry? {
+    private func isDashboardChangeVisible(_ token: PositionToken, context: OverviewPositionContext) -> Bool {
+        guard let entry = tokenEntry(for: token, context: context) else { return false }
+        return OverviewPriceChangeFeature.isDashboardEligibleForChange(
+            token: entry,
+            prices: context.prices,
+            changes24h: context.changes24h,
+            override: context.overrideMap[entry.assetId],
+            settings: context.dashboardSettings)
+    }
+
+    private func tokenEntry(for token: PositionToken, context: OverviewPositionContext) -> TokenEntry? {
         guard let asset = token.asset else { return nil }
+        let identity = OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract)
+        let coinGeckoId = OverviewWatchlistStore.normalizedID(asset.coinGeckoId)
+            ?? TokenIdentityMappingFeature.mappedCoinGeckoID(
+                for: identity,
+                mappingsByIdentity: context.mappingMap)
         return TokenEntry(
             assetId: asset.id,
             symbol: asset.symbol,
             name: asset.name,
             category: asset.category,
-            portfolioCategory: categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
-            coinGeckoId: asset.coinGeckoId,
+            portfolioCategory: context.categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
+            coinGeckoId: coinGeckoId,
+            onchainIdentity: identity,
             role: token.role,
             amount: token.amount,
             usdValue: token.usdValue,
             logoURL: asset.logoURL)
     }
 
-    private func price(_ token: PositionToken) -> Decimal {
-        guard let entry = tokenEntry(for: token) else { return 0 }
+    private func price(_ token: PositionToken, context: OverviewPositionContext) -> Decimal {
+        guard let entry = tokenEntry(for: token, context: context) else { return 0 }
         return OverviewPositionPricing.price(
             token: entry,
-            prices: appState.prices,
-            override: overrideMap[entry.assetId])
+            prices: context.prices,
+            override: context.overrideMap[entry.assetId])
     }
 
-    private func tokenValue(_ token: PositionToken) -> Decimal {
-        guard let entry = tokenEntry(for: token) else { return 0 }
-        return OverviewPositionPricing.tokenValue(
+    private func tokenValue(_ token: PositionToken, context: OverviewPositionContext) -> Decimal {
+        guard let entry = tokenEntry(for: token, context: context) else { return 0 }
+        let resolvedValue = OverviewPositionPricing.tokenValue(
             token: entry,
-            prices: appState.prices,
-            override: overrideMap[entry.assetId])
+            prices: context.prices,
+            override: context.overrideMap[entry.assetId])
+        if resolvedValue != 0 {
+            return resolvedValue
+        }
+        return OverviewPositionPricing.changeReferenceValue(
+            token: entry,
+            prices: context.prices,
+            changes24h: context.changes24h,
+            override: context.overrideMap[entry.assetId])
     }
+}
+
+private struct OverviewPositionContext {
+    let prices: [String: Decimal]
+    let changes24h: [String: Decimal]
+    let overrideMap: [UUID: TokenPricingOverrideSnapshot]
+    let mappingMap: [OnchainTokenIdentity: TokenIdentityMappingSnapshot]
+    let categoryResolver: PortfolioCategoryResolver
+    let dashboardSettings: TokenDashboardSettings
 }
