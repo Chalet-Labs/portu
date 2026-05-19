@@ -270,9 +270,11 @@ struct AssetDetailFeature {
         assetCoinGeckoId: String?,
         onchainIdentity: OnchainTokenIdentity? = nil,
         override: TokenPricingOverrideSnapshot?) -> String? {
-        normalizedHistoricalCoinGeckoID(override?.coinGeckoIdOverride)
-            ?? normalizedHistoricalCoinGeckoID(assetCoinGeckoId)
-            ?? onchainIdentity?.historicalPriceID
+        // Read path must use the same key the backfill writer used; priceID mirrors that.
+        let coinGeckoId = override?.coinGeckoIdOverride ?? assetCoinGeckoId
+        return TokenIdentityMappingFeature.priceID(
+            coinGeckoId: coinGeckoId,
+            onchainIdentity: onchainIdentity)
     }
 
     @MainActor

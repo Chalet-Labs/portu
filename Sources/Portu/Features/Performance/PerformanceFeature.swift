@@ -456,13 +456,11 @@ struct PerformanceFeature {
     }
 
     private static func resolvedCoinGeckoID(_ snapshot: HistoricalEstimateSnapshotEntry) -> String? {
-        normalizedOptionalCoinGeckoID(snapshot.coinGeckoIdOverride)
-            ?? normalizedOptionalCoinGeckoID(snapshot.coinGeckoId)
-            ?? snapshot.onchainIdentity?.historicalPriceID
-    }
-
-    private static func normalizedOptionalCoinGeckoID(_ id: String?) -> String? {
-        normalizedHistoricalPriceID(id)
+        // Read path must use the same key the backfill writer used; priceID mirrors that.
+        let coinGeckoId = snapshot.coinGeckoIdOverride ?? snapshot.coinGeckoId
+        return TokenIdentityMappingFeature.priceID(
+            coinGeckoId: coinGeckoId,
+            onchainIdentity: snapshot.onchainIdentity)
     }
 
     private static func normalizedHistoricalPriceID(_ id: String?) -> String? {

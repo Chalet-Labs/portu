@@ -78,12 +78,27 @@ struct AssetPriceChartQueryTests {
         #expect(unfiltered.count > filtered.count)
     }
 
-    @Test func `effective historical coin gecko id prefers override`() {
+    @Test func `effective historical coin gecko id prefers onchain key when identity exists`() {
+        let assetId = UUID()
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+
+        let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
+            assetCoinGeckoId: "old-id",
+            onchainIdentity: identity,
+            override: TokenPricingOverrideSnapshot(
+                assetId: assetId,
+                coinGeckoIdOverride: " New-ID "))
+
+        // Must match the cache key in HistoricalPriceBackfillFeature.addCandidate.
+        #expect(effectiveID == identity.historicalPriceID)
+    }
+
+    @Test func `effective historical coin gecko id prefers override when no onchain identity`() {
         let assetId = UUID()
 
         let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(
             assetCoinGeckoId: "old-id",
-            onchainIdentity: OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal"),
+            onchainIdentity: nil,
             override: TokenPricingOverrideSnapshot(
                 assetId: assetId,
                 coinGeckoIdOverride: " New-ID "))
