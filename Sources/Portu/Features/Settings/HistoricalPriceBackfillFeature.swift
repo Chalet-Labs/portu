@@ -347,9 +347,12 @@ enum HistoricalBackfillCandidateResolver {
             ?? normalizedID(resolvedCoinGeckoIDs[onchainIdentity])
             ?? TokenIdentityMappingFeature.knownContractCoinGeckoID(for: onchainIdentity)
         if let providerCoinGeckoID {
+            let cacheKey = TokenIdentityMappingFeature.priceID(
+                coinGeckoId: providerCoinGeckoID,
+                onchainIdentity: onchainIdentity) ?? onchainIdentity.historicalPriceID
             grouped[
                 HistoricalBackfillCandidateKey(
-                    historicalPriceID: onchainIdentity.historicalPriceID,
+                    historicalPriceID: cacheKey,
                     source: .coingecko(providerCoinGeckoID)),
                 default: []
             ].insert(asset.assetId)

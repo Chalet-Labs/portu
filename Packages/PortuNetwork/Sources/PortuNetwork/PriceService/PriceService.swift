@@ -38,6 +38,7 @@ public actor PriceService {
     }
 
     private var detectedPlan: Plan?
+    private var detectedPlanKey: String?
 
     public init(
         session: URLSession = .shared,
@@ -388,7 +389,7 @@ public actor PriceService {
     }
 
     private func detectPlan(key: String) async -> Plan {
-        if let detectedPlan { return detectedPlan }
+        if let detectedPlan, detectedPlanKey == key { return detectedPlan }
         var probe = URLRequest(url: Plan.pro.baseURL.appending(component: "ping"))
         probe.setValue(key, forHTTPHeaderField: Plan.pro.authHeader)
         let plan: Plan
@@ -403,6 +404,7 @@ public actor PriceService {
             plan = .demo
         }
         detectedPlan = plan
+        detectedPlanKey = key
         return plan
     }
 
