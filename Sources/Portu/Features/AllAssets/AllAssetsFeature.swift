@@ -190,12 +190,16 @@ struct AllAssetsFeature {
 
         return assetTokens.map { assetId, entry in
             let netAmount = entry.positive - entry.borrow
-            let hasLive = entry.coinGeckoId.flatMap { prices[$0] } != nil
+            let priceID = TokenIdentityMappingFeature.priceID(
+                coinGeckoId: entry.coinGeckoId,
+                onchainIdentity: entry.onchainIdentity)
+            let livePrice = priceID.flatMap { prices[$0] }
+            let hasLive = livePrice != nil
 
             let price: Decimal
             let value: Decimal
 
-            if let cgId = entry.coinGeckoId, let livePrice = prices[cgId] {
+            if let livePrice {
                 price = livePrice
                 value = netAmount * livePrice
             } else {
