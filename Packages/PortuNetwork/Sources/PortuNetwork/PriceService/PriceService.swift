@@ -392,16 +392,13 @@ public actor PriceService {
         if let detectedPlan, detectedPlanKey == key { return detectedPlan }
         var probe = URLRequest(url: Plan.pro.baseURL.appending(component: "ping"))
         probe.setValue(key, forHTTPHeaderField: Plan.pro.authHeader)
+        let response = try? await session.data(for: probe)
+        guard let http = response?.1 as? HTTPURLResponse else { return .demo }
         let plan: Plan
-        do {
-            let (_, response) = try await session.data(for: probe)
-            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
-                plan = .pro
-            } else {
-                plan = .demo
-            }
-        } catch {
-            plan = .demo
+        switch http.statusCode {
+        case 200: plan = .pro
+        case 401, 403: plan = .demo
+        default: return .demo
         }
         detectedPlan = plan
         detectedPlanKey = key
