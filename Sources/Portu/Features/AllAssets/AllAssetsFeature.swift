@@ -59,6 +59,7 @@ struct AssetAccumulator {
     var category: AssetCategory
     var portfolioCategory: PortfolioCategorySnapshot = PortfolioCategoryDefaults.fallbackCategory
     var coinGeckoId: String?
+    var onchainIdentity: OnchainTokenIdentity?
     var positive: Decimal = 0
     var borrow: Decimal = 0
     var positiveUSD: Decimal = 0
@@ -73,6 +74,7 @@ struct TokenEntry: Equatable {
     let category: AssetCategory
     let portfolioCategory: PortfolioCategorySnapshot
     let coinGeckoId: String?
+    let onchainIdentity: OnchainTokenIdentity?
     let role: TokenRole
     let amount: Decimal
     let usdValue: Decimal
@@ -85,6 +87,7 @@ struct TokenEntry: Equatable {
         category: AssetCategory,
         portfolioCategory: PortfolioCategorySnapshot? = nil,
         coinGeckoId: String?,
+        onchainIdentity: OnchainTokenIdentity? = nil,
         role: TokenRole,
         amount: Decimal,
         usdValue: Decimal,
@@ -96,6 +99,7 @@ struct TokenEntry: Equatable {
         self.portfolioCategory = portfolioCategory
             ?? PortfolioCategoryResolver.defaults.resolve(symbol: symbol, legacyCategory: category)
         self.coinGeckoId = coinGeckoId
+        self.onchainIdentity = onchainIdentity
         self.role = role
         self.amount = amount
         self.usdValue = usdValue
@@ -113,6 +117,7 @@ struct TokenEntry: Equatable {
                 category: asset.category,
                 portfolioCategory: categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
                 coinGeckoId: asset.coinGeckoId,
+                onchainIdentity: OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract),
                 role: token.role, amount: token.amount, usdValue: token.usdValue,
                 logoURL: asset.logoURL)
         }
@@ -168,8 +173,10 @@ struct AllAssetsFeature {
             var entry = assetTokens[token.assetId] ?? AssetAccumulator(
                 symbol: token.symbol, name: token.name, category: token.category,
                 portfolioCategory: token.portfolioCategory,
-                coinGeckoId: token.coinGeckoId)
+                coinGeckoId: token.coinGeckoId,
+                onchainIdentity: token.onchainIdentity)
             entry.coinGeckoId = entry.coinGeckoId ?? token.coinGeckoId
+            entry.onchainIdentity = entry.onchainIdentity ?? token.onchainIdentity
 
             if token.role.isBorrow {
                 entry.borrow += token.amount
@@ -183,12 +190,16 @@ struct AllAssetsFeature {
 
         return assetTokens.map { assetId, entry in
             let netAmount = entry.positive - entry.borrow
-            let hasLive = entry.coinGeckoId.flatMap { prices[$0] } != nil
+            let priceID = TokenIdentityMappingFeature.priceID(
+                coinGeckoId: entry.coinGeckoId,
+                onchainIdentity: entry.onchainIdentity)
+            let livePrice = priceID.flatMap { prices[$0] }
+            let hasLive = livePrice != nil
 
             let price: Decimal
             let value: Decimal
 
-            if let cgId = entry.coinGeckoId, let livePrice = prices[cgId] {
+            if let livePrice {
                 price = livePrice
                 value = netAmount * livePrice
             } else {

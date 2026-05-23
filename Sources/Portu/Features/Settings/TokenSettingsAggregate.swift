@@ -4,6 +4,7 @@ import PortuCore
 struct TokenSettingsAggregate {
     var base: TokenEntry
     var coinGeckoId: String?
+    var onchainIdentity: OnchainTokenIdentity?
     var logoURL: String?
     var positiveAmount: Decimal = 0
     var borrowAmount: Decimal = 0
@@ -21,6 +22,7 @@ struct TokenSettingsAggregate {
     init(_ token: TokenEntry) {
         self.base = token
         self.coinGeckoId = token.coinGeckoId
+        self.onchainIdentity = token.onchainIdentity
         self.logoURL = token.logoURL
         add(token)
     }
@@ -28,6 +30,9 @@ struct TokenSettingsAggregate {
     mutating func add(_ token: TokenEntry) {
         if coinGeckoId == nil {
             coinGeckoId = token.coinGeckoId
+        }
+        if onchainIdentity == nil {
+            onchainIdentity = token.onchainIdentity
         }
         if logoURL == nil {
             logoURL = token.logoURL

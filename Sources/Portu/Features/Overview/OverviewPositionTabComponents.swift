@@ -87,12 +87,12 @@ struct OverviewPositionGroupCard: View {
 
             Spacer(minLength: 10)
 
-            Text(groupValue, format: .currency(code: "USD").precision(.fractionLength(0)))
+            Text(OverviewPriceDisplay.currency(groupValue))
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
 
-            Text(groupChange, format: .currency(code: "USD").precision(.fractionLength(0)))
+            Text(OverviewPriceDisplay.currency(groupChange))
                 .font(.system(size: 12, weight: .medium, design: .monospaced))
                 .foregroundStyle(groupChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
                 .lineLimit(1)
@@ -146,7 +146,8 @@ private struct OverviewPositionTokenRow: View {
                 .frame(width: 250, alignment: .leading)
 
             HStack(spacing: 7) {
-                assetDot
+                AssetLogoView(symbol: token.asset?.symbol ?? "?", logoURL: token.asset?.logoURL)
+                    .frame(width: 16, height: 16)
                 Text(token.asset?.symbol ?? "???")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(PortuTheme.dashboardText)
@@ -155,20 +156,24 @@ private struct OverviewPositionTokenRow: View {
             .frame(width: 90, alignment: .leading)
 
             HStack(spacing: 8) {
-                Text(price, format: .currency(code: "USD").precision(.fractionLength(0 ... 5)))
+                Text(OverviewPriceDisplay.compactPrice(price))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
+                    .allowsTightening(true)
+                    .minimumScaleFactor(0.8)
 
-                Text(change24h, format: .currency(code: "USD").precision(.fractionLength(0)))
+                Text(OverviewPriceDisplay.currency(change24h))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(OverviewPositionChangeTone.tone(for: token.role, change: change24h).color)
                     .lineLimit(1)
+                    .allowsTightening(true)
+                    .minimumScaleFactor(0.8)
             }
             .frame(width: 140, alignment: .trailing)
 
             HStack(spacing: 8) {
-                Text(token.amount, format: .number.precision(.fractionLength(2 ... 6)))
+                Text(OverviewPriceDisplay.amount(token.amount))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
@@ -221,17 +226,6 @@ private struct OverviewPositionTokenRow: View {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(PortuTheme.dashboardGoldMuted.opacity(0.35)))
         }
-    }
-
-    private var assetDot: some View {
-        ZStack {
-            Circle()
-                .fill(PortuTheme.dashboardGoldMuted)
-            Text(String((token.asset?.symbol ?? "?").prefix(1)))
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(PortuTheme.dashboardText)
-        }
-        .frame(width: 16, height: 16)
     }
 
     private var positionLabel: String {

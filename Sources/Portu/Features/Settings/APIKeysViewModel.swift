@@ -8,20 +8,20 @@ final class APIKeysViewModel {
     var debankAPIKey = ""
     var coingeckoAPIKey = ""
     var rpcEndpoints: [Chain: String] = [:]
-    var keychainError: String?
+    var secretStoreError: String?
     private(set) var isLoading = false
     private(set) var hasLoaded = false
 
     private let secretStore: SecretStore
 
-    init(secretStore: SecretStore = KeychainService()) {
+    init(secretStore: SecretStore = LocalSecretStore()) {
         self.secretStore = secretStore
     }
 
     func load() {
         isLoading = true
         defer { isLoading = false; hasLoaded = true }
-        keychainError = nil
+        secretStoreError = nil
         do {
             zapperAPIKey = try secretStore.get(key: .providerAPIKey(.zapper)) ?? ""
             debankAPIKey = try secretStore.get(key: .serviceAPIKey("debank")) ?? ""
@@ -34,12 +34,12 @@ final class APIKeysViewModel {
                 }
             }
         } catch {
-            keychainError = "Unable to load API keys from Keychain. Try restarting the app."
+            secretStoreError = "Unable to load API keys from local storage. Try restarting the app."
         }
     }
 
     func save() {
-        keychainError = nil
+        secretStoreError = nil
         do {
             try saveKey(.providerAPIKey(.zapper), value: zapperAPIKey)
             try saveKey(.serviceAPIKey("debank"), value: debankAPIKey)
@@ -53,7 +53,7 @@ final class APIKeysViewModel {
                 }
             }
         } catch {
-            keychainError = "Unable to save API keys to Keychain. Check that the app has Keychain access."
+            secretStoreError = "Unable to save API keys to local storage."
         }
     }
 

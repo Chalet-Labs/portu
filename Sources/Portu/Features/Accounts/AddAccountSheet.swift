@@ -397,15 +397,15 @@ struct AddAccountSheet: View {
             group: exchangeGroup.isEmpty ? nil : exchangeGroup,
             notes: exchangeNotes.isEmpty ? nil : exchangeNotes)
 
-        let keychain = KeychainService()
+        let secretStore = LocalSecretStore()
         do {
-            try keychain.set(key: .exchangeAPIKey(accountId), value: exchangeAPIKey)
-            try keychain.set(key: .exchangeAPISecret(accountId), value: exchangeAPISecret)
+            try secretStore.set(key: .exchangeAPIKey(accountId), value: exchangeAPIKey)
+            try secretStore.set(key: .exchangeAPISecret(accountId), value: exchangeAPISecret)
             if let passphrase = AddAccountExchangeSecrets.persistedPassphrase(exchangePassphrase, for: exchangeType) {
-                try keychain.set(key: .exchangePassphrase(accountId), value: passphrase)
+                try secretStore.set(key: .exchangePassphrase(accountId), value: passphrase)
             }
         } catch {
-            deleteExchangeCredentials(accountId, keychain: keychain)
+            deleteExchangeCredentials(accountId, secretStore: secretStore)
             saveError = "Failed to save credentials: \(error.localizedDescription)"
             return false
         }
@@ -414,7 +414,7 @@ struct AddAccountSheet: View {
             return true
         }
 
-        deleteExchangeCredentials(accountId, keychain: keychain)
+        deleteExchangeCredentials(accountId, secretStore: secretStore)
         return false
     }
 
@@ -430,10 +430,10 @@ struct AddAccountSheet: View {
         }
     }
 
-    private func deleteExchangeCredentials(_ accountId: UUID, keychain: KeychainService) {
-        try? keychain.delete(key: .exchangeAPIKey(accountId))
-        try? keychain.delete(key: .exchangeAPISecret(accountId))
-        try? keychain.delete(key: .exchangePassphrase(accountId))
+    private func deleteExchangeCredentials(_ accountId: UUID, secretStore: any SecretStore) {
+        try? secretStore.delete(key: .exchangeAPIKey(accountId))
+        try? secretStore.delete(key: .exchangeAPISecret(accountId))
+        try? secretStore.delete(key: .exchangePassphrase(accountId))
     }
 }
 

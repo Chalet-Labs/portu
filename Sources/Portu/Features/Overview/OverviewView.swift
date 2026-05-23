@@ -8,8 +8,10 @@ import SwiftUI
 struct OverviewView: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var allTokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
@@ -22,21 +24,38 @@ struct OverviewView: View {
         TokenEntry.fromActiveTokens(allTokens)
     }
 
+    private var mappedTokenEntries: [TokenEntry] {
+        TokenSettingsFeature.applyIdentityMappings(
+            to: tokenEntries,
+            mappings: mappingSnapshots,
+            overrides: overrideSnapshots)
+    }
+
     private var watchlistIDs: [String] {
         OverviewWatchlistStore.decode(watchlistRaw)
     }
 
     private var pricePollingIDs: [String] {
         OverviewFeature.pricePollingIDs(
-            tokens: tokenEntries,
-            prices: appState.prices,
+            tokens: mappedTokenEntries,
+            prices: displayPrices,
             watchlistIDs: watchlistIDs,
             overrides: overrideSnapshots,
             settings: dashboardSettings)
     }
 
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: appState.prices,
+            historical: historicalPricesUSD)
+    }
+
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
+    }
+
+    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
+        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
     }
 
     private var dashboardSettings: TokenDashboardSettings {
@@ -50,25 +69,36 @@ struct OverviewView: View {
         GeometryReader { proxy in
             let isWide = proxy.size.width >= 1080
 
-            VStack(alignment: .leading, spacing: 0) {
-                pageHeader
-                    .padding(.horizontal, DashboardStyle.pagePadding)
-                    .padding(.top, DashboardStyle.pagePadding)
-                    .padding(.bottom, 10)
-
+            Group {
                 if isWide {
                     HStack(alignment: .top, spacing: 0) {
-                        mainScrollColumn
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        VStack(alignment: .leading, spacing: 0) {
+                            pageHeader
+                                .padding(.horizontal, DashboardStyle.pagePadding)
+                                .padding(.top, DashboardStyle.pagePadding)
+                                .padding(.bottom, 10)
+
+                            mainScrollColumn
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                         InspectorPanel(store: store)
                             .frame(width: PortuTheme.dashboardInspectorWidth + OverviewLayout.inspectorRailWidthAdjustment)
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    compactScrollColumn
+                    VStack(alignment: .leading, spacing: 0) {
+                        pageHeader
+                            .padding(.horizontal, DashboardStyle.pagePadding)
+                            .padding(.top, DashboardStyle.pagePadding)
+                            .padding(.bottom, 10)
+
+                        compactScrollColumn
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(PortuTheme.dashboardBackground)
         }
         .dashboardPage()

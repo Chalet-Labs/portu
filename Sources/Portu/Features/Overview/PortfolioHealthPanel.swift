@@ -6,6 +6,7 @@ import SwiftUI
 
 struct PortfolioHealthPanel: View {
     let store: StoreOf<AppFeature>
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -28,13 +29,19 @@ struct PortfolioHealthPanel: View {
     private var dashboardTokenEntries: [TokenEntry] {
         TokenSettingsFeature.dashboardEligibleTokens(
             tokens: tokenEntries,
-            prices: store.prices,
+            prices: displayPrices,
             overrides: overrideSnapshots,
             settings: dashboardSettings)
     }
 
     private var weights: [AssetWeight] {
-        PortfolioHealthFeature.computeAssetWeights(tokens: dashboardTokenEntries, prices: store.prices)
+        PortfolioHealthFeature.computeAssetWeights(tokens: dashboardTokenEntries, prices: displayPrices)
+    }
+
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: store.prices,
+            historical: historicalPricesUSD)
     }
 
     private var metrics: DiversificationMetrics {

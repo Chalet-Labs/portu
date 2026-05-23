@@ -13,6 +13,8 @@ func makeTestContainer() throws -> ModelContainer {
         PositionToken.self,
         Asset.self,
         TokenPricingOverride.self,
+        TokenIdentityMapping.self,
+        HistoricalPricePoint.self,
         PortfolioSnapshot.self,
         AccountSnapshot.self,
         AssetSnapshot.self
@@ -210,6 +212,104 @@ struct ModelTests {
         #expect(fetched.isIgnored)
         #expect(fetched.alwaysShow)
         #expect(fetched.notes == "manual check")
+        #expect(fetched.createdAt == createdAt)
+        #expect(fetched.updatedAt == updatedAt)
+    }
+
+    @Test func `historical price point stores utc day cache data`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+        let rawDate = Date(timeIntervalSince1970: 1_704_110_456)
+        let fetchedAt = Date(timeIntervalSince1970: 1_704_200_000)
+        let usdPrice = try #require(Decimal(string: "43123.45"))
+
+        let point = HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: rawDate,
+            usdPrice: usdPrice,
+            fetchedAt: fetchedAt)
+
+        context.insert(point)
+        try context.save()
+
+        let fetchedPoints = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+        let fetched = try #require(fetchedPoints.first)
+        #expect(fetched.coinGeckoId == "bitcoin")
+        #expect(fetched.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
+        #expect(fetched.usdPrice == usdPrice)
+        #expect(fetched.source == .coingecko)
+        #expect(fetched.fetchedAt == fetchedAt)
+    }
+
+    @Test func `historical price dto is sendable and normalizes day`() {
+        let rawDate = Date(timeIntervalSince1970: 1_704_110_456)
+        let dto = HistoricalPriceDTO(
+            coinGeckoId: "ethereum",
+            timestamp: rawDate,
+            usdPrice: 2500)
+
+        let sendable: any Sendable = dto
+        #expect(sendable is HistoricalPriceDTO)
+        #expect(dto.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
+    }
+
+    @Test func `onchain identity uses canonical asset price id and parses legacy zapper id`() throws {
+        let identity = try #require(OnchainTokenIdentity(historicalPriceID: " zapper:base:0xABCDEF "))
+
+        #expect(identity.chain == .base)
+        #expect(identity.contractAddress == "0xabcdef")
+        #expect(identity.historicalPriceID == "asset:base:0xabcdef")
+        #expect(OnchainTokenIdentity(historicalPriceID: " asset:base:0xABCDEF ") == identity)
+        #expect(OnchainTokenIdentity(historicalPriceID: "coingecko:ethereum") == nil)
+        #expect(OnchainTokenIdentity(historicalPriceID: "zapper:unknown:0xabc") == nil)
+    }
+
+    @Test func `onchain identity parses camel case chain ids case insensitively`() throws {
+        let polygon = try #require(OnchainTokenIdentity(historicalPriceID: "zapper:polygonzkevm:0xABCDEF"))
+        let immutable = try #require(OnchainTokenIdentity(historicalPriceID: "zapper:immutablex:0xABCDEF"))
+
+        #expect(polygon.chain == .polygonZkEVM)
+        #expect(polygon.historicalPriceID == "asset:polygonzkevm:0xabcdef")
+        #expect(immutable.chain == .immutableX)
+        #expect(immutable.historicalPriceID == "asset:immutablex:0xabcdef")
+    }
+
+    @Test func `chain exposes coingecko asset platform ids`() {
+        #expect(Chain.ethereum.coinGeckoAssetPlatformID == "ethereum")
+        #expect(Chain.polygon.coinGeckoAssetPlatformID == "polygon-pos")
+        #expect(Chain.arbitrum.coinGeckoAssetPlatformID == "arbitrum-one")
+        #expect(Chain.base.coinGeckoAssetPlatformID == "base")
+        #expect(Chain.monad.coinGeckoAssetPlatformID == "monad")
+        #expect(Chain.bitcoin.coinGeckoAssetPlatformID == nil)
+    }
+
+    @Test func `token identity mapping stores provider ids under canonical chain address key`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xABCDEF")
+        let createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let updatedAt = Date(timeIntervalSince1970: 1_700_000_600)
+
+        let mapping = TokenIdentityMapping(
+            identity: identity,
+            coinGeckoId: " Base-Token ",
+            zapperId: "zapper-token-id",
+            coinGeckoResolvedAt: createdAt,
+            zapperResolvedAt: updatedAt,
+            createdAt: createdAt,
+            updatedAt: updatedAt)
+
+        context.insert(mapping)
+        try context.save()
+
+        let fetched = try #require(try context.fetch(FetchDescriptor<TokenIdentityMapping>()).first)
+        #expect(fetched.canonicalKey == "base:0xabcdef")
+        #expect(fetched.chain == .base)
+        #expect(fetched.contractAddress == "0xabcdef")
+        #expect(fetched.coinGeckoId == "base-token")
+        #expect(fetched.zapperId == "zapper-token-id")
+        #expect(fetched.coinGeckoResolvedAt == createdAt)
+        #expect(fetched.zapperResolvedAt == updatedAt)
         #expect(fetched.createdAt == createdAt)
         #expect(fetched.updatedAt == updatedAt)
     }

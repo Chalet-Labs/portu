@@ -9,12 +9,14 @@ struct ExposureView: View {
     let store: StoreOf<AppFeature>
 
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
     @AppStorage(TokenDashboardSettings.hideUnpricedKey)
@@ -32,6 +34,17 @@ struct ExposureView: View {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
     }
 
+    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
+        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
+    }
+
+    private var mappedTokenEntries: [TokenEntry] {
+        TokenSettingsFeature.applyIdentityMappings(
+            to: tokenEntries,
+            mappings: mappingSnapshots,
+            overrides: overrideSnapshots)
+    }
+
     private var dashboardSettings: TokenDashboardSettings {
         TokenDashboardSettings(
             minimumDashboardValue: Decimal(minimumDashboardValue),
@@ -41,8 +54,8 @@ struct ExposureView: View {
 
     var body: some View {
         let data = ExposureFeature.computeDashboardData(
-            tokens: tokenEntries,
-            prices: store.prices,
+            tokens: mappedTokenEntries,
+            prices: displayPrices,
             overrides: overrideSnapshots,
             settings: dashboardSettings)
 
@@ -84,6 +97,12 @@ struct ExposureView: View {
                     appState.onSyncRequested?()
                 }
         }
+    }
+
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: store.prices,
+            historical: historicalPricesUSD)
     }
 }
 

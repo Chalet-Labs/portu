@@ -40,6 +40,7 @@ struct SettingsPage<Content: View>: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
+            .frame(maxWidth: SettingsMetrics.pageMaxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .scrollContentBackground(.hidden)
@@ -397,6 +398,9 @@ extension View {
 
     func settingsPrimaryButton(isDisabled: Bool) -> some View {
         foregroundStyle(isDisabled ? SettingsDesign.secondaryText : SettingsDesign.primaryText)
+            .font(.footnote.weight(.bold))
+            .lineLimit(1)
+            .padding(.horizontal, SettingsDesign.primaryButtonHorizontalPadding)
             .frame(minWidth: SettingsDesign.primaryButtonMinWidth)
             .frame(height: SettingsMetrics.compactControlHeight)
             .background(
@@ -405,6 +409,21 @@ extension View {
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
                     .strokeBorder(isDisabled ? SettingsDesign.cardStroke : SettingsDesign.accentPrimary.opacity(0.68), lineWidth: 1))
+    }
+
+    func settingsSecondaryButton(isDisabled: Bool) -> some View {
+        foregroundStyle(isDisabled ? SettingsDesign.secondaryText : SettingsDesign.primaryText)
+            .font(.footnote.weight(.bold))
+            .lineLimit(1)
+            .padding(.horizontal, SettingsDesign.primaryButtonHorizontalPadding)
+            .frame(minWidth: SettingsDesign.primaryButtonMinWidth)
+            .frame(height: SettingsMetrics.compactControlHeight)
+            .background(
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                    .fill(isDisabled ? SettingsDesign.disabledControlBackground : SettingsDesign.subtleCardBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                    .strokeBorder(SettingsDesign.cardStroke, lineWidth: 1))
     }
 
     func settingsSwitchToggle(showsLabel: Bool = true) -> some View {
@@ -421,6 +440,7 @@ enum SettingsDesign {
     static let switchRowMinHeight: CGFloat = 58
     static let switchAnimationDuration = 0.25
     static let primaryButtonMinWidth: CGFloat = 64
+    static let primaryButtonHorizontalPadding: CGFloat = 16
 
     static let contentBackground = Color(red: 0.045, green: 0.043, blue: 0.039)
     static let sidebarBackground = Color(red: 0.110, green: 0.095, blue: 0.088)

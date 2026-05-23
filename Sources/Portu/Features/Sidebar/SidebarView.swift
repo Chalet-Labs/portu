@@ -8,36 +8,64 @@ struct SidebarView: View {
     let store: StoreOf<AppFeature>
 
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
+    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
     @Query private var positions: [Position]
+    @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
+    private var tokenPricingOverrides: [TokenPricingOverride]
+    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
     @State private var searchText = ""
+
+    init(store: StoreOf<AppFeature>) {
+        self.store = store
+    }
 
     private var activePositions: [Position] {
         positions.filter { $0.account?.isActive == true }
     }
 
     private var totalValue: Decimal {
-        activePositions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
+        OverviewFeature.portfolioTotalValue(
+            tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
+            prices: displayPrices,
+            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
+            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
+            settings: dashboardSettings)
     }
 
     private var change24h: Decimal {
-        var total: Decimal = 0
-        for position in activePositions {
-            for token in position.tokens {
-                guard
-                    let asset = token.asset,
-                    let coinGeckoId = asset.coinGeckoId,
-                    let price = appState.prices[coinGeckoId],
-                    let changePct = appState.priceChanges24h[coinGeckoId] else { continue }
+        OverviewPriceChangeFeature.portfolioChange24h(
+            tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
+            prices: displayPrices,
+            changes24h: priceChanges24h,
+            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
+            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
+            settings: dashboardSettings)
+    }
 
-                let contribution = token.amount * price * changePct
-                if token.role.isPositive {
-                    total += contribution
-                } else if token.role.isBorrow {
-                    total -= contribution
-                }
-            }
-        }
-        return total
+    private var displayPrices: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedPrices(
+            live: appState.prices,
+            historical: historicalPricesUSD)
+    }
+
+    private var priceChanges24h: [String: Decimal] {
+        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
+            live: appState.priceChanges24h,
+            historical: historicalPriceChanges24h)
+    }
+
+    private var dashboardSettings: TokenDashboardSettings {
+        TokenDashboardSettings(
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust)
     }
 
     private var filteredSections: [SidebarLayoutSection] {
@@ -52,10 +80,13 @@ struct SidebarView: View {
     }
 
     var body: some View {
+        let currentTotalValue = totalValue
+        let currentChange24h = change24h
+
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    SidebarPortfolioHeader(totalValue: totalValue, change24h: change24h)
+                    SidebarPortfolioHeader(totalValue: currentTotalValue, change24h: currentChange24h)
 
                     DashboardSearchField(placeholder: "Search", text: $searchText)
 
@@ -113,13 +144,13 @@ private struct SidebarPortfolioHeader: View {
             .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(totalValue, format: .currency(code: "USD").precision(.fractionLength(0)))
+                Text(OverviewPriceDisplay.currency(totalValue))
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 HStack(spacing: 4) {
-                    Text(change24h, format: .currency(code: "USD").precision(.fractionLength(0)))
+                    Text(OverviewPriceDisplay.currency(change24h))
                     Text("24h")
                 }
                 .font(.system(size: 10, weight: .medium, design: .monospaced))

@@ -104,7 +104,7 @@ struct AppStateBridgeTests {
         } withDependencies: {
             $0.syncEngine = .testValue
             $0.priceService = .testValue
-            $0.date = .constant(Date(timeIntervalSince1970: 1_000_000))
+            $0.currentDate.now = { Date(timeIntervalSince1970: 1_000_000) }
         }
 
         let appState = AppState()

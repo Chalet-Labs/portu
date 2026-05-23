@@ -68,7 +68,7 @@ struct APIKeysSettingsTab: View {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Provider API Keys",
-                    subtitle: "Secrets are stored locally in macOS Keychain.",
+                    subtitle: "Stored locally on this Mac.",
                     icon: .apiKeys) {
                         VStack(spacing: 0) {
                             apiKeyField(
@@ -99,10 +99,10 @@ struct APIKeysSettingsTab: View {
                             rpcTable
                             addEndpointSection
 
-                            if let keychainError = viewModel.keychainError {
+                            if let secretStoreError = viewModel.secretStoreError {
                                 SettingsInlineNotice(
-                                    title: "Keychain Error",
-                                    message: keychainError,
+                                    title: "Storage Error",
+                                    message: secretStoreError,
                                     style: .error)
                             }
                         }

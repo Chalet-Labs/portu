@@ -43,6 +43,8 @@ struct SettingsTabTests {
         #expect(SettingsMetrics.pageTitleSize < 38)
         #expect(SettingsMetrics.sectionTitleSize < 22)
         #expect(SettingsMetrics.sidebarWidth < 250)
+        #expect(SettingsMetrics.pageMaxWidth <= 980)
+        #expect(SettingsDesign.primaryButtonHorizontalPadding >= 14)
     }
 
     @Test func `settings omits explicit back navigation`() {
@@ -87,6 +89,89 @@ struct SettingsTabTests {
 
         defaults.set(7.0, forKey: PricePollingSettings.refreshIntervalKey)
         #expect(PricePollingSettings.refreshIntervalSeconds(defaults: defaults) == 30)
+    }
+
+    @Test func `historical price settings use shared keys and labels`() {
+        let defaults = cleanDefaults()
+
+        #expect(HistoricalPriceBackfillSettings.isEnabledKey == "historicalPriceBackfill.isEnabled")
+        #expect(HistoricalPriceBackfillSettings.isEnabled(defaults: defaults) == false)
+
+        defaults.set(true, forKey: HistoricalPriceBackfillSettings.isEnabledKey)
+        #expect(HistoricalPriceBackfillSettings.isEnabled(defaults: defaults) == true)
+        #expect(HistoricalPriceBackfillSettings.sectionTitle == "Historical Prices")
+        #expect(HistoricalPriceBackfillSettings.chartHorizonDays == 365)
+    }
+
+    @Test func `historical backfill status surfaces partial failures`() {
+        let result = HistoricalBackfillResult(
+            requestedAssets: 4,
+            fetchedAssets: 3,
+            skippedAssets: 1,
+            insertedPoints: 10,
+            updatedPoints: 2,
+            failedCoinGeckoIDs: ["ethereum"])
+
+        let message = HistoricalBackfillStatusFormatter.message(for: .succeeded(result))
+
+        #expect(message.contains("Fetched 3 assets"))
+        #expect(message.contains("failed 1"))
+        #expect(message.contains("ethereum"))
+    }
+
+    @Test func `historical backfill status summarizes long failed identifier lists`() {
+        let longIdentifier = "zapper:arbitrum:0x13ad3f1150db0e1e05fd32bdeeb7c110ee023de6"
+        let result = HistoricalBackfillResult(
+            requestedAssets: 4,
+            fetchedAssets: 0,
+            skippedAssets: 0,
+            insertedPoints: 0,
+            updatedPoints: 0,
+            failedCoinGeckoIDs: [
+                longIdentifier,
+                "zapper:base:0x1234567890abcdef1234567890abcdef12345678",
+                "ethereum",
+                "bitcoin"
+            ])
+
+        let message = HistoricalBackfillStatusFormatter.message(for: .succeeded(result))
+
+        #expect(message.contains("No prices fetched"))
+        #expect(message.contains("failed 4 assets"))
+        #expect(message.contains("provider access"))
+        #expect(!message.contains(longIdentifier))
+        #expect(!message.contains("zapper:"))
+        #expect(message.count <= 80)
+    }
+
+    @Test func `historical backfill status names price sources while running`() {
+        let message = HistoricalBackfillStatusFormatter.message(for: .running)
+
+        #expect(message.contains("CoinGecko"))
+        #expect(message.contains("Zapper"))
+    }
+
+    @Test func `historical backfill status surfaces cache clearing`() {
+        let message = HistoricalBackfillStatusFormatter.message(for: .clearing)
+
+        #expect(message == "Clearing historical price cache...")
+    }
+
+    @Test func `historical backfill status explains when local snapshots have no eligible price source`() {
+        let result = HistoricalBackfillResult(
+            requestedAssets: 0,
+            fetchedAssets: 0,
+            skippedAssets: 1050,
+            insertedPoints: 0,
+            updatedPoints: 0,
+            failedCoinGeckoIDs: [])
+
+        let message = HistoricalBackfillStatusFormatter.message(for: .succeeded(result))
+
+        #expect(message.contains("No eligible assets"))
+        #expect(message.contains("CoinGecko"))
+        #expect(message.contains("onchain addresses"))
+        #expect(message.contains("1050"))
     }
 
     private func cleanDefaults() -> UserDefaults {

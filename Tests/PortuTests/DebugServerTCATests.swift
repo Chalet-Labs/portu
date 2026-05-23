@@ -27,6 +27,7 @@
                 $0.syncEngine = SyncEngineClient(sync: { SyncResult(failedAccounts: []) })
                 $0.priceService = PriceServiceClient(
                     fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                    fetchHistoricalPrices: { _, _ in [] },
                     invalidateCache: {})
             }
         }
@@ -148,6 +149,7 @@
             nonisolated(unsafe) var invalidateCalled = false
             let priceService = PriceServiceClient(
                 fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                fetchHistoricalPrices: { _, _ in [] },
                 invalidateCache: { invalidateCalled = true })
             let store = makeStore()
             let server = DebugServer(port: 19027, store: store, priceService: priceService)
@@ -248,6 +250,7 @@
             let store = makeStore()
             let server = DebugServer(port: 19033, store: store, priceService: PriceServiceClient(
                 fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                fetchHistoricalPrices: { _, _ in [] },
                 invalidateCache: {}))
             try await server.start()
             defer { server.stop() }

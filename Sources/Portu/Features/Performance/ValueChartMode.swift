@@ -14,6 +14,28 @@ struct ValueChartMode: View {
     @Query(sort: \AccountSnapshot.timestamp)
     private var accountSnapshots: [AccountSnapshot]
 
+    @Query(sort: \AssetSnapshot.timestamp)
+    private var assetSnapshots: [AssetSnapshot]
+
+    @Query private var assets: [Asset]
+
+    @Query private var tokenPricingOverrides: [TokenPricingOverride]
+
+    @Query
+    private var historicalPrices: [HistoricalPricePoint]
+
+    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
+    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
+
+    init(accountId: UUID?, startDate: Date) {
+        self.accountId = accountId
+        self.startDate = startDate
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        _historicalPrices = Query(
+            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+    }
+
     private var dataPoints: [(Date, Decimal, Bool)] {
         if let accountId {
             accountSnapshots
@@ -26,6 +48,57 @@ struct ValueChartMode: View {
         }
     }
 
+    private var scopedAssetSnapshots: [AssetSnapshot] {
+        assetSnapshots.filter { accountId == nil || $0.accountId == accountId }
+    }
+
+    private var estimatedPoints: [HistoricalPortfolioValuePoint] {
+        guard
+            historicalBackfillEnabled,
+            let firstRealSnapshotDate = scopedAssetSnapshots.map(\.timestamp).min()
+        else { return [] }
+
+        let holdings = PerformanceFeature.earliestEstimateHoldings(
+            snapshots: historicalEstimateSnapshotEntries,
+            firstRealSnapshotDate: firstRealSnapshotDate,
+            accountId: accountId)
+        guard !holdings.isEmpty else { return [] }
+
+        let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        return HistoricalPortfolioEstimator.estimatedValues(
+            holdings: holdings,
+            prices: historicalPrices.compactMap {
+                guard $0.day >= startDay, $0.day < firstRealSnapshotDate else { return nil }
+                return HistoricalPriceEntry(
+                    coinGeckoId: $0.coinGeckoId,
+                    day: $0.day,
+                    usdPrice: $0.usdPrice)
+            },
+            startDate: startDate,
+            firstRealSnapshotDate: firstRealSnapshotDate,
+            accountId: accountId)
+    }
+
+    private var historicalEstimateSnapshotEntries: [HistoricalEstimateSnapshotEntry] {
+        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(
+            tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
+        let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
+
+        return scopedAssetSnapshots.map { snapshot in
+            let asset = assetsById[snapshot.assetId]
+            return HistoricalEstimateSnapshotEntry(
+                accountId: snapshot.accountId,
+                assetId: snapshot.assetId,
+                timestamp: snapshot.timestamp,
+                coinGeckoId: asset?.coinGeckoId,
+                coinGeckoIdOverride: overridesByAssetId[snapshot.assetId]?.coinGeckoIdOverride,
+                onchainIdentity: OnchainTokenIdentity(chain: asset?.upsertChain, contractAddress: asset?.upsertContract),
+                amount: snapshot.amount,
+                borrowAmount: snapshot.borrowAmount,
+                netUSDValue: snapshot.usdValue - snapshot.borrowUsdValue)
+        }
+    }
+
     var body: some View {
         if dataPoints.isEmpty {
             ContentUnavailableView(
@@ -35,7 +108,16 @@ struct ValueChartMode: View {
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 .frame(height: 320)
         } else {
+            let estimatedPoints = estimatedPoints
             Chart {
+                ForEach(estimatedPoints) { point in
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value("Value", point.value))
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
+                }
+
                 ForEach(dataPoints, id: \.0) { date, value, isPartial in
                     AreaMark(x: .value("Date", date), y: .value("Value", value))
                         .foregroundStyle(

@@ -1,185 +1,5 @@
 import Foundation
 
-// MARK: - GraphQL Queries
-
-extension ZapperProvider {
-    static let tokenBalancesQuery = """
-    query PortuTokenBalances($addresses: [Address!]!, $chainIds: [Int!], $first: Int!, $after: String) {
-      portfolioV2(addresses: $addresses, chainIds: $chainIds) {
-        tokenBalances {
-          byToken(first: $first, after: $after) {
-            edges {
-              node {
-                tokenAddress
-                name
-                symbol
-                balance
-                balanceUSD
-                verified
-                imgUrlV2
-                network {
-                  chainId
-                  name
-                }
-              }
-            }
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-          }
-        }
-      }
-    }
-    """
-
-    static let appBalancesQuery = """
-    query PortuAppBalances($addresses: [Address!]!, $chainIds: [Int!], $first: Int!, $after: String) {
-      portfolioV2(addresses: $addresses, chainIds: $chainIds) {
-        appBalances {
-          byApp(first: $first, after: $after) {
-            edges {
-              node {
-                appId
-                balanceUSD
-                app {
-                  slug
-                  displayName
-                  imgUrl
-                }
-                network {
-                  chainId
-                  name
-                }
-                positionBalances(first: 100) {
-                  edges {
-                    node {
-                      __typename
-                      ... on ContractPositionBalance {
-                        key
-                        appId
-                        groupId
-                        groupLabel
-                        balanceUSD
-                        tokens {
-                          metaType
-                          token {
-                            __typename
-                            address
-                            network
-                            balance
-                            balanceUSD
-                            symbol
-                          }
-                        }
-                      }
-                      ... on AppTokenPositionBalance {
-                        address
-                        balance
-                        balanceUSD
-                        symbol
-                        key
-                        appId
-                        groupId
-                        groupLabel
-                        network
-                      }
-                    }
-                  }
-                  pageInfo {
-                    hasNextPage
-                    endCursor
-                  }
-                }
-              }
-            }
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-          }
-        }
-      }
-    }
-    """
-
-    static let appPositionBalancesQuery = """
-    query PortuAppPositionBalances(
-      $addresses: [Address!]!,
-      $chainIds: [Int!],
-      $appSlug: String!,
-      $first: Int!,
-      $after: String
-    ) {
-      portfolioV2(addresses: $addresses, chainIds: $chainIds) {
-        appBalances {
-          byApp(first: 1, filters: { appSlugs: [$appSlug] }) {
-            edges {
-              node {
-                appId
-                balanceUSD
-                app {
-                  slug
-                  displayName
-                  imgUrl
-                }
-                network {
-                  chainId
-                  name
-                }
-                positionBalances(first: $first, after: $after) {
-                  edges {
-                    node {
-                      __typename
-                      ... on ContractPositionBalance {
-                        key
-                        appId
-                        groupId
-                        groupLabel
-                        balanceUSD
-                        tokens {
-                          metaType
-                          token {
-                            __typename
-                            address
-                            network
-                            balance
-                            balanceUSD
-                            symbol
-                          }
-                        }
-                      }
-                      ... on AppTokenPositionBalance {
-                        address
-                        balance
-                        balanceUSD
-                        symbol
-                        key
-                        appId
-                        groupId
-                        groupLabel
-                        network
-                      }
-                    }
-                  }
-                  pageInfo {
-                    hasNextPage
-                    endCursor
-                  }
-                }
-              }
-            }
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-          }
-        }
-      }
-    }
-    """
-}
-
 // MARK: - Request Types
 
 // swiftformat:disable redundantSendable
@@ -247,6 +67,22 @@ struct AppPositionVariables: Encodable, Sendable {
             try container.encodeNil(forKey: .after)
         }
     }
+}
+
+struct TokenPriceTicksVariables: Encodable, Sendable {
+    let address: String
+    let chainId: Int
+    let currency: String
+    let timeFrame: String
+}
+
+struct TokenPriceBatchVariables: Encodable, Sendable {
+    let tokens: [FungibleTokenInputV2]
+}
+
+struct FungibleTokenInputV2: Encodable, Sendable {
+    let address: String
+    let chainId: Int
 }
 
 // MARK: - Response Types
@@ -439,6 +275,30 @@ struct NetworkObject: Decodable, Sendable {
 struct PageInfo: Decodable, Sendable {
     let hasNextPage: Bool
     let endCursor: String?
+}
+
+struct TokenPriceTicksData: Decodable, Sendable {
+    let fungibleTokenV2: ZapperFungibleTokenV2?
+}
+
+struct TokenPriceBatchData: Decodable, Sendable {
+    let fungibleTokenBatchV2: [ZapperFungibleTokenV2?]
+}
+
+struct ZapperFungibleTokenV2: Decodable, Sendable {
+    let address: String?
+    let priceData: ZapperTokenPriceData?
+}
+
+struct ZapperTokenPriceData: Decodable, Sendable {
+    let price: Double?
+    let priceChange24h: Double?
+    let priceTicks: [ZapperPriceTick]?
+}
+
+struct ZapperPriceTick: Decodable, Sendable {
+    let close: Double
+    let timestamp: Double
 }
 
 // swiftformat:enable redundantSendable

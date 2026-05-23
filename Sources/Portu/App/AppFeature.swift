@@ -37,23 +37,128 @@ extension DependencyValues {
 // MARK: - PriceServiceClient
 
 struct PriceServiceClient {
+    enum ClientError: Error {
+        /// Returned by `fetchZapperHistoricalPrices` when no Zapper API key is configured.
+        /// The backfill runner's upstream pre-filter normally prevents reaching this path,
+        /// but a missing key here means the candidate cannot be fetched — surface it as a
+        /// failure instead of silently returning an empty result set.
+        case zapperProviderUnavailable
+    }
+
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
+    var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
+    var resolveCoinGeckoIDs: @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String]
+    var fetchZapperHistoricalPrices: @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO]
+    var canFetchZapperHistoricalPrices: @Sendable () -> Bool
     var invalidateCache: @Sendable () async -> Void
+
+    init(
+        fetchPrices: @escaping @Sendable ([String]) async throws -> PriceUpdate,
+        fetchHistoricalPrices: @escaping @Sendable (String, Int) async throws -> [HistoricalPriceDTO],
+        resolveCoinGeckoIDs: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String] = { _ in [:] },
+        fetchZapperHistoricalPrices: @escaping @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO] = { _, _ in [] },
+        canFetchZapperHistoricalPrices: @escaping @Sendable () -> Bool = { true },
+        invalidateCache: @escaping @Sendable () async -> Void) {
+        self.fetchPrices = fetchPrices
+        self.fetchHistoricalPrices = fetchHistoricalPrices
+        self.resolveCoinGeckoIDs = resolveCoinGeckoIDs
+        self.fetchZapperHistoricalPrices = fetchZapperHistoricalPrices
+        self.canFetchZapperHistoricalPrices = canFetchZapperHistoricalPrices
+        self.invalidateCache = invalidateCache
+    }
+}
+
+enum LivePriceUpdateBuilder {
+    static func fetchPrices(
+        coinIds: [String],
+        priceService: PriceService,
+        fetchZapperUpdate: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate) async throws -> PriceUpdate {
+        let request = PricePollingIDResolver.split(coinIds)
+        let coinGeckoUpdate = try await fetchCoinGeckoIDUpdate(
+            coinIDs: request.coinGeckoIDs,
+            priceService: priceService,
+            allowEmptyOnFailure: !request.zapperIdentities.isEmpty)
+        let tokenUpdate = await fetchCoinGeckoTokenUpdate(
+            identities: request.zapperIdentities,
+            priceService: priceService)
+        let unresolvedZapperIdentities = request.zapperIdentities.filter {
+            tokenUpdate.prices[$0.historicalPriceID] == nil
+        }
+        let zapperUpdate: PriceUpdate
+        do {
+            zapperUpdate = try await fetchZapperUpdate(unresolvedZapperIdentities)
+        } catch {
+            zapperUpdate = PricePollingIDResolver.emptyUpdate
+        }
+        return PricePollingIDResolver.merge([coinGeckoUpdate, tokenUpdate, zapperUpdate])
+    }
+
+    private static func fetchCoinGeckoIDUpdate(
+        coinIDs: [String],
+        priceService: PriceService,
+        allowEmptyOnFailure: Bool) async throws -> PriceUpdate {
+        guard !coinIDs.isEmpty else { return PricePollingIDResolver.emptyUpdate }
+        do {
+            return try await priceService.fetchPriceUpdate(for: coinIDs)
+        } catch {
+            guard allowEmptyOnFailure else { throw error }
+            return PricePollingIDResolver.emptyUpdate
+        }
+    }
+
+    private static func fetchCoinGeckoTokenUpdate(
+        identities: [OnchainTokenIdentity],
+        priceService: PriceService) async -> PriceUpdate {
+        guard !identities.isEmpty else { return PricePollingIDResolver.emptyUpdate }
+        do {
+            return try await priceService.fetchTokenPriceUpdate(for: identities)
+        } catch {
+            return PricePollingIDResolver.emptyUpdate
+        }
+    }
 }
 
 extension PriceServiceClient: DependencyKey {
     static let liveValue = Self(
         fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        resolveCoinGeckoIDs: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchZapperHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        canFetchZapperHistoricalPrices: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         invalidateCache: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") })
     static let testValue = Self(
         fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+        fetchHistoricalPrices: { _, _ in [] },
+        resolveCoinGeckoIDs: { _ in [:] },
+        fetchZapperHistoricalPrices: { _, _ in [] },
+        canFetchZapperHistoricalPrices: { true },
         invalidateCache: {})
 
-    static func live(service: PriceService) -> Self {
+    static func live(service: PriceService, zapperProvider: ZapperProvider? = nil) -> Self {
         Self(
             fetchPrices: { coinIds in
-                try await service.fetchPriceUpdate(for: coinIds)
+                try await LivePriceUpdateBuilder.fetchPrices(
+                    coinIds: coinIds,
+                    priceService: service) { identities in
+                        guard let zapperProvider, !identities.isEmpty else {
+                            return PricePollingIDResolver.emptyUpdate
+                        }
+                        return try await zapperProvider.fetchPriceUpdate(for: identities)
+                    }
             },
+            fetchHistoricalPrices: { coinId, days in
+                try await service.fetchHistoricalPrices(for: coinId, days: days)
+            },
+            resolveCoinGeckoIDs: { identities in
+                try await service.resolveCoinGeckoIDs(for: identities)
+            },
+            fetchZapperHistoricalPrices: { identity, days in
+                guard let zapperProvider else {
+                    throw ClientError.zapperProviderUnavailable
+                }
+                return try await zapperProvider.fetchHistoricalPrices(identity: identity, days: days)
+            },
+            canFetchZapperHistoricalPrices: { zapperProvider != nil },
             invalidateCache: { await service.invalidateCache() })
     }
 }
@@ -85,6 +190,24 @@ extension DependencyValues {
     }
 }
 
+// MARK: - CurrentDateClient
+
+struct CurrentDateClient {
+    var now: @Sendable () -> Date
+}
+
+extension CurrentDateClient: DependencyKey {
+    static let liveValue = Self(now: { Date.now })
+    static let testValue = Self(now: { Date(timeIntervalSince1970: 1_000_000) })
+}
+
+extension DependencyValues {
+    var currentDate: CurrentDateClient {
+        get { self[CurrentDateClient.self] }
+        set { self[CurrentDateClient.self] = newValue }
+    }
+}
+
 // MARK: - AppFeature
 
 @Reducer
@@ -112,6 +235,7 @@ struct AppFeature {
         var accounts = AccountsFeature.State()
         var performance = PerformanceFeature.State()
         var portfolioHealth = PortfolioHealthFeature.State()
+        var historicalPriceBackfill = HistoricalPriceBackfillFeature.State()
     }
 
     enum Action {
@@ -129,6 +253,7 @@ struct AppFeature {
         case accounts(AccountsFeature.Action)
         case performance(PerformanceFeature.Action)
         case portfolioHealth(PortfolioHealthFeature.Action)
+        case historicalPriceBackfill(HistoricalPriceBackfillFeature.Action)
     }
 
     private enum CancelID {
@@ -139,7 +264,7 @@ struct AppFeature {
     @Dependency(\.priceService) var priceService
     @Dependency(\.pricePollingSettings) var pricePollingSettings
     @Dependency(\.continuousClock) var clock
-    @Dependency(\.date.now) var now
+    @Dependency(\.currentDate) var currentDate
 
     var body: some ReducerOf<Self> {
         Scope(state: \.allAssets, action: \.allAssets) {
@@ -156,6 +281,9 @@ struct AppFeature {
         }
         Scope(state: \.portfolioHealth, action: \.portfolioHealth) {
             PortfolioHealthFeature()
+        }
+        Scope(state: \.historicalPriceBackfill, action: \.historicalPriceBackfill) {
+            HistoricalPriceBackfillFeature()
         }
         Reduce { state, action in
             switch action {
@@ -212,7 +340,7 @@ struct AppFeature {
             case let .pricesReceived(update):
                 state.prices.merge(update.prices) { _, new in new }
                 state.priceChanges24h.merge(update.changes24h) { _, new in new }
-                state.lastPriceUpdate = now
+                state.lastPriceUpdate = currentDate.now()
                 state.connectionStatus = .idle
                 return .none
 
@@ -237,6 +365,9 @@ struct AppFeature {
                 return .none
 
             case .portfolioHealth:
+                return .none
+
+            case .historicalPriceBackfill:
                 return .none
             }
         }
@@ -264,6 +395,7 @@ extension AppFeature.Action: Equatable {
         case let (.accounts(l), .accounts(r)): l == r
         case let (.performance(l), .performance(r)): l == r
         case let (.portfolioHealth(l), .portfolioHealth(r)): l == r
+        case let (.historicalPriceBackfill(l), .historicalPriceBackfill(r)): l == r
         default: false
         }
     }

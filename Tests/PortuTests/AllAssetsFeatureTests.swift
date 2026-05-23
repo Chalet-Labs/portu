@@ -117,6 +117,32 @@ struct AssetRowAggregationTests {
         #expect(rows[0].hasLivePrice == true)
     }
 
+    @Test func `uses live prices keyed by onchain identity when coinGeckoId missing`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        let assetId = UUID()
+        let tokens: [TokenEntry] = [
+            TokenEntry(
+                assetId: assetId,
+                symbol: "TKN",
+                name: "Onchain Token",
+                category: .other,
+                coinGeckoId: nil,
+                onchainIdentity: identity,
+                role: .balance,
+                amount: 10,
+                usdValue: 50)
+        ]
+
+        let rows = AllAssetsFeature.aggregateRows(
+            tokens: tokens,
+            prices: [identity.historicalPriceID: 7])
+
+        #expect(rows.count == 1)
+        #expect(rows[0].hasLivePrice == true)
+        #expect(rows[0].price == 7)
+        #expect(rows[0].value == 70)
+    }
+
     @Test func `falls back to sync-time price`() {
         let assetId = UUID()
         let tokens: [TokenEntry] = [

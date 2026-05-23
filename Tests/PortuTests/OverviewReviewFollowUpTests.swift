@@ -85,6 +85,26 @@ struct OverviewReviewFollowUpTests {
         #expect(deployed.map(\.1) == [0, 15, 0])
     }
 
+    @Test func `summary breakdowns exclude implausible onchain provider prices`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xBadPrice")
+        let bad = summaryToken(
+            token(
+                symbol: "BAD",
+                category: .defi,
+                amount: 1_000_000,
+                usdValue: 10,
+                onchainIdentity: identity),
+            positionType: .idle)
+
+        let idle = OverviewSummaryCardsFeature.idleBreakdown(
+            tokens: [bad],
+            prices: [identity.historicalPriceID: 1_000_000],
+            overrides: [],
+            categories: PortfolioCategoryDefaults.categorySnapshots)
+
+        #expect(idle.map(\.1) == [0, 0, 0])
+    }
+
     @Test func `category slices use stable ids when equal value category names collide`() throws {
         let laterID = try #require(UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB"))
         let earlierID = try #require(UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"))
@@ -107,7 +127,7 @@ struct OverviewReviewFollowUpTests {
                 name: "LATER",
                 category: .other,
                 portfolioCategory: laterCategory,
-                coinGeckoId: nil,
+                coinGeckoId: "later",
                 role: .balance,
                 amount: 1,
                 usdValue: 10),
@@ -117,13 +137,13 @@ struct OverviewReviewFollowUpTests {
                 name: "EARLIER",
                 category: .other,
                 portfolioCategory: earlierCategory,
-                coinGeckoId: nil,
+                coinGeckoId: "earlier",
                 role: .balance,
                 amount: 1,
                 usdValue: 10)
         ]
 
-        let slices = OverviewFeature.categorySlices(from: tokens, prices: [:], limit: 2)
+        let slices = OverviewFeature.categorySlices(from: tokens, prices: ["later": 10, "earlier": 10], limit: 2)
 
         #expect(slices.map(\.id) == [earlierID.uuidString, laterID.uuidString])
     }
@@ -135,13 +155,15 @@ struct OverviewReviewFollowUpTests {
         coinGeckoId: String? = nil,
         role: TokenRole = .balance,
         amount: Decimal,
-        usdValue: Decimal) -> TokenEntry {
+        usdValue: Decimal,
+        onchainIdentity: OnchainTokenIdentity? = nil) -> TokenEntry {
         TokenEntry(
             assetId: assetId,
             symbol: symbol,
             name: symbol,
             category: category,
             coinGeckoId: coinGeckoId,
+            onchainIdentity: onchainIdentity,
             role: role,
             amount: amount,
             usdValue: usdValue)
