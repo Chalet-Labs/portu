@@ -39,7 +39,8 @@ xcodebuild \
   -skipMacroValidation \
   MARKETING_VERSION="$VERSION" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGN_IDENTITY="-" \
+  CODE_SIGNING_REQUIRED=NO \
   build
 
 if [[ ! -d "$APP_BUNDLE" ]]; then

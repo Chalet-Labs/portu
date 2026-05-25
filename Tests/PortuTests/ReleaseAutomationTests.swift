@@ -94,11 +94,12 @@ struct ReleaseAutomationTests {
         #expect(workflow.contains("PR title must use Conventional Commits"))
     }
 
-    @Test func `release packaging scripts build unsigned dmg and mark prereleases`() throws {
+    @Test func `release packaging scripts ad-hoc sign dmg and mark prereleases`() throws {
         let packageScript = try string("scripts/package_release_dmg.sh")
         let markScript = try string("scripts/mark_github_release_prerelease.sh")
 
-        #expect(packageScript.contains("CODE_SIGNING_ALLOWED=NO"))
+        #expect(packageScript.contains("CODE_SIGN_IDENTITY=\"-\""))
+        #expect(packageScript.contains("CODE_SIGNING_REQUIRED=NO"))
         #expect(packageScript.contains("MARKETING_VERSION=\"$VERSION\""))
         #expect(packageScript.contains("CURRENT_PROJECT_VERSION=\"$BUILD_NUMBER\""))
         #expect(packageScript.contains("hdiutil create"))
