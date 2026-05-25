@@ -1,0 +1,28 @@
+name: PR Title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Conventional Commit Title
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|perf|docs|test|tests|refactor|style|build|ci|chore|revert)(\([A-Za-z0-9._-]+\))?(!)?: .+|^Revert ".+"$'
+          if [[ "$PR_TITLE" =~ $pattern ]]; then
+            exit 0
+          fi
+
+          echo "PR title must use Conventional Commits so squash merges drive semantic-release."
+          echo "Examples: feat: add account export, fix(sync): repair error state, chore: update tooling"
+          echo "Actual: $PR_TITLE"
+          exit 1

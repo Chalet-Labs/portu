@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		010C49B4C2BB4659CAF03E36 /* HistoricalPriceBackfillRequestTimingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09FAC79936969B0BBA1C5A51 /* HistoricalPriceBackfillRequestTimingTests.swift */; };
 		02CEF7FE408D5CF38B5A88D9 /* ViewRenderSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E03E305DDC6E4458F794B16A /* ViewRenderSmokeTests.swift */; };
+		0654CA81A46C611A8907B53C /* ReleaseAutomationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A372B5E40F5617842721225 /* ReleaseAutomationTests.swift */; };
 		06D3B554E7A6183B58C4C8B9 /* DashboardStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E73BD66578FD9C7009C3632 /* DashboardStyle.swift */; };
 		07BD53EBDDCBE8986B49DE74 /* SnapshotTesting in Frameworks */ = {isa = PBXBuildFile; productRef = B357CC2B1177EF25A668EAD5 /* SnapshotTesting */; };
 		082777E4EA26D945BF5DBEFD /* PerformanceFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6CA054F3A64E61E608548C /* PerformanceFeature.swift */; };
@@ -207,6 +208,7 @@
 		5694C6AAF80F978B3E6A0EB7 /* AssetsChartMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetsChartMode.swift; sourceTree = "<group>"; };
 		583795FC83FFEAAE83E1BEAE /* PerformanceFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceFeatureTests.swift; sourceTree = "<group>"; };
 		59F1B452183C058E480F9BCC /* AddPositionCategoryRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPositionCategoryRuleTests.swift; sourceTree = "<group>"; };
+		5A372B5E40F5617842721225 /* ReleaseAutomationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseAutomationTests.swift; sourceTree = "<group>"; };
 		5C5ACF35FFCCB23A6F4AE3C4 /* HTTPParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTTPParser.swift; sourceTree = "<group>"; };
 		5E78AD0A4DDFB6A8F52A9515 /* ValueChartMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValueChartMode.swift; sourceTree = "<group>"; };
 		5F65FF1713209FB3D1DDB9C2 /* PricePollingIDResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PricePollingIDResolver.swift; sourceTree = "<group>"; };
@@ -558,6 +560,7 @@
 				B44BBABF8DC9D82CEE3CD750 /* PortfolioHealthMetricsTests.swift */,
 				1B00E51B9CD5D696629A76B9 /* PositionGroupValueTests.swift */,
 				2E83779E156800BF99D5B42F /* ProtocolFilterTests.swift */,
+				5A372B5E40F5617842721225 /* ReleaseAutomationTests.swift */,
 				726D62A9E7F60014EDC7E0EC /* SettingsTabTests.swift */,
 				ACC72A910CE88E69A0A79746 /* SidebarLayoutTests.swift */,
 				FB29EB7B31D9B8FE27EDCC5A /* SyncEngineTests.swift */,
@@ -843,6 +846,7 @@
 				60AB89812EE9C34CD3833BBD /* PortfolioHealthMetricsTests.swift in Sources */,
 				2A5980FDF680ADDCB39EA59B /* PositionGroupValueTests.swift in Sources */,
 				199AC50AADF5D13C0A51DFBD /* ProtocolFilterTests.swift in Sources */,
+				0654CA81A46C611A8907B53C /* ReleaseAutomationTests.swift in Sources */,
 				09EFC1288E41DCA2CF416638 /* SettingsTabTests.swift in Sources */,
 				688D94778A29B329D3197E6F /* SidebarLayoutTests.swift in Sources */,
 				E73D6C01F3051356E0E4D2FE /* SyncEngineTests.swift in Sources */,
@@ -888,11 +892,13 @@
 				CODE_SIGN_ENTITLEMENTS = Sources/Portu/Resources/Portu.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = Sources/Portu/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portu.app;
 				SDKROOT = macosx;
 			};
@@ -1043,11 +1049,13 @@
 				CODE_SIGN_ENTITLEMENTS = Sources/Portu/Resources/Portu.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = Sources/Portu/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portu.app;
 				SDKROOT = macosx;
 			};
