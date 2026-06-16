@@ -83,6 +83,12 @@ struct ReleaseAutomationTests {
         #expect(workflow.contains("npx semantic-release"))
         #expect(workflow.contains("SEMANTIC_RELEASE_TOKEN"))
         #expect(workflow.contains("semantic-release-bot"))
+
+        let testPackagesIndex = try #require(workflow.range(of: "just test-packages")?.lowerBound)
+        let testAppIndex = try #require(workflow.range(of: "just test\n")?.lowerBound)
+        let releaseIndex = try #require(workflow.range(of: "npx semantic-release")?.lowerBound)
+        #expect(testPackagesIndex < testAppIndex)
+        #expect(testAppIndex < releaseIndex)
     }
 
     @Test func `pull request title workflow enforces conventional squash titles`() throws {
@@ -99,7 +105,7 @@ struct ReleaseAutomationTests {
         let markScript = try string("scripts/mark_github_release_prerelease.sh")
 
         #expect(packageScript.contains("CODE_SIGN_IDENTITY=\"-\""))
-        #expect(packageScript.contains("CODE_SIGNING_REQUIRED=NO"))
+        #expect(packageScript.contains("CODE_SIGNING_REQUIRED=YES"))
         #expect(packageScript.contains("MARKETING_VERSION=\"$VERSION\""))
         #expect(packageScript.contains("CURRENT_PROJECT_VERSION=\"$BUILD_NUMBER\""))
         #expect(packageScript.contains("hdiutil create"))

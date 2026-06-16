@@ -9,7 +9,8 @@ if [[ -z "$VERSION" ]]; then
   exit 2
 fi
 
-if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+if [[ ! "$VERSION" =~ $SEMVER_REGEX ]]; then
   echo "error: '$VERSION' is not a semantic version" >&2
   exit 2
 fi
@@ -40,7 +41,7 @@ xcodebuild \
   MARKETING_VERSION="$VERSION" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   CODE_SIGN_IDENTITY="-" \
-  CODE_SIGNING_REQUIRED=NO \
+  CODE_SIGNING_REQUIRED=YES \
   build
 
 if [[ ! -d "$APP_BUNDLE" ]]; then
