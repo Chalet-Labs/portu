@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Semantic Release
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.x'
+          cache: npm
+
+      - name: Install tools
+        run: |
+          brew install xcodegen just
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Generate Xcode project
+        run: just generate
+
+      - name: Build
+        run: just build
+
+      - name: Test SPM packages
+        run: just test-packages
+
+      - name: Test app
+        run: just test
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
+          GIT_AUTHOR_NAME: semantic-release-bot
+          GIT_AUTHOR_EMAIL: semantic-release-bot@users.noreply.github.com
+          GIT_COMMITTER_NAME: semantic-release-bot
+          GIT_COMMITTER_EMAIL: semantic-release-bot@users.noreply.github.com
+        run: npx semantic-release

@@ -1,0 +1,92 @@
+{
+  "branches": [
+    "master"
+  ],
+  "tagFormat": "alpha-${version}",
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "angular",
+        "releaseRules": [
+          {
+            "breaking": true,
+            "release": "major"
+          },
+          {
+            "type": "feat",
+            "release": "minor"
+          },
+          {
+            "type": "fix",
+            "release": "patch"
+          },
+          {
+            "type": "perf",
+            "release": "patch"
+          },
+          {
+            "type": "docs",
+            "release": false
+          },
+          {
+            "type": "test",
+            "release": false
+          },
+          {
+            "type": "tests",
+            "release": false
+          },
+          {
+            "type": "refactor",
+            "release": false
+          },
+          {
+            "type": "style",
+            "release": false
+          },
+          {
+            "type": "build",
+            "release": false
+          },
+          {
+            "type": "ci",
+            "release": false
+          },
+          {
+            "type": "chore",
+            "release": false
+          }
+        ]
+      }
+    ],
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/github",
+      {
+        "successComment": false,
+        "failComment": false,
+        "releasedLabels": false,
+        "assets": [
+          {
+            "path": "dist/Portu-*.dmg",
+            "name": "Portu-${nextRelease.version}.dmg",
+            "label": "Portu ${nextRelease.version} DMG"
+          },
+          {
+            "path": "dist/Portu-*.dmg.sha256",
+            "name": "Portu-${nextRelease.version}.dmg.sha256",
+            "label": "Portu ${nextRelease.version} DMG SHA-256"
+          }
+        ]
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "scripts/package_release_dmg.sh ${nextRelease.version}",
+        "publishCmd": "scripts/mark_github_release_prerelease.sh ${nextRelease.gitTag}"
+      }
+    ]
+  ]
+}
