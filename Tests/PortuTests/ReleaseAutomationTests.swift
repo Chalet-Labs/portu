@@ -14,8 +14,10 @@ struct ReleaseAutomationTests {
 
         let branches = try #require(config["branches"] as? [Any])
         #expect(branches.count == 2)
-        #expect(branches.first as? String == "master")
-        let alphaBranch = try #require(branches.dropFirst().first as? [String: Any])
+        #expect(branches.contains { $0 as? String == "master" })
+        let alphaBranch = try #require(branches.compactMap { $0 as? [String: Any] }.first {
+            $0["name"] as? String == "alpha"
+        })
         #expect(alphaBranch["name"] as? String == "alpha")
         #expect(alphaBranch["prerelease"] as? Bool == true)
         #expect(config["tagFormat"] as? String == "v${version}")
@@ -78,7 +80,7 @@ struct ReleaseAutomationTests {
         let workflow = try string(".github/workflows/release.yml")
 
         #expect(workflow.contains("push:"))
-        #expect(workflow.contains("branches: [master, alpha]"))
+        #expect(try workflowPushBranches(in: workflow) == ["alpha", "master"])
         #expect(workflow.contains("contents: write"))
         #expect(workflow.contains("npm ci"))
         #expect(workflow.contains("just generate"))
@@ -110,12 +112,14 @@ struct ReleaseAutomationTests {
 
         #expect(packageScript.contains("CODE_SIGN_IDENTITY=\"-\""))
         #expect(packageScript.contains("CODE_SIGNING_REQUIRED=YES"))
-        #expect(packageScript.contains("MARKETING_VERSION=\"$VERSION\""))
+        #expect(packageScript.contains("BUNDLE_MARKETING_VERSION=\"${VERSION%%[-+]*}\""))
+        #expect(packageScript.contains("MARKETING_VERSION=\"$BUNDLE_MARKETING_VERSION\""))
         #expect(packageScript.contains("CURRENT_PROJECT_VERSION=\"$BUILD_NUMBER\""))
         #expect(packageScript.contains("hdiutil create"))
         #expect(packageScript.contains("hdiutil verify"))
         #expect(packageScript.contains("shasum -a 256"))
         #expect(packageScript.contains("CFBundleShortVersionString"))
+        #expect(packageScript.contains("expected CFBundleShortVersionString $BUNDLE_MARKETING_VERSION"))
         #expect(!fileExists("scripts/mark_github_release_prerelease.sh"))
     }
 
@@ -141,6 +145,61 @@ struct ReleaseAutomationTests {
 
     private func fileExists(_ path: String) -> Bool {
         FileManager.default.fileExists(atPath: repoRoot.appending(path: path).path(percentEncoded: false))
+    }
+
+    private func workflowPushBranches(in workflow: String) throws -> Set<String> {
+        let lines = workflow.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard let pushIndex = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "push:" }) else {
+            return []
+        }
+        let pushIndent = leadingSpaceCount(lines[pushIndex])
+
+        for index in lines.indices.dropFirst(pushIndex + 1) {
+            let line = lines[index]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+
+            let indent = leadingSpaceCount(line)
+            if indent <= pushIndent {
+                break
+            }
+
+            guard trimmed.hasPrefix("branches:") else { continue }
+
+            let branchIndent = indent
+            let value = trimmed.dropFirst("branches:".count).trimmingCharacters(in: .whitespaces)
+            if value.hasPrefix("[") {
+                return Set(value
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+            }
+
+            var branches = Set<String>()
+            for branchLine in lines.indices.dropFirst(index + 1).map({ lines[$0] }) {
+                let branchTrimmed = branchLine.trimmingCharacters(in: .whitespaces)
+                guard !branchTrimmed.isEmpty else { continue }
+
+                let indent = leadingSpaceCount(branchLine)
+                if indent <= branchIndent {
+                    break
+                }
+
+                if branchTrimmed.hasPrefix("-") {
+                    branches.insert(
+                        branchTrimmed
+                            .dropFirst()
+                            .trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+            }
+            return branches
+        }
+
+        return []
+    }
+
+    private func leadingSpaceCount(_ line: String) -> Int {
+        line.prefix(while: { $0 == " " }).count
     }
 
     private static func pluginName(_ plugin: Any) -> String? {
