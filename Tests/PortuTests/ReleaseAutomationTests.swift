@@ -9,11 +9,16 @@ struct ReleaseAutomationTests {
             .deletingLastPathComponent()
     }
 
-    @Test func `semantic release config publishes alpha GitHub release assets`() throws {
+    @Test func `semantic release config publishes alpha prereleases and stable releases`() throws {
         let config = try jsonObject(".releaserc.json")
 
-        #expect(config["branches"] as? [String] == ["master"])
-        #expect(config["tagFormat"] as? String == "alpha-${version}")
+        let branches = try #require(config["branches"] as? [Any])
+        #expect(branches.count == 2)
+        #expect(branches.first as? String == "master")
+        let alphaBranch = try #require(branches.dropFirst().first as? [String: Any])
+        #expect(alphaBranch["name"] as? String == "alpha")
+        #expect(alphaBranch["prerelease"] as? Bool == true)
+        #expect(config["tagFormat"] as? String == "v${version}")
 
         let plugins = try #require(config["plugins"] as? [Any])
         let pluginNames = plugins.compactMap(Self.pluginName)
@@ -46,7 +51,7 @@ struct ReleaseAutomationTests {
 
         let exec = try #require(pluginConfig("@semantic-release/exec", in: plugins))
         #expect(exec["prepareCmd"] as? String == "scripts/package_release_dmg.sh ${nextRelease.version}")
-        #expect(exec["publishCmd"] as? String == "scripts/mark_github_release_prerelease.sh ${nextRelease.gitTag}")
+        #expect(exec["publishCmd"] == nil)
     }
 
     @Test func `package manifest installs semantic release tooling only for development`() throws {
@@ -73,7 +78,7 @@ struct ReleaseAutomationTests {
         let workflow = try string(".github/workflows/release.yml")
 
         #expect(workflow.contains("push:"))
-        #expect(workflow.contains("branches: [master]"))
+        #expect(workflow.contains("branches: [master, alpha]"))
         #expect(workflow.contains("contents: write"))
         #expect(workflow.contains("npm ci"))
         #expect(workflow.contains("just generate"))
@@ -100,9 +105,8 @@ struct ReleaseAutomationTests {
         #expect(workflow.contains("PR title must use Conventional Commits"))
     }
 
-    @Test func `release packaging scripts ad-hoc sign dmg and mark prereleases`() throws {
+    @Test func `release packaging script ad-hoc signs dmg`() throws {
         let packageScript = try string("scripts/package_release_dmg.sh")
-        let markScript = try string("scripts/mark_github_release_prerelease.sh")
 
         #expect(packageScript.contains("CODE_SIGN_IDENTITY=\"-\""))
         #expect(packageScript.contains("CODE_SIGNING_REQUIRED=YES"))
@@ -112,9 +116,7 @@ struct ReleaseAutomationTests {
         #expect(packageScript.contains("hdiutil verify"))
         #expect(packageScript.contains("shasum -a 256"))
         #expect(packageScript.contains("CFBundleShortVersionString"))
-
-        #expect(markScript.contains("gh release edit"))
-        #expect(markScript.contains("--prerelease"))
+        #expect(!fileExists("scripts/mark_github_release_prerelease.sh"))
     }
 
     @Test func `app version is supplied by xcode build settings`() throws {
@@ -135,6 +137,10 @@ struct ReleaseAutomationTests {
         let data = try Data(contentsOf: repoRoot.appending(path: path))
         let object = try JSONSerialization.jsonObject(with: data)
         return try #require(object as? [String: Any])
+    }
+
+    private func fileExists(_ path: String) -> Bool {
+        FileManager.default.fileExists(atPath: repoRoot.appending(path: path).path(percentEncoded: false))
     }
 
     private static func pluginName(_ plugin: Any) -> String? {
