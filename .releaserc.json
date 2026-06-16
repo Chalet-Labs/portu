@@ -1,8 +1,12 @@
 {
   "branches": [
-    "master"
+    "master",
+    {
+      "name": "alpha",
+      "prerelease": true
+    }
   ],
-  "tagFormat": "alpha-${version}",
+  "tagFormat": "v${version}",
   "plugins": [
     [
       "@semantic-release/commit-analyzer",
@@ -84,8 +88,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "scripts/package_release_dmg.sh ${nextRelease.version}",
-        "publishCmd": "scripts/mark_github_release_prerelease.sh ${nextRelease.gitTag}"
+        "prepareCmd": "scripts/package_release_dmg.sh ${nextRelease.version}"
       }
     ]
   ]
