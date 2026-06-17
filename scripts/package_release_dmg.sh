@@ -24,6 +24,7 @@ APP_BUNDLE="$DERIVED_DATA/Build/Products/Release/$APP_NAME.app"
 DMG_PATH="$DIST_DIR/$APP_NAME-$VERSION.dmg"
 CHECKSUM_PATH="$DMG_PATH.sha256"
 BUILD_NUMBER="${GITHUB_RUN_NUMBER:-0}"
+BUNDLE_MARKETING_VERSION="${VERSION%%[-+]*}"
 
 cd "$ROOT_DIR"
 
@@ -38,7 +39,7 @@ xcodebuild \
   -configuration Release \
   -derivedDataPath "$DERIVED_DATA" \
   -skipMacroValidation \
-  MARKETING_VERSION="$VERSION" \
+  MARKETING_VERSION="$BUNDLE_MARKETING_VERSION" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   CODE_SIGN_IDENTITY="-" \
   CODE_SIGNING_REQUIRED=YES \
@@ -50,8 +51,8 @@ if [[ ! -d "$APP_BUNDLE" ]]; then
 fi
 
 BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_BUNDLE/Contents/Info.plist")"
-if [[ "$BUNDLE_VERSION" != "$VERSION" ]]; then
-  echo "error: expected CFBundleShortVersionString $VERSION, got $BUNDLE_VERSION" >&2
+if [[ "$BUNDLE_VERSION" != "$BUNDLE_MARKETING_VERSION" ]]; then
+  echo "error: expected CFBundleShortVersionString $BUNDLE_MARKETING_VERSION, got $BUNDLE_VERSION" >&2
   exit 1
 fi
 

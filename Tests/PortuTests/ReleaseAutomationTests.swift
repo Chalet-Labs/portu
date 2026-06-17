@@ -9,11 +9,18 @@ struct ReleaseAutomationTests {
             .deletingLastPathComponent()
     }
 
-    @Test func `semantic release config publishes alpha GitHub release assets`() throws {
+    @Test func `semantic release config publishes alpha prereleases and stable releases`() throws {
         let config = try jsonObject(".releaserc.json")
 
-        #expect(config["branches"] as? [String] == ["master"])
-        #expect(config["tagFormat"] as? String == "alpha-${version}")
+        let branches = try #require(config["branches"] as? [Any])
+        #expect(branches.count == 2)
+        #expect(branches.contains { $0 as? String == "master" })
+        let alphaBranch = try #require(branches.compactMap { $0 as? [String: Any] }.first {
+            $0["name"] as? String == "alpha"
+        })
+        #expect(alphaBranch["name"] as? String == "alpha")
+        #expect(alphaBranch["prerelease"] as? Bool == true)
+        #expect(config["tagFormat"] as? String == "v${version}")
 
         let plugins = try #require(config["plugins"] as? [Any])
         let pluginNames = plugins.compactMap(Self.pluginName)
@@ -46,7 +53,7 @@ struct ReleaseAutomationTests {
 
         let exec = try #require(pluginConfig("@semantic-release/exec", in: plugins))
         #expect(exec["prepareCmd"] as? String == "scripts/package_release_dmg.sh ${nextRelease.version}")
-        #expect(exec["publishCmd"] as? String == "scripts/mark_github_release_prerelease.sh ${nextRelease.gitTag}")
+        #expect(exec["publishCmd"] == nil)
     }
 
     @Test func `package manifest installs semantic release tooling only for development`() throws {
@@ -73,7 +80,7 @@ struct ReleaseAutomationTests {
         let workflow = try string(".github/workflows/release.yml")
 
         #expect(workflow.contains("push:"))
-        #expect(workflow.contains("branches: [master]"))
+        #expect(try workflowPushBranches(in: workflow) == ["alpha", "master"])
         #expect(workflow.contains("contents: write"))
         #expect(workflow.contains("npm ci"))
         #expect(workflow.contains("just generate"))
@@ -100,21 +107,20 @@ struct ReleaseAutomationTests {
         #expect(workflow.contains("PR title must use Conventional Commits"))
     }
 
-    @Test func `release packaging scripts ad-hoc sign dmg and mark prereleases`() throws {
+    @Test func `release packaging script ad-hoc signs dmg`() throws {
         let packageScript = try string("scripts/package_release_dmg.sh")
-        let markScript = try string("scripts/mark_github_release_prerelease.sh")
 
         #expect(packageScript.contains("CODE_SIGN_IDENTITY=\"-\""))
         #expect(packageScript.contains("CODE_SIGNING_REQUIRED=YES"))
-        #expect(packageScript.contains("MARKETING_VERSION=\"$VERSION\""))
+        #expect(packageScript.contains("BUNDLE_MARKETING_VERSION=\"${VERSION%%[-+]*}\""))
+        #expect(packageScript.contains("MARKETING_VERSION=\"$BUNDLE_MARKETING_VERSION\""))
         #expect(packageScript.contains("CURRENT_PROJECT_VERSION=\"$BUILD_NUMBER\""))
         #expect(packageScript.contains("hdiutil create"))
         #expect(packageScript.contains("hdiutil verify"))
         #expect(packageScript.contains("shasum -a 256"))
         #expect(packageScript.contains("CFBundleShortVersionString"))
-
-        #expect(markScript.contains("gh release edit"))
-        #expect(markScript.contains("--prerelease"))
+        #expect(packageScript.contains("expected CFBundleShortVersionString $BUNDLE_MARKETING_VERSION"))
+        #expect(!fileExists("scripts/mark_github_release_prerelease.sh"))
     }
 
     @Test func `app version is supplied by xcode build settings`() throws {
@@ -135,6 +141,65 @@ struct ReleaseAutomationTests {
         let data = try Data(contentsOf: repoRoot.appending(path: path))
         let object = try JSONSerialization.jsonObject(with: data)
         return try #require(object as? [String: Any])
+    }
+
+    private func fileExists(_ path: String) -> Bool {
+        FileManager.default.fileExists(atPath: repoRoot.appending(path: path).path(percentEncoded: false))
+    }
+
+    private func workflowPushBranches(in workflow: String) throws -> Set<String> {
+        let lines = workflow.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard let pushIndex = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == "push:" }) else {
+            return []
+        }
+        let pushIndent = leadingSpaceCount(lines[pushIndex])
+
+        for index in lines.indices.dropFirst(pushIndex + 1) {
+            let line = lines[index]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+
+            let indent = leadingSpaceCount(line)
+            if indent <= pushIndent {
+                break
+            }
+
+            guard trimmed.hasPrefix("branches:") else { continue }
+
+            let branchIndent = indent
+            let value = trimmed.dropFirst("branches:".count).trimmingCharacters(in: .whitespaces)
+            if value.hasPrefix("[") {
+                return Set(value
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+            }
+
+            var branches = Set<String>()
+            for branchLine in lines.indices.dropFirst(index + 1).map({ lines[$0] }) {
+                let branchTrimmed = branchLine.trimmingCharacters(in: .whitespaces)
+                guard !branchTrimmed.isEmpty else { continue }
+
+                let indent = leadingSpaceCount(branchLine)
+                if indent <= branchIndent {
+                    break
+                }
+
+                if branchTrimmed.hasPrefix("-") {
+                    branches.insert(
+                        branchTrimmed
+                            .dropFirst()
+                            .trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+            }
+            return branches
+        }
+
+        return []
+    }
+
+    private func leadingSpaceCount(_ line: String) -> Int {
+        line.prefix(while: { $0 == " " }).count
     }
 
     private static func pluginName(_ plugin: Any) -> String? {
