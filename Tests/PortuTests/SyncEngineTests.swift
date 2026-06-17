@@ -177,6 +177,22 @@ struct SyncEngineTests {
         #expect(allAssets.count == 1)
     }
 
+    @Test func `chain contract dedup normalizes evm casing but preserves solana casing`() throws {
+        let (context, engine) = try makeTestContext()
+        let ethereumAsset = Asset(symbol: "OLD", name: "Old", upsertChain: .ethereum, upsertContract: "0xAbC")
+        let solanaAsset = Asset(symbol: "SOL", name: "Solana", upsertChain: .solana, upsertContract: "AbC")
+        [ethereumAsset, solanaAsset].forEach(context.insert)
+        try context.save()
+
+        let ethereumMatch = try engine.upsertAsset(from: makeTokenDTO(symbol: "NEW", name: "New", chain: .ethereum, contractAddress: "0xabc"))
+        let solanaDistinct = try engine.upsertAsset(from: makeTokenDTO(symbol: "SOL2", name: "Solana 2", chain: .solana, contractAddress: "abc"))
+
+        #expect(ethereumMatch === ethereumAsset)
+        #expect(solanaDistinct !== solanaAsset)
+
+        #expect(try context.fetch(FetchDescriptor<Asset>()).count == 3)
+    }
+
     // MARK: - Transactional Isolation (#31)
 
     /// Issue #31: If upsertAsset throws mid-rebuild, existing positions
@@ -305,6 +321,54 @@ struct SyncEngineTests {
         #expect(fetched.lastSyncError == nil)
         #expect(fetched.lastSyncedAt != nil)
         #expect(result.failedAccounts.isEmpty)
+    }
+
+    @Test func `large successful rebuild clears stale sync error promptly`() async throws {
+        let assetCount = 1200
+        let balances = (0 ..< assetCount).map { index in
+            PositionDTO(
+                positionType: .idle,
+                chain: .ethereum,
+                protocolId: nil,
+                protocolName: nil,
+                protocolLogoURL: nil,
+                healthFactor: nil,
+                tokens: [makeTokenDTO(
+                    symbol: "TOK\(index)",
+                    name: "Token \(index)",
+                    amount: 1,
+                    usdValue: Decimal(index + 1),
+                    chain: .ethereum,
+                    contractAddress: "0xtoken\(index)")])
+        }
+        let (context, engine) = try makeMockContext(balances: balances)
+
+        for index in 0 ..< assetCount {
+            context.insert(Asset(
+                symbol: "OLD\(index)",
+                name: "Old Token \(index)",
+                upsertChain: .ethereum,
+                upsertContract: "0xtoken\(index)"))
+        }
+        let account = Account(
+            name: "Large Wallet",
+            kind: .wallet,
+            dataSource: .zapper,
+            lastSyncError: "Zapper GraphQL error: Payment required")
+        context.insert(account)
+        try context.save()
+
+        let start = ContinuousClock.now
+        let result = try await engine.sync()
+        let elapsed = start.duration(to: ContinuousClock.now)
+
+        #expect(elapsed < .seconds(30))
+        #expect(result.failedAccounts.isEmpty)
+
+        let freshContext = ModelContext(context.container)
+        let fetched = try #require(try freshContext.fetch(FetchDescriptor<Account>()).first)
+        #expect(fetched.lastSyncError == nil)
+        #expect(fetched.positions.count == assetCount)
     }
 
     // MARK: - Helpers

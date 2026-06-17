@@ -283,6 +283,11 @@ struct ModelTests {
         #expect(Chain.bitcoin.coinGeckoAssetPlatformID == nil)
     }
 
+    @Test func `chain exposes coingecko onchain network ids`() {
+        #expect(Chain.degen.coinGeckoOnchainNetworkID == "degenchain")
+        #expect(Chain.hyperEVM.coinGeckoOnchainNetworkID == "hyperevm")
+    }
+
     @Test func `token identity mapping stores provider ids under canonical chain address key`() throws {
         let container = try makeTestContainer()
         let context = container.mainContext

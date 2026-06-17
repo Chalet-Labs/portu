@@ -79,12 +79,13 @@ final class SyncEngine: @unchecked Sendable {
         // partial failures, and the append-only key backfill never overwrites
         // existing identity keys.
         var staged: [StagedPosition] = []
+        var assetLookup = try makeAssetLookup()
 
         for dto in allDTOs {
             var net: Decimal = 0
             var tokens: [StagedToken] = []
             for tokenDTO in dto.tokens {
-                let asset = try upsertAsset(from: tokenDTO)
+                let asset = try upsertAsset(from: tokenDTO, lookup: &assetLookup)
                 tokens.append(StagedToken(
                     role: tokenDTO.role,
                     amount: tokenDTO.amount,
@@ -156,29 +157,41 @@ final class SyncEngine: @unchecked Sendable {
 
     /// Internal (not private) — called directly by upsert/dedup tests.
     func upsertAsset(from dto: TokenDTO) throws -> Asset {
+        var lookup = try makeAssetLookup()
+        return try upsertAsset(from: dto, lookup: &lookup)
+    }
+
+    private func upsertAsset(from dto: TokenDTO, lookup: inout AssetLookupCache) throws -> Asset {
         #if DEBUG
-            if let override = upsertAssetOverride { return try override(dto) }
+            if let override = upsertAssetOverride {
+                let asset = try override(dto)
+                lookup.record(asset)
+                return asset
+            }
         #endif
         // Tier 1: coinGeckoId
-        if let cgId = dto.coinGeckoId, !cgId.isEmpty {
-            if let existing = try fetchAsset(coinGeckoId: cgId) {
+        if let cgId = normalizedUpsertKey(dto.coinGeckoId) {
+            if let existing = lookup.asset(coinGeckoId: cgId) {
                 updateAssetMetadata(existing, from: dto)
+                lookup.record(existing)
                 return existing
             }
         }
 
         // Tier 2: upsertChain + upsertContract
-        if let chain = dto.chain, let contract = dto.contractAddress, !contract.isEmpty {
-            if let existing = try fetchAsset(chain: chain, contract: contract) {
+        if let chain = dto.chain, let contract = normalizedUpsertKey(dto.contractAddress) {
+            if let existing = lookup.asset(chain: chain, contract: contract) {
                 updateAssetMetadata(existing, from: dto)
+                lookup.record(existing)
                 return existing
             }
         }
 
         // Tier 3: sourceKey
-        if let key = dto.sourceKey, !key.isEmpty {
-            if let existing = try fetchAsset(sourceKey: key) {
+        if let key = normalizedUpsertKey(dto.sourceKey) {
+            if let existing = lookup.asset(sourceKey: key) {
                 updateAssetMetadata(existing, from: dto)
+                lookup.record(existing)
                 return existing
             }
         }
@@ -187,15 +200,16 @@ final class SyncEngine: @unchecked Sendable {
         let asset = Asset(
             symbol: dto.symbol,
             name: dto.name,
-            coinGeckoId: dto.coinGeckoId.flatMap { $0.isEmpty ? nil : $0 },
+            coinGeckoId: normalizedUpsertKey(dto.coinGeckoId),
             upsertChain: dto.chain,
-            upsertContract: dto.contractAddress.flatMap { $0.isEmpty ? nil : $0 },
-            sourceKey: dto.sourceKey.flatMap { $0.isEmpty ? nil : $0 },
-            debankId: dto.debankId.flatMap { $0.isEmpty ? nil : $0 },
+            upsertContract: normalizedUpsertKey(dto.contractAddress),
+            sourceKey: normalizedUpsertKey(dto.sourceKey),
+            debankId: normalizedUpsertKey(dto.debankId),
             logoURL: dto.logoURL,
             category: dto.category,
             isVerified: dto.isVerified)
         modelContext.insert(asset)
+        lookup.record(asset)
         return asset
     }
 
@@ -210,17 +224,17 @@ final class SyncEngine: @unchecked Sendable {
         if dto.isVerified { asset.isVerified = true }
 
         // Append-only: fill in missing keys, never overwrite
-        if asset.coinGeckoId == nil, let cgId = dto.coinGeckoId, !cgId.isEmpty { asset.coinGeckoId = cgId }
-        if asset.sourceKey == nil, let key = dto.sourceKey, !key.isEmpty { asset.sourceKey = key }
+        if asset.coinGeckoId == nil, let cgId = normalizedUpsertKey(dto.coinGeckoId) { asset.coinGeckoId = cgId }
+        if asset.sourceKey == nil, let key = normalizedUpsertKey(dto.sourceKey) { asset.sourceKey = key }
         if asset.upsertChain == nil, let chain = dto.chain { asset.upsertChain = chain }
         if
             asset.upsertContract == nil,
-            let contract = dto.contractAddress, !contract.isEmpty,
+            let contract = normalizedUpsertKey(dto.contractAddress),
             let dtoChain = dto.chain,
             asset.upsertChain == dtoChain {
             asset.upsertContract = contract
         }
-        if asset.debankId == nil, let dbId = dto.debankId, !dbId.isEmpty { asset.debankId = dbId }
+        if asset.debankId == nil, let dbId = normalizedUpsertKey(dto.debankId) { asset.debankId = dbId }
     }
 
     // MARK: - Phase B: Snapshots
@@ -393,19 +407,14 @@ final class SyncEngine: @unchecked Sendable {
         return try modelContext.fetch(descriptor)
     }
 
-    private func fetchAsset(coinGeckoId: String) throws -> Asset? {
-        let descriptor = FetchDescriptor<Asset>()
-        return try modelContext.fetch(descriptor).first { $0.coinGeckoId == coinGeckoId }
+    private func makeAssetLookup() throws -> AssetLookupCache {
+        try AssetLookupCache(assets: modelContext.fetch(FetchDescriptor<Asset>()))
     }
 
-    private func fetchAsset(chain: Chain, contract: String) throws -> Asset? {
-        let descriptor = FetchDescriptor<Asset>()
-        return try modelContext.fetch(descriptor).first { $0.upsertChain == chain && $0.upsertContract == contract }
-    }
-
-    private func fetchAsset(sourceKey: String) throws -> Asset? {
-        let descriptor = FetchDescriptor<Asset>()
-        return try modelContext.fetch(descriptor).first { $0.sourceKey == sourceKey }
+    private func normalizedUpsertKey(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 

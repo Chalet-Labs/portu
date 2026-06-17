@@ -7,6 +7,7 @@ public enum Chain: String, Codable, CaseIterable, Sendable {
     case optimism
     case base
     case bsc
+    case degen
     case gnosis
     case unichain
     case berachain
@@ -22,6 +23,7 @@ public enum Chain: String, Codable, CaseIterable, Sendable {
     case blast
     case taiko
     case scroll
+    case hyperEVM
     case hyperliquid
     case zora
     case solana
@@ -45,6 +47,7 @@ public extension Chain {
         case .optimism: "optimistic-ethereum"
         case .base: "base"
         case .bsc: "binance-smart-chain"
+        case .degen: nil
         case .gnosis: "xdai"
         case .unichain: "unichain"
         case .berachain: "berachain"
@@ -60,6 +63,7 @@ public extension Chain {
         case .blast: "blast"
         case .taiko: "taiko"
         case .scroll: "scroll"
+        case .hyperEVM: nil
         case .hyperliquid: "hyperliquid"
         case .zora: "zora-network"
         case .solana: "solana"
@@ -78,6 +82,7 @@ public extension Chain {
         case .optimism: "optimism"
         case .base: "base"
         case .bsc: "bsc"
+        case .degen: "degenchain"
         case .gnosis: "xdai"
         case .unichain: "unichain"
         case .berachain: "berachain"
@@ -93,6 +98,7 @@ public extension Chain {
         case .blast: "blast"
         case .taiko: "taiko"
         case .scroll: "scroll"
+        case .hyperEVM: "hyperevm"
         case .hyperliquid: nil
         case .zora: "zora"
         case .solana: "solana"

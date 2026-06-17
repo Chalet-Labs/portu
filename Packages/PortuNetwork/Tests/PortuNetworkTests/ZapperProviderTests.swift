@@ -233,6 +233,8 @@ struct ZapperProviderTests {
             (167_000, "taiko", "TAIKO"),
             (534_352, "scroll", "SCR"),
             (911_911, "hyperliquid", "HYPE"),
+            (999, "hyperEVM", "HYPE"),
+            (666_666_666, "degen", "DEGEN"),
             (7_777_777, "zora", "ZORA")
         ]
 
