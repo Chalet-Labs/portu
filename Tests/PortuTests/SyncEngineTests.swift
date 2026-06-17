@@ -177,6 +177,22 @@ struct SyncEngineTests {
         #expect(allAssets.count == 1)
     }
 
+    @Test func `chain contract dedup normalizes evm casing but preserves solana casing`() throws {
+        let (context, engine) = try makeTestContext()
+        let ethereumAsset = Asset(symbol: "OLD", name: "Old", upsertChain: .ethereum, upsertContract: "0xAbC")
+        let solanaAsset = Asset(symbol: "SOL", name: "Solana", upsertChain: .solana, upsertContract: "AbC")
+        [ethereumAsset, solanaAsset].forEach(context.insert)
+        try context.save()
+
+        let ethereumMatch = try engine.upsertAsset(from: makeTokenDTO(symbol: "NEW", name: "New", chain: .ethereum, contractAddress: "0xabc"))
+        let solanaDistinct = try engine.upsertAsset(from: makeTokenDTO(symbol: "SOL2", name: "Solana 2", chain: .solana, contractAddress: "abc"))
+
+        #expect(ethereumMatch === ethereumAsset)
+        #expect(solanaDistinct !== solanaAsset)
+
+        #expect(try context.fetch(FetchDescriptor<Asset>()).count == 3)
+    }
+
     // MARK: - Transactional Isolation (#31)
 
     /// Issue #31: If upsertAsset throws mid-rebuild, existing positions

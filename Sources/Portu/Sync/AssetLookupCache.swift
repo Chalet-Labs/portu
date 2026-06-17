@@ -1,3 +1,4 @@
+import Foundation
 import PortuCore
 
 struct AssetLookupCache {
@@ -49,4 +50,10 @@ struct AssetLookupCache {
 private struct ChainContractAssetKey: Hashable {
     let chain: Chain
     let contract: String
+
+    init(chain: Chain, contract: String) {
+        self.chain = chain
+        let trimmed = contract.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.contract = chain == .solana ? trimmed : trimmed.lowercased()
+    }
 }
