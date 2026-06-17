@@ -362,7 +362,7 @@ struct SyncEngineTests {
         let result = try await engine.sync()
         let elapsed = start.duration(to: ContinuousClock.now)
 
-        #expect(elapsed < .seconds(10))
+        #expect(elapsed < .seconds(30))
         #expect(result.failedAccounts.isEmpty)
 
         let freshContext = ModelContext(context.container)

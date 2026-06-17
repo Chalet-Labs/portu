@@ -82,7 +82,7 @@ public extension Chain {
         case .optimism: "optimism"
         case .base: "base"
         case .bsc: "bsc"
-        case .degen: nil
+        case .degen: "degenchain"
         case .gnosis: "xdai"
         case .unichain: "unichain"
         case .berachain: "berachain"
@@ -98,7 +98,7 @@ public extension Chain {
         case .blast: "blast"
         case .taiko: "taiko"
         case .scroll: "scroll"
-        case .hyperEVM: nil
+        case .hyperEVM: "hyperevm"
         case .hyperliquid: nil
         case .zora: "zora"
         case .solana: "solana"
