@@ -307,6 +307,54 @@ struct SyncEngineTests {
         #expect(result.failedAccounts.isEmpty)
     }
 
+    @Test func `large successful rebuild clears stale sync error promptly`() async throws {
+        let assetCount = 1200
+        let balances = (0 ..< assetCount).map { index in
+            PositionDTO(
+                positionType: .idle,
+                chain: .ethereum,
+                protocolId: nil,
+                protocolName: nil,
+                protocolLogoURL: nil,
+                healthFactor: nil,
+                tokens: [makeTokenDTO(
+                    symbol: "TOK\(index)",
+                    name: "Token \(index)",
+                    amount: 1,
+                    usdValue: Decimal(index + 1),
+                    chain: .ethereum,
+                    contractAddress: "0xtoken\(index)")])
+        }
+        let (context, engine) = try makeMockContext(balances: balances)
+
+        for index in 0 ..< assetCount {
+            context.insert(Asset(
+                symbol: "OLD\(index)",
+                name: "Old Token \(index)",
+                upsertChain: .ethereum,
+                upsertContract: "0xtoken\(index)"))
+        }
+        let account = Account(
+            name: "Large Wallet",
+            kind: .wallet,
+            dataSource: .zapper,
+            lastSyncError: "Zapper GraphQL error: Payment required")
+        context.insert(account)
+        try context.save()
+
+        let start = ContinuousClock.now
+        let result = try await engine.sync()
+        let elapsed = start.duration(to: ContinuousClock.now)
+
+        #expect(elapsed < .seconds(10))
+        #expect(result.failedAccounts.isEmpty)
+
+        let freshContext = ModelContext(context.container)
+        let fetched = try #require(try freshContext.fetch(FetchDescriptor<Account>()).first)
+        #expect(fetched.lastSyncError == nil)
+        #expect(fetched.positions.count == assetCount)
+    }
+
     // MARK: - Helpers
 
     private func makeTokenDTO(

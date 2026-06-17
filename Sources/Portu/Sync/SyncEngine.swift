@@ -79,12 +79,13 @@ final class SyncEngine: @unchecked Sendable {
         // partial failures, and the append-only key backfill never overwrites
         // existing identity keys.
         var staged: [StagedPosition] = []
+        var assetLookup = try makeAssetLookup()
 
         for dto in allDTOs {
             var net: Decimal = 0
             var tokens: [StagedToken] = []
             for tokenDTO in dto.tokens {
-                let asset = try upsertAsset(from: tokenDTO)
+                let asset = try upsertAsset(from: tokenDTO, lookup: &assetLookup)
                 tokens.append(StagedToken(
                     role: tokenDTO.role,
                     amount: tokenDTO.amount,
@@ -156,29 +157,41 @@ final class SyncEngine: @unchecked Sendable {
 
     /// Internal (not private) — called directly by upsert/dedup tests.
     func upsertAsset(from dto: TokenDTO) throws -> Asset {
+        var lookup = try makeAssetLookup()
+        return try upsertAsset(from: dto, lookup: &lookup)
+    }
+
+    private func upsertAsset(from dto: TokenDTO, lookup: inout AssetLookupCache) throws -> Asset {
         #if DEBUG
-            if let override = upsertAssetOverride { return try override(dto) }
+            if let override = upsertAssetOverride {
+                let asset = try override(dto)
+                lookup.record(asset)
+                return asset
+            }
         #endif
         // Tier 1: coinGeckoId
         if let cgId = dto.coinGeckoId, !cgId.isEmpty {
-            if let existing = try fetchAsset(coinGeckoId: cgId) {
+            if let existing = lookup.asset(coinGeckoId: cgId) {
                 updateAssetMetadata(existing, from: dto)
+                lookup.record(existing)
                 return existing
             }
         }
 
         // Tier 2: upsertChain + upsertContract
         if let chain = dto.chain, let contract = dto.contractAddress, !contract.isEmpty {
-            if let existing = try fetchAsset(chain: chain, contract: contract) {
+            if let existing = lookup.asset(chain: chain, contract: contract) {
                 updateAssetMetadata(existing, from: dto)
+                lookup.record(existing)
                 return existing
             }
         }
 
         // Tier 3: sourceKey
         if let key = dto.sourceKey, !key.isEmpty {
-            if let existing = try fetchAsset(sourceKey: key) {
+            if let existing = lookup.asset(sourceKey: key) {
                 updateAssetMetadata(existing, from: dto)
+                lookup.record(existing)
                 return existing
             }
         }
@@ -196,6 +209,7 @@ final class SyncEngine: @unchecked Sendable {
             category: dto.category,
             isVerified: dto.isVerified)
         modelContext.insert(asset)
+        lookup.record(asset)
         return asset
     }
 
@@ -393,19 +407,8 @@ final class SyncEngine: @unchecked Sendable {
         return try modelContext.fetch(descriptor)
     }
 
-    private func fetchAsset(coinGeckoId: String) throws -> Asset? {
-        let descriptor = FetchDescriptor<Asset>()
-        return try modelContext.fetch(descriptor).first { $0.coinGeckoId == coinGeckoId }
-    }
-
-    private func fetchAsset(chain: Chain, contract: String) throws -> Asset? {
-        let descriptor = FetchDescriptor<Asset>()
-        return try modelContext.fetch(descriptor).first { $0.upsertChain == chain && $0.upsertContract == contract }
-    }
-
-    private func fetchAsset(sourceKey: String) throws -> Asset? {
-        let descriptor = FetchDescriptor<Asset>()
-        return try modelContext.fetch(descriptor).first { $0.sourceKey == sourceKey }
+    private func makeAssetLookup() throws -> AssetLookupCache {
+        try AssetLookupCache(assets: modelContext.fetch(FetchDescriptor<Asset>()))
     }
 }
 

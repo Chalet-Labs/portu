@@ -75,6 +75,7 @@
 		7586E5633F191DC76655F7F0 /* SidebarLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B04273770EC464078A23908 /* SidebarLayout.swift */; };
 		77752EA857BE174E9F55FA9A /* PlatformsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EF959B5C3D507CB470711F6 /* PlatformsTab.swift */; };
 		7821F57194F06922936CF189 /* DebugServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FC509B87C11FACA89871DE9 /* DebugServer.swift */; };
+		79DA2050155483E0E976C3F6 /* AssetLookupCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = F709EE1D55A2C734A3B4FE8A /* AssetLookupCache.swift */; };
 		7B4832C5A117B2657930D15D /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEC920312DC620E98B3A81AE /* AppState.swift */; };
 		7C55B271CBDE85BDC34EC423 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B4DA9144050F8397802E51D /* SidebarView.swift */; };
 		7FC9EA4EB046CFDA835911D3 /* AddPositionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD13B1599F995F29139DFB24 /* AddPositionSheet.swift */; };
@@ -297,6 +298,7 @@
 		F0CF78486A93514E2377BA00 /* AddAccountSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountSheet.swift; sourceTree = "<group>"; };
 		F5E83D33F170188D9D0435C8 /* OverviewTopBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewTopBar.swift; sourceTree = "<group>"; };
 		F694EE203BEF1CB7608A00BE /* PortfolioHealthFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHealthFeatureTests.swift; sourceTree = "<group>"; };
+		F709EE1D55A2C734A3B4FE8A /* AssetLookupCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetLookupCache.swift; sourceTree = "<group>"; };
 		F7BAFB203A38FB670CBECFED /* PortuTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PortuTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F9B3B9925066BD3C245A16EA /* HistoricalPriceBackfillClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillClient.swift; sourceTree = "<group>"; };
 		FB29EB7B31D9B8FE27EDCC5A /* SyncEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineTests.swift; sourceTree = "<group>"; };
@@ -455,6 +457,7 @@
 		78E0CE645E5C47A128AE5378 /* Sync */ = {
 			isa = PBXGroup;
 			children = (
+				F709EE1D55A2C734A3B4FE8A /* AssetLookupCache.swift */,
 				9078C9F74F4C43AE558D8BA3 /* ProviderFactory.swift */,
 				C652E9A00074B7A22943B6A7 /* SyncEngine.swift */,
 			);
@@ -728,6 +731,7 @@
 				6694C3BE59A9D92FF2CCCC92 /* AssetDetailView.swift in Sources */,
 				BC67C7C0D03CB481D761B0C5 /* AssetHoldingsSummary.swift in Sources */,
 				88ABBA56E103152F9C2C6747 /* AssetLogoView.swift in Sources */,
+				79DA2050155483E0E976C3F6 /* AssetLookupCache.swift in Sources */,
 				6D9B9970959D46585F380D7A /* AssetMetadataSidebar.swift in Sources */,
 				CFE9060530486693BFF3461C /* AssetPositionsTable.swift in Sources */,
 				2F47E990712C6285668BD294 /* AssetPriceChart.swift in Sources */,
