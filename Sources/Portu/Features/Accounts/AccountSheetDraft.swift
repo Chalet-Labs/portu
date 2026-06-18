@@ -242,14 +242,22 @@ enum AccountSheetSaveCoordinator {
         secretStore: any SecretStore) throws {
         switch account.kind {
         case .wallet:
+            let chain = draft.isEVM ? nil : draft.specificChain
+            let identityChanged = walletIdentityChanged(
+                for: account,
+                chain: chain,
+                address: draft.chainAddress)
             account.name = draft.chainName
             account.group = nilIfEmpty(draft.chainGroup)
             account.notes = nilIfEmpty(draft.chainNotes)
             replaceWalletAddress(
                 for: account,
-                chain: draft.isEVM ? nil : draft.specificChain,
+                chain: chain,
                 address: draft.chainAddress,
                 modelContext: modelContext)
+            if identityChanged {
+                invalidateSyncedPositions(for: account, modelContext: modelContext)
+            }
 
         case .manual:
             account.name = draft.manualName
@@ -261,6 +269,10 @@ enum AccountSheetSaveCoordinator {
             // untouched, so autosave can't flush a renamed account that still points at
             // the old secrets.
             let previousCredentials = try readExchangeCredentials(for: account.id, secretStore: secretStore)
+            let credentialsAfterSave = exchangeCredentialsAfterApplying(
+                draft,
+                previousCredentials: previousCredentials)
+            let identityChanged = account.exchangeType != draft.exchangeType || previousCredentials != credentialsAfterSave
             try saveExchangeCredentials(
                 for: account.id,
                 from: draft,
@@ -270,6 +282,9 @@ enum AccountSheetSaveCoordinator {
             account.exchangeType = draft.exchangeType
             account.group = nilIfEmpty(draft.exchangeGroup)
             account.notes = nilIfEmpty(draft.exchangeNotes)
+            if identityChanged {
+                invalidateSyncedPositions(for: account, modelContext: modelContext)
+            }
 
             do {
                 try modelContext.save()
@@ -306,6 +321,24 @@ enum AccountSheetSaveCoordinator {
         let newAddress = WalletAddress(chain: chain, address: address, account: account)
         modelContext.insert(newAddress)
         account.addresses = [newAddress]
+    }
+
+    @MainActor
+    private static func walletIdentityChanged(for account: Account, chain: Chain?, address: String) -> Bool {
+        let addresses = Array(account.addresses)
+        guard addresses.count == 1, let existing = addresses.first else {
+            return true
+        }
+        return existing.chain != chain || existing.address != address
+    }
+
+    @MainActor
+    private static func invalidateSyncedPositions(for account: Account, modelContext: ModelContext) {
+        for position in Array(account.positions) {
+            modelContext.delete(position)
+        }
+        account.lastSyncedAt = nil
+        account.lastSyncError = nil
     }
 
     @MainActor
@@ -394,6 +427,25 @@ enum AccountSheetSaveCoordinator {
         }
     }
 
+    private static func exchangeCredentialsAfterApplying(
+        _ draft: AccountSheetDraft,
+        previousCredentials: ExchangeCredentialSnapshot) -> ExchangeCredentialSnapshot {
+        let passphrase: String? = if
+            let persistedPassphrase = AddAccountExchangeSecrets.persistedPassphrase(
+                draft.exchangePassphrase,
+                for: draft.exchangeType) {
+            persistedPassphrase
+        } else if draft.exchangeCredentialsLoaded {
+            nil
+        } else {
+            previousCredentials.passphrase
+        }
+        return ExchangeCredentialSnapshot(
+            apiKey: draft.exchangeAPIKey,
+            apiSecret: draft.exchangeAPISecret,
+            passphrase: passphrase)
+    }
+
     private static func readExchangeCredentials(
         for accountID: UUID,
         secretStore: any SecretStore) throws -> ExchangeCredentialSnapshot {
@@ -439,7 +491,7 @@ enum AccountSheetSaveCoordinator {
     }
 }
 
-private struct ExchangeCredentialSnapshot {
+private struct ExchangeCredentialSnapshot: Equatable {
     var apiKey: String?
     var apiSecret: String?
     var passphrase: String?
