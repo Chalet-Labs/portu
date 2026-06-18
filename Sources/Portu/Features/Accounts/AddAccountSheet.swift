@@ -7,30 +7,39 @@ struct AddAccountSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    @State private var selectedTab: AddAccountTab = .chain
+    private let mode: AccountSheetMode
+    private let account: Account?
+    private let isSyncing: Bool
+    private let canSync: Bool
+    private let isSyncBlocked: Bool
+    private let onSync: ((UUID) -> Void)?
+    private let secretStore: any SecretStore
 
-    // Chain account fields
-    @State private var chainName = ""
-    @State private var chainAddress = ""
-    @State private var chainGroup = ""
-    @State private var chainNotes = ""
-    @State private var isEVM = true
-    @State private var specificChain: Chain = .solana
-
-    // Manual account fields
-    @State private var manualName = ""
-    @State private var manualNotes = ""
-    @State private var manualGroup = ""
-
-    // Exchange account fields
-    @State private var exchangeName = ""
-    @State private var exchangeType: ExchangeType = .kraken
-    @State private var exchangeAPIKey = ""
-    @State private var exchangeAPISecret = ""
-    @State private var exchangePassphrase = ""
-    @State private var exchangeGroup = ""
-    @State private var exchangeNotes = ""
+    @State private var draft: AccountSheetDraft
     @State private var saveError: String?
+
+    init(
+        mode: AccountSheetMode = .add,
+        account: Account? = nil,
+        isSyncing: Bool = false,
+        canSync: Bool = false,
+        isSyncBlocked: Bool = false,
+        onSync: ((UUID) -> Void)? = nil,
+        secretStore: any SecretStore = LocalSecretStore()) {
+        self.mode = mode
+        self.account = account
+        self.isSyncing = isSyncing
+        self.canSync = canSync
+        self.isSyncBlocked = isSyncBlocked
+        self.onSync = onSync
+        self.secretStore = secretStore
+        let initialDraft = if mode.isEditing, let account {
+            AccountSheetDraft.editing(account: account, secretStore: secretStore)
+        } else {
+            AccountSheetDraft.adding()
+        }
+        _draft = State(initialValue: initialDraft)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,10 +50,14 @@ struct AddAccountSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    AddAccountTabSelector(selection: $selectedTab)
+                    if mode.isEditing {
+                        lockedAccountTypeLabel
+                    } else {
+                        AddAccountTabSelector(selection: $draft.selectedTab)
+                    }
 
                     Group {
-                        switch selectedTab {
+                        switch draft.selectedTab {
                         case .chain:
                             chainAccountTab
                         case .manual:
@@ -53,7 +66,7 @@ struct AddAccountSheet: View {
                             exchangeAccountTab
                         }
                     }
-                    .animation(.snappy(duration: 0.18), value: selectedTab)
+                    .animation(.snappy(duration: 0.18), value: draft.selectedTab)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -70,7 +83,7 @@ struct AddAccountSheet: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
         .environment(\.colorScheme, .dark)
-        .alert("Unable to Add Account", isPresented: Binding(
+        .alert(alertTitle, isPresented: Binding(
             get: { saveError != nil },
             set: { if !$0 { saveError = nil } })) {
                 Button("OK") { saveError = nil }
@@ -81,7 +94,7 @@ struct AddAccountSheet: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Text("Add new account")
+            Text(mode.isEditing ? "Edit account" : "Add new account")
                 .font(.system(size: 19, weight: .medium))
                 .foregroundStyle(PortuTheme.dashboardText)
 
@@ -102,6 +115,36 @@ struct AddAccountSheet: View {
         }
         .padding(.horizontal, 20)
         .frame(height: 58)
+    }
+
+    private var lockedAccountTypeLabel: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+
+            Text(draft.selectedTab.title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(PortuTheme.dashboardText)
+
+            Spacer(minLength: 8)
+
+            Text("Type locked while editing")
+                .font(.system(size: 12))
+                .foregroundStyle(PortuTheme.dashboardTertiaryText)
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 34)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(PortuTheme.dashboardPanelElevatedBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
+    }
+
+    private var alertTitle: String {
+        mode.isEditing ? "Unable to Save Account" : "Unable to Add Account"
     }
 
     // MARK: - Chain Account Tab
@@ -126,7 +169,7 @@ struct AddAccountSheet: View {
                     AddAccountTextField(
                         title: "Account Address",
                         placeholder: "Paste wallet address",
-                        text: $chainAddress,
+                        text: $draft.chainAddress,
                         isRequired: true,
                         isMonospaced: true)
 
@@ -136,19 +179,19 @@ struct AddAccountSheet: View {
                 AddAccountTextField(
                     title: "Account Name",
                     placeholder: "Account Name",
-                    text: $chainName,
+                    text: $draft.chainName,
                     isRequired: true)
 
                 HStack(alignment: .top, spacing: 10) {
                     AddAccountTextField(
                         title: "Description",
                         placeholder: "Descriptive text",
-                        text: $chainNotes)
+                        text: $draft.chainNotes)
 
                     AddAccountTextField(
                         title: "Account group",
                         placeholder: "Select a group",
-                        text: $chainGroup)
+                        text: $draft.chainGroup)
                 }
 
                 InlineSourceNote(text: "Data source: Zapper API")
@@ -159,18 +202,18 @@ struct AddAccountSheet: View {
     private var chainTypePicker: some View {
         AddAccountMenuField(
             title: "Account Type",
-            value: isEVM ? "Ethereum & L2s (EVM)" : specificChain.addAccountTitle,
+            value: draft.isEVM ? "Ethereum & L2s (EVM)" : draft.specificChain.addAccountTitle,
             isRequired: true) {
                 Button("Ethereum & L2s (EVM)") {
-                    isEVM = true
+                    draft.isEVM = true
                 }
 
                 Divider()
 
                 ForEach([Chain.solana, .bitcoin], id: \.self) { chain in
                     Button(chain.addAccountTitle) {
-                        specificChain = chain
-                        isEVM = false
+                        draft.specificChain = chain
+                        draft.isEVM = false
                     }
                 }
             }
@@ -186,19 +229,19 @@ struct AddAccountSheet: View {
                 AddAccountTextField(
                     title: "Account Name",
                     placeholder: "Account Name",
-                    text: $manualName,
+                    text: $draft.manualName,
                     isRequired: true)
 
                 HStack(alignment: .top, spacing: 10) {
                     AddAccountTextField(
                         title: "Description",
                         placeholder: "Descriptive text",
-                        text: $manualNotes)
+                        text: $draft.manualNotes)
 
                     AddAccountTextField(
                         title: "Account group",
                         placeholder: "Select a group",
-                        text: $manualGroup)
+                        text: $draft.manualGroup)
                 }
             }
         }
@@ -225,7 +268,7 @@ struct AddAccountSheet: View {
                     AddAccountTextField(
                         title: "Name",
                         placeholder: "Account Name",
-                        text: $exchangeName,
+                        text: $draft.exchangeName,
                         isRequired: true)
                 }
 
@@ -235,33 +278,33 @@ struct AddAccountSheet: View {
                     AddAccountSecureField(
                         title: "API Key",
                         placeholder: "API Key",
-                        text: $exchangeAPIKey,
+                        text: $draft.exchangeAPIKey,
                         isRequired: true)
 
                     AddAccountSecureField(
                         title: "Private Key",
                         placeholder: "Private Key",
-                        text: $exchangeAPISecret,
+                        text: $draft.exchangeAPISecret,
                         isRequired: true)
                 }
 
-                if exchangeType == .coinbase {
+                if draft.exchangeType == .coinbase {
                     AddAccountSecureField(
                         title: "Passphrase",
                         placeholder: "Passphrase",
-                        text: $exchangePassphrase)
+                        text: $draft.exchangePassphrase)
                 }
 
                 HStack(alignment: .top, spacing: 10) {
                     AddAccountTextField(
                         title: "Description",
                         placeholder: "Descriptive text",
-                        text: $exchangeNotes)
+                        text: $draft.exchangeNotes)
 
                     AddAccountTextField(
                         title: "Account group",
                         placeholder: "Select a group",
-                        text: $exchangeGroup)
+                        text: $draft.exchangeGroup)
                 }
             }
         }
@@ -270,14 +313,14 @@ struct AddAccountSheet: View {
     private var exchangePicker: some View {
         AddAccountMenuField(
             title: "Exchange",
-            value: exchangeType.addAccountTitle,
+            value: draft.exchangeType.addAccountTitle,
             isRequired: true) {
                 ForEach(ExchangeType.allCases, id: \.self) { type in
                     Button(type.addAccountTitle) {
-                        exchangeType = type
-                        exchangePassphrase = AddAccountExchangeSecrets.passphraseAfterSelecting(
+                        draft.exchangeType = type
+                        draft.exchangePassphrase = AddAccountExchangeSecrets.passphraseAfterSelecting(
                             type,
-                            currentPassphrase: exchangePassphrase)
+                            currentPassphrase: draft.exchangePassphrase)
                     }
                 }
             }
@@ -309,10 +352,43 @@ struct AddAccountSheet: View {
 
                 Spacer()
 
+                if let accountID = mode.editedAccountID {
+                    Button {
+                        onSync?(accountID)
+                    } label: {
+                        HStack(spacing: 7) {
+                            Text("Sync")
+                            if isSyncing {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .scaleEffect(0.62)
+                                    .frame(width: 12, height: 12)
+                                    .tint(PortuTheme.dashboardGold)
+                            } else {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .font(.system(size: 11, weight: .bold))
+                            }
+                        }
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(syncButtonEnabled ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
+                        .padding(.horizontal, 14)
+                        .frame(height: 34)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(PortuTheme.dashboardMutedPanelBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!syncButtonEnabled)
+                    .help(syncHelpText)
+                }
+
                 Button {
                     saveAccount()
                 } label: {
-                    Text("Add Account")
+                    Text(mode.isEditing ? "Save Changes" : "Add Account")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(canSave ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                         .padding(.horizontal, 18)
@@ -337,103 +413,35 @@ struct AddAccountSheet: View {
     // MARK: - Save
 
     private var canSave: Bool {
-        AccountsFeature.canSave(
-            tab: selectedTab.rawValue,
-            chainName: chainName,
-            chainAddress: chainAddress,
-            manualName: manualName,
-            exchangeName: exchangeName,
-            exchangeAPIKey: exchangeAPIKey,
-            exchangeAPISecret: exchangeAPISecret)
+        draft.canSave
+    }
+
+    private var syncButtonEnabled: Bool {
+        canSync && !isSyncing && !isSyncBlocked
+    }
+
+    private var syncHelpText: String {
+        if isSyncing || isSyncBlocked {
+            return "Another sync is already running."
+        }
+        if canSync == false {
+            return "This account cannot be synced."
+        }
+        return "Sync this account."
     }
 
     private func saveAccount() {
-        let didSave: Bool = switch selectedTab {
-        case .chain:
-            saveChainAccount()
-        case .manual:
-            saveManualAccount()
-        case .exchange:
-            saveExchangeAccount()
-        }
-
-        if didSave {
+        do {
+            try AccountSheetSaveCoordinator.save(
+                draft: draft,
+                mode: mode,
+                editing: account,
+                modelContext: modelContext,
+                secretStore: secretStore)
             dismiss()
-        }
-    }
-
-    private func saveChainAccount() -> Bool {
-        let account = Account(
-            name: chainName,
-            kind: .wallet,
-            dataSource: .zapper,
-            group: chainGroup.isEmpty ? nil : chainGroup,
-            notes: chainNotes.isEmpty ? nil : chainNotes)
-        let chain: Chain? = isEVM ? nil : specificChain
-        let addr = WalletAddress(chain: chain, address: chainAddress, account: account)
-        account.addresses = [addr]
-
-        return insertAndSave(account)
-    }
-
-    private func saveManualAccount() -> Bool {
-        let account = Account(
-            name: manualName,
-            kind: .manual,
-            dataSource: .manual,
-            group: manualGroup.isEmpty ? nil : manualGroup,
-            notes: manualNotes.isEmpty ? nil : manualNotes)
-        return insertAndSave(account)
-    }
-
-    private func saveExchangeAccount() -> Bool {
-        let accountId = UUID()
-        let account = Account(
-            id: accountId,
-            name: exchangeName,
-            kind: .exchange,
-            exchangeType: exchangeType,
-            dataSource: .exchange,
-            group: exchangeGroup.isEmpty ? nil : exchangeGroup,
-            notes: exchangeNotes.isEmpty ? nil : exchangeNotes)
-
-        let secretStore = LocalSecretStore()
-        do {
-            try secretStore.set(key: .exchangeAPIKey(accountId), value: exchangeAPIKey)
-            try secretStore.set(key: .exchangeAPISecret(accountId), value: exchangeAPISecret)
-            if let passphrase = AddAccountExchangeSecrets.persistedPassphrase(exchangePassphrase, for: exchangeType) {
-                try secretStore.set(key: .exchangePassphrase(accountId), value: passphrase)
-            }
         } catch {
-            deleteExchangeCredentials(accountId, secretStore: secretStore)
-            saveError = "Failed to save credentials: \(error.localizedDescription)"
-            return false
+            saveError = error.localizedDescription
         }
-
-        if insertAndSave(account) {
-            return true
-        }
-
-        deleteExchangeCredentials(accountId, secretStore: secretStore)
-        return false
-    }
-
-    private func insertAndSave(_ account: Account) -> Bool {
-        modelContext.insert(account)
-        do {
-            try modelContext.save()
-            return true
-        } catch {
-            modelContext.delete(account)
-            saveError = "Failed to save account: \(error.localizedDescription)"
-            return false
-        }
-    }
-
-    private func deleteExchangeCredentials(_ accountId: UUID, secretStore: any SecretStore) {
-        try? secretStore.delete(key: .exchangeAPIKey(accountId))
-        try? secretStore.delete(key: .exchangeAPISecret(accountId))
-        try? secretStore.delete(key: .exchangePassphrase(accountId))
     }
 }
 

@@ -92,8 +92,8 @@ enum TokenIdentityMappingFeature {
         switch identity.chain {
         case .ethereum, .arbitrum, .optimism, .base, .unichain, .zksync, .linea, .blast, .taiko, .scroll, .zora, .mode:
             return "ethereum"
-        case .polygon, .bsc, .degen, .gnosis, .berachain, .sonic, .polygonZkEVM, .moonbeam, .ronin, .mantle, .immutableX,
-             .hyperEVM, .hyperliquid, .solana, .bitcoin, .avalanche, .monad, .katana:
+        case .polygon, .bsc, .degen, .gnosis, .celo, .opBNB, .berachain, .sonic, .polygonZkEVM, .moonbeam, .ronin,
+             .mantle, .immutableX, .hyperEVM, .hyperliquid, .solana, .bitcoin, .avalanche, .monad, .katana:
             return nil
         }
     }

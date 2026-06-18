@@ -21,6 +21,7 @@ struct AccountsView: View {
                 name: account.name,
                 kind: account.kind,
                 exchangeType: account.exchangeType,
+                dataSource: account.dataSource,
                 group: account.group,
                 isActive: account.isActive,
                 lastSyncError: account.lastSyncError,
@@ -52,10 +53,10 @@ struct AccountsView: View {
         }
         .padding(DashboardStyle.pagePadding)
         .dashboardPage()
-        .sheet(isPresented: Binding(
-            get: { store.accounts.showAddSheet },
-            set: { store.send(.accounts(.addSheetPresented($0))) })) {
-                AddAccountSheet()
+        .sheet(item: Binding(
+            get: { store.accounts.accountSheetMode },
+            set: { if $0 == nil { store.send(.accounts(.accountSheetDismissed)) } })) { mode in
+                accountSheet(for: mode)
                     .environment(\.colorScheme, .dark)
         }
     }
@@ -95,11 +96,41 @@ struct AccountsView: View {
                 .dashboardControl()
 
             Button("Add Account", systemImage: "plus") {
-                store.send(.accounts(.addSheetPresented(true)))
+                store.send(.accounts(.addAccountTapped))
             }
             .dashboardControl()
         }
         .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
+    }
+
+    @ViewBuilder
+    private func accountSheet(for mode: AccountSheetMode) -> some View {
+        switch mode {
+        case .add:
+            AddAccountSheet()
+
+        case let .edit(accountID):
+            if let account = accounts.first(where: { $0.id == accountID }) {
+                AddAccountSheet(
+                    mode: mode,
+                    account: account,
+                    isSyncing: accountIsSyncing(account.id),
+                    canSync: account.isActive && account.dataSource != .manual,
+                    isSyncBlocked: store.syncStatus.isSyncing && store.syncingAccountID != account.id,
+                    onSync: { id in store.send(.accountSyncTapped(id)) })
+            } else {
+                VStack(spacing: 12) {
+                    Text("Account not found")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(PortuTheme.dashboardText)
+                    Button("Close") {
+                        store.send(.accounts(.accountSheetDismissed))
+                    }
+                }
+                .frame(width: 420, height: 180)
+                .background(PortuTheme.dashboardPanelBackground)
+            }
+        }
     }
 
     // MARK: - Table
@@ -125,8 +156,10 @@ struct AccountsView: View {
                 Text(row.address)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .textSelection(.enabled)
+                    .help(row.address)
             }
-            .width(min: 100, ideal: 160)
+            .width(min: 260, ideal: 420)
 
             TableColumn("Type") { row in
                 CapsuleBadge(row.type)
@@ -146,10 +179,49 @@ struct AccountsView: View {
                 }
             }
             .width(min: 80, ideal: 120)
+
+            TableColumn("Actions") { row in
+                HStack(spacing: 6) {
+                    Button {
+                        store.send(.accounts(.editAccountTapped(row.id)))
+                    } label: {
+                        Image(systemName: "pencil")
+                            .frame(width: 18, height: 18)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Edit account")
+
+                    Button {
+                        store.send(.accountSyncTapped(row.id))
+                    } label: {
+                        if rowIsSyncing(row) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .scaleEffect(0.62)
+                                .frame(width: 18, height: 18)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .frame(width: 18, height: 18)
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(rowSyncDisabled(row))
+                    .help(rowSyncHelp(row))
+                }
+            }
+            .width(min: 78, ideal: 92)
         }
         .dashboardTable()
         .contextMenu(forSelectionType: AccountRowData.ID.self) { selection in
             if let id = selection.first, let account = accounts.first(where: { $0.id == id }) {
+                Button("Edit") {
+                    store.send(.accounts(.editAccountTapped(id)))
+                }
+                Button("Sync") {
+                    store.send(.accountSyncTapped(id))
+                }
+                .disabled(account.dataSource == .manual || !account.isActive || store.syncStatus.isSyncing)
+                Divider()
                 Button(account.isActive ? "Deactivate" : "Activate") {
                     account.isActive.toggle()
                     try? modelContext.save()
@@ -161,5 +233,30 @@ struct AccountsView: View {
                 }
             }
         }
+    }
+
+    private func rowSyncDisabled(_ row: AccountRowData) -> Bool {
+        !row.isSyncable || store.syncStatus.isSyncing
+    }
+
+    private func rowIsSyncing(_ row: AccountRowData) -> Bool {
+        accountIsSyncing(row.id)
+    }
+
+    private func accountIsSyncing(_ accountID: UUID) -> Bool {
+        store.syncStatus.isSyncing && store.syncingAccountID == accountID
+    }
+
+    private func rowSyncHelp(_ row: AccountRowData) -> String {
+        if store.syncStatus.isSyncing {
+            return "Another sync is already running."
+        }
+        if row.isActive == false {
+            return "Inactive accounts cannot be synced."
+        }
+        if row.dataSource == .manual {
+            return "Manual accounts do not sync."
+        }
+        return "Sync this account."
     }
 }

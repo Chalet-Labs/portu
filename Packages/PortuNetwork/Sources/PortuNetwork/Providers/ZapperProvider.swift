@@ -375,6 +375,8 @@ public actor ZapperProvider: PortfolioDataProvider {
         .bsc: 56,
         .degen: 666_666_666,
         .gnosis: 100,
+        .celo: 42220,
+        .opBNB: 204,
         .unichain: 130,
         .berachain: 80094,
         .sonic: 146,

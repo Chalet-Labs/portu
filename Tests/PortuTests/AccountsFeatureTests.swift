@@ -53,18 +53,29 @@ struct AccountsFeatureTests {
         }
     }
 
-    // MARK: - Show Add Sheet
+    // MARK: - Account Sheet Presentation
 
-    @Test func `add sheet presentation updates state`() async {
+    @Test func `add account action presents add sheet`() async {
         let store = TestStore(initialState: AccountsFeature.State()) {
             AccountsFeature()
         }
 
-        await store.send(.addSheetPresented(true)) {
-            $0.showAddSheet = true
+        await store.send(.addAccountTapped) {
+            $0.accountSheetMode = .add
         }
-        await store.send(.addSheetPresented(false)) {
-            $0.showAddSheet = false
+        await store.send(.accountSheetDismissed) {
+            $0.accountSheetMode = nil
+        }
+    }
+
+    @Test func `edit account action presents edit sheet for account id`() async {
+        let accountID = UUID()
+        let store = TestStore(initialState: AccountsFeature.State()) {
+            AccountsFeature()
+        }
+
+        await store.send(.editAccountTapped(accountID)) {
+            $0.accountSheetMode = .edit(accountID)
         }
     }
 }
@@ -72,10 +83,10 @@ struct AccountsFeatureTests {
 // MARK: - Account Row Mapping
 
 struct AccountRowMappingTests {
-    @Test func `maps wallet account with truncated address`() {
+    @Test func `maps wallet account with full address`() {
         let input = AccountInput(
             id: UUID(), name: "My Wallet", kind: .wallet,
-            exchangeType: nil, group: "DeFi", isActive: true,
+            exchangeType: nil, dataSource: .zapper, group: "DeFi", isActive: true,
             lastSyncError: nil, totalBalance: 50000,
             firstAddress: "0x1234567890abcdef1234567890abcdef12345678")
 
@@ -84,16 +95,17 @@ struct AccountRowMappingTests {
         #expect(rows.count == 1)
         #expect(rows[0].name == "My Wallet")
         #expect(rows[0].group == "DeFi")
-        #expect(rows[0].address == "0x1234567890abcd\u{2026}") // 16 chars + ellipsis
+        #expect(rows[0].address == "0x1234567890abcdef1234567890abcdef12345678")
         #expect(rows[0].type == "Wallet")
         #expect(rows[0].balance == 50000)
         #expect(rows[0].isActive == true)
+        #expect(rows[0].isSyncable == true)
     }
 
     @Test func `maps exchange account with exchange type as address`() {
         let input = AccountInput(
             id: UUID(), name: "My Kraken", kind: .exchange,
-            exchangeType: .kraken, group: nil, isActive: true,
+            exchangeType: .kraken, dataSource: .exchange, group: nil, isActive: true,
             lastSyncError: nil, totalBalance: 10000,
             firstAddress: nil)
 
@@ -101,12 +113,13 @@ struct AccountRowMappingTests {
 
         #expect(rows[0].address == "Kraken")
         #expect(rows[0].group == "\u{2014}") // em dash for nil group
+        #expect(rows[0].isSyncable == true)
     }
 
     @Test func `maps manual account with Manual as address`() {
         let input = AccountInput(
             id: UUID(), name: "Cash Stash", kind: .manual,
-            exchangeType: nil, group: nil, isActive: true,
+            exchangeType: nil, dataSource: .manual, group: nil, isActive: true,
             lastSyncError: nil, totalBalance: 0,
             firstAddress: nil)
 
@@ -114,12 +127,25 @@ struct AccountRowMappingTests {
 
         #expect(rows[0].address == "Manual")
         #expect(rows[0].type == "Manual")
+        #expect(rows[0].isSyncable == false)
+    }
+
+    @Test func `inactive syncable source is not row syncable`() {
+        let input = AccountInput(
+            id: UUID(), name: "Inactive", kind: .wallet,
+            exchangeType: nil, dataSource: .zapper, group: nil, isActive: false,
+            lastSyncError: nil, totalBalance: 0,
+            firstAddress: "0x123")
+
+        let rows = AccountsFeature.mapAccountRows(from: [input])
+
+        #expect(rows[0].isSyncable == false)
     }
 
     @Test func `short address not truncated`() {
         let input = AccountInput(
             id: UUID(), name: "Short", kind: .wallet,
-            exchangeType: nil, group: nil, isActive: true,
+            exchangeType: nil, dataSource: .zapper, group: nil, isActive: true,
             lastSyncError: nil, totalBalance: 0,
             firstAddress: "abc123")
 
@@ -131,7 +157,7 @@ struct AccountRowMappingTests {
     @Test func `preserves sync error`() {
         let input = AccountInput(
             id: UUID(), name: "Broken", kind: .exchange,
-            exchangeType: .binance, group: nil, isActive: true,
+            exchangeType: .binance, dataSource: .exchange, group: nil, isActive: true,
             lastSyncError: "API rate limit", totalBalance: 0,
             firstAddress: nil)
 
@@ -147,11 +173,11 @@ struct AccountRowFilteringTests {
     private let activeRow = AccountRowData(
         id: UUID(), name: "Active Wallet", group: "DeFi",
         address: "0x123", type: "Wallet", balance: 5000,
-        isActive: true, lastSyncError: nil)
+        dataSource: .zapper, isActive: true, lastSyncError: nil)
     private let inactiveRow = AccountRowData(
         id: UUID(), name: "Old Exchange", group: "CEX",
         address: "Kraken", type: "Exchange", balance: 0,
-        isActive: false, lastSyncError: nil)
+        dataSource: .exchange, isActive: false, lastSyncError: nil)
 
     @Test func `hides inactive when showInactive is false`() {
         let filtered = AccountsFeature.filterAccountRows(
@@ -200,7 +226,7 @@ struct AccountRowFilteringTests {
         let defiRow = AccountRowData(
             id: UUID(), name: "DeFi Wallet 2", group: "DeFi",
             address: "0x456", type: "Wallet", balance: 3000,
-            isActive: true, lastSyncError: nil)
+            dataSource: .zapper, isActive: true, lastSyncError: nil)
 
         let filtered = AccountsFeature.filterAccountRows(
             [activeRow, inactiveRow, defiRow],
@@ -220,6 +246,7 @@ struct AccountGroupExtractionTests {
                 name: "A",
                 kind: .wallet,
                 exchangeType: nil,
+                dataSource: .zapper,
                 group: "DeFi",
                 isActive: true,
                 lastSyncError: nil,
@@ -230,6 +257,7 @@ struct AccountGroupExtractionTests {
                 name: "B",
                 kind: .exchange,
                 exchangeType: .kraken,
+                dataSource: .exchange,
                 group: "CEX",
                 isActive: true,
                 lastSyncError: nil,
@@ -240,6 +268,7 @@ struct AccountGroupExtractionTests {
                 name: "C",
                 kind: .wallet,
                 exchangeType: nil,
+                dataSource: .zapper,
                 group: "DeFi",
                 isActive: true,
                 lastSyncError: nil,
@@ -250,6 +279,7 @@ struct AccountGroupExtractionTests {
                 name: "D",
                 kind: .manual,
                 exchangeType: nil,
+                dataSource: .manual,
                 group: nil,
                 isActive: true,
                 lastSyncError: nil,
@@ -269,6 +299,7 @@ struct AccountGroupExtractionTests {
                 name: "A",
                 kind: .manual,
                 exchangeType: nil,
+                dataSource: .manual,
                 group: nil,
                 isActive: true,
                 lastSyncError: nil,
@@ -288,84 +319,52 @@ struct AccountFormValidationTests {
     @Test func `chain tab requires name and address`() {
         #expect(AccountsFeature.canSave(
             tab: 0,
-            chainName: "W",
-            chainAddress: "0x1",
-            manualName: "",
-            exchangeName: "",
-            exchangeAPIKey: "",
-            exchangeAPISecret: "") == true)
+            fields: AccountSaveFields(chainName: "W", chainAddress: "0x1")) == true)
         #expect(AccountsFeature.canSave(
             tab: 0,
-            chainName: "",
-            chainAddress: "0x1",
-            manualName: "",
-            exchangeName: "",
-            exchangeAPIKey: "",
-            exchangeAPISecret: "") == false)
+            fields: AccountSaveFields(chainAddress: "0x1")) == false)
         #expect(AccountsFeature.canSave(
             tab: 0,
-            chainName: "W",
-            chainAddress: "",
-            manualName: "",
-            exchangeName: "",
-            exchangeAPIKey: "",
-            exchangeAPISecret: "") == false)
+            fields: AccountSaveFields(chainName: "W")) == false)
     }
 
     @Test func `manual tab requires name`() {
         #expect(AccountsFeature.canSave(
             tab: 1,
-            chainName: "",
-            chainAddress: "",
-            manualName: "Cash",
-            exchangeName: "",
-            exchangeAPIKey: "",
-            exchangeAPISecret: "") == true)
+            fields: AccountSaveFields(manualName: "Cash")) == true)
         #expect(AccountsFeature.canSave(
             tab: 1,
-            chainName: "",
-            chainAddress: "",
-            manualName: "",
-            exchangeName: "",
-            exchangeAPIKey: "",
-            exchangeAPISecret: "") == false)
+            fields: AccountSaveFields()) == false)
     }
 
     @Test func `exchange tab requires name and both keys`() {
         #expect(AccountsFeature.canSave(
             tab: 2,
-            chainName: "",
-            chainAddress: "",
-            manualName: "",
-            exchangeName: "Kraken",
-            exchangeAPIKey: "key",
-            exchangeAPISecret: "secret") == true)
+            fields: AccountSaveFields(
+                exchangeName: "Kraken",
+                exchangeAPIKey: "key",
+                exchangeAPISecret: "secret")) == true)
         #expect(AccountsFeature.canSave(
             tab: 2,
-            chainName: "",
-            chainAddress: "",
-            manualName: "",
-            exchangeName: "Kraken",
-            exchangeAPIKey: "",
-            exchangeAPISecret: "secret") == false)
+            fields: AccountSaveFields(
+                exchangeName: "Kraken",
+                exchangeAPISecret: "secret")) == false)
         #expect(AccountsFeature.canSave(
             tab: 2,
-            chainName: "",
-            chainAddress: "",
-            manualName: "",
-            exchangeName: "",
-            exchangeAPIKey: "key",
-            exchangeAPISecret: "secret") == false)
+            fields: AccountSaveFields(
+                exchangeAPIKey: "key",
+                exchangeAPISecret: "secret")) == false)
     }
 
     @Test func `unknown tab returns false`() {
         #expect(AccountsFeature.canSave(
             tab: 99,
-            chainName: "x",
-            chainAddress: "x",
-            manualName: "x",
-            exchangeName: "x",
-            exchangeAPIKey: "x",
-            exchangeAPISecret: "x") == false)
+            fields: AccountSaveFields(
+                chainName: "x",
+                chainAddress: "x",
+                manualName: "x",
+                exchangeName: "x",
+                exchangeAPIKey: "x",
+                exchangeAPISecret: "x")) == false)
     }
 }

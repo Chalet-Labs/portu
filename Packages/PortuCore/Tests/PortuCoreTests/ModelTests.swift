@@ -279,12 +279,16 @@ struct ModelTests {
         #expect(Chain.polygon.coinGeckoAssetPlatformID == "polygon-pos")
         #expect(Chain.arbitrum.coinGeckoAssetPlatformID == "arbitrum-one")
         #expect(Chain.base.coinGeckoAssetPlatformID == "base")
+        #expect(Chain.celo.coinGeckoAssetPlatformID == "celo")
+        #expect(Chain.opBNB.coinGeckoAssetPlatformID == "opbnb")
         #expect(Chain.monad.coinGeckoAssetPlatformID == "monad")
         #expect(Chain.bitcoin.coinGeckoAssetPlatformID == nil)
     }
 
     @Test func `chain exposes coingecko onchain network ids`() {
         #expect(Chain.degen.coinGeckoOnchainNetworkID == "degenchain")
+        #expect(Chain.celo.coinGeckoOnchainNetworkID == "celo")
+        #expect(Chain.opBNB.coinGeckoOnchainNetworkID == "opbnb")
         #expect(Chain.hyperEVM.coinGeckoOnchainNetworkID == "hyperevm")
     }
 

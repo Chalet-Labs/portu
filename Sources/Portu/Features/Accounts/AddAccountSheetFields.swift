@@ -237,6 +237,8 @@ extension Chain {
         case .bsc: "BNB Smart Chain"
         case .degen: "Degen"
         case .gnosis: "Gnosis"
+        case .celo: "Celo"
+        case .opBNB: "opBNB"
         case .unichain: "Unichain"
         case .berachain: "Berachain"
         case .sonic: "Sonic"

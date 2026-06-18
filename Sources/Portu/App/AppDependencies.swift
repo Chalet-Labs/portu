@@ -15,27 +15,33 @@ struct SyncResult: Equatable {
 struct SyncEngineClient {
     var sync: @Sendable () async throws -> SyncResult
     var syncScope: @Sendable (PortfolioSyncScope) async throws -> SyncResult
+    var syncAccount: @Sendable (UUID) async throws -> SyncResult
 
     init(
         sync: @escaping @Sendable () async throws -> SyncResult,
-        syncScope: @escaping @Sendable (PortfolioSyncScope) async throws -> SyncResult = { _ in SyncResult(failedAccounts: []) }) {
+        syncScope: @escaping @Sendable (PortfolioSyncScope) async throws -> SyncResult = { _ in SyncResult(failedAccounts: []) },
+        syncAccount: @escaping @Sendable (UUID) async throws -> SyncResult = { _ in SyncResult(failedAccounts: []) }) {
         self.sync = sync
         self.syncScope = syncScope
+        self.syncAccount = syncAccount
     }
 }
 
 extension SyncEngineClient: DependencyKey {
     static let liveValue = Self(
         sync: { fatalError("SyncEngineClient.liveValue must be overridden at Store creation") },
-        syncScope: { _ in fatalError("SyncEngineClient.liveValue must be overridden at Store creation") })
+        syncScope: { _ in fatalError("SyncEngineClient.liveValue must be overridden at Store creation") },
+        syncAccount: { _ in fatalError("SyncEngineClient.liveValue must be overridden at Store creation") })
     static let testValue = Self(
         sync: { SyncResult(failedAccounts: []) },
-        syncScope: { _ in SyncResult(failedAccounts: []) })
+        syncScope: { _ in SyncResult(failedAccounts: []) },
+        syncAccount: { _ in SyncResult(failedAccounts: []) })
 
     static func live(engine: SyncEngine) -> Self {
         Self(
             sync: { try await engine.sync() },
-            syncScope: { scope in try await engine.sync(scope: scope) })
+            syncScope: { scope in try await engine.sync(scope: scope) },
+            syncAccount: { accountID in try await engine.sync(accountID: accountID) })
     }
 }
 
