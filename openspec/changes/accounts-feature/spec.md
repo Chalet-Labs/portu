@@ -15,8 +15,10 @@ Migrate `AccountsView` from `@Environment(AppState.self)` + `@State` to TCA.
 
 ### Out of scope
 - `sortOrder` (KeyPathComparator not Equatable — stays as view-local `@State`)
-- Save/delete side effects for account rows (toggle active, delete — mutate SwiftData directly)
-- Context menu actions (toggle active, delete — mutate SwiftData directly)
+- Reducer-owned SwiftData mutations for account row actions; views route toggle/delete
+  through `AccountSheetSaveCoordinator` for save, rollback, and credential cleanup
+- Reducer-owned context menu effects; context menu actions remain view-driven and
+  delegate account persistence to `AccountSheetSaveCoordinator`
 
 ---
 
@@ -44,7 +46,8 @@ Migrate `AccountsView` from `@Environment(AppState.self)` + `@State` to TCA.
   - Maps to `AccountRowData` with name, group, full address, type (kind capitalized),
     balance, dataSource, isActive, lastSyncError
   - Group defaults to em dash "—" when nil
-  - Address: first wallet address, or exchange type capitalized, or "Manual"
+  - Address: wallet first address or em dash when missing; exchange type capitalized
+    or "Exchange" when missing; "Manual" for manual accounts
   - Row is syncable only when active and not manual
 
 ### B6: Account row filtering

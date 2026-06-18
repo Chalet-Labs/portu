@@ -130,6 +130,32 @@ struct AccountRowMappingTests {
         #expect(rows[0].isSyncable == false)
     }
 
+    @Test func `maps missing wallet address as em dash`() {
+        let input = AccountInput(
+            id: UUID(), name: "Addressless Wallet", kind: .wallet,
+            exchangeType: nil, dataSource: .zapper, group: nil, isActive: true,
+            lastSyncError: nil, totalBalance: 0,
+            firstAddress: nil)
+
+        let rows = AccountsFeature.mapAccountRows(from: [input])
+
+        #expect(rows[0].address == "\u{2014}")
+        #expect(rows[0].type == "Wallet")
+    }
+
+    @Test func `maps missing exchange type as exchange`() {
+        let input = AccountInput(
+            id: UUID(), name: "Exchange", kind: .exchange,
+            exchangeType: nil, dataSource: .exchange, group: nil, isActive: true,
+            lastSyncError: nil, totalBalance: 0,
+            firstAddress: nil)
+
+        let rows = AccountsFeature.mapAccountRows(from: [input])
+
+        #expect(rows[0].address == "Exchange")
+        #expect(rows[0].type == "Exchange")
+    }
+
     @Test func `inactive syncable source is not row syncable`() {
         let input = AccountInput(
             id: UUID(), name: "Inactive", kind: .wallet,

@@ -106,6 +106,35 @@ struct SyncEngineScopedTests {
         #expect(other.lastSyncedAt == nil)
         #expect(result.failedAccounts.isEmpty)
         #expect(try context.fetch(FetchDescriptor<AccountSnapshot>()).count == 2)
+        let portfolioSnapshot = try #require(try context.fetch(FetchDescriptor<PortfolioSnapshot>()).first)
+        #expect(portfolioSnapshot.isPartial == true)
+    }
+
+    @Test func `account scoped sync snapshot is complete when selected account is the only syncable account`() async throws {
+        let context = try makeModelContext()
+        let provider = ScopedSyncStubProvider(balances: [
+            PositionDTO(
+                positionType: .idle,
+                chain: .ethereum,
+                protocolId: nil,
+                protocolName: nil,
+                protocolLogoURL: nil,
+                healthFactor: nil,
+                tokens: [makeTokenDTO(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")])
+        ])
+        let factory = ProviderFactory(resolver: { _, _ in provider })
+        let engine = SyncEngine(modelContext: context, providerFactory: factory)
+        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zapper)
+        selected.addresses = [WalletAddress(address: "0xselected", account: selected)]
+        let manual = Account(name: "Manual", kind: .manual, dataSource: .manual)
+        context.insert(selected)
+        context.insert(manual)
+        try context.save()
+
+        _ = try await engine.sync(accountID: selected.id)
+
+        let portfolioSnapshot = try #require(try context.fetch(FetchDescriptor<PortfolioSnapshot>()).first)
+        #expect(portfolioSnapshot.isPartial == false)
     }
 
     @Test func `account scoped sync rejects missing account`() async throws {

@@ -155,20 +155,27 @@ struct AccountsFeature {
     /// Map account inputs to display rows.
     static func mapAccountRows(from accounts: [AccountInput]) -> [AccountRowData] {
         accounts.map { account in
-            let address = account.firstAddress
-                ?? account.exchangeType?.rawValue.capitalized
-                ?? "Manual"
-
-            return AccountRowData(
+            AccountRowData(
                 id: account.id,
                 name: account.name,
                 group: account.group ?? "\u{2014}",
-                address: address,
+                address: addressDisplay(for: account),
                 type: account.kind.rawValue.capitalized,
                 balance: account.totalBalance,
                 dataSource: account.dataSource,
                 isActive: account.isActive,
                 lastSyncError: account.lastSyncError)
+        }
+    }
+
+    private static func addressDisplay(for account: AccountInput) -> String {
+        switch account.kind {
+        case .wallet:
+            account.firstAddress ?? "\u{2014}"
+        case .exchange:
+            account.exchangeType?.rawValue.capitalized ?? "Exchange"
+        case .manual:
+            "Manual"
         }
     }
 

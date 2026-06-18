@@ -149,12 +149,17 @@ struct AppFeature {
                 }
                 return .none
 
-            case .accountSyncCompleted(.failure):
+            case let .accountSyncCompleted(.failure(error)):
                 // A single-account failure is surfaced on that row's `lastSyncError`
-                // (the engine persists it); don't escalate a scoped sync to a global
-                // error banner that implies the whole portfolio failed.
+                // when the engine throws allAccountsFailed after persisting the row
+                // error. Later-stage failures (snapshot/save) have no row error to
+                // show, so surface those globally.
                 state.syncingAccountID = nil
-                state.syncStatus = .idle
+                if (error as? SyncError) == .allAccountsFailed {
+                    state.syncStatus = .idle
+                } else {
+                    state.syncStatus = .error(error.localizedDescription)
+                }
                 return .none
 
             case .startScheduledSync:

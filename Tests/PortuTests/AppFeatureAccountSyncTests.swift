@@ -29,18 +29,12 @@ struct AppFeatureAccountSyncTests {
         #expect(syncedAccountIDs == [accountID])
     }
 
-    @Test func `account sync failure resets to idle without a global error`() async {
-        struct AccountSyncFailed: Error, LocalizedError {
-            var errorDescription: String? {
-                "Account sync failed"
-            }
-        }
-
+    @Test func `row recorded account sync failure resets to idle without a global error`() async {
         let accountID = UUID()
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.syncAccount = { _ in throw AccountSyncFailed() }
+            $0.syncEngine.syncAccount = { _ in throw SyncError.allAccountsFailed }
         }
 
         await store.send(.accountSyncTapped(accountID)) {
@@ -51,6 +45,30 @@ struct AppFeatureAccountSyncTests {
         // global error banner — global status returns to idle.
         await store.receive(\.accountSyncCompleted) {
             $0.syncStatus = .idle
+            $0.syncingAccountID = nil
+        }
+    }
+
+    @Test func `non row account sync failure surfaces global error`() async {
+        struct SnapshotSaveFailed: Error, LocalizedError {
+            var errorDescription: String? {
+                "Snapshot save failed"
+            }
+        }
+
+        let accountID = UUID()
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.syncEngine.syncAccount = { _ in throw SnapshotSaveFailed() }
+        }
+
+        await store.send(.accountSyncTapped(accountID)) {
+            $0.syncStatus = .syncing(progress: 0)
+            $0.syncingAccountID = accountID
+        }
+        await store.receive(\.accountSyncCompleted) {
+            $0.syncStatus = .error("Snapshot save failed")
             $0.syncingAccountID = nil
         }
     }
