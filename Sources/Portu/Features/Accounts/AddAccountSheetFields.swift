@@ -10,6 +10,10 @@ enum AddAccountSheetSavePolicy {
     static func canSubmit(draftCanSave: Bool, isSyncing: Bool, isSyncBlocked: Bool) -> Bool {
         draftCanSave && !isSyncing && !isSyncBlocked
     }
+
+    static func canEditFields(isSyncing: Bool, isSyncBlocked: Bool) -> Bool {
+        !isSyncing && !isSyncBlocked
+    }
 }
 
 enum AddAccountExchangeSecrets {

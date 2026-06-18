@@ -386,6 +386,12 @@ struct AccountSheetDraftTests {
         #expect(!AddAccountSheetSavePolicy.canSubmit(draftCanSave: true, isSyncing: false, isSyncBlocked: true))
     }
 
+    @Test func `save policy blocks field editing while syncing`() {
+        #expect(AddAccountSheetSavePolicy.canEditFields(isSyncing: false, isSyncBlocked: false))
+        #expect(!AddAccountSheetSavePolicy.canEditFields(isSyncing: true, isSyncBlocked: false))
+        #expect(!AddAccountSheetSavePolicy.canEditFields(isSyncing: false, isSyncBlocked: true))
+    }
+
     private func makeModelContext() throws -> ModelContext {
         let schema = Schema([
             Account.self,

@@ -71,6 +71,7 @@ struct AddAccountSheet: View {
                             exchangeAccountTab
                         }
                     }
+                    .disabled(!fieldsEditable)
                     .animation(.snappy(duration: 0.18), value: draft.selectedTab)
                 }
                 .padding(.horizontal, 14)
@@ -441,6 +442,10 @@ private extension AddAccountSheet {
             draftCanSave: draft.canSave,
             isSyncing: isSyncing,
             isSyncBlocked: isSyncBlocked)
+    }
+
+    var fieldsEditable: Bool {
+        AddAccountSheetSavePolicy.canEditFields(isSyncing: isSyncing, isSyncBlocked: isSyncBlocked)
     }
 
     var syncHelpText: String {
