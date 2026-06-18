@@ -44,6 +44,36 @@ nonisolated struct AccountRowData: Identifiable {
     }
 }
 
+enum AccountRowActionPolicy {
+    static func syncDisabled(rowIsSyncable: Bool, globalSyncIsRunning: Bool) -> Bool {
+        !rowIsSyncable || globalSyncIsRunning
+    }
+
+    static func deleteDisabled(globalSyncIsRunning: Bool) -> Bool {
+        globalSyncIsRunning
+    }
+
+    static func syncHelp(
+        isActive: Bool,
+        dataSource: DataSource,
+        isSyncingThisAccount: Bool,
+        globalSyncIsRunning: Bool) -> String {
+        if isSyncingThisAccount {
+            return "Syncing this account..."
+        }
+        if globalSyncIsRunning {
+            return "Another sync is already running."
+        }
+        if isActive == false {
+            return "Inactive accounts cannot be synced."
+        }
+        if dataSource == .manual {
+            return "Manual accounts do not sync."
+        }
+        return "Sync this account."
+    }
+}
+
 // MARK: - AccountsFeature
 
 enum AccountSheetMode: Equatable, Identifiable {

@@ -393,3 +393,28 @@ struct AccountSyncEligibilityTests {
         #expect(inactive.isSyncable == false)
     }
 }
+
+// MARK: - Row Action Policy
+
+struct AccountRowActionPolicyTests {
+    @Test func `sync help prioritizes the selected syncing row`() {
+        #expect(AccountRowActionPolicy.syncHelp(
+            isActive: true,
+            dataSource: .zapper,
+            isSyncingThisAccount: true,
+            globalSyncIsRunning: true) == "Syncing this account...")
+    }
+
+    @Test func `sync help reports another sync for different row`() {
+        #expect(AccountRowActionPolicy.syncHelp(
+            isActive: true,
+            dataSource: .zapper,
+            isSyncingThisAccount: false,
+            globalSyncIsRunning: true) == "Another sync is already running.")
+    }
+
+    @Test func `delete is disabled while any sync is running`() {
+        #expect(!AccountRowActionPolicy.deleteDisabled(globalSyncIsRunning: false))
+        #expect(AccountRowActionPolicy.deleteDisabled(globalSyncIsRunning: true))
+    }
+}

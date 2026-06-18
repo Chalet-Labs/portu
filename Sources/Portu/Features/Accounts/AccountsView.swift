@@ -234,8 +234,14 @@ struct AccountsView: View {
                 .disabled(!account.isSyncable || store.syncStatus.isSyncing)
                 Divider()
                 Button(account.isActive ? "Deactivate" : "Activate") {
-                    account.isActive.toggle()
-                    try? modelContext.save()
+                    do {
+                        try AccountSheetSaveCoordinator.setAccount(
+                            account,
+                            isActive: !account.isActive,
+                            modelContext: modelContext)
+                    } catch {
+                        accountActionError = error.localizedDescription
+                    }
                 }
                 Divider()
                 Button("Delete", role: .destructive) {
@@ -248,12 +254,15 @@ struct AccountsView: View {
                         accountActionError = error.localizedDescription
                     }
                 }
+                .disabled(AccountRowActionPolicy.deleteDisabled(globalSyncIsRunning: store.syncStatus.isSyncing))
             }
         }
     }
 
     private func rowSyncDisabled(_ row: AccountRowData) -> Bool {
-        !row.isSyncable || store.syncStatus.isSyncing
+        AccountRowActionPolicy.syncDisabled(
+            rowIsSyncable: row.isSyncable,
+            globalSyncIsRunning: store.syncStatus.isSyncing)
     }
 
     private func rowIsSyncing(_ row: AccountRowData) -> Bool {
@@ -265,15 +274,10 @@ struct AccountsView: View {
     }
 
     private func rowSyncHelp(_ row: AccountRowData) -> String {
-        if store.syncStatus.isSyncing {
-            return "Another sync is already running."
-        }
-        if row.isActive == false {
-            return "Inactive accounts cannot be synced."
-        }
-        if row.dataSource == .manual {
-            return "Manual accounts do not sync."
-        }
-        return "Sync this account."
+        AccountRowActionPolicy.syncHelp(
+            isActive: row.isActive,
+            dataSource: row.dataSource,
+            isSyncingThisAccount: accountIsSyncing(row.id),
+            globalSyncIsRunning: store.syncStatus.isSyncing)
     }
 }

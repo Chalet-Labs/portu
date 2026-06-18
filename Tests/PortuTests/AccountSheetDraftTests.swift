@@ -322,6 +322,36 @@ struct AccountSheetDraftTests {
         #expect(try context.fetch(FetchDescriptor<Account>()).count == 1)
     }
 
+    @Test func `set account active saves the account state`() throws {
+        let context = try makeModelContext()
+        let account = Account(name: "Archived", kind: .wallet, dataSource: .zapper, isActive: false)
+        context.insert(account)
+        try context.save()
+
+        try AccountSheetSaveCoordinator.setAccount(account, isActive: true, modelContext: context)
+
+        let reloaded = try #require(try context.fetch(FetchDescriptor<Account>()).first)
+        #expect(reloaded.isActive == true)
+    }
+
+    @Test func `set account active rolls back when save fails`() throws {
+        let context = try makeModelContext()
+        let account = Account(name: "Active", kind: .wallet, dataSource: .zapper, isActive: true)
+        context.insert(account)
+        try context.save()
+
+        #expect(throws: AccountSheetSaveError.self) {
+            try AccountSheetSaveCoordinator.setAccount(
+                account,
+                isActive: false,
+                modelContext: context,
+                save: { _ in throw KeychainError.interactionNotAllowed })
+        }
+
+        let reloaded = try #require(try context.fetch(FetchDescriptor<Account>()).first)
+        #expect(reloaded.isActive == true)
+    }
+
     @Test func `editing a deleted account throws missingEditedAccount`() throws {
         let context = try makeModelContext()
         let account = Account(name: "Doomed", kind: .manual, dataSource: .manual)

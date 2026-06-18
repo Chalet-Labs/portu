@@ -353,6 +353,23 @@ enum AccountSheetSaveCoordinator {
         }
     }
 
+    @MainActor
+    static func setAccount(
+        _ account: Account,
+        isActive: Bool,
+        modelContext: ModelContext,
+        save: @MainActor (ModelContext) throws -> Void = { try $0.save() }) throws {
+        let previousValue = account.isActive
+        account.isActive = isActive
+        do {
+            try save(modelContext)
+        } catch {
+            modelContext.rollback()
+            account.isActive = previousValue
+            throw AccountSheetSaveError.accountSaveFailed(error.localizedDescription)
+        }
+    }
+
     private static func saveExchangeCredentials(
         for accountID: UUID,
         from draft: AccountSheetDraft,
