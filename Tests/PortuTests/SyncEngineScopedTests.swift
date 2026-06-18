@@ -137,6 +137,42 @@ struct SyncEngineScopedTests {
         #expect(portfolioSnapshot.isPartial == false)
     }
 
+    @Test func `account scoped sync recomputes snapshot partial state after provider awaits`() async throws {
+        let context = try makeModelContext()
+        let provider = GatedScopedSyncStubProvider(balances: [
+            PositionDTO(
+                positionType: .idle,
+                chain: .ethereum,
+                protocolId: nil,
+                protocolName: nil,
+                protocolLogoURL: nil,
+                healthFactor: nil,
+                tokens: [makeTokenDTO(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")])
+        ])
+        let factory = ProviderFactory(resolver: { _, _ in provider })
+        let engine = SyncEngine(modelContext: context, providerFactory: factory)
+        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zapper)
+        selected.addresses = [WalletAddress(address: "0xselected", account: selected)]
+        let other = Account(name: "Other", kind: .wallet, dataSource: .zapper, isActive: false)
+        other.addresses = [WalletAddress(address: "0xother", account: other)]
+        context.insert(selected)
+        context.insert(other)
+        try context.save()
+
+        let syncTask = Task {
+            try await engine.sync(accountID: selected.id)
+        }
+        await provider.waitUntilFetchBalancesStarted()
+        other.isActive = true
+        try context.save()
+        await provider.releaseFetchBalances()
+
+        _ = try await syncTask.value
+
+        let portfolioSnapshot = try #require(try context.fetch(FetchDescriptor<PortfolioSnapshot>()).first)
+        #expect(portfolioSnapshot.isPartial == true)
+    }
+
     @Test func `account scoped sync rejects missing account`() async throws {
         let context = try makeModelContext()
         let engine = SyncEngine(
@@ -239,5 +275,49 @@ private actor ScopedSyncStubProvider: PortfolioDataProvider {
 
     func fetchBalances(context _: SyncContext) async throws -> [PositionDTO] {
         balances
+    }
+}
+
+private actor GatedScopedSyncStubProvider: PortfolioDataProvider {
+    nonisolated var capabilities: ProviderCapabilities {
+        ProviderCapabilities()
+    }
+
+    let balances: [PositionDTO]
+    private var didStartFetchBalances = false
+    private var didReleaseFetchBalances = false
+    private var startContinuation: CheckedContinuation<Void, Never>?
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+
+    init(balances: [PositionDTO]) {
+        self.balances = balances
+    }
+
+    func waitUntilFetchBalancesStarted() async {
+        if didStartFetchBalances { return }
+
+        await withCheckedContinuation { continuation in
+            startContinuation = continuation
+        }
+    }
+
+    func releaseFetchBalances() {
+        didReleaseFetchBalances = true
+        releaseContinuation?.resume()
+        releaseContinuation = nil
+    }
+
+    func fetchBalances(context _: SyncContext) async throws -> [PositionDTO] {
+        didStartFetchBalances = true
+        startContinuation?.resume()
+        startContinuation = nil
+
+        if didReleaseFetchBalances == false {
+            await withCheckedContinuation { continuation in
+                releaseContinuation = continuation
+            }
+        }
+
+        return balances
     }
 }

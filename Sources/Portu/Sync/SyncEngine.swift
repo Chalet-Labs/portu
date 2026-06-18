@@ -40,17 +40,15 @@ final class SyncEngine: @unchecked Sendable {
             throw SyncError.accountNotSyncable
         }
 
-        let activeSyncableCount = try fetchActiveSyncableAccounts().count
         return try await sync(
             activeSyncable: [account],
-            activeManual: [],
-            forcePartialSnapshot: activeSyncableCount > 1)
+            activeManual: []) { try self.fetchActiveSyncableAccounts().count > 1 }
     }
 
     private func sync(
         activeSyncable: [Account],
         activeManual: [Account],
-        forcePartialSnapshot: Bool = false) async throws -> SyncResult {
+        forcePartialSnapshot: () throws -> Bool = { false }) async throws -> SyncResult {
         guard !activeSyncable.isEmpty || !activeManual.isEmpty else {
             throw SyncError.noActiveAccounts
         }
@@ -74,7 +72,8 @@ final class SyncEngine: @unchecked Sendable {
             throw SyncError.allAccountsFailed
         }
 
-        try createSnapshots(isPartial: forcePartialSnapshot || !failedAccounts.isEmpty)
+        let isPartialSnapshot = try forcePartialSnapshot() || !failedAccounts.isEmpty
+        try createSnapshots(isPartial: isPartialSnapshot)
 
         return SyncResult(failedAccounts: failedAccounts)
     }

@@ -4,6 +4,7 @@ import SwiftUI
 
 enum AddAccountAccessibility {
     static let closeButtonLabel = "Close"
+    static let closeButtonHint = "Closes the account sheet."
 }
 
 enum AddAccountSheetSavePolicy {

@@ -118,7 +118,7 @@ struct AddAccountSheet: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(AddAccountAccessibility.closeButtonLabel)
-            .accessibilityHint("Closes the add account sheet.")
+            .accessibilityHint(AddAccountAccessibility.closeButtonHint)
         }
         .padding(.horizontal, 20)
         .frame(height: 58)
