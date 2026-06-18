@@ -13,6 +13,7 @@ struct AccountsView: View {
     @State private var sortOrder: [KeyPathComparator<AccountRowData>] = [
         KeyPathComparator(\.name)
     ]
+    @State private var accountActionError: String?
 
     private var accountInputs: [AccountInput] {
         accounts.map { account in
@@ -58,6 +59,13 @@ struct AccountsView: View {
             set: { if $0 == nil { store.send(.accounts(.accountSheetDismissed)) } })) { mode in
                 accountSheet(for: mode)
                     .environment(\.colorScheme, .dark)
+        }
+        .alert("Unable to Update Account", isPresented: Binding(
+            get: { accountActionError != nil },
+            set: { if !$0 { accountActionError = nil } })) {
+                Button("OK") { accountActionError = nil }
+        } message: {
+            Text(accountActionError ?? "")
         }
     }
 
@@ -231,11 +239,13 @@ struct AccountsView: View {
                 }
                 Divider()
                 Button("Delete", role: .destructive) {
-                    let isExchange = account.kind == .exchange
-                    modelContext.delete(account)
-                    try? modelContext.save()
-                    if isExchange {
-                        AccountSheetSaveCoordinator.deleteExchangeCredentials(id, secretStore: LocalSecretStore())
+                    do {
+                        try AccountSheetSaveCoordinator.deleteAccount(
+                            account,
+                            modelContext: modelContext,
+                            secretStore: LocalSecretStore())
+                    } catch {
+                        accountActionError = error.localizedDescription
                     }
                 }
             }

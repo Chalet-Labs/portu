@@ -56,6 +56,25 @@ struct AccountSheetDraftTests {
         #expect(draft.exchangeNotes == "Read-only")
     }
 
+    @Test func `partial exchange credential load does not mutate draft fields`() {
+        let accountID = UUID()
+        let store = InMemorySecretStore()
+        store.storage[.exchangeAPIKey(accountID)] = "stored-key"
+        store.storage[.exchangeAPISecret(accountID)] = "stored-secret"
+        store.throwOnGetKeys = [.exchangePassphrase(accountID)]
+        var draft = AccountSheetDraft()
+        draft.exchangeAPIKey = "typed-key"
+        draft.exchangeAPISecret = "typed-secret"
+        draft.exchangePassphrase = "typed-passphrase"
+
+        draft.loadExchangeCredentials(accountID: accountID, secretStore: store)
+
+        #expect(draft.exchangeCredentialsLoaded == false)
+        #expect(draft.exchangeAPIKey == "typed-key")
+        #expect(draft.exchangeAPISecret == "typed-secret")
+        #expect(draft.exchangePassphrase == "typed-passphrase")
+    }
+
     @Test func `saving edit mode mutates existing account instead of inserting`() throws {
         let context = try makeModelContext()
         let account = Account(
@@ -125,6 +144,43 @@ struct AccountSheetDraftTests {
         #expect(reloaded.name == "Kraken")
     }
 
+    @Test func `exchange edit credential write failure restores previous credentials`() throws {
+        let context = try makeModelContext()
+        let accountID = UUID()
+        let store = InMemorySecretStore()
+        store.storage[.exchangeAPIKey(accountID)] = "old-key"
+        store.storage[.exchangeAPISecret(accountID)] = "old-secret"
+        store.storage[.exchangePassphrase(accountID)] = "old-passphrase"
+        let account = Account(
+            id: accountID,
+            name: "Coinbase",
+            kind: .exchange,
+            exchangeType: .coinbase,
+            dataSource: .exchange)
+        context.insert(account)
+        try context.save()
+
+        var draft = AccountSheetDraft.editing(account: account, secretStore: store)
+        draft.exchangeName = "Coinbase Prime"
+        draft.exchangeAPIKey = "new-key"
+        draft.exchangeAPISecret = "new-secret"
+        draft.exchangePassphrase = "new-passphrase"
+        store.throwOnSetKeys = [.exchangeAPISecret(accountID)]
+
+        #expect(throws: AccountSheetSaveError.self) {
+            try AccountSheetSaveCoordinator.save(
+                draft: draft,
+                mode: .edit(accountID),
+                editing: account,
+                modelContext: context,
+                secretStore: store)
+        }
+
+        #expect(store.storage[.exchangeAPIKey(accountID)] == "old-key")
+        #expect(store.storage[.exchangeAPISecret(accountID)] == "old-secret")
+        #expect(store.storage[.exchangePassphrase(accountID)] == "old-passphrase")
+    }
+
     @Test func `exchange edit with a failed credential read preserves the stored passphrase`() throws {
         let context = try makeModelContext()
         let accountID = UUID()
@@ -190,6 +246,82 @@ struct AccountSheetDraftTests {
         #expect(addresses.first?.chain == nil)
     }
 
+    @Test func `wallet add persists a managed address row`() throws {
+        let context = try makeModelContext()
+        var draft = AccountSheetDraft.adding()
+        draft.selectedTab = .chain
+        draft.chainName = "Wallet"
+        draft.chainAddress = "0xabc"
+        draft.isEVM = false
+        draft.specificChain = .base
+
+        try AccountSheetSaveCoordinator.save(
+            draft: draft,
+            mode: .add,
+            editing: nil,
+            modelContext: context,
+            secretStore: InMemorySecretStore())
+
+        let account = try #require(try context.fetch(FetchDescriptor<Account>()).first)
+        let address = try #require(try context.fetch(FetchDescriptor<WalletAddress>()).first)
+        #expect(account.addresses.map(\.id) == [address.id])
+        #expect(address.account?.id == account.id)
+        #expect(address.chain == .base)
+        #expect(address.address == "0xabc")
+    }
+
+    @Test func `delete exchange account removes credentials after successful save`() throws {
+        let context = try makeModelContext()
+        let accountID = UUID()
+        let store = InMemorySecretStore()
+        store.storage[.exchangeAPIKey(accountID)] = "key"
+        store.storage[.exchangeAPISecret(accountID)] = "secret"
+        store.storage[.exchangePassphrase(accountID)] = "passphrase"
+        let account = Account(
+            id: accountID,
+            name: "Kraken",
+            kind: .exchange,
+            exchangeType: .kraken,
+            dataSource: .exchange)
+        context.insert(account)
+        try context.save()
+
+        try AccountSheetSaveCoordinator.deleteAccount(account, modelContext: context, secretStore: store)
+
+        #expect(try context.fetch(FetchDescriptor<Account>()).isEmpty)
+        #expect(store.storage[.exchangeAPIKey(accountID)] == nil)
+        #expect(store.storage[.exchangeAPISecret(accountID)] == nil)
+        #expect(store.storage[.exchangePassphrase(accountID)] == nil)
+    }
+
+    @Test func `delete exchange account keeps credentials when save fails`() throws {
+        let context = try makeModelContext()
+        let accountID = UUID()
+        let store = InMemorySecretStore()
+        store.storage[.exchangeAPIKey(accountID)] = "key"
+        store.storage[.exchangeAPISecret(accountID)] = "secret"
+        let account = Account(
+            id: accountID,
+            name: "Kraken",
+            kind: .exchange,
+            exchangeType: .kraken,
+            dataSource: .exchange)
+        context.insert(account)
+        try context.save()
+
+        #expect(throws: AccountSheetSaveError.self) {
+            try AccountSheetSaveCoordinator.deleteAccount(
+                account,
+                modelContext: context,
+                secretStore: store,
+                save: { _ in throw KeychainError.interactionNotAllowed })
+        }
+
+        #expect(store.storage[.exchangeAPIKey(accountID)] == "key")
+        #expect(store.storage[.exchangeAPISecret(accountID)] == "secret")
+        #expect(try context.fetch(FetchDescriptor<Account>()).count == 1)
+    }
+
     @Test func `editing a deleted account throws missingEditedAccount`() throws {
         let context = try makeModelContext()
         let account = Account(name: "Doomed", kind: .manual, dataSource: .manual)
@@ -247,6 +379,13 @@ struct AccountSheetDraftTests {
         #expect(store.storage[.exchangePassphrase(accountID)] == nil)
     }
 
+    @Test func `save policy blocks submit while syncing`() {
+        #expect(AddAccountSheetSavePolicy.canSubmit(draftCanSave: true, isSyncing: false, isSyncBlocked: false))
+        #expect(!AddAccountSheetSavePolicy.canSubmit(draftCanSave: false, isSyncing: false, isSyncBlocked: false))
+        #expect(!AddAccountSheetSavePolicy.canSubmit(draftCanSave: true, isSyncing: true, isSyncBlocked: false))
+        #expect(!AddAccountSheetSavePolicy.canSubmit(draftCanSave: true, isSyncing: false, isSyncBlocked: true))
+    }
+
     private func makeModelContext() throws -> ModelContext {
         let schema = Schema([
             Account.self,
@@ -273,19 +412,23 @@ struct AccountSheetDraftTests {
 final class InMemorySecretStore: SecretStore, @unchecked Sendable {
     var storage: [KeychainKey: String] = [:]
     var throwOnGet = false
+    var throwOnGetKeys: Set<KeychainKey> = []
     var throwOnSet = false
+    var throwOnSetKeys: Set<KeychainKey> = []
+    var throwOnDeleteKeys: Set<KeychainKey> = []
 
     func get(key: KeychainKey) throws(KeychainError) -> String? {
-        if throwOnGet { throw .interactionNotAllowed }
+        if throwOnGet || throwOnGetKeys.contains(key) { throw .interactionNotAllowed }
         return storage[key]
     }
 
     func set(key: KeychainKey, value: String) throws(KeychainError) {
-        if throwOnSet { throw .interactionNotAllowed }
+        if throwOnSet || throwOnSetKeys.contains(key) { throw .interactionNotAllowed }
         storage[key] = value
     }
 
     func delete(key: KeychainKey) throws(KeychainError) {
+        if throwOnDeleteKeys.contains(key) { throw .interactionNotAllowed }
         storage[key] = nil
     }
 }

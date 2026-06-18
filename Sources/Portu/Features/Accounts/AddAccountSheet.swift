@@ -98,14 +98,6 @@ struct AddAccountSheet: View {
         .onAppear { loadCredentialsIfNeeded() }
     }
 
-    private func loadCredentialsIfNeeded() {
-        guard !didLoadCredentials, mode.isEditing, let account, account.kind == .exchange else { return }
-        didLoadCredentials = true
-        draft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
-        // Re-baseline so loaded credentials don't read as unsaved user edits.
-        baselineDraft = draft
-    }
-
     private var header: some View {
         HStack(spacing: 12) {
             Text(mode.isEditing ? "Edit account" : "Add new account")
@@ -155,10 +147,6 @@ struct AddAccountSheet: View {
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
-    }
-
-    private var alertTitle: String {
-        mode.isEditing ? "Unable to Save Account" : "Unable to Add Account"
     }
 
     // MARK: - Chain Account Tab
@@ -404,37 +392,58 @@ struct AddAccountSheet: View {
                 } label: {
                     Text(mode.isEditing ? "Save Changes" : "Add Account")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(draft.canSave ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
+                        .foregroundStyle(saveEnabled ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                         .padding(.horizontal, 18)
                         .frame(height: 34)
                         .background(
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(draft.canSave ? PortuTheme.dashboardGoldMuted : PortuTheme.dashboardMutedPanelBackground))
+                                .fill(saveEnabled ? PortuTheme.dashboardGoldMuted : PortuTheme.dashboardMutedPanelBackground))
                         .overlay(
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(draft.canSave ? PortuTheme.dashboardMutedStroke : PortuTheme.dashboardStroke, lineWidth: 1))
+                                .stroke(saveEnabled ? PortuTheme.dashboardMutedStroke : PortuTheme.dashboardStroke, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
-                .disabled(!draft.canSave)
+                .disabled(!saveEnabled)
             }
             .padding(.horizontal, 20)
             .frame(height: 54)
             .background(PortuTheme.dashboardPanelBackground)
         }
     }
+}
 
-    // MARK: - Save
+// MARK: - Sheet State
 
-    private var hasUnsavedChanges: Bool {
+private extension AddAccountSheet {
+    func loadCredentialsIfNeeded() {
+        guard !didLoadCredentials, mode.isEditing, let account, account.kind == .exchange else { return }
+        didLoadCredentials = true
+        draft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
+        // Re-baseline so loaded credentials don't read as unsaved user edits.
+        baselineDraft = draft
+    }
+
+    var alertTitle: String {
+        mode.isEditing ? "Unable to Save Account" : "Unable to Add Account"
+    }
+
+    var hasUnsavedChanges: Bool {
         draft != baselineDraft
     }
 
-    private var syncButtonEnabled: Bool {
+    var syncButtonEnabled: Bool {
         canSync && !isSyncing && !isSyncBlocked && !hasUnsavedChanges
     }
 
-    private var syncHelpText: String {
+    var saveEnabled: Bool {
+        AddAccountSheetSavePolicy.canSubmit(
+            draftCanSave: draft.canSave,
+            isSyncing: isSyncing,
+            isSyncBlocked: isSyncBlocked)
+    }
+
+    var syncHelpText: String {
         if hasUnsavedChanges {
             return "Save your changes before syncing."
         }
@@ -450,7 +459,8 @@ struct AddAccountSheet: View {
         return "Sync this account."
     }
 
-    private func saveAccount() {
+    func saveAccount() {
+        guard saveEnabled else { return }
         do {
             try AccountSheetSaveCoordinator.save(
                 draft: draft,
@@ -462,25 +472,5 @@ struct AddAccountSheet: View {
         } catch {
             saveError = error.localizedDescription
         }
-    }
-}
-
-enum AddAccountAccessibility {
-    static let closeButtonLabel = "Close"
-}
-
-enum AddAccountExchangeSecrets {
-    static func persistedPassphrase(_ passphrase: String, for exchangeType: ExchangeType) -> String? {
-        guard exchangeType == .coinbase, !passphrase.isEmpty else {
-            return nil
-        }
-
-        return passphrase
-    }
-
-    static func passphraseAfterSelecting(
-        _ exchangeType: ExchangeType,
-        currentPassphrase: String) -> String {
-        exchangeType == .coinbase ? currentPassphrase : ""
     }
 }

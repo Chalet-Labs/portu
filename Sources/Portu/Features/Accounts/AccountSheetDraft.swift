@@ -90,9 +90,12 @@ struct AccountSheetDraft: Equatable {
     /// an empty string) so the save path can avoid clobbering secrets it never loaded.
     mutating func loadExchangeCredentials(accountID: UUID, secretStore: any SecretStore) {
         do {
-            exchangeAPIKey = try secretStore.get(key: .exchangeAPIKey(accountID)) ?? ""
-            exchangeAPISecret = try secretStore.get(key: .exchangeAPISecret(accountID)) ?? ""
-            exchangePassphrase = try secretStore.get(key: .exchangePassphrase(accountID)) ?? ""
+            let apiKey = try secretStore.get(key: .exchangeAPIKey(accountID)) ?? ""
+            let apiSecret = try secretStore.get(key: .exchangeAPISecret(accountID)) ?? ""
+            let passphrase = try secretStore.get(key: .exchangePassphrase(accountID)) ?? ""
+            exchangeAPIKey = apiKey
+            exchangeAPISecret = apiSecret
+            exchangePassphrase = passphrase
             exchangeCredentialsLoaded = true
         } catch {
             exchangeCredentialsLoaded = false
@@ -181,13 +184,14 @@ enum AccountSheetSaveCoordinator {
                 dataSource: .zapper,
                 group: nilIfEmpty(draft.chainGroup),
                 notes: nilIfEmpty(draft.chainNotes))
-            account.addresses = [
-                WalletAddress(
-                    chain: draft.isEVM ? nil : draft.specificChain,
-                    address: draft.chainAddress,
-                    account: account)
-            ]
-            try insertAndSave(account, modelContext: modelContext)
+            modelContext.insert(account)
+            let walletAddress = WalletAddress(
+                chain: draft.isEVM ? nil : draft.specificChain,
+                address: draft.chainAddress,
+                account: account)
+            modelContext.insert(walletAddress)
+            account.addresses = [walletAddress]
+            try saveInsertedWalletAccount(account, walletAddress: walletAddress, modelContext: modelContext)
 
         case .manual:
             let account = Account(
@@ -208,9 +212,14 @@ enum AccountSheetSaveCoordinator {
                 dataSource: .exchange,
                 group: nilIfEmpty(draft.exchangeGroup),
                 notes: nilIfEmpty(draft.exchangeNotes))
+            let emptyCredentials = ExchangeCredentialSnapshot.empty
 
             do {
-                try saveExchangeCredentials(for: accountID, from: draft, secretStore: secretStore)
+                try saveExchangeCredentials(
+                    for: accountID,
+                    from: draft,
+                    secretStore: secretStore,
+                    rollbackTo: emptyCredentials)
             } catch {
                 deleteExchangeCredentials(accountID, secretStore: secretStore)
                 throw error
@@ -251,16 +260,31 @@ enum AccountSheetSaveCoordinator {
             // Persist credentials first. If the keychain write fails the model is left
             // untouched, so autosave can't flush a renamed account that still points at
             // the old secrets.
-            try saveExchangeCredentials(for: account.id, from: draft, secretStore: secretStore)
+            let previousCredentials = try readExchangeCredentials(for: account.id, secretStore: secretStore)
+            try saveExchangeCredentials(
+                for: account.id,
+                from: draft,
+                secretStore: secretStore,
+                rollbackTo: previousCredentials)
             account.name = draft.exchangeName
             account.exchangeType = draft.exchangeType
             account.group = nilIfEmpty(draft.exchangeGroup)
             account.notes = nilIfEmpty(draft.exchangeNotes)
+
+            do {
+                try modelContext.save()
+            } catch {
+                modelContext.rollback()
+                restoreExchangeCredentials(previousCredentials, for: account.id, secretStore: secretStore)
+                throw AccountSheetSaveError.accountSaveFailed(error.localizedDescription)
+            }
+            return
         }
 
         do {
             try modelContext.save()
         } catch {
+            modelContext.rollback()
             throw AccountSheetSaveError.accountSaveFailed(error.localizedDescription)
         }
     }
@@ -275,10 +299,27 @@ enum AccountSheetSaveCoordinator {
         // row in place reused its identity (stale position resolution after a chain
         // change) and relied on the non-deterministic order of an unordered to-many;
         // recreating is deterministic and handles the empty/multi-address cases alike.
-        for existing in account.addresses {
+        let existingAddresses = Array(account.addresses)
+        for existing in existingAddresses {
             modelContext.delete(existing)
         }
-        account.addresses = [WalletAddress(chain: chain, address: address, account: account)]
+        let newAddress = WalletAddress(chain: chain, address: address, account: account)
+        modelContext.insert(newAddress)
+        account.addresses = [newAddress]
+    }
+
+    @MainActor
+    private static func saveInsertedWalletAccount(
+        _ account: Account,
+        walletAddress: WalletAddress,
+        modelContext: ModelContext) throws {
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.delete(walletAddress)
+            modelContext.delete(account)
+            throw AccountSheetSaveError.accountSaveFailed(error.localizedDescription)
+        }
     }
 
     @MainActor
@@ -292,10 +333,31 @@ enum AccountSheetSaveCoordinator {
         }
     }
 
+    @MainActor
+    static func deleteAccount(
+        _ account: Account,
+        modelContext: ModelContext,
+        secretStore: any SecretStore,
+        save: @MainActor (ModelContext) throws -> Void = { try $0.save() }) throws {
+        let accountID = account.id
+        let isExchange = account.kind == .exchange
+        modelContext.delete(account)
+        do {
+            try save(modelContext)
+        } catch {
+            modelContext.rollback()
+            throw AccountSheetSaveError.accountSaveFailed(error.localizedDescription)
+        }
+        if isExchange {
+            deleteExchangeCredentials(accountID, secretStore: secretStore)
+        }
+    }
+
     private static func saveExchangeCredentials(
         for accountID: UUID,
         from draft: AccountSheetDraft,
-        secretStore: any SecretStore) throws {
+        secretStore: any SecretStore,
+        rollbackTo previousCredentials: ExchangeCredentialSnapshot) throws {
         do {
             try secretStore.set(key: .exchangeAPIKey(accountID), value: draft.exchangeAPIKey)
             try secretStore.set(key: .exchangeAPISecret(accountID), value: draft.exchangeAPISecret)
@@ -310,7 +372,38 @@ enum AccountSheetSaveCoordinator {
                 try secretStore.delete(key: .exchangePassphrase(accountID))
             }
         } catch {
+            restoreExchangeCredentials(previousCredentials, for: accountID, secretStore: secretStore)
             throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
+        }
+    }
+
+    private static func readExchangeCredentials(
+        for accountID: UUID,
+        secretStore: any SecretStore) throws -> ExchangeCredentialSnapshot {
+        do {
+            return try ExchangeCredentialSnapshot(
+                apiKey: secretStore.get(key: .exchangeAPIKey(accountID)),
+                apiSecret: secretStore.get(key: .exchangeAPISecret(accountID)),
+                passphrase: secretStore.get(key: .exchangePassphrase(accountID)))
+        } catch {
+            throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
+        }
+    }
+
+    private static func restoreExchangeCredentials(
+        _ snapshot: ExchangeCredentialSnapshot,
+        for accountID: UUID,
+        secretStore: any SecretStore) {
+        restore(snapshot.apiKey, key: .exchangeAPIKey(accountID), secretStore: secretStore)
+        restore(snapshot.apiSecret, key: .exchangeAPISecret(accountID), secretStore: secretStore)
+        restore(snapshot.passphrase, key: .exchangePassphrase(accountID), secretStore: secretStore)
+    }
+
+    private static func restore(_ value: String?, key: KeychainKey, secretStore: any SecretStore) {
+        if let value {
+            try? secretStore.set(key: key, value: value)
+        } else {
+            try? secretStore.delete(key: key)
         }
     }
 
@@ -327,4 +420,12 @@ enum AccountSheetSaveCoordinator {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
+}
+
+private struct ExchangeCredentialSnapshot {
+    var apiKey: String?
+    var apiSecret: String?
+    var passphrase: String?
+
+    static let empty = Self(apiKey: nil, apiSecret: nil, passphrase: nil)
 }
