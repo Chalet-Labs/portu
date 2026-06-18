@@ -124,26 +124,43 @@ struct AppFeature {
                 return .none
 
             case .startScheduledSync:
-                var effects: [Effect<Action>] = []
-                if let zapperInterval = providerSyncSettings.zapperPortfolioSyncInterval() {
-                    effects.append(.run { send in
-                        while !Task.isCancelled {
-                            try await clock.sleep(for: zapperInterval)
-                            await send(.scheduledSyncDue(.zapper))
+                return .run { send in
+                    var lastZapperSync = currentDate.now()
+                    var lastExchangeSync = currentDate.now()
+
+                    while !Task.isCancelled {
+                        let now = currentDate.now()
+                        let zapperInterval = providerSyncSettings.zapperPortfolioSyncInterval()
+                        let exchangeInterval = providerSyncSettings.exchangePortfolioSyncInterval()
+
+                        if let zapperInterval {
+                            if now.timeIntervalSince(lastZapperSync) >= Self.timeInterval(for: zapperInterval) {
+                                lastZapperSync = now
+                                await send(.scheduledSyncDue(.zapper))
+                            }
+                        } else {
+                            lastZapperSync = now
                         }
-                    })
-                }
-                if let exchangeInterval = providerSyncSettings.exchangePortfolioSyncInterval() {
-                    effects.append(.run { send in
-                        while !Task.isCancelled {
-                            try await clock.sleep(for: exchangeInterval)
-                            await send(.scheduledSyncDue(.exchange))
+
+                        if let exchangeInterval {
+                            if now.timeIntervalSince(lastExchangeSync) >= Self.timeInterval(for: exchangeInterval) {
+                                lastExchangeSync = now
+                                await send(.scheduledSyncDue(.exchange))
+                            }
+                        } else {
+                            lastExchangeSync = now
                         }
-                    })
+
+                        let sleepDuration = Self.scheduledSyncSleepDuration(
+                            now: now,
+                            lastZapperSync: lastZapperSync,
+                            lastExchangeSync: lastExchangeSync,
+                            zapperInterval: zapperInterval,
+                            exchangeInterval: exchangeInterval)
+                        try await clock.sleep(for: sleepDuration)
+                    }
                 }
-                guard effects.isEmpty == false else { return .none }
-                return .merge(effects)
-                    .cancellable(id: CancelID.scheduledSync, cancelInFlight: true)
+                .cancellable(id: CancelID.scheduledSync, cancelInFlight: true)
 
             case .stopScheduledSync:
                 return .cancel(id: CancelID.scheduledSync)
@@ -189,18 +206,32 @@ struct AppFeature {
                     }
                 ]
 
-                if
-                    request.zapperIdentities.isEmpty == false,
-                    let zapperFallbackInterval = pricePollingSettings.zapperFallbackInterval() {
+                if request.zapperIdentities.isEmpty == false {
                     effects.append(.run { send in
                         while !Task.isCancelled {
+                            guard let zapperFallbackInterval = pricePollingSettings.zapperFallbackInterval() else {
+                                try await clock.sleep(for: Self.settingsRecheckInterval)
+                                continue
+                            }
+
                             do {
                                 let update = try await priceService.fetchZapperPrices(request.zapperIdentities)
                                 await send(.pricesReceived(update))
                             } catch {
                                 await send(.priceFetchFailed(error))
                             }
-                            try await clock.sleep(for: zapperFallbackInterval)
+
+                            var elapsed: Duration = .zero
+                            while !Task.isCancelled {
+                                guard let currentInterval = pricePollingSettings.zapperFallbackInterval() else {
+                                    break
+                                }
+                                guard elapsed < currentInterval else { break }
+                                let remaining = currentInterval - elapsed
+                                let sleepDuration = Self.shorterDuration(remaining, Self.settingsRecheckInterval)
+                                try await clock.sleep(for: sleepDuration)
+                                elapsed += sleepDuration
+                            }
                         }
                     })
                 }
@@ -242,6 +273,49 @@ struct AppFeature {
                 return .none
             }
         }
+    }
+}
+
+private extension AppFeature {
+    static let settingsRecheckInterval: Duration = .seconds(10)
+
+    static func scheduledSyncSleepDuration(
+        now: Date,
+        lastZapperSync: Date,
+        lastExchangeSync: Date,
+        zapperInterval: Duration?,
+        exchangeInterval: Duration?) -> Duration {
+        var sleepDuration = settingsRecheckInterval
+
+        if let zapperInterval {
+            sleepDuration = shorterDuration(
+                sleepDuration,
+                remainingDuration(interval: zapperInterval, lastSync: lastZapperSync, now: now))
+        }
+
+        if let exchangeInterval {
+            sleepDuration = shorterDuration(
+                sleepDuration,
+                remainingDuration(interval: exchangeInterval, lastSync: lastExchangeSync, now: now))
+        }
+
+        return sleepDuration
+    }
+
+    static func remainingDuration(interval: Duration, lastSync: Date, now: Date) -> Duration {
+        let remainingSeconds = timeInterval(for: interval) - now.timeIntervalSince(lastSync)
+        guard remainingSeconds > 0 else { return .zero }
+        return .seconds(remainingSeconds)
+    }
+
+    static func shorterDuration(_ lhs: Duration, _ rhs: Duration) -> Duration {
+        lhs < rhs ? lhs : rhs
+    }
+
+    static func timeInterval(for duration: Duration) -> TimeInterval {
+        let components = duration.components
+        let attosecondsPerSecond = 1_000_000_000_000_000_000.0
+        return TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / attosecondsPerSecond
     }
 }
 
