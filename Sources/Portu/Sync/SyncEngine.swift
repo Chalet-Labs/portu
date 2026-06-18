@@ -23,6 +23,15 @@ final class SyncEngine: @unchecked Sendable {
         let activeSyncable = try fetchActiveSyncableAccounts()
         let activeManual = try fetchActiveManualAccounts()
 
+        return try await sync(activeSyncable: activeSyncable, activeManual: activeManual)
+    }
+
+    func sync(scope: PortfolioSyncScope) async throws -> SyncResult {
+        let activeSyncable = try fetchActiveSyncableAccounts(scope: scope)
+        return try await sync(activeSyncable: activeSyncable, activeManual: [])
+    }
+
+    private func sync(activeSyncable: [Account], activeManual: [Account]) async throws -> SyncResult {
         guard !activeSyncable.isEmpty || !activeManual.isEmpty else {
             throw SyncError.noActiveAccounts
         }
@@ -395,6 +404,17 @@ final class SyncEngine: @unchecked Sendable {
     private func fetchActiveSyncableAccounts() throws -> [Account] {
         let descriptor = FetchDescriptor<Account>()
         return try modelContext.fetch(descriptor).filter { $0.isActive && $0.dataSource != .manual }
+    }
+
+    private func fetchActiveSyncableAccounts(scope: PortfolioSyncScope) throws -> [Account] {
+        try fetchActiveSyncableAccounts().filter { account in
+            switch scope {
+            case .zapper:
+                account.dataSource == .zapper
+            case .exchange:
+                account.dataSource == .exchange
+            }
+        }
     }
 
     private func fetchActiveManualAccounts() throws -> [Account] {

@@ -134,6 +134,21 @@ struct PortuApp: App {
                         return try await zapperProvider.fetchPriceUpdate(for: identities)
                     }
             },
+            fetchCoinGeckoPrices: { request in
+                try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
+                    request: request,
+                    priceService: priceService)
+            },
+            fetchZapperPrices: { identities in
+                guard
+                    !identities.isEmpty,
+                    let apiKey = zapperAPIKey(from: secretStore)
+                else {
+                    return PricePollingIDResolver.emptyUpdate
+                }
+                let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
+                return try await zapperProvider.fetchPriceUpdate(for: identities)
+            },
             fetchHistoricalPrices: { coinId, days in
                 try await priceService.fetchHistoricalPrices(for: coinId, days: days)
             },
