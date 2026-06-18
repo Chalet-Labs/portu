@@ -24,12 +24,21 @@ struct AccountSheetDraft: Equatable {
     var exchangeGroup = ""
     var exchangeNotes = ""
 
+    /// Whether the exchange credentials were read back from the keychain successfully.
+    /// Stays `true` for non-exchange drafts and before a load is attempted; set to
+    /// `false` if a keychain read fails so saving never blindly overwrites or deletes
+    /// secrets it could not load.
+    var exchangeCredentialsLoaded = true
+
     static func adding() -> Self {
         Self()
     }
 
+    /// Builds an edit draft from the account's non-secret fields only. Keychain
+    /// reads are deliberately excluded so this can run in a SwiftUI view initializer
+    /// without side effects; load credentials separately via `loadExchangeCredentials`.
     @MainActor
-    static func editing(account: Account, secretStore: any SecretStore = LocalSecretStore()) -> Self {
+    static func editing(account: Account) -> Self {
         var draft = Self()
 
         switch account.kind {
@@ -60,12 +69,34 @@ struct AccountSheetDraft: Equatable {
             draft.exchangeType = account.exchangeType ?? .kraken
             draft.exchangeGroup = account.group ?? ""
             draft.exchangeNotes = account.notes ?? ""
-            draft.exchangeAPIKey = (try? secretStore.get(key: .exchangeAPIKey(account.id))) ?? ""
-            draft.exchangeAPISecret = (try? secretStore.get(key: .exchangeAPISecret(account.id))) ?? ""
-            draft.exchangePassphrase = (try? secretStore.get(key: .exchangePassphrase(account.id))) ?? ""
         }
 
         return draft
+    }
+
+    /// Builds an edit draft and eagerly loads exchange credentials. Performs keychain
+    /// I/O, so call off the view-initializer path (tests, or `loadExchangeCredentials`).
+    @MainActor
+    static func editing(account: Account, secretStore: any SecretStore) -> Self {
+        var draft = editing(account: account)
+        if account.kind == .exchange {
+            draft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
+        }
+        return draft
+    }
+
+    /// Reads exchange credentials from the keychain into the draft. A read failure is
+    /// recorded in `exchangeCredentialsLoaded` (rather than being silently coalesced to
+    /// an empty string) so the save path can avoid clobbering secrets it never loaded.
+    mutating func loadExchangeCredentials(accountID: UUID, secretStore: any SecretStore) {
+        do {
+            exchangeAPIKey = try secretStore.get(key: .exchangeAPIKey(accountID)) ?? ""
+            exchangeAPISecret = try secretStore.get(key: .exchangeAPISecret(accountID)) ?? ""
+            exchangePassphrase = try secretStore.get(key: .exchangePassphrase(accountID)) ?? ""
+            exchangeCredentialsLoaded = true
+        } catch {
+            exchangeCredentialsLoaded = false
+        }
     }
 
     var canSave: Bool {
@@ -120,8 +151,21 @@ enum AccountSheetSaveCoordinator {
             guard account.id == accountID else {
                 throw AccountSheetSaveError.editedAccountMismatch
             }
+            // The captured Account may have been deleted while the sheet was open
+            // (e.g. via the table context menu). Mutating + saving a tombstoned model
+            // is undefined; confirm it still lives in the context first.
+            guard accountExists(id: accountID, modelContext: modelContext) else {
+                throw AccountSheetSaveError.missingEditedAccount
+            }
             try update(account, from: draft, modelContext: modelContext, secretStore: secretStore)
         }
+    }
+
+    @MainActor
+    private static func accountExists(id: UUID, modelContext: ModelContext) -> Bool {
+        var descriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return (try? modelContext.fetch(descriptor))?.isEmpty == false
     }
 
     @MainActor
@@ -204,11 +248,14 @@ enum AccountSheetSaveCoordinator {
             account.notes = nilIfEmpty(draft.manualNotes)
 
         case .exchange:
+            // Persist credentials first. If the keychain write fails the model is left
+            // untouched, so autosave can't flush a renamed account that still points at
+            // the old secrets.
+            try saveExchangeCredentials(for: account.id, from: draft, secretStore: secretStore)
             account.name = draft.exchangeName
             account.exchangeType = draft.exchangeType
             account.group = nilIfEmpty(draft.exchangeGroup)
             account.notes = nilIfEmpty(draft.exchangeNotes)
-            try saveExchangeCredentials(for: account.id, from: draft, secretStore: secretStore)
         }
 
         do {
@@ -224,19 +271,14 @@ enum AccountSheetSaveCoordinator {
         chain: Chain?,
         address: String,
         modelContext: ModelContext) {
-        let currentAddresses = account.addresses
-        if let first = currentAddresses.first {
-            first.chain = chain
-            first.address = address
-            first.account = account
-            account.addresses = [first]
-
-            for extra in currentAddresses.dropFirst() {
-                modelContext.delete(extra)
-            }
-        } else {
-            account.addresses = [WalletAddress(chain: chain, address: address, account: account)]
+        // Replace the whole address set with a single fresh row. Mutating an existing
+        // row in place reused its identity (stale position resolution after a chain
+        // change) and relied on the non-deterministic order of an unordered to-many;
+        // recreating is deterministic and handles the empty/multi-address cases alike.
+        for existing in account.addresses {
+            modelContext.delete(existing)
         }
+        account.addresses = [WalletAddress(chain: chain, address: address, account: account)]
     }
 
     @MainActor
@@ -262,7 +304,9 @@ enum AccountSheetSaveCoordinator {
                     draft.exchangePassphrase,
                     for: draft.exchangeType) {
                 try secretStore.set(key: .exchangePassphrase(accountID), value: passphrase)
-            } else {
+            } else if draft.exchangeCredentialsLoaded {
+                // Only delete when we know the prior state: a blank field after a
+                // failed credential read must not be mistaken for "user cleared it".
                 try secretStore.delete(key: .exchangePassphrase(accountID))
             }
         } catch {
@@ -270,13 +314,17 @@ enum AccountSheetSaveCoordinator {
         }
     }
 
-    private static func deleteExchangeCredentials(_ accountID: UUID, secretStore: any SecretStore) {
+    /// Removes all keychain entries for an account. Safe to call for non-exchange
+    /// accounts (deletes of missing keys are no-ops); used both by the failure-cleanup
+    /// paths here and by account deletion.
+    static func deleteExchangeCredentials(_ accountID: UUID, secretStore: any SecretStore) {
         try? secretStore.delete(key: .exchangeAPIKey(accountID))
         try? secretStore.delete(key: .exchangeAPISecret(accountID))
         try? secretStore.delete(key: .exchangePassphrase(accountID))
     }
 
     private static func nilIfEmpty(_ value: String) -> String? {
-        value.isEmpty ? nil : value
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

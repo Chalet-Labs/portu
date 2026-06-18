@@ -440,8 +440,9 @@ final class SyncEngine: @unchecked Sendable {
     }
 
     private func fetchAccount(id: UUID) throws -> Account {
-        let descriptor = FetchDescriptor<Account>()
-        guard let account = try modelContext.fetch(descriptor).first(where: { $0.id == id }) else {
+        var descriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard let account = try modelContext.fetch(descriptor).first else {
             throw SyncError.accountNotFound
         }
         return account

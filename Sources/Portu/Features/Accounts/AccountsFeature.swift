@@ -40,7 +40,7 @@ nonisolated struct AccountRowData: Identifiable {
     let lastSyncError: String?
 
     var isSyncable: Bool {
-        isActive && dataSource != .manual
+        AccountSyncEligibility.isSyncable(isActive: isActive, dataSource: dataSource)
     }
 }
 

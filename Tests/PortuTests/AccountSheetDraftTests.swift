@@ -88,6 +88,165 @@ struct AccountSheetDraftTests {
         #expect(updated.notes == "After")
     }
 
+    @Test func `exchange edit credential save failure leaves the account unmutated`() throws {
+        let context = try makeModelContext()
+        let accountID = UUID()
+        let store = InMemorySecretStore()
+        store.storage[.exchangeAPIKey(accountID)] = "old-key"
+        store.storage[.exchangeAPISecret(accountID)] = "old-secret"
+        let account = Account(
+            id: accountID,
+            name: "Kraken",
+            kind: .exchange,
+            exchangeType: .kraken,
+            dataSource: .exchange,
+            group: "CEX")
+        context.insert(account)
+        try context.save()
+
+        var draft = AccountSheetDraft.editing(account: account, secretStore: store)
+        draft.exchangeName = "Renamed"
+        draft.exchangeAPIKey = "new-key"
+        draft.exchangeAPISecret = "new-secret"
+        store.throwOnSet = true
+
+        #expect(throws: AccountSheetSaveError.self) {
+            try AccountSheetSaveCoordinator.save(
+                draft: draft,
+                mode: .edit(accountID),
+                editing: account,
+                modelContext: context,
+                secretStore: store)
+        }
+
+        // Credentials are written before the model is mutated, so a keychain failure
+        // leaves the account name untouched (nothing for autosave to flush).
+        let reloaded = try #require(try context.fetch(FetchDescriptor<Account>()).first)
+        #expect(reloaded.name == "Kraken")
+    }
+
+    @Test func `exchange edit with a failed credential read preserves the stored passphrase`() throws {
+        let context = try makeModelContext()
+        let accountID = UUID()
+        let store = InMemorySecretStore()
+        store.storage[.exchangeAPIKey(accountID)] = "real-key"
+        store.storage[.exchangeAPISecret(accountID)] = "real-secret"
+        store.storage[.exchangePassphrase(accountID)] = "real-passphrase"
+        let account = Account(
+            id: accountID,
+            name: "Coinbase",
+            kind: .exchange,
+            exchangeType: .coinbase,
+            dataSource: .exchange)
+        context.insert(account)
+        try context.save()
+
+        store.throwOnGet = true
+        var draft = AccountSheetDraft.editing(account: account, secretStore: store)
+        #expect(draft.exchangeCredentialsLoaded == false)
+
+        // User supplies fresh required fields but leaves the passphrase blank.
+        draft.exchangeAPIKey = "typed-key"
+        draft.exchangeAPISecret = "typed-secret"
+        store.throwOnGet = false
+
+        try AccountSheetSaveCoordinator.save(
+            draft: draft,
+            mode: .edit(accountID),
+            editing: account,
+            modelContext: context,
+            secretStore: store)
+
+        // The blank passphrase must not be mistaken for "cleared" — it was never loaded.
+        #expect(store.storage[.exchangePassphrase(accountID)] == "real-passphrase")
+        #expect(store.storage[.exchangeAPIKey(accountID)] == "typed-key")
+    }
+
+    @Test func `wallet edit replaces all addresses with a single row`() throws {
+        let context = try makeModelContext()
+        let account = Account(name: "Multi", kind: .wallet, dataSource: .zapper)
+        account.addresses = [
+            WalletAddress(chain: nil, address: "0xaaa", account: account),
+            WalletAddress(chain: .solana, address: "sol111", account: account)
+        ]
+        context.insert(account)
+        try context.save()
+        #expect(try context.fetch(FetchDescriptor<WalletAddress>()).count == 2)
+
+        var draft = AccountSheetDraft.editing(account: account)
+        draft.isEVM = true
+        draft.chainAddress = "0xnew"
+
+        try AccountSheetSaveCoordinator.save(
+            draft: draft,
+            mode: .edit(account.id),
+            editing: account,
+            modelContext: context,
+            secretStore: InMemorySecretStore())
+
+        let addresses = try context.fetch(FetchDescriptor<WalletAddress>())
+        #expect(addresses.count == 1)
+        #expect(addresses.first?.address == "0xnew")
+        #expect(addresses.first?.chain == nil)
+    }
+
+    @Test func `editing a deleted account throws missingEditedAccount`() throws {
+        let context = try makeModelContext()
+        let account = Account(name: "Doomed", kind: .manual, dataSource: .manual)
+        context.insert(account)
+        try context.save()
+        let id = account.id
+        let draft = AccountSheetDraft.editing(account: account)
+
+        context.delete(account)
+        try context.save()
+
+        #expect(throws: AccountSheetSaveError.missingEditedAccount) {
+            try AccountSheetSaveCoordinator.save(
+                draft: draft,
+                mode: .edit(id),
+                editing: account,
+                modelContext: context,
+                secretStore: InMemorySecretStore())
+        }
+    }
+
+    @Test func `whitespace-only group and notes persist as nil`() throws {
+        let context = try makeModelContext()
+        let account = Account(name: "M", kind: .manual, dataSource: .manual, group: "x", notes: "y")
+        context.insert(account)
+        try context.save()
+
+        var draft = AccountSheetDraft.editing(account: account)
+        draft.manualGroup = "   "
+        draft.manualNotes = "\n\t "
+
+        try AccountSheetSaveCoordinator.save(
+            draft: draft,
+            mode: .edit(account.id),
+            editing: account,
+            modelContext: context,
+            secretStore: InMemorySecretStore())
+
+        let updated = try #require(try context.fetch(FetchDescriptor<Account>()).first)
+        #expect(updated.group == nil)
+        #expect(updated.notes == nil)
+    }
+
+    @Test func `deleting exchange credentials removes all stored keys`() {
+        let accountID = UUID()
+        let store = InMemorySecretStore()
+        store.storage[.exchangeAPIKey(accountID)] = "k"
+        store.storage[.exchangeAPISecret(accountID)] = "s"
+        store.storage[.exchangePassphrase(accountID)] = "p"
+
+        AccountSheetSaveCoordinator.deleteExchangeCredentials(accountID, secretStore: store)
+
+        #expect(store.storage[.exchangeAPIKey(accountID)] == nil)
+        #expect(store.storage[.exchangeAPISecret(accountID)] == nil)
+        #expect(store.storage[.exchangePassphrase(accountID)] == nil)
+    }
+
     private func makeModelContext() throws -> ModelContext {
         let schema = Schema([
             Account.self,
@@ -107,5 +266,26 @@ struct AccountSheetDraftTests {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])
         return ModelContext(container)
+    }
+}
+
+/// In-memory `SecretStore` test double with configurable failure injection.
+final class InMemorySecretStore: SecretStore, @unchecked Sendable {
+    var storage: [KeychainKey: String] = [:]
+    var throwOnGet = false
+    var throwOnSet = false
+
+    func get(key: KeychainKey) throws(KeychainError) -> String? {
+        if throwOnGet { throw .interactionNotAllowed }
+        return storage[key]
+    }
+
+    func set(key: KeychainKey, value: String) throws(KeychainError) {
+        if throwOnSet { throw .interactionNotAllowed }
+        storage[key] = value
+    }
+
+    func delete(key: KeychainKey) throws(KeychainError) {
+        storage[key] = nil
     }
 }

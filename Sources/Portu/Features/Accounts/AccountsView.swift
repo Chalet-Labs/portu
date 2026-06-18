@@ -115,7 +115,7 @@ struct AccountsView: View {
                     mode: mode,
                     account: account,
                     isSyncing: accountIsSyncing(account.id),
-                    canSync: account.isActive && account.dataSource != .manual,
+                    canSync: account.isSyncable,
                     isSyncBlocked: store.syncStatus.isSyncing && store.syncingAccountID != account.id,
                     onSync: { id in store.send(.accountSyncTapped(id)) })
             } else {
@@ -190,6 +190,7 @@ struct AccountsView: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Edit account")
+                    .accessibilityLabel("Edit account")
 
                     Button {
                         store.send(.accountSyncTapped(row.id))
@@ -198,6 +199,7 @@ struct AccountsView: View {
                             ProgressView()
                                 .controlSize(.small)
                                 .scaleEffect(0.62)
+                                .tint(PortuTheme.dashboardGold)
                                 .frame(width: 18, height: 18)
                         } else {
                             Image(systemName: "arrow.triangle.2.circlepath")
@@ -207,6 +209,7 @@ struct AccountsView: View {
                     .buttonStyle(.borderless)
                     .disabled(rowSyncDisabled(row))
                     .help(rowSyncHelp(row))
+                    .accessibilityLabel("Sync account")
                 }
             }
             .width(min: 78, ideal: 92)
@@ -220,7 +223,7 @@ struct AccountsView: View {
                 Button("Sync") {
                     store.send(.accountSyncTapped(id))
                 }
-                .disabled(account.dataSource == .manual || !account.isActive || store.syncStatus.isSyncing)
+                .disabled(!account.isSyncable || store.syncStatus.isSyncing)
                 Divider()
                 Button(account.isActive ? "Deactivate" : "Activate") {
                     account.isActive.toggle()
@@ -228,8 +231,12 @@ struct AccountsView: View {
                 }
                 Divider()
                 Button("Delete", role: .destructive) {
+                    let isExchange = account.kind == .exchange
                     modelContext.delete(account)
                     try? modelContext.save()
+                    if isExchange {
+                        AccountSheetSaveCoordinator.deleteExchangeCredentials(id, secretStore: LocalSecretStore())
+                    }
                 }
             }
         }

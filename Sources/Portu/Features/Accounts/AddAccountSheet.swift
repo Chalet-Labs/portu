@@ -16,6 +16,8 @@ struct AddAccountSheet: View {
     private let secretStore: any SecretStore
 
     @State private var draft: AccountSheetDraft
+    @State private var baselineDraft: AccountSheetDraft
+    @State private var didLoadCredentials = false
     @State private var saveError: String?
 
     init(
@@ -33,12 +35,15 @@ struct AddAccountSheet: View {
         self.isSyncBlocked = isSyncBlocked
         self.onSync = onSync
         self.secretStore = secretStore
+        // No keychain I/O here: the View struct is re-created on every parent render,
+        // so credentials are loaded once in `.onAppear` instead.
         let initialDraft = if mode.isEditing, let account {
-            AccountSheetDraft.editing(account: account, secretStore: secretStore)
+            AccountSheetDraft.editing(account: account)
         } else {
             AccountSheetDraft.adding()
         }
         _draft = State(initialValue: initialDraft)
+        _baselineDraft = State(initialValue: initialDraft)
     }
 
     var body: some View {
@@ -90,6 +95,15 @@ struct AddAccountSheet: View {
         } message: {
             Text(saveError ?? "")
         }
+        .onAppear { loadCredentialsIfNeeded() }
+    }
+
+    private func loadCredentialsIfNeeded() {
+        guard !didLoadCredentials, mode.isEditing, let account, account.kind == .exchange else { return }
+        didLoadCredentials = true
+        draft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
+        // Re-baseline so loaded credentials don't read as unsaved user edits.
+        baselineDraft = draft
     }
 
     private var header: some View {
@@ -390,19 +404,19 @@ struct AddAccountSheet: View {
                 } label: {
                     Text(mode.isEditing ? "Save Changes" : "Add Account")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(canSave ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
+                        .foregroundStyle(draft.canSave ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                         .padding(.horizontal, 18)
                         .frame(height: 34)
                         .background(
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(canSave ? PortuTheme.dashboardGoldMuted : PortuTheme.dashboardMutedPanelBackground))
+                                .fill(draft.canSave ? PortuTheme.dashboardGoldMuted : PortuTheme.dashboardMutedPanelBackground))
                         .overlay(
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(canSave ? PortuTheme.dashboardMutedStroke : PortuTheme.dashboardStroke, lineWidth: 1))
+                                .stroke(draft.canSave ? PortuTheme.dashboardMutedStroke : PortuTheme.dashboardStroke, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
-                .disabled(!canSave)
+                .disabled(!draft.canSave)
             }
             .padding(.horizontal, 20)
             .frame(height: 54)
@@ -412,16 +426,22 @@ struct AddAccountSheet: View {
 
     // MARK: - Save
 
-    private var canSave: Bool {
-        draft.canSave
+    private var hasUnsavedChanges: Bool {
+        draft != baselineDraft
     }
 
     private var syncButtonEnabled: Bool {
-        canSync && !isSyncing && !isSyncBlocked
+        canSync && !isSyncing && !isSyncBlocked && !hasUnsavedChanges
     }
 
     private var syncHelpText: String {
-        if isSyncing || isSyncBlocked {
+        if hasUnsavedChanges {
+            return "Save your changes before syncing."
+        }
+        if isSyncing {
+            return "Syncing this account\u{2026}"
+        }
+        if isSyncBlocked {
             return "Another sync is already running."
         }
         if canSync == false {

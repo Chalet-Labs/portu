@@ -29,7 +29,7 @@ struct AppFeatureAccountSyncTests {
         #expect(syncedAccountIDs == [accountID])
     }
 
-    @Test func `account sync failure updates sync status error`() async {
+    @Test func `account sync failure resets to idle without a global error`() async {
         struct AccountSyncFailed: Error, LocalizedError {
             var errorDescription: String? {
                 "Account sync failed"
@@ -47,8 +47,10 @@ struct AppFeatureAccountSyncTests {
             $0.syncStatus = .syncing(progress: 0)
             $0.syncingAccountID = accountID
         }
+        // A single-account failure is surfaced on the row's lastSyncError, not as a
+        // global error banner — global status returns to idle.
         await store.receive(\.accountSyncCompleted) {
-            $0.syncStatus = .error("Account sync failed")
+            $0.syncStatus = .idle
             $0.syncingAccountID = nil
         }
     }

@@ -368,3 +368,28 @@ struct AccountFormValidationTests {
                 exchangeAPISecret: "x")) == false)
     }
 }
+
+// MARK: - Sync Eligibility
+
+struct AccountSyncEligibilityTests {
+    @Test func `active non-manual accounts are syncable`() {
+        #expect(AccountSyncEligibility.isSyncable(isActive: true, dataSource: .zapper))
+        #expect(AccountSyncEligibility.isSyncable(isActive: true, dataSource: .exchange))
+    }
+
+    @Test func `inactive or manual accounts are not syncable`() {
+        #expect(AccountSyncEligibility.isSyncable(isActive: false, dataSource: .zapper) == false)
+        #expect(AccountSyncEligibility.isSyncable(isActive: false, dataSource: .exchange) == false)
+        #expect(AccountSyncEligibility.isSyncable(isActive: true, dataSource: .manual) == false)
+    }
+
+    @MainActor
+    @Test func `account isSyncable mirrors the shared rule`() {
+        let syncable = Account(name: "W", kind: .wallet, dataSource: .zapper)
+        let manual = Account(name: "M", kind: .manual, dataSource: .manual)
+        let inactive = Account(name: "I", kind: .wallet, dataSource: .zapper, isActive: false)
+        #expect(syncable.isSyncable)
+        #expect(manual.isSyncable == false)
+        #expect(inactive.isSyncable == false)
+    }
+}
