@@ -262,6 +262,12 @@ private struct GeneralSettingsTab: View {
 
     @AppStorage(PricePollingSettings.refreshIntervalKey)
     private var refreshInterval = PricePollingSettings.defaultRefreshIntervalSeconds
+    @AppStorage(ProviderIntervalSettings.zapperLivePriceIntervalKey)
+    private var zapperLivePriceInterval = ProviderIntervalSettings.defaultZapperLivePriceIntervalSeconds
+    @AppStorage(ProviderIntervalSettings.zapperPortfolioSyncIntervalKey)
+    private var zapperPortfolioSyncInterval = ProviderIntervalSettings.defaultZapperPortfolioSyncIntervalSeconds
+    @AppStorage(ProviderIntervalSettings.exchangePortfolioSyncIntervalKey)
+    private var exchangePortfolioSyncInterval = ProviderIntervalSettings.defaultExchangePortfolioSyncIntervalSeconds
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
     private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
 
@@ -269,20 +275,44 @@ private struct GeneralSettingsTab: View {
         SettingsPage(tab: .general) {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
-                    title: "Price Updates",
-                    subtitle: "Choose how often Portu refreshes token pricing.",
+                    title: "Live Prices",
+                    subtitle: "Choose automatic refresh intervals by price provider.",
                     icon: .priceUpdates) {
-                        VStack(alignment: .leading, spacing: 14) {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text("Refresh interval")
-                                    .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
-                                    .foregroundStyle(SettingsDesign.primaryText)
-                                Text("Default: 30 seconds")
-                                    .font(.footnote)
-                                    .foregroundStyle(SettingsDesign.secondaryText)
-                            }
+                        VStack(alignment: .leading, spacing: 10) {
+                            SettingsIntervalRow(
+                                title: "CoinGecko live prices",
+                                subtitle: "Default: 30 seconds. Longer intervals intentionally keep dashboard prices stale between refreshes.",
+                                selection: $refreshInterval,
+                                fallbackSeconds: PricePollingSettings.defaultRefreshIntervalSeconds,
+                                options: .coinGeckoLivePrices)
 
-                            RefreshIntervalControl(selection: $refreshInterval)
+                            SettingsIntervalRow(
+                                title: "Zapper live price fallback",
+                                subtitle: "Default: 1 hour. Used only for onchain tokens CoinGecko cannot price.",
+                                selection: $zapperLivePriceInterval,
+                                fallbackSeconds: ProviderIntervalSettings.defaultZapperLivePriceIntervalSeconds,
+                                options: .zapperLivePriceFallback)
+                        }
+                    }
+
+                SettingsSectionCard(
+                    title: "Portfolio Sync",
+                    subtitle: "Control automatic portfolio sync calls by provider.",
+                    icon: .priceUpdates) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            SettingsIntervalRow(
+                                title: "Zapper portfolio sync",
+                                subtitle: "Default: 6 hours. Manual only disables scheduled Zapper portfolio refreshes.",
+                                selection: $zapperPortfolioSyncInterval,
+                                fallbackSeconds: ProviderIntervalSettings.defaultZapperPortfolioSyncIntervalSeconds,
+                                options: .zapperPortfolioSync)
+
+                            SettingsIntervalRow(
+                                title: "Exchange portfolio sync",
+                                subtitle: "Default: 1 hour. Manual only disables scheduled exchange portfolio refreshes.",
+                                selection: $exchangePortfolioSyncInterval,
+                                fallbackSeconds: ProviderIntervalSettings.defaultExchangePortfolioSyncIntervalSeconds,
+                                options: .exchangePortfolioSync)
                         }
                     }
 
@@ -324,7 +354,7 @@ private struct GeneralSettingsTab: View {
 
                 SettingsInfoCard(
                     title: "Auto-saved",
-                    message: "This setting is stored locally with AppStorage and applies across Portu views.")
+                    message: "These settings are stored locally with AppStorage and apply across Portu views.")
             }
         }
     }
@@ -387,74 +417,5 @@ enum HistoricalBackfillStatusFormatter {
             return "\(head):\(tail.prefix(6))...\(tail.suffix(4))"
         }
         return "\(trimmed.prefix(12))...\(trimmed.suffix(8))"
-    }
-}
-
-private enum RefreshIntervalOption: Double, CaseIterable, Identifiable {
-    case fifteenSeconds = 15
-    case thirtySeconds = 30
-    case oneMinute = 60
-    case fiveMinutes = 300
-
-    var id: Double {
-        rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .fifteenSeconds: "15 seconds"
-        case .thirtySeconds: "30 seconds"
-        case .oneMinute: "1 minute"
-        case .fiveMinutes: "5 minutes"
-        }
-    }
-}
-
-private struct RefreshIntervalControl: View {
-    @Binding var selection: Double
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(RefreshIntervalOption.allCases) { option in
-                Button {
-                    selection = option.rawValue
-                } label: {
-                    Text(option.title)
-                        .font(.footnote.weight(isSelected(option) ? .bold : .regular))
-                        .foregroundStyle(isSelected(option) ? SettingsDesign.primaryText : SettingsDesign.secondaryText)
-                        .frame(width: 84, height: 30)
-                        .background(selectedBackground(for: option))
-                }
-                .buttonStyle(.plain)
-
-                if option != .fiveMinutes {
-                    Rectangle()
-                        .fill(SettingsDesign.separator)
-                        .frame(width: 1, height: 24)
-                }
-            }
-        }
-        .padding(2)
-        .background(
-            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                .fill(SettingsDesign.subtleCardBackground))
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                .stroke(SettingsDesign.cardStroke, lineWidth: 1))
-    }
-
-    private func isSelected(_ option: RefreshIntervalOption) -> Bool {
-        selection == option.rawValue
-    }
-
-    @ViewBuilder
-    private func selectedBackground(for option: RefreshIntervalOption) -> some View {
-        if isSelected(option) {
-            RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                .fill(SettingsDesign.accentPrimary.opacity(0.42))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
-                        .stroke(SettingsDesign.accentPrimary.opacity(0.62), lineWidth: 1))
-        }
     }
 }

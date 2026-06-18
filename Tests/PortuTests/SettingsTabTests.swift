@@ -82,13 +82,51 @@ struct SettingsTabTests {
         let defaults = cleanDefaults()
 
         #expect(PricePollingSettings.refreshIntervalKey == "refreshInterval")
+        #expect(PricePollingSettings.allowedRefreshIntervalSeconds == [30, 60, 300, 900, 3600, 21600, 86400])
         #expect(PricePollingSettings.refreshIntervalSeconds(defaults: defaults) == 30)
 
-        defaults.set(60.0, forKey: PricePollingSettings.refreshIntervalKey)
-        #expect(PricePollingSettings.refreshIntervalSeconds(defaults: defaults) == 60)
+        defaults.set(86400.0, forKey: PricePollingSettings.refreshIntervalKey)
+        #expect(PricePollingSettings.refreshIntervalSeconds(defaults: defaults) == 86400)
 
-        defaults.set(7.0, forKey: PricePollingSettings.refreshIntervalKey)
+        defaults.set(15.0, forKey: PricePollingSettings.refreshIntervalKey)
         #expect(PricePollingSettings.refreshIntervalSeconds(defaults: defaults) == 30)
+    }
+
+    @Test func `provider interval settings use provider keys defaults and allowed values`() {
+        let defaults = cleanDefaults()
+
+        #expect(ProviderIntervalSettings.manualOnlySeconds == 0)
+        #expect(ProviderIntervalSettings.zapperLivePriceIntervalKey == "providerIntervals.zapperLivePrice")
+        #expect(ProviderIntervalSettings.zapperPortfolioSyncIntervalKey == "providerIntervals.zapperPortfolioSync")
+        #expect(ProviderIntervalSettings.exchangePortfolioSyncIntervalKey == "providerIntervals.exchangePortfolioSync")
+
+        #expect(ProviderIntervalSettings.allowedZapperLivePriceIntervalSeconds == [0, 600, 3600, 21600, 86400])
+        #expect(ProviderIntervalSettings.allowedZapperPortfolioSyncIntervalSeconds == [0, 3600, 21600, 86400])
+        #expect(ProviderIntervalSettings.allowedExchangePortfolioSyncIntervalSeconds == [0, 600, 3600, 21600, 86400])
+
+        #expect(ProviderIntervalSettings.zapperLivePriceIntervalSeconds(defaults: defaults) == 3600)
+        #expect(ProviderIntervalSettings.zapperPortfolioSyncIntervalSeconds(defaults: defaults) == 21600)
+        #expect(ProviderIntervalSettings.exchangePortfolioSyncIntervalSeconds(defaults: defaults) == 3600)
+    }
+
+    @Test func `provider interval settings convert manual only to no duration`() {
+        let defaults = cleanDefaults()
+
+        defaults.set(0.0, forKey: ProviderIntervalSettings.zapperLivePriceIntervalKey)
+        defaults.set(0.0, forKey: ProviderIntervalSettings.zapperPortfolioSyncIntervalKey)
+        defaults.set(0.0, forKey: ProviderIntervalSettings.exchangePortfolioSyncIntervalKey)
+
+        #expect(ProviderIntervalSettings.zapperLivePriceInterval(defaults: defaults) == nil)
+        #expect(ProviderIntervalSettings.zapperPortfolioSyncInterval(defaults: defaults) == nil)
+        #expect(ProviderIntervalSettings.exchangePortfolioSyncInterval(defaults: defaults) == nil)
+
+        defaults.set(7.0, forKey: ProviderIntervalSettings.zapperLivePriceIntervalKey)
+        defaults.set(7.0, forKey: ProviderIntervalSettings.zapperPortfolioSyncIntervalKey)
+        defaults.set(7.0, forKey: ProviderIntervalSettings.exchangePortfolioSyncIntervalKey)
+
+        #expect(ProviderIntervalSettings.zapperLivePriceIntervalSeconds(defaults: defaults) == 3600)
+        #expect(ProviderIntervalSettings.zapperPortfolioSyncIntervalSeconds(defaults: defaults) == 21600)
+        #expect(ProviderIntervalSettings.exchangePortfolioSyncIntervalSeconds(defaults: defaults) == 3600)
     }
 
     @Test func `historical price settings use shared keys and labels`() {

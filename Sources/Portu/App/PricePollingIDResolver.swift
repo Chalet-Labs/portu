@@ -4,6 +4,14 @@ import PortuCore
 struct PricePollingRequest: Equatable {
     var coinGeckoIDs: [String]
     var zapperIdentities: [OnchainTokenIdentity]
+
+    var isEmpty: Bool {
+        coinGeckoIDs.isEmpty && zapperIdentities.isEmpty
+    }
+
+    var allPriceIDs: [String] {
+        coinGeckoIDs + zapperIdentities.map(\.historicalPriceID)
+    }
 }
 
 enum PricePollingIDResolver {

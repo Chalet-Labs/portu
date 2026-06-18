@@ -13,6 +13,12 @@ struct ContentView: View {
             mainDashboard
         }
         .frame(minWidth: 900, minHeight: 600)
+        .task {
+            store.send(.startScheduledSync)
+        }
+        .onDisappear {
+            store.send(.stopScheduledSync)
+        }
     }
 
     private var mainDashboard: some View {

@@ -3,211 +3,6 @@ import Foundation
 import PortuCore
 import PortuNetwork
 
-// MARK: - SyncEngineClient
-
-struct SyncResult: Equatable {
-    var failedAccounts: [String]
-    var isPartial: Bool {
-        !failedAccounts.isEmpty
-    }
-}
-
-struct SyncEngineClient {
-    var sync: @Sendable () async throws -> SyncResult
-}
-
-extension SyncEngineClient: DependencyKey {
-    static let liveValue = Self(
-        sync: { fatalError("SyncEngineClient.liveValue must be overridden at Store creation") })
-    static let testValue = Self(
-        sync: { SyncResult(failedAccounts: []) })
-
-    static func live(engine: SyncEngine) -> Self {
-        Self(sync: { try await engine.sync() })
-    }
-}
-
-extension DependencyValues {
-    var syncEngine: SyncEngineClient {
-        get { self[SyncEngineClient.self] }
-        set { self[SyncEngineClient.self] = newValue }
-    }
-}
-
-// MARK: - PriceServiceClient
-
-struct PriceServiceClient {
-    enum ClientError: Error {
-        /// Returned by `fetchZapperHistoricalPrices` when no Zapper API key is configured.
-        /// The backfill runner's upstream pre-filter normally prevents reaching this path,
-        /// but a missing key here means the candidate cannot be fetched — surface it as a
-        /// failure instead of silently returning an empty result set.
-        case zapperProviderUnavailable
-    }
-
-    var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
-    var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
-    var resolveCoinGeckoIDs: @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String]
-    var fetchZapperHistoricalPrices: @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO]
-    var canFetchZapperHistoricalPrices: @Sendable () -> Bool
-    var invalidateCache: @Sendable () async -> Void
-
-    init(
-        fetchPrices: @escaping @Sendable ([String]) async throws -> PriceUpdate,
-        fetchHistoricalPrices: @escaping @Sendable (String, Int) async throws -> [HistoricalPriceDTO],
-        resolveCoinGeckoIDs: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String] = { _ in [:] },
-        fetchZapperHistoricalPrices: @escaping @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO] = { _, _ in [] },
-        canFetchZapperHistoricalPrices: @escaping @Sendable () -> Bool = { true },
-        invalidateCache: @escaping @Sendable () async -> Void) {
-        self.fetchPrices = fetchPrices
-        self.fetchHistoricalPrices = fetchHistoricalPrices
-        self.resolveCoinGeckoIDs = resolveCoinGeckoIDs
-        self.fetchZapperHistoricalPrices = fetchZapperHistoricalPrices
-        self.canFetchZapperHistoricalPrices = canFetchZapperHistoricalPrices
-        self.invalidateCache = invalidateCache
-    }
-}
-
-enum LivePriceUpdateBuilder {
-    static func fetchPrices(
-        coinIds: [String],
-        priceService: PriceService,
-        fetchZapperUpdate: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate) async throws -> PriceUpdate {
-        let request = PricePollingIDResolver.split(coinIds)
-        let coinGeckoUpdate = try await fetchCoinGeckoIDUpdate(
-            coinIDs: request.coinGeckoIDs,
-            priceService: priceService,
-            allowEmptyOnFailure: !request.zapperIdentities.isEmpty)
-        let tokenUpdate = await fetchCoinGeckoTokenUpdate(
-            identities: request.zapperIdentities,
-            priceService: priceService)
-        let unresolvedZapperIdentities = request.zapperIdentities.filter {
-            tokenUpdate.prices[$0.historicalPriceID] == nil
-        }
-        let zapperUpdate: PriceUpdate
-        do {
-            zapperUpdate = try await fetchZapperUpdate(unresolvedZapperIdentities)
-        } catch {
-            zapperUpdate = PricePollingIDResolver.emptyUpdate
-        }
-        return PricePollingIDResolver.merge([coinGeckoUpdate, tokenUpdate, zapperUpdate])
-    }
-
-    private static func fetchCoinGeckoIDUpdate(
-        coinIDs: [String],
-        priceService: PriceService,
-        allowEmptyOnFailure: Bool) async throws -> PriceUpdate {
-        guard !coinIDs.isEmpty else { return PricePollingIDResolver.emptyUpdate }
-        do {
-            return try await priceService.fetchPriceUpdate(for: coinIDs)
-        } catch {
-            guard allowEmptyOnFailure else { throw error }
-            return PricePollingIDResolver.emptyUpdate
-        }
-    }
-
-    private static func fetchCoinGeckoTokenUpdate(
-        identities: [OnchainTokenIdentity],
-        priceService: PriceService) async -> PriceUpdate {
-        guard !identities.isEmpty else { return PricePollingIDResolver.emptyUpdate }
-        do {
-            return try await priceService.fetchTokenPriceUpdate(for: identities)
-        } catch {
-            return PricePollingIDResolver.emptyUpdate
-        }
-    }
-}
-
-extension PriceServiceClient: DependencyKey {
-    static let liveValue = Self(
-        fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        fetchHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        resolveCoinGeckoIDs: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        fetchZapperHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        canFetchZapperHistoricalPrices: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        invalidateCache: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") })
-    static let testValue = Self(
-        fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
-        fetchHistoricalPrices: { _, _ in [] },
-        resolveCoinGeckoIDs: { _ in [:] },
-        fetchZapperHistoricalPrices: { _, _ in [] },
-        canFetchZapperHistoricalPrices: { true },
-        invalidateCache: {})
-
-    static func live(service: PriceService, zapperProvider: ZapperProvider? = nil) -> Self {
-        Self(
-            fetchPrices: { coinIds in
-                try await LivePriceUpdateBuilder.fetchPrices(
-                    coinIds: coinIds,
-                    priceService: service) { identities in
-                        guard let zapperProvider, !identities.isEmpty else {
-                            return PricePollingIDResolver.emptyUpdate
-                        }
-                        return try await zapperProvider.fetchPriceUpdate(for: identities)
-                    }
-            },
-            fetchHistoricalPrices: { coinId, days in
-                try await service.fetchHistoricalPrices(for: coinId, days: days)
-            },
-            resolveCoinGeckoIDs: { identities in
-                try await service.resolveCoinGeckoIDs(for: identities)
-            },
-            fetchZapperHistoricalPrices: { identity, days in
-                guard let zapperProvider else {
-                    throw ClientError.zapperProviderUnavailable
-                }
-                return try await zapperProvider.fetchHistoricalPrices(identity: identity, days: days)
-            },
-            canFetchZapperHistoricalPrices: { zapperProvider != nil },
-            invalidateCache: { await service.invalidateCache() })
-    }
-}
-
-extension DependencyValues {
-    var priceService: PriceServiceClient {
-        get { self[PriceServiceClient.self] }
-        set { self[PriceServiceClient.self] = newValue }
-    }
-}
-
-// MARK: - PricePollingSettingsClient
-
-struct PricePollingSettingsClient {
-    var refreshInterval: @Sendable () -> Duration
-}
-
-extension PricePollingSettingsClient: DependencyKey {
-    static let liveValue = Self(
-        refreshInterval: { PricePollingSettings.refreshInterval() })
-    static let testValue = Self(
-        refreshInterval: { .seconds(PricePollingSettings.defaultRefreshIntervalSeconds) })
-}
-
-extension DependencyValues {
-    var pricePollingSettings: PricePollingSettingsClient {
-        get { self[PricePollingSettingsClient.self] }
-        set { self[PricePollingSettingsClient.self] = newValue }
-    }
-}
-
-// MARK: - CurrentDateClient
-
-struct CurrentDateClient {
-    var now: @Sendable () -> Date
-}
-
-extension CurrentDateClient: DependencyKey {
-    static let liveValue = Self(now: { Date.now })
-    static let testValue = Self(now: { Date(timeIntervalSince1970: 1_000_000) })
-}
-
-extension DependencyValues {
-    var currentDate: CurrentDateClient {
-        get { self[CurrentDateClient.self] }
-        set { self[CurrentDateClient.self] = newValue }
-    }
-}
-
 // MARK: - AppFeature
 
 @Reducer
@@ -244,6 +39,10 @@ struct AppFeature {
         case syncTapped
         case syncProgressUpdated(Double)
         case syncCompleted(Result<SyncResult, Error>)
+        case startScheduledSync
+        case stopScheduledSync
+        case scheduledSyncDue(PortfolioSyncScope)
+        case scheduledSyncCompleted(Result<SyncResult, Error>)
         case startPricePolling([String])
         case stopPricePolling
         case pricesReceived(PriceUpdate)
@@ -258,11 +57,13 @@ struct AppFeature {
 
     private enum CancelID {
         case pricePolling
+        case scheduledSync
     }
 
     @Dependency(\.syncEngine) var syncEngine
     @Dependency(\.priceService) var priceService
     @Dependency(\.pricePollingSettings) var pricePollingSettings
+    @Dependency(\.providerSyncSettings) var providerSyncSettings
     @Dependency(\.continuousClock) var clock
     @Dependency(\.currentDate) var currentDate
 
@@ -322,20 +123,121 @@ struct AppFeature {
                 state.syncStatus = .error(error.localizedDescription)
                 return .none
 
-            case let .startPricePolling(coinIds):
-                state.connectionStatus = .fetching
+            case .startScheduledSync:
                 return .run { send in
+                    var lastZapperSync = currentDate.now()
+                    var lastExchangeSync = currentDate.now()
+
                     while !Task.isCancelled {
-                        do {
-                            let update = try await priceService.fetchPrices(coinIds)
-                            await send(.pricesReceived(update))
-                        } catch {
-                            await send(.priceFetchFailed(error))
+                        let now = currentDate.now()
+                        let zapperInterval = providerSyncSettings.zapperPortfolioSyncInterval()
+                        let exchangeInterval = providerSyncSettings.exchangePortfolioSyncInterval()
+
+                        if let zapperInterval {
+                            if now.timeIntervalSince(lastZapperSync) >= Self.timeInterval(for: zapperInterval) {
+                                lastZapperSync = now
+                                await send(.scheduledSyncDue(.zapper))
+                            }
+                        } else {
+                            lastZapperSync = now
                         }
-                        try await clock.sleep(for: pricePollingSettings.refreshInterval())
+
+                        if let exchangeInterval {
+                            if now.timeIntervalSince(lastExchangeSync) >= Self.timeInterval(for: exchangeInterval) {
+                                lastExchangeSync = now
+                                await send(.scheduledSyncDue(.exchange))
+                            }
+                        } else {
+                            lastExchangeSync = now
+                        }
+
+                        let sleepDuration = Self.scheduledSyncSleepDuration(
+                            now: now,
+                            lastZapperSync: lastZapperSync,
+                            lastExchangeSync: lastExchangeSync,
+                            zapperInterval: zapperInterval,
+                            exchangeInterval: exchangeInterval)
+                        try await clock.sleep(for: sleepDuration)
                     }
                 }
-                .cancellable(id: CancelID.pricePolling, cancelInFlight: true)
+                .cancellable(id: CancelID.scheduledSync, cancelInFlight: true)
+
+            case .stopScheduledSync:
+                return .cancel(id: CancelID.scheduledSync)
+
+            case let .scheduledSyncDue(scope):
+                if case .syncing = state.syncStatus { return .none }
+                state.syncStatus = .syncing(progress: 0)
+                return .run { send in
+                    let result = try await syncEngine.syncScope(scope)
+                    await send(.scheduledSyncCompleted(.success(result)))
+                } catch: { error, send in
+                    await send(.scheduledSyncCompleted(.failure(error)))
+                }
+
+            case let .scheduledSyncCompleted(.success(result)):
+                if result.isPartial {
+                    state.syncStatus = .completedWithErrors(failedAccounts: result.failedAccounts)
+                } else {
+                    state.syncStatus = .idle
+                }
+                return .none
+
+            case let .scheduledSyncCompleted(.failure(error)):
+                state.syncStatus = .error(error.localizedDescription)
+                return .none
+
+            case let .startPricePolling(coinIds):
+                let request = PricePollingIDResolver.split(coinIds)
+                guard request.isEmpty == false else { return .none }
+                state.connectionStatus = .fetching
+
+                var effects: [Effect<Action>] = [
+                    .run { send in
+                        while !Task.isCancelled {
+                            do {
+                                let update = try await priceService.fetchCoinGeckoPrices(request)
+                                await send(.pricesReceived(update))
+                            } catch {
+                                await send(.priceFetchFailed(error))
+                            }
+                            try await clock.sleep(for: pricePollingSettings.refreshInterval())
+                        }
+                    }
+                ]
+
+                if request.zapperIdentities.isEmpty == false {
+                    effects.append(.run { send in
+                        while !Task.isCancelled {
+                            guard let zapperFallbackInterval = pricePollingSettings.zapperFallbackInterval() else {
+                                try await clock.sleep(for: Self.settingsRecheckInterval)
+                                continue
+                            }
+
+                            do {
+                                let update = try await priceService.fetchZapperPrices(request.zapperIdentities)
+                                await send(.pricesReceived(update))
+                            } catch {
+                                await send(.priceFetchFailed(error))
+                            }
+
+                            var elapsed: Duration = .zero
+                            while !Task.isCancelled {
+                                guard let currentInterval = pricePollingSettings.zapperFallbackInterval() else {
+                                    break
+                                }
+                                guard elapsed < currentInterval else { break }
+                                let remaining = currentInterval - elapsed
+                                let sleepDuration = Self.shorterDuration(remaining, Self.settingsRecheckInterval)
+                                try await clock.sleep(for: sleepDuration)
+                                elapsed += sleepDuration
+                            }
+                        }
+                    })
+                }
+
+                return .merge(effects)
+                    .cancellable(id: CancelID.pricePolling, cancelInFlight: true)
 
             case let .pricesReceived(update):
                 state.prices.merge(update.prices) { _, new in new }
@@ -374,6 +276,49 @@ struct AppFeature {
     }
 }
 
+private extension AppFeature {
+    static let settingsRecheckInterval: Duration = .seconds(10)
+
+    static func scheduledSyncSleepDuration(
+        now: Date,
+        lastZapperSync: Date,
+        lastExchangeSync: Date,
+        zapperInterval: Duration?,
+        exchangeInterval: Duration?) -> Duration {
+        var sleepDuration = settingsRecheckInterval
+
+        if let zapperInterval {
+            sleepDuration = shorterDuration(
+                sleepDuration,
+                remainingDuration(interval: zapperInterval, lastSync: lastZapperSync, now: now))
+        }
+
+        if let exchangeInterval {
+            sleepDuration = shorterDuration(
+                sleepDuration,
+                remainingDuration(interval: exchangeInterval, lastSync: lastExchangeSync, now: now))
+        }
+
+        return sleepDuration
+    }
+
+    static func remainingDuration(interval: Duration, lastSync: Date, now: Date) -> Duration {
+        let remainingSeconds = timeInterval(for: interval) - now.timeIntervalSince(lastSync)
+        guard remainingSeconds > 0 else { return .zero }
+        return .seconds(remainingSeconds)
+    }
+
+    static func shorterDuration(_ lhs: Duration, _ rhs: Duration) -> Duration {
+        lhs < rhs ? lhs : rhs
+    }
+
+    static func timeInterval(for duration: Duration) -> TimeInterval {
+        let components = duration.components
+        let attosecondsPerSecond = 1_000_000_000_000_000_000.0
+        return TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / attosecondsPerSecond
+    }
+}
+
 // MARK: - Equatable for Result
 
 extension AppFeature.Action: Equatable {
@@ -386,6 +331,11 @@ extension AppFeature.Action: Equatable {
         case let (.syncProgressUpdated(l), .syncProgressUpdated(r)): l == r
         case let (.syncCompleted(.success(l)), .syncCompleted(.success(r))): l == r
         case (.syncCompleted(.failure), .syncCompleted(.failure)): true
+        case (.startScheduledSync, .startScheduledSync): true
+        case (.stopScheduledSync, .stopScheduledSync): true
+        case let (.scheduledSyncDue(l), .scheduledSyncDue(r)): l == r
+        case let (.scheduledSyncCompleted(.success(l)), .scheduledSyncCompleted(.success(r))): l == r
+        case (.scheduledSyncCompleted(.failure), .scheduledSyncCompleted(.failure)): true
         case let (.startPricePolling(l), .startPricePolling(r)): l == r
         case (.stopPricePolling, .stopPricePolling): true
         case let (.pricesReceived(l), .pricesReceived(r)): l == r
