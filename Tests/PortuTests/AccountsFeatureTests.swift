@@ -444,3 +444,44 @@ struct AccountRowActionPolicyTests {
         #expect(AccountRowActionPolicy.deleteDisabled(globalSyncIsRunning: true))
     }
 }
+
+// MARK: - Sheet Sync Policy
+
+struct AccountSheetSyncPolicyTests {
+    @Test func `add sheet is blocked during any sync`() {
+        let policy = AccountSheetSyncPolicy.state(
+            mode: .add,
+            syncStatus: .syncing(progress: 0.4),
+            syncingAccountID: UUID())
+
+        #expect(policy.isSyncing == false)
+        #expect(policy.isSyncBlocked == true)
+    }
+
+    @Test func `edit sheet marks selected syncing account separately from blocked accounts`() {
+        let accountID = UUID()
+        let selectedPolicy = AccountSheetSyncPolicy.state(
+            mode: .edit(accountID),
+            syncStatus: .syncing(progress: 0.4),
+            syncingAccountID: accountID)
+        let blockedPolicy = AccountSheetSyncPolicy.state(
+            mode: .edit(UUID()),
+            syncStatus: .syncing(progress: 0.4),
+            syncingAccountID: accountID)
+
+        #expect(selectedPolicy.isSyncing == true)
+        #expect(selectedPolicy.isSyncBlocked == false)
+        #expect(blockedPolicy.isSyncing == false)
+        #expect(blockedPolicy.isSyncBlocked == true)
+    }
+
+    @Test func `sheet is editable while sync is idle`() {
+        let policy = AccountSheetSyncPolicy.state(
+            mode: .add,
+            syncStatus: .idle,
+            syncingAccountID: nil)
+
+        #expect(policy.isSyncing == false)
+        #expect(policy.isSyncBlocked == false)
+    }
+}

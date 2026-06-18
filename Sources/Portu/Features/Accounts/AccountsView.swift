@@ -113,18 +113,24 @@ struct AccountsView: View {
 
     @ViewBuilder
     private func accountSheet(for mode: AccountSheetMode) -> some View {
+        let syncState = AccountSheetSyncPolicy.state(
+            mode: mode,
+            syncStatus: store.syncStatus,
+            syncingAccountID: store.syncingAccountID)
         switch mode {
         case .add:
-            AddAccountSheet()
+            AddAccountSheet(
+                isSyncing: syncState.isSyncing,
+                isSyncBlocked: syncState.isSyncBlocked)
 
         case let .edit(accountID):
             if let account = accounts.first(where: { $0.id == accountID }) {
                 AddAccountSheet(
                     mode: mode,
                     account: account,
-                    isSyncing: accountIsSyncing(account.id),
+                    isSyncing: syncState.isSyncing,
                     canSync: account.isSyncable,
-                    isSyncBlocked: store.syncStatus.isSyncing && store.syncingAccountID != account.id,
+                    isSyncBlocked: syncState.isSyncBlocked,
                     onSync: { id in store.send(.accountSyncTapped(id)) })
             } else {
                 VStack(spacing: 12) {

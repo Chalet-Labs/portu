@@ -74,6 +74,33 @@ enum AccountRowActionPolicy {
     }
 }
 
+struct AccountSheetSyncState: Equatable {
+    let isSyncing: Bool
+    let isSyncBlocked: Bool
+}
+
+enum AccountSheetSyncPolicy {
+    static func state(
+        mode: AccountSheetMode,
+        syncStatus: SyncStatus,
+        syncingAccountID: UUID?) -> AccountSheetSyncState {
+        guard syncStatus.isSyncing else {
+            return AccountSheetSyncState(isSyncing: false, isSyncBlocked: false)
+        }
+
+        switch mode {
+        case .add:
+            return AccountSheetSyncState(isSyncing: false, isSyncBlocked: true)
+
+        case let .edit(accountID):
+            let isSyncingThisAccount = syncingAccountID == accountID
+            return AccountSheetSyncState(
+                isSyncing: isSyncingThisAccount,
+                isSyncBlocked: !isSyncingThisAccount)
+        }
+    }
+}
+
 // MARK: - AccountsFeature
 
 enum AccountSheetMode: Equatable, Identifiable {
