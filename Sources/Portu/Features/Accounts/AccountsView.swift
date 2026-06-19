@@ -13,6 +13,7 @@ struct AccountsView: View {
     @State private var sortOrder: [KeyPathComparator<AccountRowData>] = [
         KeyPathComparator(\.name)
     ]
+    @State private var accountActionError: String?
 
     private var accountInputs: [AccountInput] {
         accounts.map { account in
@@ -21,6 +22,7 @@ struct AccountsView: View {
                 name: account.name,
                 kind: account.kind,
                 exchangeType: account.exchangeType,
+                dataSource: account.dataSource,
                 group: account.group,
                 isActive: account.isActive,
                 lastSyncError: account.lastSyncError,
@@ -52,11 +54,18 @@ struct AccountsView: View {
         }
         .padding(DashboardStyle.pagePadding)
         .dashboardPage()
-        .sheet(isPresented: Binding(
-            get: { store.accounts.showAddSheet },
-            set: { store.send(.accounts(.addSheetPresented($0))) })) {
-                AddAccountSheet()
+        .sheet(item: Binding(
+            get: { store.accounts.accountSheetMode },
+            set: { if $0 == nil { store.send(.accounts(.accountSheetDismissed)) } })) { mode in
+                accountSheet(for: mode)
                     .environment(\.colorScheme, .dark)
+        }
+        .alert("Unable to Update Account", isPresented: Binding(
+            get: { accountActionError != nil },
+            set: { if !$0 { accountActionError = nil } })) {
+                Button("OK") { accountActionError = nil }
+        } message: {
+            Text(accountActionError ?? "")
         }
     }
 
@@ -95,11 +104,47 @@ struct AccountsView: View {
                 .dashboardControl()
 
             Button("Add Account", systemImage: "plus") {
-                store.send(.accounts(.addSheetPresented(true)))
+                store.send(.accounts(.addAccountTapped))
             }
             .dashboardControl()
         }
         .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
+    }
+
+    @ViewBuilder
+    private func accountSheet(for mode: AccountSheetMode) -> some View {
+        let syncState = AccountSheetSyncPolicy.state(
+            mode: mode,
+            syncStatus: store.syncStatus,
+            syncingAccountID: store.syncingAccountID)
+        switch mode {
+        case .add:
+            AddAccountSheet(
+                isSyncing: syncState.isSyncing,
+                isSyncBlocked: syncState.isSyncBlocked)
+
+        case let .edit(accountID):
+            if let account = accounts.first(where: { $0.id == accountID }) {
+                AddAccountSheet(
+                    mode: mode,
+                    account: account,
+                    isSyncing: syncState.isSyncing,
+                    canSync: account.isSyncable,
+                    isSyncBlocked: syncState.isSyncBlocked,
+                    onSync: { id in store.send(.accountSyncTapped(id)) })
+            } else {
+                VStack(spacing: 12) {
+                    Text("Account not found")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(PortuTheme.dashboardText)
+                    Button("Close") {
+                        store.send(.accounts(.accountSheetDismissed))
+                    }
+                }
+                .frame(width: 420, height: 180)
+                .background(PortuTheme.dashboardPanelBackground)
+            }
+        }
     }
 
     // MARK: - Table
@@ -125,8 +170,10 @@ struct AccountsView: View {
                 Text(row.address)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .textSelection(.enabled)
+                    .help(row.address)
             }
-            .width(min: 100, ideal: 160)
+            .width(min: 260, ideal: 420)
 
             TableColumn("Type") { row in
                 CapsuleBadge(row.type)
@@ -146,20 +193,98 @@ struct AccountsView: View {
                 }
             }
             .width(min: 80, ideal: 120)
+
+            TableColumn("Actions") { row in
+                HStack(spacing: 6) {
+                    Button {
+                        store.send(.accounts(.editAccountTapped(row.id)))
+                    } label: {
+                        Image(systemName: "pencil")
+                            .frame(width: 18, height: 18)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Edit account")
+                    .accessibilityLabel("Edit account")
+
+                    Button {
+                        store.send(.accountSyncTapped(row.id))
+                    } label: {
+                        if rowIsSyncing(row) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .scaleEffect(0.62)
+                                .tint(PortuTheme.dashboardGold)
+                                .frame(width: 18, height: 18)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .frame(width: 18, height: 18)
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(rowSyncDisabled(row))
+                    .help(rowSyncHelp(row))
+                    .accessibilityLabel("Sync account")
+                }
+            }
+            .width(min: 78, ideal: 92)
         }
         .dashboardTable()
         .contextMenu(forSelectionType: AccountRowData.ID.self) { selection in
             if let id = selection.first, let account = accounts.first(where: { $0.id == id }) {
-                Button(account.isActive ? "Deactivate" : "Activate") {
-                    account.isActive.toggle()
-                    try? modelContext.save()
+                Button("Edit") {
+                    store.send(.accounts(.editAccountTapped(id)))
                 }
+                Button("Sync") {
+                    store.send(.accountSyncTapped(id))
+                }
+                .disabled(!account.isSyncable || store.syncStatus.isSyncing)
+                Divider()
+                Button(account.isActive ? "Deactivate" : "Activate") {
+                    do {
+                        try AccountSheetSaveCoordinator.setAccount(
+                            account,
+                            isActive: !account.isActive,
+                            modelContext: modelContext)
+                    } catch {
+                        accountActionError = error.localizedDescription
+                    }
+                }
+                .disabled(AccountRowActionPolicy.activationToggleDisabled(globalSyncIsRunning: store.syncStatus.isSyncing))
                 Divider()
                 Button("Delete", role: .destructive) {
-                    modelContext.delete(account)
-                    try? modelContext.save()
+                    do {
+                        try AccountSheetSaveCoordinator.deleteAccount(
+                            account,
+                            modelContext: modelContext,
+                            secretStore: LocalSecretStore())
+                    } catch {
+                        accountActionError = error.localizedDescription
+                    }
                 }
+                .disabled(AccountRowActionPolicy.deleteDisabled(globalSyncIsRunning: store.syncStatus.isSyncing))
             }
         }
+    }
+
+    private func rowSyncDisabled(_ row: AccountRowData) -> Bool {
+        AccountRowActionPolicy.syncDisabled(
+            rowIsSyncable: row.isSyncable,
+            globalSyncIsRunning: store.syncStatus.isSyncing)
+    }
+
+    private func rowIsSyncing(_ row: AccountRowData) -> Bool {
+        accountIsSyncing(row.id)
+    }
+
+    private func accountIsSyncing(_ accountID: UUID) -> Bool {
+        store.syncStatus.isSyncing && store.syncingAccountID == accountID
+    }
+
+    private func rowSyncHelp(_ row: AccountRowData) -> String {
+        AccountRowActionPolicy.syncHelp(
+            isActive: row.isActive,
+            dataSource: row.dataSource,
+            isSyncingThisAccount: accountIsSyncing(row.id),
+            globalSyncIsRunning: store.syncStatus.isSyncing)
     }
 }

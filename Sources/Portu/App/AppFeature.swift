@@ -20,6 +20,7 @@ struct AppFeature {
         }
 
         var syncStatus: SyncStatus = .idle
+        var syncingAccountID: UUID?
         var connectionStatus: ConnectionStatus = .idle
         var prices: [String: Decimal] = [:]
         var priceChanges24h: [String: Decimal] = [:]
@@ -37,8 +38,10 @@ struct AppFeature {
         case sectionSelected(SidebarSection)
         case settingsSelected
         case syncTapped
+        case accountSyncTapped(UUID)
         case syncProgressUpdated(Double)
         case syncCompleted(Result<SyncResult, Error>)
+        case accountSyncCompleted(Result<SyncResult, Error>)
         case startScheduledSync
         case stopScheduledSync
         case scheduledSyncDue(PortfolioSyncScope)
@@ -100,6 +103,7 @@ struct AppFeature {
             case .syncTapped:
                 if case .syncing = state.syncStatus { return .none }
                 state.syncStatus = .syncing(progress: 0)
+                state.syncingAccountID = nil
                 return .run { send in
                     let result = try await syncEngine.sync()
                     await send(.syncCompleted(.success(result)))
@@ -107,11 +111,23 @@ struct AppFeature {
                     await send(.syncCompleted(.failure(error)))
                 }
 
+            case let .accountSyncTapped(accountID):
+                if case .syncing = state.syncStatus { return .none }
+                state.syncStatus = .syncing(progress: 0)
+                state.syncingAccountID = accountID
+                return .run { send in
+                    let result = try await syncEngine.syncAccount(accountID)
+                    await send(.accountSyncCompleted(.success(result)))
+                } catch: { error, send in
+                    await send(.accountSyncCompleted(.failure(error)))
+                }
+
             case let .syncProgressUpdated(progress):
                 state.syncStatus = .syncing(progress: progress)
                 return .none
 
             case let .syncCompleted(.success(result)):
+                state.syncingAccountID = nil
                 if result.isPartial {
                     state.syncStatus = .completedWithErrors(failedAccounts: result.failedAccounts)
                 } else {
@@ -120,7 +136,30 @@ struct AppFeature {
                 return .none
 
             case let .syncCompleted(.failure(error)):
+                state.syncingAccountID = nil
                 state.syncStatus = .error(error.localizedDescription)
+                return .none
+
+            case let .accountSyncCompleted(.success(result)):
+                state.syncingAccountID = nil
+                if result.isPartial {
+                    state.syncStatus = .completedWithErrors(failedAccounts: result.failedAccounts)
+                } else {
+                    state.syncStatus = .idle
+                }
+                return .none
+
+            case let .accountSyncCompleted(.failure(error)):
+                // A single-account failure is surfaced on that row's `lastSyncError`
+                // when the engine throws allAccountsFailed after persisting the row
+                // error. Later-stage failures (snapshot/save) have no row error to
+                // show, so surface those globally.
+                state.syncingAccountID = nil
+                if (error as? SyncError) == .allAccountsFailed {
+                    state.syncStatus = .idle
+                } else {
+                    state.syncStatus = .error(error.localizedDescription)
+                }
                 return .none
 
             case .startScheduledSync:
@@ -168,6 +207,7 @@ struct AppFeature {
             case let .scheduledSyncDue(scope):
                 if case .syncing = state.syncStatus { return .none }
                 state.syncStatus = .syncing(progress: 0)
+                state.syncingAccountID = nil
                 return .run { send in
                     let result = try await syncEngine.syncScope(scope)
                     await send(.scheduledSyncCompleted(.success(result)))
@@ -176,6 +216,7 @@ struct AppFeature {
                 }
 
             case let .scheduledSyncCompleted(.success(result)):
+                state.syncingAccountID = nil
                 if result.isPartial {
                     state.syncStatus = .completedWithErrors(failedAccounts: result.failedAccounts)
                 } else {
@@ -184,6 +225,7 @@ struct AppFeature {
                 return .none
 
             case let .scheduledSyncCompleted(.failure(error)):
+                state.syncingAccountID = nil
                 state.syncStatus = .error(error.localizedDescription)
                 return .none
 
@@ -328,9 +370,12 @@ extension AppFeature.Action: Equatable {
         case let (.sectionSelected(l), .sectionSelected(r)): l == r
         case (.settingsSelected, .settingsSelected): true
         case (.syncTapped, .syncTapped): true
+        case let (.accountSyncTapped(l), .accountSyncTapped(r)): l == r
         case let (.syncProgressUpdated(l), .syncProgressUpdated(r)): l == r
         case let (.syncCompleted(.success(l)), .syncCompleted(.success(r))): l == r
         case (.syncCompleted(.failure), .syncCompleted(.failure)): true
+        case let (.accountSyncCompleted(.success(l)), .accountSyncCompleted(.success(r))): l == r
+        case (.accountSyncCompleted(.failure), .accountSyncCompleted(.failure)): true
         case (.startScheduledSync, .startScheduledSync): true
         case (.stopScheduledSync, .stopScheduledSync): true
         case let (.scheduledSyncDue(l), .scheduledSyncDue(r)): l == r

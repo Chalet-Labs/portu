@@ -147,6 +147,23 @@ struct ViewRenderSmokeTests {
         render(view)
     }
 
+    @Test func `edit account sheet renders without crashing`() throws {
+        let container = try makeContainer()
+        let account = try #require(try container.mainContext.fetch(FetchDescriptor<Account>()).first)
+
+        let view = AddAccountSheet(
+            mode: .edit(account.id),
+            account: account,
+            isSyncing: false,
+            canSync: true,
+            onSync: { _ in })
+            .modelContainer(container)
+            .environment(\.colorScheme, .dark)
+            .frame(width: 920, height: 760)
+
+        render(view)
+    }
+
     private func makeStore(section: SidebarSection) -> StoreOf<AppFeature> {
         makeStore(state: populatedState(section: section))
     }

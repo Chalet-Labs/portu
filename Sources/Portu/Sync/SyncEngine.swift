@@ -31,17 +31,37 @@ final class SyncEngine: @unchecked Sendable {
         return try await sync(activeSyncable: activeSyncable, activeManual: [])
     }
 
-    private func sync(activeSyncable: [Account], activeManual: [Account]) async throws -> SyncResult {
+    func sync(accountID: UUID) async throws -> SyncResult {
+        let account = try fetchAccount(id: accountID)
+        guard account.isActive else {
+            throw SyncError.accountInactive
+        }
+        guard account.dataSource != .manual else {
+            throw SyncError.accountNotSyncable
+        }
+
+        return try await sync(
+            activeSyncable: [account],
+            activeManual: [])
+    }
+
+    private func sync(
+        activeSyncable: [Account],
+        activeManual: [Account]) async throws -> SyncResult {
         guard !activeSyncable.isEmpty || !activeManual.isEmpty else {
             throw SyncError.noActiveAccounts
         }
 
+        let attemptedSyncableAccountIDs = Set(activeSyncable.map(\.id))
+
         // ── Phase A: Per-account fetch + persist ──
         var failedAccounts: [String] = []
+        var refreshedSyncableAccountIDs: Set<UUID> = []
 
         for account in activeSyncable {
             do {
                 try await syncAccount(account)
+                refreshedSyncableAccountIDs.insert(account.id)
             } catch {
                 account.lastSyncError = error.localizedDescription
                 failedAccounts.append(account.name)
@@ -55,7 +75,10 @@ final class SyncEngine: @unchecked Sendable {
             throw SyncError.allAccountsFailed
         }
 
-        try createSnapshots(isPartial: !failedAccounts.isEmpty)
+        let isPartialSnapshot = try hasActiveSyncableAccounts(outside: attemptedSyncableAccountIDs) || !failedAccounts.isEmpty
+        try createSnapshots(
+            isPartial: isPartialSnapshot,
+            refreshedSyncableAccountIDs: refreshedSyncableAccountIDs)
 
         return SyncResult(failedAccounts: failedAccounts)
     }
@@ -248,7 +271,9 @@ final class SyncEngine: @unchecked Sendable {
 
     // MARK: - Phase B: Snapshots
 
-    private func createSnapshots(isPartial: Bool) throws {
+    private func createSnapshots(
+        isPartial: Bool,
+        refreshedSyncableAccountIDs: Set<UUID>) throws {
         let batchId = UUID()
         let batchTimestamp = Date.now
 
@@ -260,11 +285,16 @@ final class SyncEngine: @unchecked Sendable {
         let activeAccounts = try fetchAllActiveAccounts()
 
         createPortfolioSnapshot(batchId: batchId, timestamp: batchTimestamp, positions: allPositions, isPartial: isPartial)
-        createAccountSnapshots(batchId: batchId, timestamp: batchTimestamp, accounts: activeAccounts)
+        createAccountSnapshots(
+            batchId: batchId,
+            timestamp: batchTimestamp,
+            accounts: activeAccounts,
+            refreshedSyncableAccountIDs: refreshedSyncableAccountIDs)
         createAssetSnapshots(
             batchId: batchId,
             timestamp: batchTimestamp,
-            positions: allPositions)
+            positions: allPositions,
+            refreshedSyncableAccountIDs: refreshedSyncableAccountIDs)
 
         pruneSnapshots()
         try modelContext.save()
@@ -308,10 +338,15 @@ final class SyncEngine: @unchecked Sendable {
         modelContext.insert(snap)
     }
 
-    private func createAccountSnapshots(batchId: UUID, timestamp: Date, accounts: [Account]) {
+    private func createAccountSnapshots(
+        batchId: UUID,
+        timestamp: Date,
+        accounts: [Account],
+        refreshedSyncableAccountIDs: Set<UUID>) {
         for account in accounts {
             let accountTotal = account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
-            let isFresh = account.dataSource == .manual || account.lastSyncError == nil
+            let isFresh = account.dataSource == .manual ||
+                (refreshedSyncableAccountIDs.contains(account.id) && account.lastSyncError == nil)
 
             let snap = AccountSnapshot(
                 syncBatchId: batchId, timestamp: timestamp,
@@ -323,11 +358,16 @@ final class SyncEngine: @unchecked Sendable {
     private func createAssetSnapshots(
         batchId: UUID,
         timestamp: Date,
-        positions: [Position]) {
+        positions: [Position],
+        refreshedSyncableAccountIDs: Set<UUID>) {
         var accumulators: [String: AssetSnapshotAccumulator] = [:]
 
         for pos in positions {
-            guard let accountId = pos.account?.id else { continue }
+            guard let account = pos.account else { continue }
+            if account.dataSource != .manual, refreshedSyncableAccountIDs.contains(account.id) == false {
+                continue
+            }
+            let accountId = account.id
 
             for token in pos.tokens {
                 guard let asset = token.asset else { continue }
@@ -406,6 +446,10 @@ final class SyncEngine: @unchecked Sendable {
         return try modelContext.fetch(descriptor).filter { $0.isActive && $0.dataSource != .manual }
     }
 
+    private func hasActiveSyncableAccounts(outside accountIDs: Set<UUID>) throws -> Bool {
+        try fetchActiveSyncableAccounts().contains { accountIDs.contains($0.id) == false }
+    }
+
     private func fetchActiveSyncableAccounts(scope: PortfolioSyncScope) throws -> [Account] {
         try fetchActiveSyncableAccounts().filter { account in
             switch scope {
@@ -427,6 +471,15 @@ final class SyncEngine: @unchecked Sendable {
         return try modelContext.fetch(descriptor)
     }
 
+    private func fetchAccount(id: UUID) throws -> Account {
+        var descriptor = FetchDescriptor<Account>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        guard let account = try modelContext.fetch(descriptor).first else {
+            throw SyncError.accountNotFound
+        }
+        return account
+    }
+
     private func makeAssetLookup() throws -> AssetLookupCache {
         try AssetLookupCache(assets: modelContext.fetch(FetchDescriptor<Asset>()))
     }
@@ -435,54 +488,5 @@ final class SyncEngine: @unchecked Sendable {
         guard let value else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-}
-
-/// Plain-value staging for syncAccount's build phase. Holding @Model instances
-/// (Position/PositionToken) here would cause SwiftData to auto-register them
-/// when their relationships are assigned to already-managed objects, defeating
-/// the build-phase isolation. Pure structs keep the staging side-effect-free.
-private struct StagedPosition {
-    let positionType: PositionType
-    let chain: Chain?
-    let protocolId: String?
-    let protocolName: String?
-    let protocolLogoURL: String?
-    let healthFactor: Double?
-    let netUSDValue: Decimal
-    let tokens: [StagedToken]
-}
-
-private struct StagedToken {
-    let role: TokenRole
-    let amount: Decimal
-    let usdValue: Decimal
-    /// Reference to the already-resolved (managed) Asset. Storing a pointer in
-    /// a value type does not trigger SwiftData tracking.
-    let asset: Asset
-}
-
-private struct AssetSnapshotAccumulator {
-    var accountId: UUID
-    var assetId: UUID
-    var symbol: String
-    var category: AssetCategory
-    var grossAmount: Decimal = 0
-    var grossUsdValue: Decimal = 0
-    var borrowAmount: Decimal = 0
-    var borrowUsdValue: Decimal = 0
-}
-
-enum SyncError: Error, LocalizedError, Equatable {
-    case missingAPIKey(String)
-    case noActiveAccounts
-    case allAccountsFailed
-
-    var errorDescription: String? {
-        switch self {
-        case let .missingAPIKey(msg): msg
-        case .noActiveAccounts: "No active accounts"
-        case .allAccountsFailed: "All accounts failed to sync"
-        }
     }
 }

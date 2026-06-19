@@ -3,20 +3,22 @@
 ## Scope
 
 Migrate `AccountsView` from `@Environment(AppState.self)` + `@State` to TCA.
-`AddAccountSheet` keeps its form `@State` (local, resets on dismiss).
+`AddAccountSheet` uses local draft state for add/edit form fields.
 
 ### In scope
 - Child reducer `AccountsFeature` under `AppFeature`
-- Filter/search/presentation state in reducer (replacing `@State`)
+- Filter/search/account sheet presentation state in reducer (replacing `@State`)
 - Pure functions for: account row mapping, filtering, group extraction, form validation
 - Lightweight `AccountInput` struct decoupling from SwiftData models
 - Views read from store, @Query stays in views
+- Account-scoped sync entry point exposed through `AppFeature`
 
 ### Out of scope
 - `sortOrder` (KeyPathComparator not Equatable — stays as view-local `@State`)
-- AddAccountSheet form fields (19 @State properties — purely local form state)
-- Save/delete side effects (SwiftData + Keychain — stay in views for now)
-- Context menu actions (toggle active, delete — mutate SwiftData directly)
+- Reducer-owned SwiftData mutations for account row actions; views route toggle/delete
+  through `AccountSheetSaveCoordinator` for save, rollback, and credential cleanup
+- Reducer-owned context menu effects; context menu actions remain view-driven and
+  delegate account persistence to `AccountSheetSaveCoordinator`
 
 ---
 
@@ -34,17 +36,19 @@ Migrate `AccountsView` from `@Environment(AppState.self)` + `@State` to TCA.
 - Toggle sets show/hide inactive accounts
 - State change through reducer action
 
-### B4: Show add sheet
-- Button opens add account sheet
-- Dismiss closes it
-- State change through reducer action
+### B4: Show account sheet
+- Add button opens add account sheet mode
+- Edit row/context action opens edit account sheet mode for the selected account id
+- Dismiss clears the sheet mode through reducer action
 
 ### B5: Account row mapping
 - Given a list of `AccountInput` entries:
-  - Maps to `AccountRowData` with name, group, address (truncated to 16 chars + ellipsis),
-    type (kind capitalized), balance, isActive, lastSyncError
+  - Maps to `AccountRowData` with name, group, full address, type (kind capitalized),
+    balance, dataSource, isActive, lastSyncError
   - Group defaults to em dash "—" when nil
-  - Address: first wallet address, or exchange type capitalized, or "Manual"
+  - Address: wallet first address or em dash when missing; exchange type capitalized
+    or "Exchange" when missing; "Manual" for manual accounts
+  - Row is syncable only when active and not manual
 
 ### B6: Account row filtering
 - Given rows + filter criteria:
@@ -60,3 +64,15 @@ Migrate `AccountsView` from `@Environment(AppState.self)` + `@State` to TCA.
 - Tab 0 (Chain): requires non-empty name AND address
 - Tab 1 (Manual): requires non-empty name
 - Tab 2 (Exchange): requires non-empty name AND API key AND API secret
+
+### B9: Edit account sheet
+- Edit mode pre-fills current account data
+- Edit mode locks the account type instead of allowing tab switching
+- Wallet edit updates name, group, notes, first address, and chain/EVM selection
+- Manual edit updates name, group, and notes
+- Exchange edit pre-fills and saves credentials for the same account id
+
+### B10: Account-scoped sync
+- Account row Sync and edit sheet Sync call the app-level account sync action
+- Sync is disabled for manual accounts, inactive accounts, and while another sync is running
+- Account-scoped sync updates the same global `SyncStatus` as full/provider sync

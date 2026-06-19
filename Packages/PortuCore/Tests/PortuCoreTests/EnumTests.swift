@@ -75,9 +75,11 @@ struct EnumTests {
     // MARK: - Chain
 
     @Test func `chain cases`() {
-        #expect(Chain.allCases.count == 30)
+        #expect(Chain.allCases.count == 32)
         #expect(Chain.allCases.contains(.degen))
         #expect(Chain.allCases.contains(.gnosis))
+        #expect(Chain.allCases.contains(.celo))
+        #expect(Chain.allCases.contains(.opBNB))
         #expect(Chain.allCases.contains(.unichain))
         #expect(Chain.allCases.contains(.berachain))
         #expect(Chain.allCases.contains(.sonic))

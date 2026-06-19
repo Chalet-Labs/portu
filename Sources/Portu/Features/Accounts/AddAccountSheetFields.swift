@@ -2,6 +2,37 @@ import PortuCore
 import PortuUI
 import SwiftUI
 
+enum AddAccountAccessibility {
+    static let closeButtonLabel = "Close"
+    static let closeButtonHint = "Closes the account sheet."
+}
+
+enum AddAccountSheetSavePolicy {
+    static func canSubmit(draftCanSave: Bool, isSyncing: Bool, isSyncBlocked: Bool) -> Bool {
+        draftCanSave && !isSyncing && !isSyncBlocked
+    }
+
+    static func canEditFields(isSyncing: Bool, isSyncBlocked: Bool) -> Bool {
+        !isSyncing && !isSyncBlocked
+    }
+}
+
+enum AddAccountExchangeSecrets {
+    static func persistedPassphrase(_ passphrase: String, for exchangeType: ExchangeType) -> String? {
+        guard exchangeType == .coinbase, !passphrase.isEmpty else {
+            return nil
+        }
+
+        return passphrase
+    }
+
+    static func passphraseAfterSelecting(
+        _ exchangeType: ExchangeType,
+        currentPassphrase: String) -> String {
+        exchangeType == .coinbase ? currentPassphrase : ""
+    }
+}
+
 struct AddAccountInfoRow: View {
     let icon: String
     var iconColor: Color = .blue.opacity(0.88)
@@ -237,6 +268,8 @@ extension Chain {
         case .bsc: "BNB Smart Chain"
         case .degen: "Degen"
         case .gnosis: "Gnosis"
+        case .celo: "Celo"
+        case .opBNB: "opBNB"
         case .unichain: "Unichain"
         case .berachain: "Berachain"
         case .sonic: "Sonic"

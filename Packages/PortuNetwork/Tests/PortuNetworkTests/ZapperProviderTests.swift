@@ -64,6 +64,34 @@ struct ZapperProviderTests {
     }
 
     @Test
+    func `fetchBalances decodes Celo and opBNB Zapper chain ids`() async throws {
+        defer { ZapperMockURLProtocol.reset() }
+        ZapperMockURLProtocol.requestHandler = { request in
+            let variables = try graphQLVariables(from: request)
+            let chainIds = try #require(variables["chainIds"] as? [Int])
+            let chainId = try #require(chainIds.first)
+            let response = switch chainId {
+            case 204:
+                tokenResponse(symbol: "BNB", tokenAddress: "0xbnb", chainId: 204)
+            case 42220:
+                tokenResponse(symbol: "CELO", tokenAddress: "0xcelo", chainId: 42220)
+            default:
+                tokenResponse(symbol: "UNKNOWN", tokenAddress: "0xunknown", chainId: chainId)
+            }
+            return try (jsonData(response), 200)
+        }
+
+        let context = makeSyncContext(addresses: [
+            ("0xcelo-wallet", .celo),
+            ("0xbnb-wallet", .opBNB)
+        ])
+        let provider = makeProvider(session: session)
+        let results = try await provider.fetchBalances(context: context)
+
+        #expect(results.map(\.chain) == [.opBNB, .celo])
+    }
+
+    @Test
     func `fetch historical prices reads Zapper price ticks by onchain identity`() async throws {
         defer { ZapperMockURLProtocol.reset() }
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")

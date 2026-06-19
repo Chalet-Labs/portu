@@ -21,4 +21,8 @@ struct AddAccountAccessibilityTests {
     @Test func `close icon button has explicit accessible label`() {
         #expect(AddAccountAccessibility.closeButtonLabel == "Close")
     }
+
+    @Test func `close icon button uses mode agnostic accessible hint`() {
+        #expect(AddAccountAccessibility.closeButtonHint == "Closes the account sheet.")
+    }
 }

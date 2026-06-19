@@ -9,6 +9,8 @@ public enum Chain: String, Codable, CaseIterable, Sendable {
     case bsc
     case degen
     case gnosis
+    case celo
+    case opBNB = "opbnb"
     case unichain
     case berachain
     case sonic
@@ -49,6 +51,8 @@ public extension Chain {
         case .bsc: "binance-smart-chain"
         case .degen: nil
         case .gnosis: "xdai"
+        case .celo: "celo"
+        case .opBNB: "opbnb"
         case .unichain: "unichain"
         case .berachain: "berachain"
         case .sonic: "sonic"
@@ -84,6 +88,8 @@ public extension Chain {
         case .bsc: "bsc"
         case .degen: "degenchain"
         case .gnosis: "xdai"
+        case .celo: "celo"
+        case .opBNB: "opbnb"
         case .unichain: "unichain"
         case .berachain: "berachain"
         case .sonic: "sonic"
