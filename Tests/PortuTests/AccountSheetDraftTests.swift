@@ -322,6 +322,33 @@ struct AccountSheetDraftTests {
         #expect(try context.fetch(FetchDescriptor<Account>()).count == 1)
     }
 
+    @Test func `delete exchange account keeps account and credentials when credential deletion fails`() throws {
+        let context = try makeModelContext()
+        let accountID = UUID()
+        let store = InMemorySecretStore()
+        store.storage[.exchangeAPIKey(accountID)] = "key"
+        store.storage[.exchangeAPISecret(accountID)] = "secret"
+        store.storage[.exchangePassphrase(accountID)] = "passphrase"
+        store.throwOnDeleteKeys = [.exchangeAPISecret(accountID)]
+        let account = Account(
+            id: accountID,
+            name: "Kraken",
+            kind: .exchange,
+            exchangeType: .kraken,
+            dataSource: .exchange)
+        context.insert(account)
+        try context.save()
+
+        #expect(throws: AccountSheetSaveError.self) {
+            try AccountSheetSaveCoordinator.deleteAccount(account, modelContext: context, secretStore: store)
+        }
+
+        #expect(store.storage[.exchangeAPIKey(accountID)] == "key")
+        #expect(store.storage[.exchangeAPISecret(accountID)] == "secret")
+        #expect(store.storage[.exchangePassphrase(accountID)] == "passphrase")
+        #expect(try context.fetch(FetchDescriptor<Account>()).count == 1)
+    }
+
     @Test func `set account active saves the account state`() throws {
         let context = try makeModelContext()
         let account = Account(name: "Archived", kind: .wallet, dataSource: .zapper, isActive: false)
@@ -395,14 +422,14 @@ struct AccountSheetDraftTests {
         #expect(updated.notes == nil)
     }
 
-    @Test func `deleting exchange credentials removes all stored keys`() {
+    @Test func `deleting exchange credentials removes all stored keys`() throws {
         let accountID = UUID()
         let store = InMemorySecretStore()
         store.storage[.exchangeAPIKey(accountID)] = "k"
         store.storage[.exchangeAPISecret(accountID)] = "s"
         store.storage[.exchangePassphrase(accountID)] = "p"
 
-        AccountSheetSaveCoordinator.deleteExchangeCredentials(accountID, secretStore: store)
+        try AccountSheetSaveCoordinator.deleteExchangeCredentials(accountID, secretStore: store)
 
         #expect(store.storage[.exchangeAPIKey(accountID)] == nil)
         #expect(store.storage[.exchangeAPISecret(accountID)] == nil)

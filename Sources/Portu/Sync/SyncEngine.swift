@@ -56,10 +56,12 @@ final class SyncEngine: @unchecked Sendable {
 
         // ── Phase A: Per-account fetch + persist ──
         var failedAccounts: [String] = []
+        var refreshedSyncableAccountIDs: Set<UUID> = []
 
         for account in activeSyncable {
             do {
                 try await syncAccount(account)
+                refreshedSyncableAccountIDs.insert(account.id)
             } catch {
                 account.lastSyncError = error.localizedDescription
                 failedAccounts.append(account.name)
@@ -76,7 +78,7 @@ final class SyncEngine: @unchecked Sendable {
         let isPartialSnapshot = try hasActiveSyncableAccounts(outside: attemptedSyncableAccountIDs) || !failedAccounts.isEmpty
         try createSnapshots(
             isPartial: isPartialSnapshot,
-            refreshedSyncableAccountIDs: attemptedSyncableAccountIDs)
+            refreshedSyncableAccountIDs: refreshedSyncableAccountIDs)
 
         return SyncResult(failedAccounts: failedAccounts)
     }
@@ -291,7 +293,8 @@ final class SyncEngine: @unchecked Sendable {
         createAssetSnapshots(
             batchId: batchId,
             timestamp: batchTimestamp,
-            positions: allPositions)
+            positions: allPositions,
+            refreshedSyncableAccountIDs: refreshedSyncableAccountIDs)
 
         pruneSnapshots()
         try modelContext.save()
@@ -355,11 +358,16 @@ final class SyncEngine: @unchecked Sendable {
     private func createAssetSnapshots(
         batchId: UUID,
         timestamp: Date,
-        positions: [Position]) {
+        positions: [Position],
+        refreshedSyncableAccountIDs: Set<UUID>) {
         var accumulators: [String: AssetSnapshotAccumulator] = [:]
 
         for pos in positions {
-            guard let accountId = pos.account?.id else { continue }
+            guard let account = pos.account else { continue }
+            if account.dataSource != .manual, refreshedSyncableAccountIDs.contains(account.id) == false {
+                continue
+            }
+            let accountId = account.id
 
             for token in pos.tokens {
                 guard let asset = token.asset else { continue }

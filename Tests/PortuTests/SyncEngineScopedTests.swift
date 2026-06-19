@@ -94,8 +94,13 @@ struct SyncEngineScopedTests {
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
         let selected = Account(name: "Selected", kind: .wallet, dataSource: .zapper)
         selected.addresses = [WalletAddress(address: "0xselected", account: selected)]
+        let staleAsset = Asset(symbol: "OLD", name: "Old Token", category: .major)
+        let staleToken = PositionToken(role: .balance, amount: 1, usdValue: 100, asset: staleAsset)
+        let stalePosition = Position(positionType: .idle, chain: .ethereum, netUSDValue: 100, tokens: [staleToken])
         let other = Account(name: "Other", kind: .wallet, dataSource: .zapper)
         other.addresses = [WalletAddress(address: "0xother", account: other)]
+        other.positions = [stalePosition]
+        context.insert(staleAsset)
         context.insert(selected)
         context.insert(other)
         try context.save()
@@ -114,6 +119,50 @@ struct SyncEngineScopedTests {
         #expect(otherSnapshot.isFresh == false)
         let portfolioSnapshot = try #require(try context.fetch(FetchDescriptor<PortfolioSnapshot>()).first)
         #expect(portfolioSnapshot.isPartial == true)
+        let assetSnapshots = try context.fetch(FetchDescriptor<AssetSnapshot>())
+        #expect(assetSnapshots.allSatisfy { $0.accountId == selected.id })
+    }
+
+    @Test func `partial sync asset snapshots skip failed account stale positions`() async throws {
+        let context = try makeModelContext()
+        let provider = ScopedSyncStubProvider(balances: [
+            PositionDTO(
+                positionType: .idle,
+                chain: .ethereum,
+                protocolId: nil,
+                protocolName: nil,
+                protocolLogoURL: nil,
+                healthFactor: nil,
+                tokens: [makeTokenDTO(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")])
+        ])
+        let succeeded = Account(name: "Succeeded", kind: .wallet, dataSource: .zapper)
+        succeeded.addresses = [WalletAddress(address: "0xsucceeded", account: succeeded)]
+        let staleAsset = Asset(symbol: "OLD", name: "Old Token", category: .major)
+        let staleToken = PositionToken(role: .balance, amount: 1, usdValue: 100, asset: staleAsset)
+        let stalePosition = Position(positionType: .idle, chain: .ethereum, netUSDValue: 100, tokens: [staleToken])
+        let failed = Account(name: "Failed", kind: .wallet, dataSource: .zapper)
+        failed.addresses = [WalletAddress(address: "0xfailed", account: failed)]
+        failed.positions = [stalePosition]
+        let failedID = failed.id
+        let factory = ProviderFactory(resolver: { _, context in
+            if context.accountId == failedID {
+                throw SyncEngineScopedTestError.forcedProviderFailure
+            }
+            return provider
+        })
+        let engine = SyncEngine(modelContext: context, providerFactory: factory)
+        context.insert(staleAsset)
+        context.insert(succeeded)
+        context.insert(failed)
+        try context.save()
+
+        let result = try await engine.sync()
+
+        #expect(result.failedAccounts == ["Failed"])
+        let assetSnapshots = try context.fetch(FetchDescriptor<AssetSnapshot>())
+        #expect(assetSnapshots.allSatisfy { $0.accountId == succeeded.id })
+        let failedSnapshot = try #require(try context.fetch(FetchDescriptor<AccountSnapshot>()).first { $0.accountId == failed.id })
+        #expect(failedSnapshot.isFresh == false)
     }
 
     @Test func `account scoped sync snapshot is complete when selected account is the only syncable account`() async throws {
@@ -365,4 +414,8 @@ private actor GatedScopedSyncStubProvider: PortfolioDataProvider {
 
         return balances
     }
+}
+
+private enum SyncEngineScopedTestError: Error {
+    case forcedProviderFailure
 }

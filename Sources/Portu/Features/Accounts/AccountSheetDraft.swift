@@ -115,26 +115,6 @@ struct AccountSheetDraft: Equatable {
     }
 }
 
-enum AccountSheetSaveError: Error, LocalizedError, Equatable {
-    case missingEditedAccount
-    case editedAccountMismatch
-    case credentialSaveFailed(String)
-    case accountSaveFailed(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .missingEditedAccount:
-            "The account being edited is no longer available."
-        case .editedAccountMismatch:
-            "The account being edited does not match the open sheet."
-        case let .credentialSaveFailed(message):
-            "Failed to save credentials: \(message)"
-        case let .accountSaveFailed(message):
-            "Failed to save account: \(message)"
-        }
-    }
-}
-
 enum AccountSheetSaveCoordinator {
     @MainActor
     static func save(
@@ -221,14 +201,14 @@ enum AccountSheetSaveCoordinator {
                     secretStore: secretStore,
                     rollbackTo: emptyCredentials)
             } catch {
-                deleteExchangeCredentials(accountID, secretStore: secretStore)
+                deleteExchangeCredentialsBestEffort(accountID, secretStore: secretStore)
                 throw error
             }
 
             do {
                 try insertAndSave(account, modelContext: modelContext)
             } catch {
-                deleteExchangeCredentials(accountID, secretStore: secretStore)
+                deleteExchangeCredentialsBestEffort(accountID, secretStore: secretStore)
                 throw error
             }
         }
@@ -374,15 +354,28 @@ enum AccountSheetSaveCoordinator {
         save: @MainActor (ModelContext) throws -> Void = { try $0.save() }) throws {
         let accountID = account.id
         let isExchange = account.kind == .exchange
+        let previousCredentials = if isExchange {
+            try readExchangeCredentials(for: accountID, secretStore: secretStore)
+        } else {
+            ExchangeCredentialSnapshot.empty
+        }
+        if isExchange {
+            do {
+                try deleteExchangeCredentials(accountID, secretStore: secretStore)
+            } catch {
+                restoreExchangeCredentials(previousCredentials, for: accountID, secretStore: secretStore)
+                throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
+            }
+        }
         modelContext.delete(account)
         do {
             try save(modelContext)
         } catch {
             modelContext.rollback()
+            if isExchange {
+                restoreExchangeCredentials(previousCredentials, for: accountID, secretStore: secretStore)
+            }
             throw AccountSheetSaveError.accountSaveFailed(error.localizedDescription)
-        }
-        if isExchange {
-            deleteExchangeCredentials(accountID, secretStore: secretStore)
         }
     }
 
@@ -479,7 +472,13 @@ enum AccountSheetSaveCoordinator {
     /// Removes all keychain entries for an account. Safe to call for non-exchange
     /// accounts (deletes of missing keys are no-ops); used both by the failure-cleanup
     /// paths here and by account deletion.
-    static func deleteExchangeCredentials(_ accountID: UUID, secretStore: any SecretStore) {
+    static func deleteExchangeCredentials(_ accountID: UUID, secretStore: any SecretStore) throws {
+        try secretStore.delete(key: .exchangeAPIKey(accountID))
+        try secretStore.delete(key: .exchangeAPISecret(accountID))
+        try secretStore.delete(key: .exchangePassphrase(accountID))
+    }
+
+    private static func deleteExchangeCredentialsBestEffort(_ accountID: UUID, secretStore: any SecretStore) {
         try? secretStore.delete(key: .exchangeAPIKey(accountID))
         try? secretStore.delete(key: .exchangeAPISecret(accountID))
         try? secretStore.delete(key: .exchangePassphrase(accountID))
@@ -489,12 +488,4 @@ enum AccountSheetSaveCoordinator {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
-}
-
-private struct ExchangeCredentialSnapshot: Equatable {
-    var apiKey: String?
-    var apiSecret: String?
-    var passphrase: String?
-
-    static let empty = Self(apiKey: nil, apiSecret: nil, passphrase: nil)
 }
