@@ -443,6 +443,11 @@ struct AccountRowActionPolicyTests {
         #expect(!AccountRowActionPolicy.deleteDisabled(globalSyncIsRunning: false))
         #expect(AccountRowActionPolicy.deleteDisabled(globalSyncIsRunning: true))
     }
+
+    @Test func `activation toggle is disabled while any sync is running`() {
+        #expect(AccountRowActionPolicy.activationToggleDisabled(globalSyncIsRunning: false) == false)
+        #expect(AccountRowActionPolicy.activationToggleDisabled(globalSyncIsRunning: true))
+    }
 }
 
 // MARK: - Sheet Sync Policy

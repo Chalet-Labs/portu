@@ -53,6 +53,10 @@ enum AccountRowActionPolicy {
         globalSyncIsRunning
     }
 
+    static func activationToggleDisabled(globalSyncIsRunning: Bool) -> Bool {
+        globalSyncIsRunning
+    }
+
     static func syncHelp(
         isActive: Bool,
         dataSource: DataSource,

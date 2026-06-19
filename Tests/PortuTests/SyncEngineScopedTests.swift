@@ -106,6 +106,11 @@ struct SyncEngineScopedTests {
         #expect(other.lastSyncedAt == nil)
         #expect(result.failedAccounts.isEmpty)
         #expect(try context.fetch(FetchDescriptor<AccountSnapshot>()).count == 2)
+        let accountSnapshots = try context.fetch(FetchDescriptor<AccountSnapshot>())
+        let selectedSnapshot = try #require(accountSnapshots.first { $0.accountId == selected.id })
+        let otherSnapshot = try #require(accountSnapshots.first { $0.accountId == other.id })
+        #expect(selectedSnapshot.isFresh == true)
+        #expect(otherSnapshot.isFresh == false)
         let portfolioSnapshot = try #require(try context.fetch(FetchDescriptor<PortfolioSnapshot>()).first)
         #expect(portfolioSnapshot.isPartial == true)
     }
@@ -171,6 +176,45 @@ struct SyncEngineScopedTests {
 
         let portfolioSnapshot = try #require(try context.fetch(FetchDescriptor<PortfolioSnapshot>()).first)
         #expect(portfolioSnapshot.isPartial == true)
+    }
+
+    @Test func `account scoped sync stays partial when selected account is deactivated before snapshots`() async throws {
+        let context = try makeModelContext()
+        let provider = GatedScopedSyncStubProvider(balances: [
+            PositionDTO(
+                positionType: .idle,
+                chain: .ethereum,
+                protocolId: nil,
+                protocolName: nil,
+                protocolLogoURL: nil,
+                healthFactor: nil,
+                tokens: [makeTokenDTO(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")])
+        ])
+        let factory = ProviderFactory(resolver: { _, _ in provider })
+        let engine = SyncEngine(modelContext: context, providerFactory: factory)
+        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zapper)
+        selected.addresses = [WalletAddress(address: "0xselected", account: selected)]
+        let other = Account(name: "Other", kind: .wallet, dataSource: .zapper)
+        other.addresses = [WalletAddress(address: "0xother", account: other)]
+        context.insert(selected)
+        context.insert(other)
+        try context.save()
+
+        let syncTask = Task {
+            try await engine.sync(accountID: selected.id)
+        }
+        await provider.waitUntilFetchBalancesStarted()
+        selected.isActive = false
+        try context.save()
+        await provider.releaseFetchBalances()
+
+        _ = try await syncTask.value
+
+        let portfolioSnapshot = try #require(try context.fetch(FetchDescriptor<PortfolioSnapshot>()).first)
+        #expect(portfolioSnapshot.isPartial == true)
+        let accountSnapshot = try #require(try context.fetch(FetchDescriptor<AccountSnapshot>()).first)
+        #expect(accountSnapshot.accountId == other.id)
+        #expect(accountSnapshot.isFresh == false)
     }
 
     @Test func `account scoped sync rejects missing account`() async throws {

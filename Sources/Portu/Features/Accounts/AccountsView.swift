@@ -249,6 +249,7 @@ struct AccountsView: View {
                         accountActionError = error.localizedDescription
                     }
                 }
+                .disabled(AccountRowActionPolicy.activationToggleDisabled(globalSyncIsRunning: store.syncStatus.isSyncing))
                 Divider()
                 Button("Delete", role: .destructive) {
                     do {

@@ -42,16 +42,17 @@ final class SyncEngine: @unchecked Sendable {
 
         return try await sync(
             activeSyncable: [account],
-            activeManual: []) { try self.fetchActiveSyncableAccounts().count > 1 }
+            activeManual: [])
     }
 
     private func sync(
         activeSyncable: [Account],
-        activeManual: [Account],
-        forcePartialSnapshot: () throws -> Bool = { false }) async throws -> SyncResult {
+        activeManual: [Account]) async throws -> SyncResult {
         guard !activeSyncable.isEmpty || !activeManual.isEmpty else {
             throw SyncError.noActiveAccounts
         }
+
+        let attemptedSyncableAccountIDs = Set(activeSyncable.map(\.id))
 
         // ── Phase A: Per-account fetch + persist ──
         var failedAccounts: [String] = []
@@ -72,8 +73,10 @@ final class SyncEngine: @unchecked Sendable {
             throw SyncError.allAccountsFailed
         }
 
-        let isPartialSnapshot = try forcePartialSnapshot() || !failedAccounts.isEmpty
-        try createSnapshots(isPartial: isPartialSnapshot)
+        let isPartialSnapshot = try hasActiveSyncableAccounts(outside: attemptedSyncableAccountIDs) || !failedAccounts.isEmpty
+        try createSnapshots(
+            isPartial: isPartialSnapshot,
+            refreshedSyncableAccountIDs: attemptedSyncableAccountIDs)
 
         return SyncResult(failedAccounts: failedAccounts)
     }
@@ -266,7 +269,9 @@ final class SyncEngine: @unchecked Sendable {
 
     // MARK: - Phase B: Snapshots
 
-    private func createSnapshots(isPartial: Bool) throws {
+    private func createSnapshots(
+        isPartial: Bool,
+        refreshedSyncableAccountIDs: Set<UUID>) throws {
         let batchId = UUID()
         let batchTimestamp = Date.now
 
@@ -278,7 +283,11 @@ final class SyncEngine: @unchecked Sendable {
         let activeAccounts = try fetchAllActiveAccounts()
 
         createPortfolioSnapshot(batchId: batchId, timestamp: batchTimestamp, positions: allPositions, isPartial: isPartial)
-        createAccountSnapshots(batchId: batchId, timestamp: batchTimestamp, accounts: activeAccounts)
+        createAccountSnapshots(
+            batchId: batchId,
+            timestamp: batchTimestamp,
+            accounts: activeAccounts,
+            refreshedSyncableAccountIDs: refreshedSyncableAccountIDs)
         createAssetSnapshots(
             batchId: batchId,
             timestamp: batchTimestamp,
@@ -326,10 +335,15 @@ final class SyncEngine: @unchecked Sendable {
         modelContext.insert(snap)
     }
 
-    private func createAccountSnapshots(batchId: UUID, timestamp: Date, accounts: [Account]) {
+    private func createAccountSnapshots(
+        batchId: UUID,
+        timestamp: Date,
+        accounts: [Account],
+        refreshedSyncableAccountIDs: Set<UUID>) {
         for account in accounts {
             let accountTotal = account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
-            let isFresh = account.dataSource == .manual || account.lastSyncError == nil
+            let isFresh = account.dataSource == .manual ||
+                (refreshedSyncableAccountIDs.contains(account.id) && account.lastSyncError == nil)
 
             let snap = AccountSnapshot(
                 syncBatchId: batchId, timestamp: timestamp,
@@ -422,6 +436,10 @@ final class SyncEngine: @unchecked Sendable {
     private func fetchActiveSyncableAccounts() throws -> [Account] {
         let descriptor = FetchDescriptor<Account>()
         return try modelContext.fetch(descriptor).filter { $0.isActive && $0.dataSource != .manual }
+    }
+
+    private func hasActiveSyncableAccounts(outside accountIDs: Set<UUID>) throws -> Bool {
+        try fetchActiveSyncableAccounts().contains { accountIDs.contains($0.id) == false }
     }
 
     private func fetchActiveSyncableAccounts(scope: PortfolioSyncScope) throws -> [Account] {
