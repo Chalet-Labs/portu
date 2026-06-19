@@ -2,18 +2,19 @@ import ComposableArchitecture
 import Foundation
 @testable import Portu
 import PortuNetwork
+import Synchronization
 import Testing
 
 @MainActor
 struct AppFeatureAccountSyncTests {
     @Test func `account sync happy path syncs requested account`() async {
         let accountID = UUID()
-        nonisolated(unsafe) var syncedAccountIDs: [UUID] = []
+        let syncedAccountIDs = Mutex<[UUID]>([])
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
             $0.syncEngine.syncAccount = { id in
-                syncedAccountIDs.append(id)
+                syncedAccountIDs.withLock { $0.append(id) }
                 return SyncResult(failedAccounts: [])
             }
         }
@@ -26,7 +27,7 @@ struct AppFeatureAccountSyncTests {
             $0.syncStatus = .idle
             $0.syncingAccountID = nil
         }
-        #expect(syncedAccountIDs == [accountID])
+        #expect(syncedAccountIDs.withLock { $0 } == [accountID])
     }
 
     @Test func `row recorded account sync failure resets to idle without a global error`() async {
@@ -76,7 +77,7 @@ struct AppFeatureAccountSyncTests {
     @Test func `account sync guards against double tap`() async {
         let accountID = UUID()
         let syncingAccountID = UUID()
-        nonisolated(unsafe) var syncCount = 0
+        let syncCount = Mutex(0)
         let store = TestStore(
             initialState: AppFeature.State(
                 syncStatus: .syncing(progress: 0.5),
@@ -84,13 +85,13 @@ struct AppFeatureAccountSyncTests {
             AppFeature()
         } withDependencies: {
             $0.syncEngine.syncAccount = { _ in
-                syncCount += 1
+                syncCount.withLock { $0 += 1 }
                 return SyncResult(failedAccounts: [])
             }
         }
 
         await store.send(.accountSyncTapped(accountID))
         #expect(store.state.syncingAccountID == syncingAccountID)
-        #expect(syncCount == 0)
+        #expect(syncCount.withLock { $0 } == 0)
     }
 }

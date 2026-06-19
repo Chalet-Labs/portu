@@ -3,6 +3,7 @@ import Foundation
 import PortuCore
 import PortuNetwork
 import SwiftData
+import Synchronization
 import Testing
 
 @MainActor
@@ -19,9 +20,9 @@ struct SyncEngineScopedTests {
                 healthFactor: nil,
                 tokens: [makeTokenDTO(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")])
         ])
-        nonisolated(unsafe) var resolvedSources: [DataSource] = []
+        let resolvedSources = Mutex<[DataSource]>([])
         let factory = ProviderFactory(resolver: { dataSource, _ in
-            resolvedSources.append(dataSource)
+            resolvedSources.withLock { $0.append(dataSource) }
             return provider
         })
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
@@ -33,7 +34,7 @@ struct SyncEngineScopedTests {
 
         let result = try await engine.sync(scope: .zapper)
 
-        #expect(resolvedSources == [.zapper])
+        #expect(resolvedSources.withLock { $0 } == [.zapper])
         #expect(wallet.lastSyncedAt != nil)
         #expect(exchange.lastSyncedAt == nil)
         #expect(result.failedAccounts.isEmpty)
@@ -52,9 +53,9 @@ struct SyncEngineScopedTests {
                 healthFactor: nil,
                 tokens: [makeTokenDTO(symbol: "BTC", name: "Bitcoin", coinGeckoId: "bitcoin")])
         ])
-        nonisolated(unsafe) var resolvedSources: [DataSource] = []
+        let resolvedSources = Mutex<[DataSource]>([])
         let factory = ProviderFactory(resolver: { dataSource, _ in
-            resolvedSources.append(dataSource)
+            resolvedSources.withLock { $0.append(dataSource) }
             return provider
         })
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
@@ -66,7 +67,7 @@ struct SyncEngineScopedTests {
 
         let result = try await engine.sync(scope: .exchange)
 
-        #expect(resolvedSources == [.exchange])
+        #expect(resolvedSources.withLock { $0 } == [.exchange])
         #expect(wallet.lastSyncedAt == nil)
         #expect(exchange.lastSyncedAt != nil)
         #expect(result.failedAccounts.isEmpty)
@@ -85,9 +86,9 @@ struct SyncEngineScopedTests {
                 healthFactor: nil,
                 tokens: [makeTokenDTO(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")])
         ])
-        nonisolated(unsafe) var resolvedAccountIDs: [UUID] = []
+        let resolvedAccountIDs = Mutex<[UUID]>([])
         let factory = ProviderFactory(resolver: { _, context in
-            resolvedAccountIDs.append(context.accountId)
+            resolvedAccountIDs.withLock { $0.append(context.accountId) }
             return provider
         })
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
@@ -101,7 +102,7 @@ struct SyncEngineScopedTests {
 
         let result = try await engine.sync(accountID: selected.id)
 
-        #expect(resolvedAccountIDs == [selected.id])
+        #expect(resolvedAccountIDs.withLock { $0 } == [selected.id])
         #expect(selected.lastSyncedAt != nil)
         #expect(other.lastSyncedAt == nil)
         #expect(result.failedAccounts.isEmpty)
