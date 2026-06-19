@@ -1,7 +1,6 @@
 import ComposableArchitecture
 import Foundation
 @testable import Portu
-import PortuNetwork
 import Synchronization
 import Testing
 

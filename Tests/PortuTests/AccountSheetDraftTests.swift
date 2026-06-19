@@ -96,7 +96,7 @@ struct AccountSheetDraftTests {
             mode: .edit(account.id),
             editing: account,
             modelContext: context,
-            secretStore: LocalSecretStore(suiteName: "AccountSheetDraftTests-\(UUID().uuidString)"))
+            secretStore: InMemorySecretStore())
 
         let accounts = try context.fetch(FetchDescriptor<Account>())
         let updated = try #require(accounts.first)
