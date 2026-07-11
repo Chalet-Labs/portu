@@ -17,9 +17,11 @@ struct CurrencyConversionContext: Equatable {
         historicalUSDToDisplayRatesByDay: [Date: Decimal] = [:]) {
         self.displayCurrency = displayCurrency
         self.currentUSDToDisplayRate = currentUSDToDisplayRate
-        self.historicalUSDToDisplayRatesByDay = Dictionary(uniqueKeysWithValues: historicalUSDToDisplayRatesByDay.map {
-            (HistoricalPriceCalendar.utcStartOfDay(for: $0.key), $0.value)
-        })
+        self.historicalUSDToDisplayRatesByDay = Dictionary(
+            historicalUSDToDisplayRatesByDay.map {
+                (HistoricalPriceCalendar.utcStartOfDay(for: $0.key), $0.value)
+            },
+            uniquingKeysWith: { _, latest in latest })
     }
 
     init(

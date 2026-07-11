@@ -41,6 +41,7 @@ struct AppFeature {
     }
 
     enum Action {
+        case appLaunched
         case sectionSelected(SidebarSection)
         case settingsSelected
         case syncTapped
@@ -70,6 +71,7 @@ struct AppFeature {
     private enum CancelID {
         case pricePolling
         case scheduledSync
+        case currencyConversion
     }
 
     @Dependency(\.syncEngine) var syncEngine
@@ -102,6 +104,14 @@ struct AppFeature {
         }
         Reduce { state, action in
             switch action {
+            case .appLaunched:
+                // A saved non-USD currency is restored into initial state without an
+                // FX refresh, so displayed values would stay raw USD until the user
+                // toggled currencies. Kick off the conversion refresh on launch.
+                guard state.selectedCurrency != .usd else { return .none }
+                state.historicalFXAvailability = .loading
+                return currencyConversionEffect(currency: state.selectedCurrency)
+
             case let .sectionSelected(section):
                 state.selectedSection = section
                 state.isSettingsPresented = false
@@ -286,8 +296,9 @@ struct AppFeature {
             case let .startPricePolling(coinIds):
                 let request = PricePollingIDResolver.split(coinIds)
                 guard request.isEmpty == false else {
+                    state.connectionStatus = .idle
                     state.pricePollingIDs = []
-                    return .none
+                    return .cancel(id: CancelID.pricePolling)
                 }
                 state.pricePollingIDs = request.allPriceIDs
                 state.connectionStatus = .fetching
@@ -364,6 +375,7 @@ private extension AppFeature {
                     .failure(CurrencyConversionRefreshError(message: error.localizedDescription))))
             }
         }
+        .cancellable(id: CancelID.currencyConversion, cancelInFlight: true)
     }
 
     func pricePollingEffect(request: PricePollingRequest, currency: FiatCurrency) -> Effect<Action> {
@@ -488,6 +500,7 @@ extension AppFeature.Action: Equatable {
     // swiftlint:disable:next cyclomatic_complexity
     static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
+        case (.appLaunched, .appLaunched): true
         case let (.sectionSelected(l), .sectionSelected(r)): l == r
         case (.settingsSelected, .settingsSelected): true
         case (.syncTapped, .syncTapped): true

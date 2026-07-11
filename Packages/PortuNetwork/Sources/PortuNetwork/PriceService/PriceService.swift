@@ -17,9 +17,9 @@ public actor PriceService {
     }
 
     private var cache: [CacheKey: Decimal] = [:]
-    private var lastFetchDate: Date?
-    private var updateCache: PriceUpdate?
-    private var lastUpdateFetchDate: Date?
+    private var lastFetchDates: [FiatCurrency: Date] = [:]
+    private var updateCaches: [FiatCurrency: PriceUpdate] = [:]
+    private var lastUpdateFetchDates: [FiatCurrency: Date] = [:]
     private let cacheTTL: TimeInterval
     private let coinGeckoAPIKey: @Sendable () async -> String?
 
@@ -70,12 +70,12 @@ public actor PriceService {
 
         let cacheKeys = coinIds.map { CacheKey(currency: currency, coinId: $0) }
         if
-            let lastFetch = lastFetchDate,
+            let lastFetch = lastFetchDates[currency],
             Date.now.timeIntervalSince(lastFetch) < cacheTTL,
             cacheKeys.allSatisfy({ cache[$0] != nil }) {
-            return Dictionary(uniqueKeysWithValues: coinIds.compactMap { id in
+            return Dictionary(coinIds.compactMap { id in
                 cache[CacheKey(currency: currency, coinId: id)].map { (id, $0) }
-            })
+            }, uniquingKeysWith: { current, _ in current })
         }
 
         let data = try await rateLimitedFetch(
@@ -97,10 +97,10 @@ public actor PriceService {
         for (id, price) in parsed.prices {
             cache[CacheKey(currency: currency, coinId: id)] = price
         }
-        lastFetchDate = .now
-        return Dictionary(uniqueKeysWithValues: coinIds.compactMap { id in
+        lastFetchDates[currency] = .now
+        return Dictionary(coinIds.compactMap { id in
             cache[CacheKey(currency: currency, coinId: id)].map { (id, $0) }
-        })
+        }, uniquingKeysWith: { current, _ in current })
     }
 
     /// Fetch current USD prices and 24h change percentages for the given CoinGecko coin IDs.
@@ -111,10 +111,9 @@ public actor PriceService {
         guard !coinIds.isEmpty else { return PriceUpdate(currency: currency, prices: [:], changes24h: [:]) }
 
         if
-            let lastFetch = lastUpdateFetchDate,
+            let lastFetch = lastUpdateFetchDates[currency],
             Date.now.timeIntervalSince(lastFetch) < cacheTTL,
-            let cached = updateCache,
-            cached.currency == currency,
+            let cached = updateCaches[currency],
             coinIds.allSatisfy({ cached.prices[$0] != nil && cached.changes24h[$0] != nil }) {
             let requested = Set(coinIds)
             return PriceUpdate(
@@ -129,8 +128,8 @@ public actor PriceService {
             extraParams: [URLQueryItem(name: "include_24hr_change", value: "true")])
 
         let parsed = try CoinGeckoSimplePriceResponse.parsePriceUpdate(from: data, currency: currency)
-        updateCache = parsed
-        lastUpdateFetchDate = .now
+        updateCaches[currency] = parsed
+        lastUpdateFetchDates[currency] = .now
         let requested = Set(coinIds)
         return PriceUpdate(
             currency: currency,
@@ -380,7 +379,7 @@ public actor PriceService {
         guard currency != .usd else { return [] }
         let usdRows = try await fetchHistoricalPrices(for: "bitcoin", currency: .usd, days: days)
         let targetRows = try await fetchHistoricalPrices(for: "bitcoin", currency: currency, days: days)
-        let usdByDay = Dictionary(uniqueKeysWithValues: usdRows.map { ($0.day, $0.price) })
+        let usdByDay = Dictionary(usdRows.map { ($0.day, $0.price) }, uniquingKeysWith: { current, _ in current })
         return targetRows.compactMap { row in
             guard let usd = usdByDay[row.day], usd > 0 else { return nil }
             return CurrencyConversionRate(currency: currency, day: row.day, rate: row.price / usd)
@@ -538,9 +537,9 @@ public actor PriceService {
     /// Clear the price cache, forcing a fresh fetch on next call.
     public func invalidateCache() {
         cache = [:]
-        lastFetchDate = nil
-        updateCache = nil
-        lastUpdateFetchDate = nil
+        lastFetchDates = [:]
+        updateCaches = [:]
+        lastUpdateFetchDates = [:]
     }
 }
 

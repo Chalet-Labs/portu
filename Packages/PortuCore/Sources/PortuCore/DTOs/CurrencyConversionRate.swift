@@ -2,7 +2,7 @@ import Foundation
 
 public struct CurrencyConversionRate: Sendable, Equatable, Identifiable {
     public var id: String {
-        "\(base.storageCode)-\(currency.storageCode)-\(day.timeIntervalSince1970)"
+        "\(base.storageCode)-\(currency.storageCode)-\(Int(day.timeIntervalSince1970))"
     }
 
     public let base: FiatCurrency
