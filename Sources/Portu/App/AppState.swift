@@ -41,6 +41,10 @@ enum SyncStatus: Hashable {
 final class AppState {
     var lastPriceUpdate: Date?
     var selectedCurrency: FiatCurrency = .default
+    var currencyCode: String {
+        selectedCurrency.displayCode
+    }
+
     var currentUSDToDisplayRate: Decimal = 1
     var historicalFXAvailability: CurrencyFXAvailability = .available
     var prices: [String: Decimal] = [:]

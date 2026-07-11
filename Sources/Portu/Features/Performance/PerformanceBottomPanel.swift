@@ -264,43 +264,10 @@ struct PerformanceBottomPanel: View {
     }
 
     private func historicalPriceEntriesForDisplayCurrency(startDay: Date) -> [HistoricalPriceEntry] {
-        struct PriceKey: Hashable {
-            let coinGeckoId: String
-            let day: Date
-        }
-
-        var selectedRows: [PriceKey: HistoricalPriceEntry] = [:]
-        var usdFallbackRows: [PriceKey: HistoricalPriceEntry] = [:]
-        let displayCurrency = appState.selectedCurrency
-        let context = currencyConversionContext
-
-        for row in historicalPrices where row.day >= startDay {
-            guard let historicalPriceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(row.coinGeckoId) else {
-                continue
-            }
-            let key = PriceKey(
-                coinGeckoId: historicalPriceID,
-                day: HistoricalPriceCalendar.utcStartOfDay(for: row.day))
-            if row.fiatCurrency == displayCurrency {
-                selectedRows[key] = HistoricalPriceEntry(
-                    coinGeckoId: historicalPriceID,
-                    day: row.day,
-                    usdPrice: row.price)
-            } else if row.fiatCurrency == .usd {
-                usdFallbackRows[key] = HistoricalPriceEntry(
-                    coinGeckoId: historicalPriceID,
-                    day: row.day,
-                    usdPrice: context.convertUSDValue(row.price, on: row.day))
-            }
-        }
-
-        return (Array(selectedRows.values) + usdFallbackRows.compactMap { key, value in
-            selectedRows[key] == nil ? value : nil
-        })
-        .sorted {
-            if $0.coinGeckoId != $1.coinGeckoId { return $0.coinGeckoId < $1.coinGeckoId }
-            return $0.day < $1.day
-        }
+        OverviewHistoricalPriceChangeFeature.mergedHistoricalPriceEntries(
+            from: historicalPrices.filter { $0.day >= startDay },
+            displayCurrency: appState.selectedCurrency,
+            context: currencyConversionContext)
     }
 
     private func displayName(for asset: Asset) -> String {

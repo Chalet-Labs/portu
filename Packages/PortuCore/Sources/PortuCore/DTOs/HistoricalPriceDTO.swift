@@ -17,10 +17,6 @@ public struct HistoricalPriceDTO: Sendable, Equatable {
     public let price: Decimal
     public let source: HistoricalPriceSource
 
-    public var usdPrice: Decimal {
-        price
-    }
-
     public init(
         coinGeckoId: String,
         timestamp: Date,

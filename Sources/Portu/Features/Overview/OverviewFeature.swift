@@ -558,7 +558,7 @@ enum OverviewFeature {
             override: override,
             fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         if liveOrManualValue != 0 {
-            guard passesDashboardThreshold(value: liveOrManualValue, settings: settings) else {
+            guard override?.alwaysShow == true || passesDashboardThreshold(value: liveOrManualValue, settings: settings) else {
                 return nil
             }
             return liveOrManualValue
@@ -574,7 +574,7 @@ enum OverviewFeature {
         guard fallbackValue != 0 else {
             return override?.alwaysShow == true || !settings.hideUnpriced ? 0 : nil
         }
-        guard passesDashboardThreshold(value: fallbackValue, settings: settings) else {
+        guard override?.alwaysShow == true || passesDashboardThreshold(value: fallbackValue, settings: settings) else {
             return nil
         }
         return fallbackValue

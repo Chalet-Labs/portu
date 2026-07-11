@@ -62,12 +62,18 @@ struct PortfolioHealthFeature {
 
     // MARK: - Pure Functions
 
-    static func computeAssetWeights(tokens: [TokenEntry], prices: [String: Decimal]) -> [AssetWeight] {
+    static func computeAssetWeights(
+        tokens: [TokenEntry],
+        prices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> [AssetWeight] {
         // Group by (symbol, name), net positive - borrow, skip rewards
         var groups: [String: (symbol: String, name: String, value: Decimal)] = [:]
 
         for token in tokens {
-            let resolved = resolveValue(token: token, prices: prices)
+            let resolved = resolveValue(
+                token: token,
+                prices: prices,
+                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
             let key = token.symbol + token.name
 
             var entry = groups[key] ?? (symbol: token.symbol, name: token.name, value: 0)
@@ -123,10 +129,13 @@ struct PortfolioHealthFeature {
 
     // MARK: - Private
 
-    private static func resolveValue(token: TokenEntry, prices: [String: Decimal]) -> Decimal {
+    private static func resolveValue(
+        token: TokenEntry,
+        prices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal) -> Decimal {
         if let cgId = token.coinGeckoId, let livePrice = prices[cgId] {
             return token.amount * livePrice
         }
-        return token.usdValue
+        return token.usdValue * fallbackUSDToDisplayRate
     }
 }

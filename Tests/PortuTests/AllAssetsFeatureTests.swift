@@ -509,8 +509,8 @@ struct SharePercentTests {
 
     @Test func `platforms tab mixed positive negative sum to 100 percent`() {
         let positions: [PlatformsTab.PlatformInput] = [
-            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "aave-v3", protocolName: "Aave V3", positionType: .lending, netUSDValue: 200),
-            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "compound", protocolName: "Compound", positionType: .lending, netUSDValue: -80)
+            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "aave-v3", protocolName: "Aave V3", positionType: .lending, netValue: 200),
+            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "compound", protocolName: "Compound", positionType: .lending, netValue: -80)
         ]
 
         let rows = PlatformsTab.computeRows(from: positions)
@@ -532,8 +532,8 @@ struct SharePercentTests {
         ])
 
         let platformRows = PlatformsTab.computeRows(from: [
-            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "proto-a", protocolName: "Proto A", positionType: .lending, netUSDValue: netA),
-            PlatformsTab.PlatformInput(chain: "polygon", protocolId: "proto-b", protocolName: "Proto B", positionType: .lending, netUSDValue: netB)
+            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "proto-a", protocolName: "Proto A", positionType: .lending, netValue: netA),
+            PlatformsTab.PlatformInput(chain: "polygon", protocolId: "proto-b", protocolName: "Proto B", positionType: .lending, netValue: netB)
         ])
 
         let networkSum = networkRows.reduce(Decimal.zero) { $0 + $1.sharePercent }

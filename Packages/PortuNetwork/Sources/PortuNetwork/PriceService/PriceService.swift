@@ -20,6 +20,7 @@ public actor PriceService {
     private var lastFetchDates: [FiatCurrency: Date] = [:]
     private var updateCaches: [FiatCurrency: PriceUpdate] = [:]
     private var lastUpdateFetchDates: [FiatCurrency: Date] = [:]
+    private var conversionRateCache: [FiatCurrency: (rate: Decimal, date: Date)] = [:]
     private let cacheTTL: TimeInterval
     private let coinGeckoAPIKey: @Sendable () async -> String?
 
@@ -361,6 +362,9 @@ public actor PriceService {
 
     public func fetchCurrentUSDConversionRate(to currency: FiatCurrency) async throws(PriceServiceError) -> Decimal {
         guard currency != .usd else { return 1 }
+        if let cached = conversionRateCache[currency], Date.now.timeIntervalSince(cached.date) < cacheTTL {
+            return cached.rate
+        }
         let data = try await rateLimitedFetch(pathComponents: ["exchange_rates"], queryItems: [])
         let parsed = try CoinGeckoExchangeRatesResponse(data: data)
         guard
@@ -370,7 +374,9 @@ public actor PriceService {
         else {
             throw .decodingFailed
         }
-        return target / usd
+        let rate = target / usd
+        conversionRateCache[currency] = (rate: rate, date: .now)
+        return rate
     }
 
     public func fetchHistoricalUSDConversionRates(
@@ -540,6 +546,7 @@ public actor PriceService {
         lastFetchDates = [:]
         updateCaches = [:]
         lastUpdateFetchDates = [:]
+        conversionRateCache = [:]
     }
 }
 

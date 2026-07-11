@@ -381,7 +381,7 @@ struct PriceServiceTests {
             #require(Decimal(string: "43000.50")),
             #require(Decimal(string: "43100.75"))
         ]
-        #expect(prices.map(\.usdPrice) == expectedPrices)
+        #expect(prices.map(\.price) == expectedPrices)
     }
 
     @Test func `fetch historical prices uses requested fiat currency`() async throws {

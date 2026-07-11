@@ -139,7 +139,12 @@ enum CurrencyConversionRateCacheWriter {
             return CurrencyConversionRateWriteResult(inserted: 0, updated: 0)
         }
 
-        let existingRows = try context.fetch(FetchDescriptor<CurrencyConversionRatePoint>())
+        let incomingKeys = rates.map {
+            CurrencyConversionRatePoint.cacheKey(baseCurrency: $0.base, quoteCurrency: $0.currency, day: $0.day)
+        }
+        let descriptor = FetchDescriptor<CurrencyConversionRatePoint>(
+            predicate: #Predicate { incomingKeys.contains($0.cacheKey) })
+        let existingRows = try context.fetch(descriptor)
         var existingByKey = Dictionary(
             grouping: existingRows,
             by: { CurrencyConversionRateCacheKey(

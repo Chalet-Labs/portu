@@ -35,7 +35,10 @@ struct PortfolioHealthPanel: View {
     }
 
     private var weights: [AssetWeight] {
-        PortfolioHealthFeature.computeAssetWeights(tokens: dashboardTokenEntries, prices: displayPrices)
+        PortfolioHealthFeature.computeAssetWeights(
+            tokens: dashboardTokenEntries,
+            prices: displayPrices,
+            fallbackUSDToDisplayRate: store.currentUSDToDisplayRate)
     }
 
     private var displayPrices: [String: Decimal] {

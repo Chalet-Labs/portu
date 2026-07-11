@@ -23,9 +23,15 @@ enum LivePriceUpdateBuilder {
         }
         let zapperUpdate: PriceUpdate
         do {
-            zapperUpdate = try await fetchZapperUpdate(unresolvedZapperIdentities)
+            let rawZapperUpdate = try await fetchZapperUpdate(unresolvedZapperIdentities)
+            if currency == .usd {
+                zapperUpdate = rawZapperUpdate
+            } else {
+                let rate = try await priceService.fetchCurrentUSDConversionRate(to: currency)
+                zapperUpdate = rawZapperUpdate.convertedUSDValues(to: currency, rate: rate)
+            }
         } catch {
-            zapperUpdate = PricePollingIDResolver.emptyUpdate
+            zapperUpdate = PricePollingIDResolver.emptyUpdate(currency: currency)
         }
         return PricePollingIDResolver.merge([coinGeckoUpdate, tokenUpdate, zapperUpdate])
     }

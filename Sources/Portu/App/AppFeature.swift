@@ -395,6 +395,7 @@ private extension AppFeature {
                         let update = try await priceService.fetchZapperPrices(request.zapperIdentities, currency)
                         await send(.pricesReceived(update))
                     } catch {
+                        guard !Task.isCancelled else { return }
                         await send(.priceFetchFailed(error))
                     }
 
@@ -432,6 +433,7 @@ private extension AppFeature {
                         let update = try await priceService.fetchCoinGeckoPrices(coinRequest, currency)
                         await send(.pricesReceived(update))
                     } catch {
+                        guard !Task.isCancelled else { return }
                         if tokenRequest.isEmpty {
                             await send(.priceFetchFailed(error))
                         }
@@ -445,6 +447,7 @@ private extension AppFeature {
                             await send(.pricesReceived(update))
                         }
                     } catch {
+                        guard !Task.isCancelled else { return }
                         await send(.priceFetchFailed(error))
                     }
                 }

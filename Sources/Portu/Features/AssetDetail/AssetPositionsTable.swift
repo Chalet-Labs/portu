@@ -20,7 +20,7 @@ struct AssetPositionsTable: View {
     }
 
     private var currencyCode: String {
-        appState.selectedCurrency.displayCode
+        appState.currencyCode
     }
 
     var body: some View {

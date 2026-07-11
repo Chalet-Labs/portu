@@ -357,7 +357,7 @@ private extension [HistoricalPriceDTO] {
             HistoricalPriceDTO(
                 coinGeckoId: priceID,
                 timestamp: $0.timestamp,
-                usdPrice: $0.usdPrice,
+                usdPrice: $0.price,
                 source: $0.source)
         }
     }
