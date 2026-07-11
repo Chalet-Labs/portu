@@ -9,6 +9,7 @@ extension PriceUpdate {
         return PriceUpdate(
             currency: currency,
             prices: prices.mapValues { $0 * rate },
-            changes24h: changes24h)
+            // Zapper reports USD changes, which are invalid after FX conversion.
+            changes24h: [:])
     }
 }

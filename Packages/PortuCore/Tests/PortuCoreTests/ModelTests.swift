@@ -237,7 +237,7 @@ struct ModelTests {
         let fetched = try #require(fetchedPoints.first)
         #expect(fetched.coinGeckoId == "bitcoin")
         #expect(fetched.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
-        #expect(fetched.currency == .usd)
+        #expect(fetched.fiatCurrency == .usd)
         #expect(fetched.price == usdPrice)
         #expect(fetched.usdPrice == usdPrice)
         #expect(fetched.source == .coingecko)
@@ -260,8 +260,34 @@ struct ModelTests {
         try context.save()
 
         let fetched = try #require(try context.fetch(FetchDescriptor<HistoricalPricePoint>()).first)
-        #expect(fetched.currency == .chf)
+        #expect(fetched.fiatCurrency == .chf)
         #expect(fetched.price == price)
+    }
+
+    @Test func `historical price point defaults canonical price rows to usd`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+        let price = try #require(Decimal(string: "39000.50"))
+
+        let point = HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: Date(timeIntervalSince1970: 1_704_110_456),
+            price: price)
+        context.insert(point)
+        try context.save()
+
+        let fetched = try #require(try context.fetch(FetchDescriptor<HistoricalPricePoint>()).first)
+        #expect(fetched.fiatCurrency == .usd)
+        #expect(fetched.price == price)
+    }
+
+    @Test func `historical price schema defaults migrated currency rows to usd`() throws {
+        let schema = Schema([HistoricalPricePoint.self])
+        let entity = try #require(schema.entity(for: HistoricalPricePoint.self))
+        let currency = try #require(entity.attributesByName["currency"])
+
+        #expect(currency.defaultValue as? FiatCurrency == .usd)
+        #expect(currency.isOptional == true)
     }
 
     @Test func `currency conversion rate point normalizes utc day and stores pair`() throws {

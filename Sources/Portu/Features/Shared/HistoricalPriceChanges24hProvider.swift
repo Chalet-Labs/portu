@@ -51,12 +51,12 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
             let key = HistoricalPriceDisplayKey(
                 coinGeckoId: historicalPriceID,
                 day: HistoricalPriceCalendar.utcStartOfDay(for: row.day))
-            if row.currency == displayCurrency {
+            if row.fiatCurrency == displayCurrency {
                 selectedRows[key] = HistoricalPriceEntry(
                     coinGeckoId: historicalPriceID,
                     day: row.day,
                     usdPrice: row.price)
-            } else if row.currency == .usd {
+            } else if row.fiatCurrency == .usd {
                 usdFallbackRows[key] = HistoricalPriceEntry(
                     coinGeckoId: historicalPriceID,
                     day: row.day,

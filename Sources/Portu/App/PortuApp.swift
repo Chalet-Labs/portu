@@ -54,20 +54,24 @@ struct PortuApp: App {
             secretStore: secretStore,
             session: session)
 
-        self.store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
-            AppFeature()
-        } withDependencies: {
-            $0.continuousClock = ContinuousClock()
-            $0.syncEngine = .live(engine: syncEngine)
-            $0.priceService = priceServiceClient
-            $0.currencyConversion = .live(
-                modelContext: modelContext,
-                priceService: priceServiceClient)
-            $0.historicalPriceBackfill = .live(
-                modelContext: modelContext,
-                priceService: priceServiceClient,
-                dashboardSettings: { TokenDashboardSettings.fromDefaults() })
-        }
+        let displayCurrencyPreference = DisplayCurrencyPreferenceClient.liveValue
+        self.store = Store(initialState: AppFeature.State(
+            selectedCurrency: displayCurrencyPreference.load(),
+            storeIsEphemeral: isEphemeral)) {
+                AppFeature()
+            } withDependencies: {
+                $0.continuousClock = ContinuousClock()
+                $0.syncEngine = .live(engine: syncEngine)
+                $0.priceService = priceServiceClient
+                $0.displayCurrencyPreference = displayCurrencyPreference
+                $0.currencyConversion = .live(
+                    modelContext: modelContext,
+                    priceService: priceServiceClient)
+                $0.historicalPriceBackfill = .live(
+                    modelContext: modelContext,
+                    priceService: priceServiceClient,
+                    dashboardSettings: { TokenDashboardSettings.fromDefaults() })
+            }
 
         // Bridge: features can trigger sync via AppState until migrated to TCA
         appState.onSyncRequested = { [store] in

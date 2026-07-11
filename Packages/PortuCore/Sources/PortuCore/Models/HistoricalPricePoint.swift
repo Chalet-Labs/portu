@@ -13,10 +13,14 @@ public final class HistoricalPricePoint {
     @Attribute(.unique) public var id: UUID
     public var coinGeckoId: String
     public var day: Date
-    public var currency: FiatCurrency
+    public var currency: FiatCurrency? = FiatCurrency.usd
     @Attribute(originalName: "usdPrice") public var price: Decimal
     public var source: HistoricalPriceSource
     public var fetchedAt: Date
+
+    public var fiatCurrency: FiatCurrency {
+        currency ?? .usd
+    }
 
     public var usdPrice: Decimal {
         get { price }
@@ -44,7 +48,7 @@ public final class HistoricalPricePoint {
         id: UUID = UUID(),
         coinGeckoId: String,
         day: Date,
-        currency: FiatCurrency,
+        currency: FiatCurrency = .usd,
         price: Decimal,
         source: HistoricalPriceSource = .coingecko,
         fetchedAt: Date = .now) {

@@ -311,9 +311,9 @@ struct AssetDetailFeature {
 
         for row in rows where row.day >= startDay {
             let normalizedDay = HistoricalPriceCalendar.utcStartOfDay(for: row.day)
-            let candidate: (priority: Int, point: HistoricalAssetPricePoint)? = if row.currency == displayCurrency {
+            let candidate: (priority: Int, point: HistoricalAssetPricePoint)? = if row.fiatCurrency == displayCurrency {
                 (0, HistoricalAssetPricePoint(day: normalizedDay, price: row.price))
-            } else if row.currency == .usd {
+            } else if row.fiatCurrency == .usd {
                 (
                     1,
                     HistoricalAssetPricePoint(

@@ -80,7 +80,7 @@ struct ValueChartMode: View {
         return HistoricalPortfolioEstimator.estimatedValues(
             holdings: holdings,
             prices: historicalPrices.compactMap {
-                guard $0.currency == .usd, $0.day >= startDay, $0.day < firstRealSnapshotDate else { return nil }
+                guard $0.fiatCurrency == .usd, $0.day >= startDay, $0.day < firstRealSnapshotDate else { return nil }
                 return HistoricalPriceEntry(
                     coinGeckoId: $0.coinGeckoId,
                     day: $0.day,

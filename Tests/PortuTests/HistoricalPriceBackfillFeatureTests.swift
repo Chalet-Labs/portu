@@ -199,10 +199,10 @@ struct HistoricalPriceBackfillFeatureTests {
             fetchedAt: Date(timeIntervalSince1970: 20))
 
         let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
-            .sorted { $0.currency.storageCode < $1.currency.storageCode }
+            .sorted { $0.fiatCurrency.storageCode < $1.fiatCurrency.storageCode }
         #expect(result.inserted == 1)
         #expect(result.updated == 0)
-        #expect(rows.map(\.currency) == [.eur, .usd])
+        #expect(rows.map(\.fiatCurrency) == [.eur, .usd])
         #expect(rows.map(\.price) == [37000, 40000])
     }
 

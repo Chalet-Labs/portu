@@ -484,7 +484,7 @@ enum HistoricalPriceCacheWriter {
             // SwiftData only enforces id uniqueness for this model; cache uniqueness
             // for (coinGeckoId, day, currency) is enforced here by scoped upsert and dedupe.
             let groupedExisting = Dictionary(grouping: existing) {
-                HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day, currency: $0.currency)
+                HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day, currency: $0.fiatCurrency)
             }
             var existingByKey: [HistoricalPriceCacheKey: HistoricalPricePoint] = [:]
             for (cacheKey, rows) in groupedExisting {

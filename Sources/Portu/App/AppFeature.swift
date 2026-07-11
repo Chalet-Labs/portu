@@ -75,6 +75,7 @@ struct AppFeature {
     @Dependency(\.syncEngine) var syncEngine
     @Dependency(\.priceService) var priceService
     @Dependency(\.currencyConversion) var currencyConversion
+    @Dependency(\.displayCurrencyPreference) var displayCurrencyPreference
     @Dependency(\.pricePollingSettings) var pricePollingSettings
     @Dependency(\.providerSyncSettings) var providerSyncSettings
     @Dependency(\.continuousClock) var clock
@@ -241,6 +242,7 @@ struct AppFeature {
 
             case let .displayCurrencySelected(currency):
                 guard state.selectedCurrency != currency else { return .none }
+                displayCurrencyPreference.save(currency)
                 state.selectedCurrency = currency
                 state.currentUSDToDisplayRate = 1
                 state.historicalFXAvailability = currency == .usd ? .available : .loading
