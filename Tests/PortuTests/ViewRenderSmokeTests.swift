@@ -87,9 +87,12 @@ struct ViewRenderSmokeTests {
         let container = try makeContainer()
         let asset = try #require(try container.mainContext.fetch(FetchDescriptor<Asset>()).first)
         let store = makeStore(section: .allAssets)
+        let appState = AppState()
+        appState.bridge(from: store)
 
         let view = AssetDetailView(assetId: asset.id, store: store)
             .modelContainer(container)
+            .environment(appState)
             .frame(width: 1400, height: 900)
 
         render(view)
@@ -198,6 +201,7 @@ struct ViewRenderSmokeTests {
             TokenPricingOverride.self,
             TokenIdentityMapping.self,
             HistoricalPricePoint.self,
+            CurrencyConversionRatePoint.self,
             PortfolioCategory.self,
             CategorySymbolRule.self,
             PortfolioSnapshot.self,

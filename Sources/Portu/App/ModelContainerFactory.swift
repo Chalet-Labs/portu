@@ -4,19 +4,16 @@ import SwiftData
 
 struct ModelContainerFactory {
     private let fileManager: FileManager
+    private let storeURL: URL?
 
-    init(fileManager: FileManager = .default) {
+    init(fileManager: FileManager = .default, storeURL: URL? = nil) {
         self.fileManager = fileManager
+        self.storeURL = storeURL
     }
 
     func makeForProduction() throws -> ModelContainer {
         let storeURL = try persistentStoreURL()
-        do {
-            return try makePersistentContainer(at: storeURL)
-        } catch {
-            try destroyStoreArtifacts(at: storeURL)
-            return try makePersistentContainer(at: storeURL)
-        }
+        return try makePersistentContainer(at: storeURL)
     }
 
     func makeInMemory() throws -> ModelContainer {
@@ -41,24 +38,15 @@ struct ModelContainerFactory {
     }
 
     private func persistentStoreURL() throws -> URL {
+        if let storeURL {
+            return storeURL
+        }
         guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             throw CocoaError(.fileNoSuchFile, userInfo: [NSLocalizedDescriptionKey: "Could not find Application Support directory"])
         }
         let directory = appSupport.appending(path: "Portu", directoryHint: .isDirectory)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appending(path: "Portu.store")
-    }
-
-    private func destroyStoreArtifacts(at storeURL: URL) throws {
-        let storePath = storeURL.path(percentEncoded: false)
-        let urls = [
-            storeURL,
-            URL(fileURLWithPath: storePath + "-shm"),
-            URL(fileURLWithPath: storePath + "-wal")
-        ]
-        for url in urls where fileManager.fileExists(atPath: url.path(percentEncoded: false)) {
-            try fileManager.removeItem(at: url)
-        }
     }
 
     static let schema = Schema([
@@ -70,6 +58,7 @@ struct ModelContainerFactory {
         TokenPricingOverride.self,
         TokenIdentityMapping.self,
         HistoricalPricePoint.self,
+        CurrencyConversionRatePoint.self,
         PortfolioCategory.self,
         CategorySymbolRule.self,
         PortfolioSnapshot.self,

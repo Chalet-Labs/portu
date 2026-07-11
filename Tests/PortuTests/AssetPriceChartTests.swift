@@ -17,6 +17,7 @@ struct AssetPriceChartQueryTests {
             PositionToken.self, Asset.self, TokenPricingOverride.self,
             TokenIdentityMapping.self,
             HistoricalPricePoint.self,
+            CurrencyConversionRatePoint.self,
             PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -158,6 +159,85 @@ struct AssetPriceChartQueryTests {
             isHistoricalBackfillEnabled: true)
 
         #expect(visibleRows.map(\.coinGeckoId) == ["bitcoin"])
+    }
+
+    @Test func `historical price points prefer selected currency and convert usd fallback`() throws {
+        let dayOne = Date(timeIntervalSince1970: 1_704_067_200)
+        let dayTwo = dayOne.addingTimeInterval(86400)
+        let rows = [
+            HistoricalPricePoint(
+                coinGeckoId: "bitcoin",
+                day: dayOne,
+                currency: .usd,
+                price: 100),
+            HistoricalPricePoint(
+                coinGeckoId: "bitcoin",
+                day: dayOne,
+                currency: .eur,
+                price: 92),
+            HistoricalPricePoint(
+                coinGeckoId: "bitcoin",
+                day: dayTwo,
+                currency: .usd,
+                price: 110),
+            HistoricalPricePoint(
+                coinGeckoId: "bitcoin",
+                day: dayTwo,
+                currency: .chf,
+                price: 95)
+        ]
+        let context = try CurrencyConversionContext(
+            displayCurrency: .eur,
+            currentUSDToDisplayRate: 1,
+            historicalUSDToDisplayRatesByDay: [
+                dayOne: #require(Decimal(string: "0.91")),
+                dayTwo: #require(Decimal(string: "0.9"))
+            ])
+
+        let points = AssetDetailFeature.historicalPricePoints(
+            rows,
+            startDate: dayOne,
+            displayCurrency: .eur,
+            conversionContext: context,
+            isHistoricalBackfillEnabled: true)
+
+        #expect(points.map(\.price) == [92, 99])
+        #expect(points.map(\.day) == [dayOne, dayTwo])
+    }
+
+    @Test func `value chart points are converted with each point day rate before rendering`() throws {
+        let dayOne = Date(timeIntervalSince1970: 1_704_067_200)
+        let dayTwo = dayOne.addingTimeInterval(86400)
+        let points = [
+            ChartDataPoint(
+                date: dayOne,
+                grossUSD: 100,
+                borrowUSD: 10,
+                grossAmount: 2,
+                borrowAmount: 0),
+            ChartDataPoint(
+                date: dayTwo,
+                grossUSD: 200,
+                borrowUSD: 20,
+                grossAmount: 3,
+                borrowAmount: 1)
+        ]
+        let context = try CurrencyConversionContext(
+            displayCurrency: .chf,
+            currentUSDToDisplayRate: 1,
+            historicalUSDToDisplayRatesByDay: [
+                dayOne: #require(Decimal(string: "0.8")),
+                dayTwo: #require(Decimal(string: "0.85"))
+            ])
+
+        let converted = AssetDetailFeature.convertedValueChartPoints(
+            points,
+            conversionContext: context)
+
+        #expect(converted.map(\.grossUSD) == [80, 170])
+        #expect(converted.map(\.borrowUSD) == [8, 17])
+        #expect(converted.map(\.grossAmount) == [2, 3])
+        #expect(converted.map(\.borrowAmount) == [0, 1])
     }
 
     @Test func `price empty state prompts to enable backfill when disabled`() {

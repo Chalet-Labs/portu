@@ -57,7 +57,8 @@ struct ExposureView: View {
             tokens: mappedTokenEntries,
             prices: displayPrices,
             overrides: overrideSnapshots,
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
 
         return GeometryReader { proxy in
             let isCompact = proxy.size.width < ExposureLayout.compactWidth
@@ -132,6 +133,11 @@ private enum ExposureLayout {
 private struct ExposureSummaryGrid: View {
     let summary: ExposureSummary
     let isCompact: Bool
+    @Environment(AppState.self) private var appState
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
+    }
 
     private var columns: [GridItem] {
         Array(
@@ -147,7 +153,7 @@ private struct ExposureSummaryGrid: View {
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: ExposureLayout.cardSpacing) {
             ExposureSummaryCard(title: "Spot total") {
-                Text(ExposureFormat.currency(summary.totalSpot, fractionDigits: 2))
+                Text(ExposureFormat.currency(summary.totalSpot, fractionDigits: 2, currencyCode: currencyCode))
                     .font(.system(size: 16, weight: .medium, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
@@ -171,7 +177,7 @@ private struct ExposureSummaryGrid: View {
             }
 
             ExposureSummaryCard(title: "Net exposure (excl. stablecoins)") {
-                Text(ExposureFormat.currency(summary.netExposure, fractionDigits: 2))
+                Text(ExposureFormat.currency(summary.netExposure, fractionDigits: 2, currencyCode: currencyCode))
                     .font(.system(size: 16, weight: .medium, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardGold)
                     .lineLimit(1)

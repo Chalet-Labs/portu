@@ -10,12 +10,16 @@ struct AssetsChartMode: View {
     let startDate: Date
     let store: StoreOf<AppFeature>
 
+    @Environment(AppState.self) private var appState
+
     @Query(sort: \AssetSnapshot.timestamp)
     private var snapshots: [AssetSnapshot]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
+    @Query(sort: \CurrencyConversionRatePoint.day)
+    private var currencyRates: [CurrencyConversionRatePoint]
 
     private var categoryResolver: PortfolioCategoryResolver {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
@@ -42,8 +46,21 @@ struct AssetsChartMode: View {
             guard !store.performance.disabledPortfolioCategoryIDs.contains(entry.categoryID) else { return nil }
             return entry
         }
-        return PerformanceFeature.aggregateCategorySnapshots(entries: entries)
+        return PerformanceFeature.aggregateCategorySnapshots(
+            entries: entries,
+            conversionContext: currencyConversionContext)
             .map { ChartPoint(date: $0.date, categoryID: $0.categoryID, categoryName: $0.categoryName, value: $0.value) }
+    }
+
+    private var currencyConversionContext: CurrencyConversionContext {
+        CurrencyConversionContext(
+            displayCurrency: appState.selectedCurrency,
+            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
+            historicalRatePoints: currencyRates)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -63,7 +80,7 @@ struct AssetsChartMode: View {
                         .foregroundStyle(by: .value("Category", point.categoryID))
                 }
                 .chartYAxis {
-                    AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))
+                    AxisMarks(format: .currency(code: currencyCode).precision(.fractionLength(0)))
                 }
                 .frame(height: 320)
             }

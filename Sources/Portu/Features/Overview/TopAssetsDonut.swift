@@ -54,13 +54,15 @@ struct TopAssetsDonut: View {
                 from: dashboardTokenEntries,
                 prices: displayPrices,
                 overrides: overrideSnapshots,
-                limit: 5)
+                limit: 5,
+                fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
         case .category:
             OverviewFeature.categorySlices(
                 from: dashboardTokenEntries,
                 prices: displayPrices,
                 overrides: overrideSnapshots,
-                limit: 6)
+                limit: 6,
+                fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
         }
     }
 

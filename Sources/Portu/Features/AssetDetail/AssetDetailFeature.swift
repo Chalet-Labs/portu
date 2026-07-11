@@ -6,7 +6,7 @@ import PortuCore
 
 enum ChartMode: String, CaseIterable, Equatable, Hashable {
     case price = "Price"
-    case dollarValue = "$ Value"
+    case dollarValue = "Value"
     case amount = "Amount"
 }
 
@@ -95,6 +95,15 @@ nonisolated struct ChartDataPoint: Identifiable, Equatable {
     let borrowAmount: Decimal
 }
 
+nonisolated struct HistoricalAssetPricePoint: Identifiable, Equatable {
+    let day: Date
+    var id: Date {
+        day
+    }
+
+    let price: Decimal
+}
+
 /// Price info for the asset detail header.
 struct AssetPriceInfo: Equatable {
     let price: Decimal
@@ -135,12 +144,13 @@ struct AssetDetailFeature {
     /// Map individual token entries to position rows with live price resolution.
     static func aggregatePositionRows(
         tokens: [PositionTokenEntry],
-        prices: [String: Decimal]) -> [PositionRowData] {
+        prices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> [PositionRowData] {
         tokens.map { token in
             let usdBalance: Decimal = if let cgId = token.coinGeckoId, let livePrice = prices[cgId] {
                 token.amount * livePrice
             } else {
-                token.usdValue
+                token.usdValue * fallbackUSDToDisplayRate
             }
 
             return PositionRowData(
@@ -158,7 +168,8 @@ struct AssetDetailFeature {
     /// Compute holdings summary from token entries for a single asset.
     static func computeHoldingsSummary(
         tokens: [PositionTokenEntry],
-        prices: [String: Decimal]) -> HoldingsSummary {
+        prices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> HoldingsSummary {
         var positiveAmount: Decimal = 0
         var borrowAmount: Decimal = 0
         var positiveUSD: Decimal = 0
@@ -181,7 +192,7 @@ struct AssetDetailFeature {
         let totalValue: Decimal = if let cgId = coinGeckoId, let livePrice = prices[cgId] {
             totalAmount * livePrice
         } else {
-            positiveUSD - borrowUSD
+            (positiveUSD - borrowUSD) * fallbackUSDToDisplayRate
         }
 
         // Chain breakdown — positive tokens only
@@ -191,7 +202,7 @@ struct AssetDetailFeature {
             let val: Decimal = if let cgId = token.coinGeckoId, let livePrice = prices[cgId] {
                 token.amount * livePrice
             } else {
-                token.usdValue
+                token.usdValue * fallbackUSDToDisplayRate
             }
             chains[chainName, default: (0, 0)].amount += token.amount
             chains[chainName, default: (0, 0)].value += val
@@ -285,6 +296,56 @@ struct AssetDetailFeature {
         guard isHistoricalBackfillEnabled else { return [] }
         let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
         return rows.filter { $0.day >= startDay }
+    }
+
+    @MainActor
+    static func historicalPricePoints(
+        _ rows: [HistoricalPricePoint],
+        startDate: Date,
+        displayCurrency: FiatCurrency,
+        conversionContext: CurrencyConversionContext,
+        isHistoricalBackfillEnabled: Bool) -> [HistoricalAssetPricePoint] {
+        guard isHistoricalBackfillEnabled else { return [] }
+        let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        var selectedByDay: [Date: (priority: Int, point: HistoricalAssetPricePoint)] = [:]
+
+        for row in rows where row.day >= startDay {
+            let normalizedDay = HistoricalPriceCalendar.utcStartOfDay(for: row.day)
+            let candidate: (priority: Int, point: HistoricalAssetPricePoint)? = if row.currency == displayCurrency {
+                (0, HistoricalAssetPricePoint(day: normalizedDay, price: row.price))
+            } else if row.currency == .usd {
+                (
+                    1,
+                    HistoricalAssetPricePoint(
+                        day: normalizedDay,
+                        price: conversionContext.convertUSDValue(row.price, on: normalizedDay)))
+            } else {
+                nil
+            }
+
+            guard let candidate else { continue }
+            if let existing = selectedByDay[normalizedDay], existing.priority <= candidate.priority {
+                continue
+            }
+            selectedByDay[normalizedDay] = candidate
+        }
+
+        return selectedByDay
+            .sorted { $0.key < $1.key }
+            .map(\.value.point)
+    }
+
+    static func convertedValueChartPoints(
+        _ points: [ChartDataPoint],
+        conversionContext: CurrencyConversionContext) -> [ChartDataPoint] {
+        points.map { point in
+            ChartDataPoint(
+                date: point.date,
+                grossUSD: conversionContext.convertUSDValue(point.grossUSD, on: point.date),
+                borrowUSD: conversionContext.convertUSDValue(point.borrowUSD, on: point.date),
+                grossAmount: point.grossAmount,
+                borrowAmount: point.borrowAmount)
+        }
     }
 
     static func historicalPriceEmptyDescription(

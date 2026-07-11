@@ -9,6 +9,7 @@ struct AssetDetailView: View {
     let store: StoreOf<AppFeature>
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppState.self) private var appState
     @Query private var assets: [Asset]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
 
@@ -24,6 +25,10 @@ struct AssetDetailView: View {
             assetCoinGeckoId: asset.coinGeckoId,
             onchainIdentity: OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract),
             override: overridesByAssetId[assetId])
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -50,7 +55,7 @@ struct AssetDetailView: View {
                                 HStack(alignment: .firstTextBaseline) {
                                     DashboardMetricBlock(
                                         title: "Price",
-                                        value: info.price.formatted(.currency(code: "USD")))
+                                        value: info.price.formatted(.currency(code: currencyCode)))
                                     Spacer()
                                     if let change = info.change24h {
                                         HStack(spacing: 4) {

@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import Foundation
 import PortuCore
 @testable import PortuNetwork
@@ -41,6 +43,7 @@ nonisolated final class MockURLProtocol: URLProtocol, @unchecked Sendable {
 }
 
 @Suite(.serialized)
+// swiftlint:disable:next type_body_length
 struct PriceServiceTests {
     let session: URLSession
 
@@ -62,6 +65,22 @@ struct PriceServiceTests {
 
         #expect(prices["bitcoin"] == 62400)
         #expect(prices["ethereum"] == 3200)
+    }
+
+    @Test func `fetch prices uses requested fiat currency`() async throws {
+        var capturedURL: URL?
+        MockURLProtocol.requestHandler = { request in
+            capturedURL = request.url
+            return (Data("""
+            {"bitcoin":{"eur":53100}}
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session)
+        let prices = try await service.fetchPrices(for: ["bitcoin"], currency: .eur)
+
+        #expect(capturedURL?.query?.contains("vs_currencies=eur") == true)
+        #expect(prices["bitcoin"] == 53100)
     }
 
     @Test func `fetch prices rate limited`() async {
@@ -140,6 +159,21 @@ struct PriceServiceTests {
         #expect(try #require(update.changes24h["ethereum"]) > 0)
     }
 
+    @Test func `fetch price update parses requested fiat change keys`() async throws {
+        MockURLProtocol.requestHandler = { _ in
+            (Data("""
+            {"bitcoin":{"chf":48961.0,"chf_24h_change":0.8638901969108479}}
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session)
+        let update = try await service.fetchPriceUpdate(for: ["bitcoin"], currency: .chf)
+
+        #expect(update.currency == .chf)
+        #expect(update.prices["bitcoin"] == Decimal(48961))
+        #expect(update.changes24h["bitcoin"] == Decimal(string: "0.008638901969108479"))
+    }
+
     @Test func `fetch token price update uses coingecko platform address endpoint`() async throws {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
         var capturedURL: URL?
@@ -164,6 +198,30 @@ struct PriceServiceTests {
         #expect(capturedURL?.query?.contains("include_24hr_change=true") == true)
         #expect(update.prices[identity.historicalPriceID] == Decimal(string: "3.5"))
         #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "0.025"))
+    }
+
+    @Test func `fetch token price update uses requested fiat currency`() async throws {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        var capturedURL: URL?
+        MockURLProtocol.requestHandler = { request in
+            capturedURL = request.url
+            return (Data("""
+            {
+              "0xtoken": {
+                "eur": 3.10,
+                "eur_24h_change": -1.25
+              }
+            }
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let update = try await service.fetchTokenPriceUpdate(for: [identity], currency: .eur)
+
+        #expect(capturedURL?.query?.contains("vs_currencies=eur") == true)
+        #expect(update.currency == .eur)
+        #expect(update.prices[identity.historicalPriceID] == Decimal(string: "3.1"))
+        #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "-0.0125"))
     }
 
     @Test func `fetch token price update keeps partial results when rate limited`() async throws {
@@ -324,6 +382,53 @@ struct PriceServiceTests {
             #require(Decimal(string: "43100.75"))
         ]
         #expect(prices.map(\.usdPrice) == expectedPrices)
+    }
+
+    @Test func `fetch historical prices uses requested fiat currency`() async throws {
+        var capturedURL: URL?
+        MockURLProtocol.requestHandler = { request in
+            capturedURL = request.url
+            return (Data("""
+            {
+              "prices": [[1704067200000, 53100.25]],
+              "market_caps": [],
+              "total_volumes": []
+            }
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let prices = try await service.fetchHistoricalPrices(for: "bitcoin", currency: .eur, days: 30)
+
+        let url = try #require(capturedURL)
+        let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        #expect(query.contains(URLQueryItem(name: "vs_currency", value: "eur")))
+        #expect(prices.first?.currency == .eur)
+        #expect(prices.first?.price == Decimal(string: "53100.25"))
+    }
+
+    @Test func `historical usd conversion rates derive from btc market charts`() async throws {
+        var requestedCurrencies: [String] = []
+        MockURLProtocol.requestHandler = { request in
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let currency = query.first { $0.name == "vs_currency" }?.value ?? ""
+            requestedCurrencies.append(currency)
+            if currency == "usd" {
+                return (Data("""
+                {"prices":[[1704067200000, 50000], [1704153600000, 60000]], "market_caps": [], "total_volumes": []}
+                """.utf8), 200)
+            }
+            return (Data("""
+            {"prices":[[1704067200000, 45000], [1704153600000, 54000]], "market_caps": [], "total_volumes": []}
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let rates = try await service.fetchHistoricalUSDConversionRates(to: .eur, days: 2)
+
+        #expect(requestedCurrencies == ["usd", "eur"])
+        #expect(rates.map(\.currency) == [.eur, .eur])
+        #expect(rates.map(\.rate) == [Decimal(string: "0.9"), Decimal(string: "0.9")])
     }
 
     @Test func `fetch historical prices escapes slash in coin id path component`() async throws {

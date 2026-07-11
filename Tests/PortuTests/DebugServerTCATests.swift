@@ -8,6 +8,7 @@
     @MainActor
     struct DebugServerTCATests {
         private func makeStore(
+            selectedCurrency: FiatCurrency = .usd,
             prices: [String: Decimal] = [:],
             priceChanges24h: [String: Decimal] = [:],
             lastPriceUpdate: Date? = nil,
@@ -15,6 +16,7 @@
             connectionStatus: ConnectionStatus = .idle,
             storeIsEphemeral: Bool = false) -> StoreOf<AppFeature> {
             var state = AppFeature.State()
+            state.selectedCurrency = selectedCurrency
             state.prices = prices
             state.priceChanges24h = priceChanges24h
             state.lastPriceUpdate = lastPriceUpdate
@@ -36,6 +38,7 @@
 
         @Test func `prices endpoint returns coin prices and changes`() async throws {
             let store = makeStore(
+                selectedCurrency: .chf,
                 prices: ["bitcoin": 50000],
                 priceChanges24h: ["bitcoin": Decimal(2.5)],
                 lastPriceUpdate: Date(timeIntervalSince1970: 1_000_000))
@@ -53,6 +56,7 @@
             #expect(prices["bitcoin"] == 50000)
             let changes = try #require(json["changes24h"] as? [String: Double])
             #expect(changes["bitcoin"] == 2.5)
+            #expect(json["currency"] as? String == "CHF")
             #expect(json["lastUpdate"] is String)
         }
 

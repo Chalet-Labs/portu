@@ -69,34 +69,37 @@ struct PriceServiceClient {
     }
 
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
-    private var fetchCoinGeckoPricesOverride: (@Sendable (PricePollingRequest) async throws -> PriceUpdate)?
-    private var fetchZapperPricesOverride: (@Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate)?
+    private var fetchCoinGeckoPricesOverride: (@Sendable (PricePollingRequest, FiatCurrency) async throws -> PriceUpdate)?
+    private var fetchZapperPricesOverride: (@Sendable ([OnchainTokenIdentity], FiatCurrency) async throws -> PriceUpdate)?
     var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
+    var fetchHistoricalPricesForCurrency: @Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO]
+    var fetchCurrentUSDConversionRate: @Sendable (FiatCurrency) async throws -> Decimal
+    var fetchHistoricalUSDConversionRates: @Sendable (FiatCurrency, Int) async throws -> [CurrencyConversionRate]
     var resolveCoinGeckoIDs: @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String]
     var fetchZapperHistoricalPrices: @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO]
     var canFetchZapperHistoricalPrices: @Sendable () -> Bool
     var invalidateCache: @Sendable () async -> Void
 
-    var fetchCoinGeckoPrices: @Sendable (PricePollingRequest) async throws -> PriceUpdate {
+    var fetchCoinGeckoPrices: @Sendable (PricePollingRequest, FiatCurrency) async throws -> PriceUpdate {
         get {
             if let fetchCoinGeckoPricesOverride {
                 return fetchCoinGeckoPricesOverride
             }
             let fetchPrices = fetchPrices
-            return { request in
+            return { request, _ in
                 try await fetchPrices(request.allPriceIDs)
             }
         }
         set { fetchCoinGeckoPricesOverride = newValue }
     }
 
-    var fetchZapperPrices: @Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate {
+    var fetchZapperPrices: @Sendable ([OnchainTokenIdentity], FiatCurrency) async throws -> PriceUpdate {
         get {
             if let fetchZapperPricesOverride {
                 return fetchZapperPricesOverride
             }
             let fetchPrices = fetchPrices
-            return { identities in
+            return { identities, _ in
                 try await fetchPrices(identities.map(\.historicalPriceID))
             }
         }
@@ -105,9 +108,12 @@ struct PriceServiceClient {
 
     init(
         fetchPrices: @escaping @Sendable ([String]) async throws -> PriceUpdate,
-        fetchCoinGeckoPrices: (@Sendable (PricePollingRequest) async throws -> PriceUpdate)? = nil,
-        fetchZapperPrices: (@Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate)? = nil,
+        fetchCoinGeckoPrices: (@Sendable (PricePollingRequest, FiatCurrency) async throws -> PriceUpdate)? = nil,
+        fetchZapperPrices: (@Sendable ([OnchainTokenIdentity], FiatCurrency) async throws -> PriceUpdate)? = nil,
         fetchHistoricalPrices: @escaping @Sendable (String, Int) async throws -> [HistoricalPriceDTO],
+        fetchHistoricalPricesForCurrency: (@Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO])? = nil,
+        fetchCurrentUSDConversionRate: @escaping @Sendable (FiatCurrency) async throws -> Decimal = { _ in 1 },
+        fetchHistoricalUSDConversionRates: @escaping @Sendable (FiatCurrency, Int) async throws -> [CurrencyConversionRate] = { _, _ in [] },
         resolveCoinGeckoIDs: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String] = { _ in [:] },
         fetchZapperHistoricalPrices: @escaping @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO] = { _, _ in [] },
         canFetchZapperHistoricalPrices: @escaping @Sendable () -> Bool = { true },
@@ -116,6 +122,11 @@ struct PriceServiceClient {
         self.fetchCoinGeckoPricesOverride = fetchCoinGeckoPrices
         self.fetchZapperPricesOverride = fetchZapperPrices
         self.fetchHistoricalPrices = fetchHistoricalPrices
+        self.fetchHistoricalPricesForCurrency = fetchHistoricalPricesForCurrency ?? { coinId, _, days in
+            try await fetchHistoricalPrices(coinId, days)
+        }
+        self.fetchCurrentUSDConversionRate = fetchCurrentUSDConversionRate
+        self.fetchHistoricalUSDConversionRates = fetchHistoricalUSDConversionRates
         self.resolveCoinGeckoIDs = resolveCoinGeckoIDs
         self.fetchZapperHistoricalPrices = fetchZapperHistoricalPrices
         self.canFetchZapperHistoricalPrices = canFetchZapperHistoricalPrices
@@ -126,9 +137,12 @@ struct PriceServiceClient {
 extension PriceServiceClient: DependencyKey {
     static let liveValue = Self(
         fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        fetchCoinGeckoPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        fetchZapperPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchCoinGeckoPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchZapperPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchHistoricalPricesForCurrency: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchCurrentUSDConversionRate: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchHistoricalUSDConversionRates: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         resolveCoinGeckoIDs: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchZapperHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         canFetchZapperHistoricalPrices: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
@@ -153,19 +167,32 @@ extension PriceServiceClient: DependencyKey {
                         return try await zapperProvider.fetchPriceUpdate(for: identities)
                     }
             },
-            fetchCoinGeckoPrices: { request in
+            fetchCoinGeckoPrices: { request, currency in
                 try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
                     request: request,
-                    priceService: service)
+                    priceService: service,
+                    currency: currency)
             },
-            fetchZapperPrices: { identities in
+            fetchZapperPrices: { identities, currency in
                 guard let zapperProvider, !identities.isEmpty else {
-                    return PricePollingIDResolver.emptyUpdate
+                    return PricePollingIDResolver.emptyUpdate(currency: currency)
                 }
-                return try await zapperProvider.fetchPriceUpdate(for: identities)
+                let update = try await zapperProvider.fetchPriceUpdate(for: identities)
+                guard currency != .usd else { return update }
+                let rate = try await service.fetchCurrentUSDConversionRate(to: currency)
+                return update.convertedUSDValues(to: currency, rate: rate)
             },
             fetchHistoricalPrices: { coinId, days in
                 try await service.fetchHistoricalPrices(for: coinId, days: days)
+            },
+            fetchHistoricalPricesForCurrency: { coinId, currency, days in
+                try await service.fetchHistoricalPrices(for: coinId, currency: currency, days: days)
+            },
+            fetchCurrentUSDConversionRate: { currency in
+                try await service.fetchCurrentUSDConversionRate(to: currency)
+            },
+            fetchHistoricalUSDConversionRates: { currency, days in
+                try await service.fetchHistoricalUSDConversionRates(to: currency, days: days)
             },
             resolveCoinGeckoIDs: { identities in
                 try await service.resolveCoinGeckoIDs(for: identities)

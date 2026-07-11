@@ -8,11 +8,19 @@ struct AssetPositionsTable: View {
     let assetId: UUID
     let store: StoreOf<AppFeature>
 
+    @Environment(AppState.self) private var appState
     @Query private var allTokens: [PositionToken]
 
     private var rows: [PositionRowData] {
         let entries = PositionTokenEntry.fromActiveTokens(allTokens, assetId: assetId)
-        return AssetDetailFeature.aggregatePositionRows(tokens: entries, prices: store.prices)
+        return AssetDetailFeature.aggregatePositionRows(
+            tokens: entries,
+            prices: store.prices,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -37,8 +45,8 @@ struct AssetPositionsTable: View {
                         .font(DashboardStyle.monoTableFont)
                 }
                 .width(min: 80, ideal: 100)
-                TableColumn("USD Balance") { row in
-                    Text(row.usdBalance, format: .currency(code: "USD"))
+                TableColumn("Balance") { row in
+                    Text(row.usdBalance, format: .currency(code: currencyCode))
                         .font(DashboardStyle.monoTableFont)
                 }
                 .width(min: 80, ideal: 100)

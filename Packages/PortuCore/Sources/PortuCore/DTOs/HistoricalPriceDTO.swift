@@ -13,18 +13,38 @@ public struct HistoricalPriceDTO: Sendable, Equatable {
     public let coinGeckoId: String
     public let timestamp: Date
     public let day: Date
-    public let usdPrice: Decimal
+    public let currency: FiatCurrency
+    public let price: Decimal
     public let source: HistoricalPriceSource
+
+    public var usdPrice: Decimal {
+        price
+    }
 
     public init(
         coinGeckoId: String,
         timestamp: Date,
         usdPrice: Decimal,
         source: HistoricalPriceSource = .coingecko) {
+        self.init(
+            coinGeckoId: coinGeckoId,
+            timestamp: timestamp,
+            currency: .usd,
+            price: usdPrice,
+            source: source)
+    }
+
+    public init(
+        coinGeckoId: String,
+        timestamp: Date,
+        currency: FiatCurrency,
+        price: Decimal,
+        source: HistoricalPriceSource = .coingecko) {
         self.coinGeckoId = coinGeckoId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         self.timestamp = timestamp
         self.day = HistoricalPriceCalendar.utcStartOfDay(for: timestamp)
-        self.usdPrice = usdPrice
+        self.currency = currency
+        self.price = price
         self.source = source
     }
 }

@@ -171,19 +171,25 @@ struct AppFeatureIntervalTests {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
         let testClock = TestClock()
         let testDate = Date(timeIntervalSince1970: 1_000_000)
-        nonisolated(unsafe) var coinGeckoFetchCount = 0
+        nonisolated(unsafe) var coinGeckoCoinFetchCount = 0
+        nonisolated(unsafe) var coinGeckoTokenFetchCount = 0
         nonisolated(unsafe) var zapperFetchCount = 0
 
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request in
-                coinGeckoFetchCount += 1
-                #expect(request.coinGeckoIDs == ["bitcoin"])
+            $0.priceService.fetchCoinGeckoPrices = { request, _ in
+                if request.coinGeckoIDs == ["bitcoin"] {
+                    coinGeckoCoinFetchCount += 1
+                    #expect(request.zapperIdentities.isEmpty)
+                    return PriceUpdate(prices: ["bitcoin": Decimal(coinGeckoCoinFetchCount)], changes24h: [:])
+                }
+                coinGeckoTokenFetchCount += 1
+                #expect(request.coinGeckoIDs.isEmpty)
                 #expect(request.zapperIdentities == [identity])
-                return PriceUpdate(prices: ["bitcoin": Decimal(coinGeckoFetchCount)], changes24h: [:])
+                return PriceUpdate(prices: [:], changes24h: [:])
             }
-            $0.priceService.fetchZapperPrices = { identities in
+            $0.priceService.fetchZapperPrices = { identities, _ in
                 zapperFetchCount += 1
                 #expect(identities == [identity])
                 return PriceUpdate(
@@ -198,6 +204,7 @@ struct AppFeatureIntervalTests {
 
         await store.send(.startPricePolling(["bitcoin", identity.historicalPriceID])) {
             $0.connectionStatus = .fetching
+            $0.pricePollingIDs = ["bitcoin", identity.historicalPriceID]
         }
         await store.receive(\.pricesReceived) {
             $0.prices = ["bitcoin": 1]
@@ -210,7 +217,8 @@ struct AppFeatureIntervalTests {
         }
 
         await testClock.advance(by: .seconds(4))
-        #expect(coinGeckoFetchCount == 1)
+        #expect(coinGeckoCoinFetchCount == 1)
+        #expect(coinGeckoTokenFetchCount == 1)
         #expect(zapperFetchCount == 1)
 
         await testClock.advance(by: .seconds(1))
@@ -218,10 +226,14 @@ struct AppFeatureIntervalTests {
             $0.prices = ["bitcoin": 1, identity.historicalPriceID: 20]
             $0.lastPriceUpdate = testDate
         }
-        #expect(coinGeckoFetchCount == 1)
+        #expect(coinGeckoCoinFetchCount == 1)
+        #expect(coinGeckoTokenFetchCount == 1)
         #expect(zapperFetchCount == 2)
 
-        await store.send(.stopPricePolling)
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
+        }
     }
 
     @Test func `zapper price fallback observes manual only changes after startup`() async {
@@ -234,12 +246,12 @@ struct AppFeatureIntervalTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request in
+            $0.priceService.fetchCoinGeckoPrices = { request, _ in
                 #expect(request.coinGeckoIDs.isEmpty)
                 #expect(request.zapperIdentities == [identity])
                 return PriceUpdate(prices: [:], changes24h: [:])
             }
-            $0.priceService.fetchZapperPrices = { identities in
+            $0.priceService.fetchZapperPrices = { identities, _ in
                 zapperFetchCount += 1
                 #expect(identities == [identity])
                 return PriceUpdate(
@@ -254,6 +266,7 @@ struct AppFeatureIntervalTests {
 
         await store.send(.startPricePolling([identity.historicalPriceID])) {
             $0.connectionStatus = .fetching
+            $0.pricePollingIDs = [identity.historicalPriceID]
         }
         await store.receive(\.pricesReceived) {
             $0.lastPriceUpdate = testDate
@@ -275,7 +288,10 @@ struct AppFeatureIntervalTests {
         await testClock.advance(by: .seconds(30))
         #expect(zapperFetchCount == 1)
 
-        await store.send(.stopPricePolling)
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
+        }
     }
 
     @Test func `manual only zapper price fallback suppresses automatic zapper calls`() async {
@@ -287,12 +303,12 @@ struct AppFeatureIntervalTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request in
+            $0.priceService.fetchCoinGeckoPrices = { request, _ in
                 #expect(request.coinGeckoIDs.isEmpty)
                 #expect(request.zapperIdentities == [identity])
                 return PriceUpdate(prices: [:], changes24h: [:])
             }
-            $0.priceService.fetchZapperPrices = { _ in
+            $0.priceService.fetchZapperPrices = { _, _ in
                 zapperFetchCount += 1
                 return PriceUpdate(prices: [identity.historicalPriceID: 10], changes24h: [:])
             }
@@ -304,6 +320,7 @@ struct AppFeatureIntervalTests {
 
         await store.send(.startPricePolling([identity.historicalPriceID])) {
             $0.connectionStatus = .fetching
+            $0.pricePollingIDs = [identity.historicalPriceID]
         }
         await store.receive(\.pricesReceived) {
             $0.lastPriceUpdate = testDate
@@ -313,6 +330,9 @@ struct AppFeatureIntervalTests {
         await testClock.advance(by: .seconds(30))
         #expect(zapperFetchCount == 0)
 
-        await store.send(.stopPricePolling)
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
+        }
     }
 }

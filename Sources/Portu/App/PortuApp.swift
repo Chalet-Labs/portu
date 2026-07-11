@@ -60,6 +60,9 @@ struct PortuApp: App {
             $0.continuousClock = ContinuousClock()
             $0.syncEngine = .live(engine: syncEngine)
             $0.priceService = priceServiceClient
+            $0.currencyConversion = .live(
+                modelContext: modelContext,
+                priceService: priceServiceClient)
             $0.historicalPriceBackfill = .live(
                 modelContext: modelContext,
                 priceService: priceServiceClient,
@@ -134,23 +137,36 @@ struct PortuApp: App {
                         return try await zapperProvider.fetchPriceUpdate(for: identities)
                     }
             },
-            fetchCoinGeckoPrices: { request in
+            fetchCoinGeckoPrices: { request, currency in
                 try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
                     request: request,
-                    priceService: priceService)
+                    priceService: priceService,
+                    currency: currency)
             },
-            fetchZapperPrices: { identities in
+            fetchZapperPrices: { identities, currency in
                 guard
                     !identities.isEmpty,
                     let apiKey = zapperAPIKey(from: secretStore)
                 else {
-                    return PricePollingIDResolver.emptyUpdate
+                    return PricePollingIDResolver.emptyUpdate(currency: currency)
                 }
                 let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
-                return try await zapperProvider.fetchPriceUpdate(for: identities)
+                let update = try await zapperProvider.fetchPriceUpdate(for: identities)
+                guard currency != .usd else { return update }
+                let rate = try await priceService.fetchCurrentUSDConversionRate(to: currency)
+                return update.convertedUSDValues(to: currency, rate: rate)
             },
             fetchHistoricalPrices: { coinId, days in
                 try await priceService.fetchHistoricalPrices(for: coinId, days: days)
+            },
+            fetchHistoricalPricesForCurrency: { coinId, currency, days in
+                try await priceService.fetchHistoricalPrices(for: coinId, currency: currency, days: days)
+            },
+            fetchCurrentUSDConversionRate: { currency in
+                try await priceService.fetchCurrentUSDConversionRate(to: currency)
+            },
+            fetchHistoricalUSDConversionRates: { currency, days in
+                try await priceService.fetchHistoricalUSDConversionRates(to: currency, days: days)
             },
             resolveCoinGeckoIDs: { identities in
                 try await priceService.resolveCoinGeckoIDs(for: identities)

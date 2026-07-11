@@ -8,7 +8,11 @@ extension EnvironmentValues {
 }
 
 struct HistoricalPriceChanges24hProvider<Content: View>: View {
+    @Environment(AppState.self) private var appState
+
     @Query private var historicalPrices: [HistoricalPricePoint]
+    @Query(sort: \CurrencyConversionRatePoint.day)
+    private var currencyRates: [CurrencyConversionRatePoint]
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
     private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
 
@@ -32,8 +36,40 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
     }
 
     private var historicalEntries: [HistoricalPriceEntry] {
-        historicalPrices.map {
-            HistoricalPriceEntry(coinGeckoId: $0.coinGeckoId, day: $0.day, usdPrice: $0.usdPrice)
+        var selectedRows: [HistoricalPriceDisplayKey: HistoricalPriceEntry] = [:]
+        var usdFallbackRows: [HistoricalPriceDisplayKey: HistoricalPriceEntry] = [:]
+        let displayCurrency = appState.selectedCurrency
+        let context = CurrencyConversionContext(
+            displayCurrency: displayCurrency,
+            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
+            historicalRatePoints: currencyRates)
+
+        for row in historicalPrices {
+            guard let historicalPriceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(row.coinGeckoId) else {
+                continue
+            }
+            let key = HistoricalPriceDisplayKey(
+                coinGeckoId: historicalPriceID,
+                day: HistoricalPriceCalendar.utcStartOfDay(for: row.day))
+            if row.currency == displayCurrency {
+                selectedRows[key] = HistoricalPriceEntry(
+                    coinGeckoId: historicalPriceID,
+                    day: row.day,
+                    usdPrice: row.price)
+            } else if row.currency == .usd {
+                usdFallbackRows[key] = HistoricalPriceEntry(
+                    coinGeckoId: historicalPriceID,
+                    day: row.day,
+                    usdPrice: context.convertUSDValue(row.price, on: row.day))
+            }
+        }
+
+        return (Array(selectedRows.values) + usdFallbackRows.compactMap { key, value in
+            selectedRows[key] == nil ? value : nil
+        })
+        .sorted {
+            if $0.coinGeckoId != $1.coinGeckoId { return $0.coinGeckoId < $1.coinGeckoId }
+            return $0.day < $1.day
         }
     }
 
@@ -44,4 +80,9 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
     private var historicalPricesUSD: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.latestPrices(from: historicalEntries)
     }
+}
+
+private struct HistoricalPriceDisplayKey: Hashable {
+    let coinGeckoId: String
+    let day: Date
 }

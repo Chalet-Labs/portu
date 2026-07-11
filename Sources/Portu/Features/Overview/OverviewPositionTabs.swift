@@ -149,7 +149,8 @@ struct OverviewPositionTabs: View {
             overrideMap: overrideMap,
             mappingMap: mappingMap,
             categoryResolver: categoryResolver,
-            dashboardSettings: dashboardSettings)
+            dashboardSettings: dashboardSettings,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var displayPrices: [String: Decimal] {
@@ -215,7 +216,8 @@ struct OverviewPositionTabs: View {
             token: entry,
             prices: context.prices,
             changes24h: context.changes24h,
-            override: context.overrideMap[entry.assetId])
+            override: context.overrideMap[entry.assetId],
+            fallbackUSDToDisplayRate: context.fallbackUSDToDisplayRate)
     }
 
     // MARK: - Position cards
@@ -232,6 +234,7 @@ struct OverviewPositionTabs: View {
                     ForEach(groupedTokens(tokens)) { group in
                         OverviewPositionGroupCard(
                             group: group,
+                            currencyCode: appState.selectedCurrency.displayCode,
                             price: { price($0, context: context) },
                             tokenValue: { tokenValue($0, context: context) },
                             tokenChange24h: { tokenChange24h($0, context: context) })
@@ -292,6 +295,7 @@ struct OverviewPositionTabs: View {
                 ForEach(borrowPositions, id: \.id) { group in
                     OverviewPositionGroupCard(
                         group: group,
+                        currencyCode: appState.selectedCurrency.displayCode,
                         price: { price($0, context: context) },
                         tokenValue: { tokenValue($0, context: context) },
                         tokenChange24h: { tokenChange24h($0, context: context) })
@@ -347,7 +351,8 @@ struct OverviewPositionTabs: View {
         return OverviewPositionPricing.price(
             token: entry,
             prices: context.prices,
-            override: context.overrideMap[entry.assetId])
+            override: context.overrideMap[entry.assetId],
+            fallbackUSDToDisplayRate: context.fallbackUSDToDisplayRate)
     }
 
     private func tokenValue(_ token: PositionToken, context: OverviewPositionContext) -> Decimal {
@@ -355,7 +360,8 @@ struct OverviewPositionTabs: View {
         let resolvedValue = OverviewPositionPricing.tokenValue(
             token: entry,
             prices: context.prices,
-            override: context.overrideMap[entry.assetId])
+            override: context.overrideMap[entry.assetId],
+            fallbackUSDToDisplayRate: context.fallbackUSDToDisplayRate)
         if resolvedValue != 0 {
             return resolvedValue
         }
@@ -363,7 +369,8 @@ struct OverviewPositionTabs: View {
             token: entry,
             prices: context.prices,
             changes24h: context.changes24h,
-            override: context.overrideMap[entry.assetId])
+            override: context.overrideMap[entry.assetId],
+            fallbackUSDToDisplayRate: context.fallbackUSDToDisplayRate)
     }
 }
 
@@ -374,4 +381,5 @@ private struct OverviewPositionContext {
     let mappingMap: [OnchainTokenIdentity: TokenIdentityMappingSnapshot]
     let categoryResolver: PortfolioCategoryResolver
     let dashboardSettings: TokenDashboardSettings
+    let fallbackUSDToDisplayRate: Decimal
 }

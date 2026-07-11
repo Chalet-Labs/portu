@@ -8,6 +8,8 @@ struct ValueChartMode: View {
     let accountId: UUID?
     let startDate: Date
 
+    @Environment(AppState.self) private var appState
+
     @Query(sort: \PortfolioSnapshot.timestamp)
     private var portfolioSnapshots: [PortfolioSnapshot]
 
@@ -23,6 +25,9 @@ struct ValueChartMode: View {
 
     @Query
     private var historicalPrices: [HistoricalPricePoint]
+
+    @Query(sort: \CurrencyConversionRatePoint.day)
+    private var currencyRates: [CurrencyConversionRatePoint]
 
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
     private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
@@ -48,6 +53,13 @@ struct ValueChartMode: View {
         }
     }
 
+    private var convertedDataPoints: [(Date, Decimal, Bool)] {
+        let context = currencyConversionContext
+        return dataPoints.map { date, value, isPartial in
+            (date, context.convertUSDValue(value, on: date), isPartial)
+        }
+    }
+
     private var scopedAssetSnapshots: [AssetSnapshot] {
         assetSnapshots.filter { accountId == nil || $0.accountId == accountId }
     }
@@ -68,7 +80,7 @@ struct ValueChartMode: View {
         return HistoricalPortfolioEstimator.estimatedValues(
             holdings: holdings,
             prices: historicalPrices.compactMap {
-                guard $0.day >= startDay, $0.day < firstRealSnapshotDate else { return nil }
+                guard $0.currency == .usd, $0.day >= startDay, $0.day < firstRealSnapshotDate else { return nil }
                 return HistoricalPriceEntry(
                     coinGeckoId: $0.coinGeckoId,
                     day: $0.day,
@@ -77,6 +89,22 @@ struct ValueChartMode: View {
             startDate: startDate,
             firstRealSnapshotDate: firstRealSnapshotDate,
             accountId: accountId)
+    }
+
+    private var convertedEstimatedPoints: [HistoricalPortfolioValuePoint] {
+        let context = currencyConversionContext
+        return estimatedPoints.map { context.convertUSDPoint($0) }
+    }
+
+    private var currencyConversionContext: CurrencyConversionContext {
+        CurrencyConversionContext(
+            displayCurrency: appState.selectedCurrency,
+            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
+            historicalRatePoints: currencyRates)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     private var historicalEstimateSnapshotEntries: [HistoricalEstimateSnapshotEntry] {
@@ -100,6 +128,7 @@ struct ValueChartMode: View {
     }
 
     var body: some View {
+        let dataPoints = convertedDataPoints
         if dataPoints.isEmpty {
             ContentUnavailableView(
                 "No Performance Data",
@@ -108,7 +137,7 @@ struct ValueChartMode: View {
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 .frame(height: 320)
         } else {
-            let estimatedPoints = estimatedPoints
+            let estimatedPoints = convertedEstimatedPoints
             Chart {
                 ForEach(estimatedPoints) { point in
                     LineMark(
@@ -130,7 +159,7 @@ struct ValueChartMode: View {
                 }
             }
             .chartYAxis {
-                AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))
+                AxisMarks(format: .currency(code: currencyCode).precision(.fractionLength(0)))
             }
             .frame(height: 320)
         }

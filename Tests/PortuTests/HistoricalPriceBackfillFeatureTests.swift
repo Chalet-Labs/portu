@@ -175,6 +175,37 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(rows[1].coinGeckoId == "ethereum")
     }
 
+    @Test func `cache writer keeps separate rows per currency`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        context.insert(HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: day,
+            currency: .usd,
+            price: 40000,
+            fetchedAt: Date(timeIntervalSince1970: 10)))
+        try context.save()
+
+        let result = try HistoricalPriceCacheWriter.upsert(
+            [
+                HistoricalPriceDTO(
+                    coinGeckoId: "bitcoin",
+                    timestamp: day.addingTimeInterval(3600),
+                    currency: .eur,
+                    price: 37000)
+            ],
+            in: context,
+            fetchedAt: Date(timeIntervalSince1970: 20))
+
+        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+            .sorted { $0.currency.storageCode < $1.currency.storageCode }
+        #expect(result.inserted == 1)
+        #expect(result.updated == 0)
+        #expect(rows.map(\.currency) == [.eur, .usd])
+        #expect(rows.map(\.price) == [37000, 40000])
+    }
+
     @Test func `cache writer converges duplicate existing rows for same coin gecko id and day`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext

@@ -8,11 +8,19 @@ struct AssetHoldingsSummary: View {
     let assetId: UUID
     let store: StoreOf<AppFeature>
 
+    @Environment(AppState.self) private var appState
     @Query private var allTokens: [PositionToken]
 
     private var summary: HoldingsSummary {
         let entries = PositionTokenEntry.fromActiveTokens(allTokens, assetId: assetId)
-        return AssetDetailFeature.computeHoldingsSummary(tokens: entries, prices: store.prices)
+        return AssetDetailFeature.computeHoldingsSummary(
+            tokens: entries,
+            prices: store.prices,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -34,7 +42,7 @@ struct AssetHoldingsSummary: View {
                 }
                 VStack(alignment: .leading) {
                     Text("Total Value").font(.caption).foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    Text(summary.totalValue, format: .currency(code: "USD"))
+                    Text(summary.totalValue, format: .currency(code: currencyCode))
                         .font(.system(size: 18, weight: .semibold, design: .monospaced))
                 }
             }
@@ -48,7 +56,7 @@ struct AssetHoldingsSummary: View {
                         Spacer()
                         Text(chain.share, format: .percent.precision(.fractionLength(1)))
                             .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                        Text(chain.value, format: .currency(code: "USD"))
+                        Text(chain.value, format: .currency(code: currencyCode))
                             .font(DashboardStyle.monoTableFont)
                             .frame(width: 100, alignment: .trailing)
                     }

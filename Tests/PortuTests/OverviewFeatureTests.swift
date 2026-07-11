@@ -358,6 +358,50 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(total == 32)
     }
 
+    @Test func `portfolio total uses converted usd fallback while selected currency prices are loading`() throws {
+        let held = token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 1, usdValue: 60000)
+        let borrow = token(symbol: "DEBT", coinGeckoId: "debt", role: .borrow, amount: 2, usdValue: 100)
+
+        let total = try OverviewFeature.portfolioTotalValue(
+            tokens: [held, borrow],
+            prices: [:],
+            overrides: [],
+            mappings: [],
+            settings: .defaults,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(total == 53910)
+    }
+
+    @Test func `portfolio total converts manual usd overrides once for display currency`() throws {
+        let manualId = UUID()
+        let live = token(symbol: "LIVE", coinGeckoId: "live", amount: 2, usdValue: 2)
+        let manual = token(assetId: manualId, symbol: "MANUAL", amount: 4, usdValue: 0)
+
+        let total = try OverviewFeature.portfolioTotalValue(
+            tokens: [live, manual],
+            prices: ["live": 5],
+            overrides: [TokenPricingOverrideSnapshot(assetId: manualId, manualPriceUSD: 7)],
+            mappings: [],
+            settings: .defaults,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(total == Decimal(string: "35.2")!)
+    }
+
+    @Test func `top asset slices do not convert live display prices again`() throws {
+        let token = token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 2, usdValue: 120_000)
+
+        let slices = try OverviewFeature.topAssetSlices(
+            from: [token],
+            prices: ["bitcoin": 55000],
+            limit: 5,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        let slice = try #require(slices.first)
+        #expect(slice.value == 110_000)
+    }
+
     @Test func `asset candidates are pre grouped by normalized coin gecko id`() throws {
         let preferred = asset(symbol: "AAVE", coinGeckoId: " aave ")
         let later = asset(symbol: "ZAAVE", coinGeckoId: "AAVE")
@@ -437,6 +481,16 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(label == "$ 20,000")
         #expect(!label.contains("US$"))
         #expect(!label.contains("'"))
+    }
+
+    @Test func `overview currency display supports eur and chf prefixes`() throws {
+        let eur = try OverviewPriceDisplay.currency(#require(Decimal(
+            string: "8889",
+            locale: Locale(identifier: "en_US_POSIX"))), currencyCode: "EUR")
+        let chf = OverviewPriceDisplay.axisCurrency(-20000, currencyCode: "CHF")
+
+        #expect(eur == "€ 8,889")
+        #expect(chf == "-CHF 20,000")
     }
 
     @Test func `overview amount display compacts very large token balances`() throws {

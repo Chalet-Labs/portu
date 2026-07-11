@@ -10,10 +10,14 @@ struct AssetPriceChart: View {
     let coinGeckoId: String?
     let store: StoreOf<AppFeature>
 
+    @Environment(AppState.self) private var appState
+
     @Query
     private var snapshots: [AssetSnapshot]
     @Query
     private var historicalPrices: [HistoricalPricePoint]
+    @Query(sort: \CurrencyConversionRatePoint.day)
+    private var currencyRates: [CurrencyConversionRatePoint]
 
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
     private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
@@ -50,6 +54,23 @@ struct AssetPriceChart: View {
 
     private var aggregated: [ChartDataPoint] {
         AssetDetailFeature.aggregateSnapshots(entries: chartEntries)
+    }
+
+    private var convertedAggregated: [ChartDataPoint] {
+        AssetDetailFeature.convertedValueChartPoints(
+            aggregated,
+            conversionContext: currencyConversionContext)
+    }
+
+    private var currencyConversionContext: CurrencyConversionContext {
+        CurrencyConversionContext(
+            displayCurrency: appState.selectedCurrency,
+            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
+            historicalRatePoints: currencyRates)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -96,12 +117,14 @@ struct AssetPriceChart: View {
     private var priceChart: some View {
         Group {
             let points = if historicalBackfillEnabled {
-                AssetDetailFeature.historicalPriceRows(
+                AssetDetailFeature.historicalPricePoints(
                     historicalPrices,
                     startDate: store.assetDetail.selectedRange.startDate,
+                    displayCurrency: appState.selectedCurrency,
+                    conversionContext: currencyConversionContext,
                     isHistoricalBackfillEnabled: true)
             } else {
-                [HistoricalPricePoint]()
+                [HistoricalAssetPricePoint]()
             }
             if points.isEmpty {
                 ContentUnavailableView(
@@ -116,32 +139,33 @@ struct AssetPriceChart: View {
                 Chart(points, id: \.id) { point in
                     LineMark(
                         x: .value("Date", point.day),
-                        y: .value("Price", point.usdPrice))
+                        y: .value("Price", point.price))
                         .foregroundStyle(PortuTheme.dashboardGold)
                 }
                 .chartYAxis {
-                    AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0 ... 4)))
+                    AxisMarks(format: .currency(code: currencyCode).precision(.fractionLength(0 ... 4)))
                 }
                 .frame(height: 250)
             }
         }
     }
 
-    // MARK: - $ Value chart (net from AssetSnapshot)
+    // MARK: - Value chart (net from AssetSnapshot)
 
     private var valueChart: some View {
         Group {
-            if aggregated.isEmpty {
+            let points = convertedAggregated
+            if points.isEmpty {
                 ContentUnavailableView(
                     "No Value Data", systemImage: "chart.line.uptrend.xyaxis",
                     description: Text("Sync your accounts to see value history"))
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 250)
             } else {
-                let isBorrowOnly = aggregated.allSatisfy { $0.grossUSD == 0 && $0.borrowUSD > 0 }
+                let isBorrowOnly = points.allSatisfy { $0.grossUSD == 0 && $0.borrowUSD > 0 }
 
                 Chart {
-                    ForEach(aggregated) { point in
+                    ForEach(points) { point in
                         let net = point.grossUSD - point.borrowUSD
                         LineMark(
                             x: .value("Date", point.date),
@@ -161,7 +185,7 @@ struct AssetPriceChart: View {
                     }
                 }
                 .chartYAxis {
-                    AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))
+                    AxisMarks(format: .currency(code: currencyCode).precision(.fractionLength(0)))
                 }
                 .frame(height: 250)
 

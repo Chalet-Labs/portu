@@ -31,6 +31,7 @@ enum OverviewPositionVisibility {
 
 struct OverviewPositionGroupCard: View {
     let group: OverviewPositionGroupData
+    let currencyCode: String
     let price: (PositionToken) -> Decimal
     let tokenValue: (PositionToken) -> Decimal
     let tokenChange24h: (PositionToken) -> Decimal
@@ -60,6 +61,7 @@ struct OverviewPositionGroupCard: View {
                     OverviewPositionTokenRow(
                         token: token,
                         position: group.position,
+                        currencyCode: currencyCode,
                         price: price(token),
                         value: tokenValue(token),
                         change24h: tokenChange24h(token))
@@ -87,12 +89,12 @@ struct OverviewPositionGroupCard: View {
 
             Spacer(minLength: 10)
 
-            Text(OverviewPriceDisplay.currency(groupValue))
+            Text(OverviewPriceDisplay.currency(groupValue, currencyCode: currencyCode))
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
 
-            Text(OverviewPriceDisplay.currency(groupChange))
+            Text(OverviewPriceDisplay.currency(groupChange, currencyCode: currencyCode))
                 .font(.system(size: 12, weight: .medium, design: .monospaced))
                 .foregroundStyle(groupChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
                 .lineLimit(1)
@@ -136,6 +138,7 @@ struct OverviewPositionGroupCard: View {
 private struct OverviewPositionTokenRow: View {
     let token: PositionToken
     let position: Position
+    let currencyCode: String
     let price: Decimal
     let value: Decimal
     let change24h: Decimal
@@ -156,14 +159,14 @@ private struct OverviewPositionTokenRow: View {
             .frame(width: 90, alignment: .leading)
 
             HStack(spacing: 8) {
-                Text(OverviewPriceDisplay.compactPrice(price))
+                Text(OverviewPriceDisplay.compactPrice(price, currencyCode: currencyCode))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .allowsTightening(true)
                     .minimumScaleFactor(0.8)
 
-                Text(OverviewPriceDisplay.currency(change24h))
+                Text(OverviewPriceDisplay.currency(change24h, currencyCode: currencyCode))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(OverviewPositionChangeTone.tone(for: token.role, change: change24h).color)
                     .lineLimit(1)

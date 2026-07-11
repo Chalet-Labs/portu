@@ -72,7 +72,8 @@ struct OverviewSummaryCards: View {
             prices: displayPrices,
             overrides: overrideSnapshots,
             settings: dashboardSettings,
-            categories: categoryResolver.categories)
+            categories: categoryResolver.categories,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var deployedBreakdown: [(String, Decimal)] {
@@ -80,13 +81,18 @@ struct OverviewSummaryCards: View {
             tokens: summaryTokens,
             prices: displayPrices,
             overrides: overrideSnapshots,
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: appState.prices,
             historical: historicalPricesUSD)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -119,7 +125,7 @@ struct OverviewSummaryCards: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Spacer()
-                        Text(OverviewPriceDisplay.currency(value))
+                        Text(OverviewPriceDisplay.currency(value, currencyCode: currencyCode))
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(PortuTheme.dashboardText)
                             .lineLimit(1)
@@ -150,14 +156,21 @@ enum OverviewSummaryCardsFeature {
         prices: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot],
         settings: TokenDashboardSettings = .defaults,
-        categories: [PortfolioCategorySnapshot]) -> [(String, Decimal)] {
+        categories: [PortfolioCategorySnapshot],
+        fallbackUSDToDisplayRate: Decimal = 1) -> [(String, Decimal)] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var stablesFiat: Decimal = 0
         var majors: Decimal = 0
         var otherTokens: Decimal = 0
 
         for summaryToken in tokens where summaryToken.positionType == .idle {
-            guard let token = visibleToken(summaryToken.token, prices: prices, overrideMap: overrideMap, settings: settings) else {
+            guard
+                let token = visibleToken(
+                    summaryToken.token,
+                    prices: prices,
+                    overrideMap: overrideMap,
+                    settings: settings,
+                    fallbackUSDToDisplayRate: fallbackUSDToDisplayRate) else {
                 continue
             }
 
@@ -181,14 +194,21 @@ enum OverviewSummaryCardsFeature {
         tokens: [OverviewSummaryToken],
         prices: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults) -> [(String, Decimal)] {
+        settings: TokenDashboardSettings = .defaults,
+        fallbackUSDToDisplayRate: Decimal = 1) -> [(String, Decimal)] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var lending: Decimal = 0
         var staked: Decimal = 0
         var yield: Decimal = 0
 
         for summaryToken in tokens {
-            guard let token = visibleToken(summaryToken.token, prices: prices, overrideMap: overrideMap, settings: settings) else {
+            guard
+                let token = visibleToken(
+                    summaryToken.token,
+                    prices: prices,
+                    overrideMap: overrideMap,
+                    settings: settings,
+                    fallbackUSDToDisplayRate: fallbackUSDToDisplayRate) else {
                 continue
             }
 
@@ -215,12 +235,17 @@ enum OverviewSummaryCardsFeature {
         _ token: TokenEntry,
         prices: [String: Decimal],
         overrideMap: [UUID: TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings) -> TokenEntry? {
+        settings: TokenDashboardSettings,
+        fallbackUSDToDisplayRate: Decimal) -> TokenEntry? {
         let override = overrideMap[token.assetId]
         guard token.role.isPositive else { return nil }
         guard override?.isIgnored != true else { return nil }
 
-        let value = OverviewPositionPricing.tokenValue(token: token, prices: prices, override: override)
+        let value = OverviewPositionPricing.tokenValue(
+            token: token,
+            prices: prices,
+            override: override,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         if value == 0 {
             guard override?.alwaysShow == true || !settings.hideUnpriced else { return nil }
         } else if abs(value) < normalizedThreshold(settings.minimumDashboardValue) {

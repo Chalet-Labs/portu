@@ -15,6 +15,7 @@ func makeTestContainer() throws -> ModelContainer {
         TokenPricingOverride.self,
         TokenIdentityMapping.self,
         HistoricalPricePoint.self,
+        CurrencyConversionRatePoint.self,
         PortfolioSnapshot.self,
         AccountSnapshot.self,
         AssetSnapshot.self
@@ -236,9 +237,53 @@ struct ModelTests {
         let fetched = try #require(fetchedPoints.first)
         #expect(fetched.coinGeckoId == "bitcoin")
         #expect(fetched.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
+        #expect(fetched.currency == .usd)
+        #expect(fetched.price == usdPrice)
         #expect(fetched.usdPrice == usdPrice)
         #expect(fetched.source == .coingecko)
         #expect(fetched.fetchedAt == fetchedAt)
+    }
+
+    @Test func `historical price point stores non usd cache data separately`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+        let rawDate = Date(timeIntervalSince1970: 1_704_110_456)
+        let price = try #require(Decimal(string: "39000.50"))
+
+        let point = HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: rawDate,
+            currency: .chf,
+            price: price)
+
+        context.insert(point)
+        try context.save()
+
+        let fetched = try #require(try context.fetch(FetchDescriptor<HistoricalPricePoint>()).first)
+        #expect(fetched.currency == .chf)
+        #expect(fetched.price == price)
+    }
+
+    @Test func `currency conversion rate point normalizes utc day and stores pair`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+        let rawDate = Date(timeIntervalSince1970: 1_704_110_456)
+        let rate = try #require(Decimal(string: "0.91"))
+
+        let point = CurrencyConversionRatePoint(
+            baseCurrency: .usd,
+            quoteCurrency: .eur,
+            day: rawDate,
+            rate: rate)
+
+        context.insert(point)
+        try context.save()
+
+        let fetched = try #require(try context.fetch(FetchDescriptor<CurrencyConversionRatePoint>()).first)
+        #expect(fetched.baseCurrency == .usd)
+        #expect(fetched.quoteCurrency == .eur)
+        #expect(fetched.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
+        #expect(fetched.rate == rate)
     }
 
     @Test func `historical price dto is sendable and normalizes day`() {

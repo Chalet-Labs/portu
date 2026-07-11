@@ -65,7 +65,8 @@ struct PriceWatchlist: View {
             prices: displayPrices,
             changes24h: priceChanges24h,
             watchlistIDs: watchlistIDs,
-            overrides: overrideSnapshots)
+            overrides: overrideSnapshots,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var displayPrices: [String: Decimal] {
@@ -142,7 +143,10 @@ struct PriceWatchlist: View {
                         .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
                 } else {
                     ForEach(currentRows) { row in
-                        PriceWatchlistRow(row: row, remove: removeFromWatchlist)
+                        PriceWatchlistRow(
+                            row: row,
+                            currencyCode: appState.selectedCurrency.displayCode,
+                            remove: removeFromWatchlist)
 
                         Rectangle()
                             .fill(PortuTheme.dashboardStroke.opacity(0.75))
@@ -289,6 +293,7 @@ private struct PriceCountdownText: View {
 
 private struct PriceWatchlistRow: View {
     let row: OverviewPriceRowData
+    let currencyCode: String
     let remove: (String) -> Void
 
     var body: some View {
@@ -312,7 +317,7 @@ private struct PriceWatchlistRow: View {
                     .stroke(PortuTheme.dashboardStroke, lineWidth: 1))
 
             if let price = row.price {
-                Text(OverviewPriceDisplay.price(price))
+                Text(OverviewPriceDisplay.price(price, currencyCode: currencyCode))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)

@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import Foundation
 import os
 import PortuCore
@@ -5,10 +7,16 @@ import PortuCore
 /// Fetches and caches cryptocurrency prices from CoinGecko's free API.
 /// Rate limit and cache TTL are configurable (see init).
 public actor PriceService {
+    // swiftlint:disable:previous type_body_length
     private static let logger = Logger(subsystem: "com.portu.network", category: "PriceService")
 
     private let session: URLSession
-    private var cache: [String: Decimal] = [:]
+    private struct CacheKey: Hashable {
+        var currency: FiatCurrency
+        var coinId: String
+    }
+
+    private var cache: [CacheKey: Decimal] = [:]
     private var lastFetchDate: Date?
     private var updateCache: PriceUpdate?
     private var lastUpdateFetchDate: Date?
@@ -55,21 +63,27 @@ public actor PriceService {
 
     /// Fetch current USD prices for the given CoinGecko coin IDs.
     /// Returns cached data if within TTL. Enforces client-side rate limit.
-    public func fetchPrices(for coinIds: [String]) async throws(PriceServiceError) -> [String: Decimal] {
+    public func fetchPrices(
+        for coinIds: [String],
+        currency: FiatCurrency = .default) async throws(PriceServiceError) -> [String: Decimal] {
         guard !coinIds.isEmpty else { return [:] }
 
+        let cacheKeys = coinIds.map { CacheKey(currency: currency, coinId: $0) }
         if
             let lastFetch = lastFetchDate,
             Date.now.timeIntervalSince(lastFetch) < cacheTTL,
-            coinIds.allSatisfy({ cache[$0] != nil }) {
-            return cache.filter { coinIds.contains($0.key) }
+            cacheKeys.allSatisfy({ cache[$0] != nil }) {
+            return Dictionary(uniqueKeysWithValues: coinIds.compactMap { id in
+                cache[CacheKey(currency: currency, coinId: id)].map { (id, $0) }
+            })
         }
 
         let data = try await rateLimitedFetch(
             coinIds: coinIds,
+            currency: currency,
             extraParams: [])
 
-        let parsed = try CoinGeckoSimplePriceResponse(from: data)
+        let parsed = try CoinGeckoSimplePriceResponse(from: data, currency: currency)
         let requested = Set(coinIds)
 
         // Cap cache to prevent unbounded growth in long-running sessions
@@ -78,68 +92,83 @@ public actor PriceService {
         }
         // Remove requested IDs not present in fresh payload to avoid serving stale values
         for id in requested where parsed.prices[id] == nil {
-            cache.removeValue(forKey: id)
+            cache.removeValue(forKey: CacheKey(currency: currency, coinId: id))
         }
-        cache.merge(parsed.prices) { _, new in new }
+        for (id, price) in parsed.prices {
+            cache[CacheKey(currency: currency, coinId: id)] = price
+        }
         lastFetchDate = .now
-        return cache.filter { requested.contains($0.key) }
+        return Dictionary(uniqueKeysWithValues: coinIds.compactMap { id in
+            cache[CacheKey(currency: currency, coinId: id)].map { (id, $0) }
+        })
     }
 
     /// Fetch current USD prices and 24h change percentages for the given CoinGecko coin IDs.
     /// Returns cached data if within TTL. Enforces client-side rate limit.
-    public func fetchPriceUpdate(for coinIds: [String]) async throws(PriceServiceError) -> PriceUpdate {
-        guard !coinIds.isEmpty else { return PriceUpdate(prices: [:], changes24h: [:]) }
+    public func fetchPriceUpdate(
+        for coinIds: [String],
+        currency: FiatCurrency = .default) async throws(PriceServiceError) -> PriceUpdate {
+        guard !coinIds.isEmpty else { return PriceUpdate(currency: currency, prices: [:], changes24h: [:]) }
 
         if
             let lastFetch = lastUpdateFetchDate,
             Date.now.timeIntervalSince(lastFetch) < cacheTTL,
             let cached = updateCache,
+            cached.currency == currency,
             coinIds.allSatisfy({ cached.prices[$0] != nil && cached.changes24h[$0] != nil }) {
             let requested = Set(coinIds)
             return PriceUpdate(
+                currency: currency,
                 prices: cached.prices.filter { requested.contains($0.key) },
                 changes24h: cached.changes24h.filter { requested.contains($0.key) })
         }
 
         let data = try await rateLimitedFetch(
             coinIds: coinIds,
+            currency: currency,
             extraParams: [URLQueryItem(name: "include_24hr_change", value: "true")])
 
-        let parsed = try CoinGeckoSimplePriceResponse.parsePriceUpdate(from: data)
+        let parsed = try CoinGeckoSimplePriceResponse.parsePriceUpdate(from: data, currency: currency)
         updateCache = parsed
         lastUpdateFetchDate = .now
         let requested = Set(coinIds)
         return PriceUpdate(
+            currency: currency,
             prices: parsed.prices.filter { requested.contains($0.key) },
             changes24h: parsed.changes24h.filter { requested.contains($0.key) })
     }
 
     public func fetchHistoricalPrices(
         for coinId: String,
+        currency: FiatCurrency = .default,
         days: Int = 365) async throws(PriceServiceError) -> [HistoricalPriceDTO] {
         let normalized = coinId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else { return [] }
         let data = try await rateLimitedFetch(
             pathComponents: ["coins", normalized, "market_chart"],
             queryItems: [
-                URLQueryItem(name: "vs_currency", value: "usd"),
+                URLQueryItem(name: "vs_currency", value: currency.coinGeckoParameter),
                 URLQueryItem(name: "days", value: "\(max(days, 1))")
             ])
-        return try CoinGeckoMarketChartResponse(coinGeckoId: normalized, data: data).prices
+        return try CoinGeckoMarketChartResponse(coinGeckoId: normalized, currency: currency, data: data).prices
     }
 
     public func fetchTokenPriceUpdate(
-        for identities: [OnchainTokenIdentity]) async throws(PriceServiceError) -> PriceUpdate {
+        for identities: [OnchainTokenIdentity],
+        currency: FiatCurrency = .default) async throws(PriceServiceError) -> PriceUpdate {
         let uniqueIdentities = Self.uniqueIdentitiesPreservingOrder(identities)
         guard !uniqueIdentities.isEmpty else {
-            return PriceUpdate(prices: [:], changes24h: [:])
+            return PriceUpdate(currency: currency, prices: [:], changes24h: [:])
         }
 
         var prices: [String: Decimal] = [:]
         var changes24h: [String: Decimal] = [:]
         let batches = Self.tokenPriceBatchesPreservingPriority(uniqueIdentities)
         for (index, batch) in batches.enumerated() {
-            let result = try await fetchTokenPriceChunk(platformID: batch.platformID, identities: batch.identities)
+            let result = try await fetchTokenPriceChunk(
+                platformID: batch.platformID,
+                identities: batch.identities,
+                currency: currency)
             prices.merge(result.update.prices) { _, new in new }
             changes24h.merge(result.update.changes24h) { _, new in new }
             if result.didHitRateLimit {
@@ -153,11 +182,11 @@ public actor PriceService {
                         \(remaining, privacy: .public) identities skipped this tick.
                         """)
                 }
-                return PriceUpdate(prices: prices, changes24h: changes24h)
+                return PriceUpdate(currency: currency, prices: prices, changes24h: changes24h)
             }
         }
 
-        return PriceUpdate(prices: prices, changes24h: changes24h)
+        return PriceUpdate(currency: currency, prices: prices, changes24h: changes24h)
     }
 
     public func resolveCoinGeckoIDs(
@@ -258,22 +287,23 @@ public actor PriceService {
 
     private func fetchTokenPriceChunk(
         platformID: String,
-        identities: [OnchainTokenIdentity]) async throws(PriceServiceError) -> TokenPriceFetchResult {
+        identities: [OnchainTokenIdentity],
+        currency: FiatCurrency) async throws(PriceServiceError) -> TokenPriceFetchResult {
         let addresses = identities.map(\.contractAddress).joined(separator: ",")
         do {
             let data = try await rateLimitedFetch(
                 pathComponents: ["simple", "token_price", platformID],
                 queryItems: [
                     URLQueryItem(name: "contract_addresses", value: addresses),
-                    URLQueryItem(name: "vs_currencies", value: "usd"),
+                    URLQueryItem(name: "vs_currencies", value: currency.coinGeckoParameter),
                     URLQueryItem(name: "include_24hr_change", value: "true")
                 ])
             return try TokenPriceFetchResult(
-                update: tokenPriceUpdate(from: data, identities: identities),
+                update: tokenPriceUpdate(from: data, identities: identities, currency: currency),
                 didHitRateLimit: false)
         } catch PriceServiceError.rateLimited {
             return TokenPriceFetchResult(
-                update: PriceUpdate(prices: [:], changes24h: [:]),
+                update: PriceUpdate(currency: currency, prices: [:], changes24h: [:]),
                 didHitRateLimit: true)
         } catch let PriceServiceError.invalidResponse(statusCode) where statusCode == 400 {
             guard identities.count > 1 else {
@@ -284,17 +314,19 @@ public actor PriceService {
                         "CoinGecko returned 400 for token \(lone.historicalPriceID, privacy: .public); dropping for this tick.")
                 }
                 return TokenPriceFetchResult(
-                    update: PriceUpdate(prices: [:], changes24h: [:]),
+                    update: PriceUpdate(currency: currency, prices: [:], changes24h: [:]),
                     didHitRateLimit: false)
             }
             let midpoint = identities.count / 2
             let left = try await fetchTokenPriceChunk(
                 platformID: platformID,
-                identities: Array(identities[..<midpoint]))
+                identities: Array(identities[..<midpoint]),
+                currency: currency)
             if left.didHitRateLimit { return left }
             let right = try await fetchTokenPriceChunk(
                 platformID: platformID,
-                identities: Array(identities[midpoint...]))
+                identities: Array(identities[midpoint...]),
+                currency: currency)
             return TokenPriceFetchResult(
                 update: Self.merge(left.update, right.update),
                 didHitRateLimit: right.didHitRateLimit)
@@ -303,8 +335,9 @@ public actor PriceService {
 
     private func tokenPriceUpdate(
         from data: Data,
-        identities: [OnchainTokenIdentity]) throws(PriceServiceError) -> PriceUpdate {
-        let parsed = try CoinGeckoTokenPriceResponse(data: data)
+        identities: [OnchainTokenIdentity],
+        currency: FiatCurrency) throws(PriceServiceError) -> PriceUpdate {
+        let parsed = try CoinGeckoTokenPriceResponse(data: data, currency: currency)
         var prices: [String: Decimal] = [:]
         var changes24h: [String: Decimal] = [:]
         for identity in identities {
@@ -317,23 +350,53 @@ public actor PriceService {
                 changes24h[priceID] = change
             }
         }
-        return PriceUpdate(prices: prices, changes24h: changes24h)
+        return PriceUpdate(currency: currency, prices: prices, changes24h: changes24h)
     }
 
     private static func merge(_ lhs: PriceUpdate, _ rhs: PriceUpdate) -> PriceUpdate {
         PriceUpdate(
+            currency: lhs.currency,
             prices: lhs.prices.merging(rhs.prices) { _, new in new },
             changes24h: lhs.changes24h.merging(rhs.changes24h) { _, new in new })
+    }
+
+    public func fetchCurrentUSDConversionRate(to currency: FiatCurrency) async throws(PriceServiceError) -> Decimal {
+        guard currency != .usd else { return 1 }
+        let data = try await rateLimitedFetch(pathComponents: ["exchange_rates"], queryItems: [])
+        let parsed = try CoinGeckoExchangeRatesResponse(data: data)
+        guard
+            let usd = parsed.rates[.usd],
+            let target = parsed.rates[currency],
+            usd > 0
+        else {
+            throw .decodingFailed
+        }
+        return target / usd
+    }
+
+    public func fetchHistoricalUSDConversionRates(
+        to currency: FiatCurrency,
+        days: Int) async throws(PriceServiceError) -> [CurrencyConversionRate] {
+        guard currency != .usd else { return [] }
+        let usdRows = try await fetchHistoricalPrices(for: "bitcoin", currency: .usd, days: days)
+        let targetRows = try await fetchHistoricalPrices(for: "bitcoin", currency: currency, days: days)
+        let usdByDay = Dictionary(uniqueKeysWithValues: usdRows.map { ($0.day, $0.price) })
+        return targetRows.compactMap { row in
+            guard let usd = usdByDay[row.day], usd > 0 else { return nil }
+            return CurrencyConversionRate(currency: currency, day: row.day, rate: row.price / usd)
+        }
+        .sorted { $0.day < $1.day }
     }
 
     /// Shared rate limiting, stamping, network call, and HTTP status validation.
     private func rateLimitedFetch(
         coinIds: [String],
+        currency: FiatCurrency,
         extraParams: [URLQueryItem]) async throws(PriceServiceError) -> Data {
         let ids = Set(coinIds).joined(separator: ",")
         var params = [
             URLQueryItem(name: "ids", value: ids),
-            URLQueryItem(name: "vs_currencies", value: "usd")
+            URLQueryItem(name: "vs_currencies", value: currency.coinGeckoParameter)
         ]
         params.append(contentsOf: extraParams)
         return try await rateLimitedFetch(pathComponents: ["simple", "price"], queryItems: params)

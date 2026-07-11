@@ -71,6 +71,28 @@ struct ExposureTokenValueTests {
         #expect(value == 300)
     }
 
+    @Test func `converts fallback usd value once for display currency`() throws {
+        let value = try ExposureFeature.resolveTokenUSDValue(
+            amount: 10,
+            coinGeckoId: "unknown-token",
+            usdValue: 300,
+            prices: ["bitcoin": 65000],
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(value == 270)
+    }
+
+    @Test func `does not convert live display price again`() throws {
+        let value = try ExposureFeature.resolveTokenUSDValue(
+            amount: 2,
+            coinGeckoId: "bitcoin",
+            usdValue: 100_000,
+            prices: ["bitcoin": 55000],
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(value == 110_000)
+    }
+
     @Test func `price polling ids include positive and borrow tokens but exclude rewards`() {
         let tokens = [
             makeToken(symbol: "BTC", coinGeckoId: "bitcoin", category: .major, role: .balance),

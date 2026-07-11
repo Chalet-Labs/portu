@@ -36,7 +36,8 @@ struct SidebarView: View {
             prices: displayPrices,
             overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
             mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var change24h: Decimal {
@@ -46,7 +47,8 @@ struct SidebarView: View {
             changes24h: priceChanges24h,
             overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
             mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var displayPrices: [String: Decimal] {
@@ -86,7 +88,10 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    SidebarPortfolioHeader(totalValue: currentTotalValue, change24h: currentChange24h)
+                    SidebarPortfolioHeader(
+                        totalValue: currentTotalValue,
+                        change24h: currentChange24h,
+                        currencyCode: appState.selectedCurrency.displayCode)
 
                     DashboardSearchField(placeholder: "Search", text: $searchText)
 
@@ -131,6 +136,7 @@ struct SidebarView: View {
 private struct SidebarPortfolioHeader: View {
     let totalValue: Decimal
     let change24h: Decimal
+    let currencyCode: String
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -144,13 +150,13 @@ private struct SidebarPortfolioHeader: View {
             .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(OverviewPriceDisplay.currency(totalValue))
+                Text(OverviewPriceDisplay.currency(totalValue, currencyCode: currencyCode))
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 HStack(spacing: 4) {
-                    Text(OverviewPriceDisplay.currency(change24h))
+                    Text(OverviewPriceDisplay.currency(change24h, currencyCode: currencyCode))
                     Text("24h")
                 }
                 .font(.system(size: 10, weight: .medium, design: .monospaced))

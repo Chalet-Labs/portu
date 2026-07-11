@@ -2,6 +2,16 @@ import Foundation
 @testable import PortuCore
 import Testing
 
+struct FiatCurrencyTests {
+    @Test func `supported display currencies expose stable codes`() {
+        #expect(FiatCurrency.default == .usd)
+        #expect(FiatCurrency.allCases == [.usd, .eur, .chf])
+        #expect(FiatCurrency.usd.displayCode == "USD")
+        #expect(FiatCurrency.eur.coinGeckoParameter == "eur")
+        #expect(FiatCurrency.chf.storageCode == "chf")
+    }
+}
+
 struct DTOTests {
     @Test func `sync context creation`() {
         let ctx = SyncContext(

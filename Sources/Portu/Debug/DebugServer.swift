@@ -151,6 +151,7 @@
                 let prices = store.prices.mapValues { ($0 as NSDecimalNumber).doubleValue }
                 let changes = store.priceChanges24h.mapValues { ($0 as NSDecimalNumber).doubleValue }
                 var body: [String: any Sendable] = [
+                    "currency": store.selectedCurrency.displayCode,
                     "prices": prices,
                     "changes24h": changes
                 ]

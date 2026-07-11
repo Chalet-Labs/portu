@@ -164,7 +164,8 @@ struct AllAssetsFeature {
     /// Aggregate token entries into display rows, merging live prices where available.
     static func aggregateRows(
         tokens: [TokenEntry],
-        prices: [String: Decimal]) -> [AssetRowData] {
+        prices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> [AssetRowData] {
         var assetTokens: [UUID: AssetAccumulator] = [:]
 
         for token in tokens {
@@ -205,13 +206,13 @@ struct AllAssetsFeature {
             } else {
                 // Sync-time fallback: weighted average price
                 if entry.positive > 0 {
-                    price = entry.positiveUSD / entry.positive
+                    price = (entry.positiveUSD / entry.positive) * fallbackUSDToDisplayRate
                 } else if entry.borrow > 0 {
-                    price = entry.borrowUSD / entry.borrow
+                    price = (entry.borrowUSD / entry.borrow) * fallbackUSDToDisplayRate
                 } else {
                     price = 0
                 }
-                value = entry.positiveUSD - entry.borrowUSD
+                value = (entry.positiveUSD - entry.borrowUSD) * fallbackUSDToDisplayRate
             }
 
             return AssetRowData(

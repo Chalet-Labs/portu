@@ -2,48 +2,55 @@ import Foundation
 import PortuCore
 
 /// Parses CoinGecko /simple/price JSON response via JSONSerialization.
-/// Keys are coin IDs, values contain price in USD.
+/// Keys are coin IDs, values contain price in the requested fiat currency.
 nonisolated struct CoinGeckoSimplePriceResponse {
     let prices: [String: Decimal]
 
-    init(from data: Data) throws(PriceServiceError) {
+    init(from data: Data, currency: FiatCurrency = .default) throws(PriceServiceError) {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String: NSNumber]] else {
             throw .decodingFailed
         }
         var result: [String: Decimal] = [:]
         for (coinId, currencies) in json {
-            if let usd = currencies["usd"] {
-                result[coinId] = usd.decimalValue
+            if let value = currencies[currency.coinGeckoParameter] {
+                result[coinId] = value.decimalValue
             }
         }
         self.prices = result
     }
 
     /// Parse response that includes 24h change data.
-    /// Format: `{ "bitcoin": { "usd": 67500.0, "usd_24h_change": -1.5 }, ... }`
+    /// Format: `{ "bitcoin": { "eur": 67500.0, "eur_24h_change": -1.5 }, ... }`
     /// The change percentage is divided by 100 to convert from percentage to decimal.
-    static func parsePriceUpdate(from data: Data) throws(PriceServiceError) -> PriceUpdate {
+    static func parsePriceUpdate(
+        from data: Data,
+        currency: FiatCurrency = .default) throws(PriceServiceError) -> PriceUpdate {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
             throw .decodingFailed
         }
         var prices: [String: Decimal] = [:]
         var changes: [String: Decimal] = [:]
+        let priceKey = currency.coinGeckoParameter
+        let changeKey = "\(priceKey)_24h_change"
         for (coinId, values) in json {
-            if let usd = values["usd"] as? NSNumber {
-                prices[coinId] = usd.decimalValue
+            if let value = values[priceKey] as? NSNumber {
+                prices[coinId] = value.decimalValue
             }
-            if let change = values["usd_24h_change"] as? NSNumber {
+            if let change = values[changeKey] as? NSNumber {
                 changes[coinId] = change.decimalValue / 100
             }
         }
-        return PriceUpdate(prices: prices, changes24h: changes)
+        return PriceUpdate(currency: currency, prices: prices, changes24h: changes)
     }
 }
 
 nonisolated struct CoinGeckoMarketChartResponse {
     let prices: [HistoricalPriceDTO]
 
-    init(coinGeckoId: String, data: Data) throws(PriceServiceError) {
+    init(
+        coinGeckoId: String,
+        currency: FiatCurrency = .default,
+        data: Data) throws(PriceServiceError) {
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let rows = json["prices"] as? [[Any]]
@@ -64,7 +71,8 @@ nonisolated struct CoinGeckoMarketChartResponse {
             let dto = HistoricalPriceDTO(
                 coinGeckoId: coinGeckoId,
                 timestamp: timestamp,
-                usdPrice: priceNumber.decimalValue)
+                currency: currency,
+                price: priceNumber.decimalValue)
             if let existing = latestByDay[dto.day], existing.timestamp >= dto.timestamp {
                 continue
             }
@@ -82,26 +90,51 @@ nonisolated struct CoinGeckoTokenPriceResponse {
     let pricesByAddress: [String: Decimal]
     let changes24hByAddress: [String: Decimal]
 
-    init(data: Data) throws(PriceServiceError) {
+    init(data: Data, currency: FiatCurrency = .default) throws(PriceServiceError) {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
             throw .decodingFailed
         }
 
         var prices: [String: Decimal] = [:]
         var changes: [String: Decimal] = [:]
+        let priceKey = currency.coinGeckoParameter
+        let changeKey = "\(priceKey)_24h_change"
         for (address, values) in json {
             let normalizedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard !normalizedAddress.isEmpty else { continue }
-            if let usd = values["usd"] as? NSNumber {
-                prices[normalizedAddress] = usd.decimalValue
+            if let value = values[priceKey] as? NSNumber {
+                prices[normalizedAddress] = value.decimalValue
             }
-            if let change = values["usd_24h_change"] as? NSNumber {
+            if let change = values[changeKey] as? NSNumber {
                 changes[normalizedAddress] = change.decimalValue / 100
             }
         }
 
         self.pricesByAddress = prices
         self.changes24hByAddress = changes
+    }
+}
+
+nonisolated struct CoinGeckoExchangeRatesResponse {
+    let rates: [FiatCurrency: Decimal]
+
+    init(data: Data) throws(PriceServiceError) {
+        guard
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let rows = json["rates"] as? [String: [String: Any]]
+        else {
+            throw .decodingFailed
+        }
+
+        var rates: [FiatCurrency: Decimal] = [:]
+        for (key, values) in rows {
+            let currency = FiatCurrency(storageCode: key)
+            guard currency.storageCode == key.lowercased(), let value = values["value"] as? NSNumber else {
+                continue
+            }
+            rates[currency] = value.decimalValue
+        }
+        self.rates = rates
     }
 }
 

@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import ComposableArchitecture
 import Foundation
 @testable import Portu
@@ -76,6 +78,35 @@ struct AssetDetailPositionRowTests {
 
         #expect(rows.count == 1)
         #expect(rows[0].usdBalance == 500)
+    }
+
+    @Test func `converts sync-time row fallback once for display currency`() throws {
+        let entry = PositionTokenEntry(
+            tokenId: UUID(), accountName: "Kraken", protocolName: nil,
+            positionType: .idle, chain: nil, role: .balance,
+            amount: 100, usdValue: 500, coinGeckoId: nil)
+
+        let rows = try AssetDetailFeature.aggregatePositionRows(
+            tokens: [entry],
+            prices: [:],
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(rows.count == 1)
+        #expect(rows[0].usdBalance == 450)
+    }
+
+    @Test func `does not convert live row prices again`() throws {
+        let entry = PositionTokenEntry(
+            tokenId: UUID(), accountName: "Wallet A", protocolName: nil,
+            positionType: .idle, chain: .ethereum, role: .balance,
+            amount: 10, usdValue: 25000, coinGeckoId: "ethereum")
+
+        let rows = try AssetDetailFeature.aggregatePositionRows(
+            tokens: [entry],
+            prices: ["ethereum": 2700],
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(rows[0].usdBalance == 27000)
     }
 
     @Test func `populates account name, platform, context, network`() {
@@ -188,6 +219,26 @@ struct AssetDetailHoldingsSummaryTests {
             tokens: entries, prices: [:])
 
         #expect(summary.totalValue == 750) // 500 + 250
+    }
+
+    @Test func `total value converts usd fallback once for display currency`() throws {
+        let entries = [
+            PositionTokenEntry(
+                tokenId: UUID(), accountName: "A", protocolName: nil,
+                positionType: .idle, chain: nil, role: .balance,
+                amount: 100, usdValue: 500, coinGeckoId: nil),
+            PositionTokenEntry(
+                tokenId: UUID(), accountName: "B", protocolName: nil,
+                positionType: .idle, chain: nil, role: .supply,
+                amount: 50, usdValue: 250, coinGeckoId: nil)
+        ]
+
+        let summary = try AssetDetailFeature.computeHoldingsSummary(
+            tokens: entries,
+            prices: [:],
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(summary.totalValue == 675)
     }
 
     @Test func `account count counts distinct accounts`() {

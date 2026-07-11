@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import PortuCore
 import SwiftUI
 
 enum SettingsTab: String, CaseIterable, Identifiable {
@@ -24,7 +25,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
-        case .general: "Price refresh preferences for portfolio data."
+        case .general: "Currency and price refresh preferences for portfolio data."
         case .tokens: "Manual pricing, low-value visibility, and token overrides."
         case .categories: "Category symbol rules for app-wide portfolio categories."
         case .apiKeys: "Provider credentials and optional custom RPC endpoints."
@@ -279,6 +280,8 @@ private struct GeneralSettingsTab: View {
                     subtitle: "Choose automatic refresh intervals by price provider.",
                     icon: .priceUpdates) {
                         VStack(alignment: .leading, spacing: 10) {
+                            SettingsCurrencyPicker(store: store)
+
                             SettingsIntervalRow(
                                 title: "CoinGecko live prices",
                                 subtitle: "Default: 30 seconds. Longer intervals intentionally keep dashboard prices stale between refreshes.",
@@ -357,6 +360,42 @@ private struct GeneralSettingsTab: View {
                     message: "These settings are stored locally with AppStorage and apply across Portu views.")
             }
         }
+    }
+}
+
+private struct SettingsCurrencyPicker: View {
+    let store: StoreOf<AppFeature>
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Display currency")
+                    .font(.system(size: SettingsMetrics.rowTitleSize, weight: .semibold))
+                    .foregroundStyle(SettingsDesign.primaryText)
+                Text("Portfolio values display in the selected fiat currency.")
+                    .font(.caption)
+                    .foregroundStyle(SettingsDesign.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 16)
+
+            Picker("Display currency", selection: currencyBinding) {
+                ForEach(FiatCurrency.allCases, id: \.self) { currency in
+                    Text(currency.displayCode).tag(currency)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(width: 180)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var currencyBinding: Binding<FiatCurrency> {
+        Binding(
+            get: { store.selectedCurrency },
+            set: { store.send(.displayCurrencySelected($0)) })
     }
 }
 

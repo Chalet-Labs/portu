@@ -17,6 +17,8 @@ struct PerformanceBottomPanel: View {
     private var categoryRules: [CategorySymbolRule]
     @Query
     private var historicalPrices: [HistoricalPricePoint]
+    @Query(sort: \CurrencyConversionRatePoint.day)
+    private var currencyRates: [CurrencyConversionRatePoint]
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
@@ -88,7 +90,8 @@ struct PerformanceBottomPanel: View {
             .map { CategorySnapshotEntry(snapshot: $0, categoryResolver: resolver) }
         return PerformanceFeature.computeCategoryChanges(
             entries: entries,
-            visibleAssetIDs: visibleAssetIDs)
+            visibleAssetIDs: visibleAssetIDs,
+            conversionContext: currencyConversionContext)
     }
 
     private var priceChanges: [AssetPricePeriodChange] {
@@ -96,14 +99,7 @@ struct PerformanceBottomPanel: View {
         let visibleHoldings = visibleHistoricalEstimateSnapshotEntries
         guard !visibleHoldings.isEmpty else { return [] }
         let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
-        let rows = historicalPrices
-            .filter { $0.day >= startDay }
-            .map {
-                HistoricalPriceEntry(
-                    coinGeckoId: $0.coinGeckoId,
-                    day: $0.day,
-                    usdPrice: $0.usdPrice)
-            }
+        let rows = historicalPriceEntriesForDisplayCurrency(startDay: startDay)
 
         let heldRows = PerformanceFeature.historicalPriceEntriesForHeldAssets(
             rows: rows,
@@ -154,6 +150,17 @@ struct PerformanceBottomPanel: View {
             historical: historicalPricesUSD)
     }
 
+    private var currencyConversionContext: CurrencyConversionContext {
+        CurrencyConversionContext(
+            displayCurrency: appState.selectedCurrency,
+            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
+            historicalRatePoints: currencyRates)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
+    }
+
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
     }
@@ -202,9 +209,9 @@ struct PerformanceBottomPanel: View {
                 ForEach(categoryChanges) { change in
                     HStack {
                         Text(change.name).frame(width: 100, alignment: .leading)
-                        Text(change.startValue, format: .currency(code: "USD")).frame(width: 100)
+                        Text(change.startValue, format: .currency(code: currencyCode)).frame(width: 100)
                         Text("\u{2192}").foregroundStyle(PortuTheme.dashboardSecondaryText)
-                        Text(change.endValue, format: .currency(code: "USD")).frame(width: 100)
+                        Text(change.endValue, format: .currency(code: currencyCode)).frame(width: 100)
                         Text(change.percentChange, format: .percent.precision(.fractionLength(1)))
                             .foregroundStyle(change.percentChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
                             .frame(width: 60)
@@ -232,7 +239,7 @@ struct PerformanceBottomPanel: View {
                                 .frame(width: 120, alignment: .leading)
                                 .lineLimit(2)
                                 .truncationMode(.tail)
-                            Text(change.endPrice, format: .currency(code: "USD"))
+                            Text(change.endPrice, format: .currency(code: currencyCode))
                                 .frame(width: 90, alignment: .trailing)
                             Text(change.percentChange, format: .percent.precision(.fractionLength(1)))
                                 .foregroundStyle(change.percentChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
@@ -254,6 +261,46 @@ struct PerformanceBottomPanel: View {
     private func recordName(_ name: String, for id: String?, in names: inout [String: String]) {
         guard let normalizedID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(id) else { return }
         names[normalizedID] = names[normalizedID] ?? name
+    }
+
+    private func historicalPriceEntriesForDisplayCurrency(startDay: Date) -> [HistoricalPriceEntry] {
+        struct PriceKey: Hashable {
+            let coinGeckoId: String
+            let day: Date
+        }
+
+        var selectedRows: [PriceKey: HistoricalPriceEntry] = [:]
+        var usdFallbackRows: [PriceKey: HistoricalPriceEntry] = [:]
+        let displayCurrency = appState.selectedCurrency
+        let context = currencyConversionContext
+
+        for row in historicalPrices where row.day >= startDay {
+            guard let historicalPriceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(row.coinGeckoId) else {
+                continue
+            }
+            let key = PriceKey(
+                coinGeckoId: historicalPriceID,
+                day: HistoricalPriceCalendar.utcStartOfDay(for: row.day))
+            if row.currency == displayCurrency {
+                selectedRows[key] = HistoricalPriceEntry(
+                    coinGeckoId: historicalPriceID,
+                    day: row.day,
+                    usdPrice: row.price)
+            } else if row.currency == .usd {
+                usdFallbackRows[key] = HistoricalPriceEntry(
+                    coinGeckoId: historicalPriceID,
+                    day: row.day,
+                    usdPrice: context.convertUSDValue(row.price, on: row.day))
+            }
+        }
+
+        return (Array(selectedRows.values) + usdFallbackRows.compactMap { key, value in
+            selectedRows[key] == nil ? value : nil
+        })
+        .sorted {
+            if $0.coinGeckoId != $1.coinGeckoId { return $0.coinGeckoId < $1.coinGeckoId }
+            return $0.day < $1.day
+        }
     }
 
     private func displayName(for asset: Asset) -> String {

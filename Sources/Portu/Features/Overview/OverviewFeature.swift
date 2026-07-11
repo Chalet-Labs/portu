@@ -148,6 +148,7 @@ enum OverviewWatchlistStore {
     }
 }
 
+// swiftlint:disable:next type_body_length
 enum OverviewFeature {
     private static let assetResidualSliceID = "asset-residual"
     private static let categoryResidualSliceID = "category-residual"
@@ -195,8 +196,13 @@ enum OverviewFeature {
         from tokens: [TokenEntry],
         prices: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot] = [],
-        limit: Int = 5) -> [OverviewAssetSlice] {
-        let aggregates = sortedAssetAggregates(from: tokens, prices: prices, overrides: overrides)
+        limit: Int = 5,
+        fallbackUSDToDisplayRate: Decimal = 1) -> [OverviewAssetSlice] {
+        let aggregates = sortedAssetAggregates(
+            from: tokens,
+            prices: prices,
+            overrides: overrides,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         let visibleCount = max(limit, 0)
         var sliceInputs = aggregates.prefix(visibleCount).map {
             SliceInput(id: $0.rowID, label: $0.symbol, value: $0.value, logoURL: $0.logoURL)
@@ -214,14 +220,16 @@ enum OverviewFeature {
         from tokens: [TokenEntry],
         prices: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot] = [],
-        limit: Int = 6) -> [OverviewAssetSlice] {
+        limit: Int = 6,
+        fallbackUSDToDisplayRate: Decimal = 1) -> [OverviewAssetSlice] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var values: [PortfolioCategorySnapshot: Decimal] = [:]
         for token in tokens where token.role.isPositive {
             values[token.portfolioCategory, default: 0] += resolvedValue(
                 for: token,
                 prices: prices,
-                override: overrideMap[token.assetId])
+                override: overrideMap[token.assetId],
+                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         }
 
         let sortedValues = values
@@ -301,23 +309,25 @@ enum OverviewFeature {
         prices: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot],
-        settings: TokenDashboardSettings = .defaults) -> Decimal {
+        settings: TokenDashboardSettings = .defaults,
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         let mappedTokens = TokenSettingsFeature.applyIdentityMappings(
             to: tokens,
             mappings: mappings,
             overrides: overrides)
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        let dashboardTokens = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: mappedTokens,
-            prices: prices,
-            overrideMap: overrideMap,
-            settings: settings)
 
-        return dashboardTokens.reduce(Decimal.zero) { total, token in
-            let value = OverviewPositionPricing.tokenValue(
-                token: token,
-                prices: prices,
-                override: overrideMap[token.assetId])
+        return mappedTokens.reduce(Decimal.zero) { total, token in
+            guard
+                let value = portfolioTotalDisplayValue(
+                    for: token,
+                    prices: prices,
+                    override: overrideMap[token.assetId],
+                    settings: settings,
+                    fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
+            else {
+                return total
+            }
             if token.role.isBorrow {
                 return total - value
             }
@@ -332,7 +342,8 @@ enum OverviewFeature {
         changes24h: [String: Decimal],
         watchlistIDs: [String],
         overrides: [TokenPricingOverrideSnapshot] = [],
-        portfolioLimit: Int = 10) -> [OverviewPriceRowData] {
+        portfolioLimit: Int = 10,
+        fallbackUSDToDisplayRate: Decimal = 1) -> [OverviewPriceRowData] {
         priceRows(
             tokens: tokens,
             assetsByCoinGeckoId: assetCandidatesByCoinGeckoId(from: assets),
@@ -340,7 +351,8 @@ enum OverviewFeature {
             changes24h: changes24h,
             watchlistIDs: watchlistIDs,
             overrides: overrides,
-            portfolioLimit: portfolioLimit)
+            portfolioLimit: portfolioLimit,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
     }
 
     static func priceRows(
@@ -350,7 +362,8 @@ enum OverviewFeature {
         changes24h: [String: Decimal],
         watchlistIDs: [String],
         overrides: [TokenPricingOverrideSnapshot] = [],
-        portfolioLimit: Int = 10) -> [OverviewPriceRowData] {
+        portfolioLimit: Int = 10,
+        fallbackUSDToDisplayRate: Decimal = 1) -> [OverviewPriceRowData] {
         let watchlist = OverviewWatchlistStore.normalizedUniqueIDs(watchlistIDs)
         let watchlistSet = Set(watchlist)
 
@@ -358,7 +371,12 @@ enum OverviewFeature {
         var seenRowIDs: Set<String> = []
         var portfolioCoinGeckoIDs: Set<String> = []
 
-        for aggregate in sortedAssetAggregates(from: tokens, prices: prices, overrides: overrides).prefix(max(portfolioLimit, 0)) {
+        for aggregate in sortedAssetAggregates(
+            from: tokens,
+            prices: prices,
+            overrides: overrides,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
+            .prefix(max(portfolioLimit, 0)) {
             let priceID = TokenIdentityMappingFeature.normalizedProviderID(aggregate.priceID)
             let coinGeckoId = TokenIdentityMappingFeature.nonZapperPriceID(priceID)
             let rowID = aggregate.rowID
@@ -434,7 +452,8 @@ enum OverviewFeature {
     private static func sortedAssetAggregates(
         from tokens: [TokenEntry],
         prices: [String: Decimal],
-        overrides: [TokenPricingOverrideSnapshot] = []) -> [AssetAggregate] {
+        overrides: [TokenPricingOverrideSnapshot] = [],
+        fallbackUSDToDisplayRate: Decimal = 1) -> [AssetAggregate] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var aggregates: [String: AssetAggregate] = [:]
 
@@ -461,7 +480,11 @@ enum OverviewFeature {
                 ?? TokenIdentityMappingFeature.nonZapperPriceID(priceID)
             aggregate.priceID = aggregate.priceID ?? priceID
             aggregate.logoURL = aggregate.logoURL ?? token.logoURL
-            aggregate.value += resolvedValue(for: token, prices: prices, override: override)
+            aggregate.value += resolvedValue(
+                for: token,
+                prices: prices,
+                override: override,
+                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
             if token.amount > 0 {
                 aggregate.amount += token.amount
             }
@@ -510,8 +533,61 @@ enum OverviewFeature {
     private static func resolvedValue(
         for token: TokenEntry,
         prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> Decimal {
-        OverviewPositionPricing.tokenValue(token: token, prices: prices, override: override)
+        override: TokenPricingOverrideSnapshot?,
+        fallbackUSDToDisplayRate: Decimal) -> Decimal {
+        OverviewPositionPricing.tokenValue(
+            token: token,
+            prices: prices,
+            override: override,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
+    }
+
+    private static func portfolioTotalDisplayValue(
+        for token: TokenEntry,
+        prices: [String: Decimal],
+        override: TokenPricingOverrideSnapshot?,
+        settings: TokenDashboardSettings,
+        fallbackUSDToDisplayRate: Decimal) -> Decimal? {
+        guard token.amount > 0 else { return nil }
+        guard token.role.isPositive || token.role.isBorrow else { return nil }
+        guard override?.isIgnored != true else { return nil }
+
+        let liveOrManualValue = OverviewPositionPricing.tokenValue(
+            token: token,
+            prices: prices,
+            override: override,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
+        if liveOrManualValue != 0 {
+            guard passesDashboardThreshold(value: liveOrManualValue, settings: settings) else {
+                return nil
+            }
+            return liveOrManualValue
+        }
+
+        guard TokenSettingsFeature.resolvedValue(token: token, prices: prices, override: override) == nil else {
+            return nil
+        }
+        guard TokenSettingsFeature.resolvedPriceID(token: token, override: override) != nil else {
+            return override?.alwaysShow == true ? 0 : nil
+        }
+        let fallbackValue = token.usdValue * fallbackUSDToDisplayRate
+        guard fallbackValue != 0 else {
+            return override?.alwaysShow == true || !settings.hideUnpriced ? 0 : nil
+        }
+        guard passesDashboardThreshold(value: fallbackValue, settings: settings) else {
+            return nil
+        }
+        return fallbackValue
+    }
+
+    private static func passesDashboardThreshold(
+        value: Decimal,
+        settings: TokenDashboardSettings) -> Bool {
+        let magnitude = value < 0 ? -value : value
+        if magnitude < normalizedThreshold(settings.minimumDashboardValue) {
+            return !settings.hideDust
+        }
+        return true
     }
 
     private static func displayPrice(
@@ -566,5 +642,9 @@ enum OverviewFeature {
         }
 
         return percentages
+    }
+
+    private static func normalizedThreshold(_ value: Decimal) -> Decimal {
+        value < 0 ? 0 : value
     }
 }

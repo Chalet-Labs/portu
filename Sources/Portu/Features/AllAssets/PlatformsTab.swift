@@ -5,6 +5,7 @@ import SwiftData
 import SwiftUI
 
 struct PlatformsTab: View {
+    @Environment(AppState.self) private var appState
     @Query private var allPositions: [Position]
 
     private var positions: [Position] {
@@ -81,8 +82,12 @@ struct PlatformsTab: View {
                 protocolId: $0.protocolId,
                 protocolName: $0.protocolName,
                 positionType: $0.positionType,
-                netUSDValue: $0.netUSDValue)
+                netUSDValue: $0.netUSDValue * appState.currentUSDToDisplayRate)
         })
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -94,8 +99,8 @@ struct PlatformsTab: View {
             }
             TableColumn("# Networks") { row in Text("\(row.networkCount)") }
             TableColumn("# Positions") { row in Text("\(row.positionCount)") }
-            TableColumn("USD Balance") { row in
-                Text(row.usdBalance, format: .currency(code: "USD"))
+            TableColumn("Balance") { row in
+                Text(row.usdBalance, format: .currency(code: currencyCode))
                     .font(DashboardStyle.monoTableFont)
             }
         }
