@@ -31,17 +31,19 @@ struct DisplayCurrencyPreferenceTests {
         }
 
         await store.send(.displayCurrencySelected(.eur)) {
-            $0.selectedCurrency = .eur
+            $0.pendingCurrency = .eur
             $0.historicalFXAvailability = .loading
-            $0.prices = [:]
-            $0.priceChanges24h = [:]
-            $0.lastPriceUpdate = nil
         }
-        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(1)))
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(1))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+        }
         await store.receive(\.currencyConversionRefreshCompleted) {
             $0.historicalFXAvailability = .available
         }
 
+        // The preference is persisted only once the switch commits (after the rate
+        // arrives), so a non-USD currency we could not display is never saved.
         #expect(savedCurrencies == [.eur])
     }
 }

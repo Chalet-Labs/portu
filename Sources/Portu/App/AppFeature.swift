@@ -25,6 +25,10 @@ struct AppFeature {
         var syncingAccountID: UUID?
         var connectionStatus: ConnectionStatus = .idle
         var selectedCurrency: FiatCurrency = .default
+        // Set while a non-USD switch waits for its FX rate; the switch is committed
+        // to `selectedCurrency` only once the rate arrives, so views never format
+        // cached USD values under the new currency's label.
+        var pendingCurrency: FiatCurrency?
         var currentUSDToDisplayRate: Decimal = 1
         var historicalFXAvailability: CurrencyFXAvailability = .available
         var prices: [String: Decimal] = [:]
@@ -251,31 +255,43 @@ struct AppFeature {
                 return .none
 
             case let .displayCurrencySelected(currency):
-                guard state.selectedCurrency != currency else { return .none }
-                displayCurrencyPreference.save(currency)
-                state.selectedCurrency = currency
-                state.currentUSDToDisplayRate = 1
-                state.historicalFXAvailability = currency == .usd ? .available : .loading
-                state.prices = [:]
-                state.priceChanges24h = [:]
-                state.lastPriceUpdate = nil
+                // Dedupe against the effective target: while a non-USD switch is in
+                // flight, `pendingCurrency` is where the user is already heading.
+                let activeTarget = state.pendingCurrency ?? state.selectedCurrency
+                guard currency != activeTarget else { return .none }
 
-                let request = PricePollingIDResolver.split(state.pricePollingIDs)
-                var effects: [Effect<Action>] = []
-                if currency != .usd {
-                    effects.append(currencyConversionEffect(currency: currency))
+                if currency == .usd {
+                    // USD needs no FX rate, so the switch is always safe to commit now.
+                    state.pendingCurrency = nil
+                    return commitDisplayCurrency(&state, currency: .usd, rate: 1)
                 }
-                guard request.isEmpty == false else { return .merge(effects) }
-                state.connectionStatus = .fetching
-                effects.append(pricePollingEffect(request: request, currency: currency))
-                return .merge(effects)
+
+                // Non-USD: defer the switch until the current rate is known. Committing
+                // eagerly resets the rate to 1 while relabeling values, so cached USD
+                // totals would show unchanged under the new currency until a retry.
+                state.pendingCurrency = currency
+                state.historicalFXAvailability = .loading
+                return currencyConversionEffect(currency: currency)
 
             case let .currentCurrencyConversionRateReceived(currency, .success(rate)):
+                if state.pendingCurrency == currency {
+                    // Commit the deferred switch now that a real rate is available.
+                    state.pendingCurrency = nil
+                    return commitDisplayCurrency(&state, currency: currency, rate: rate)
+                }
+                // Launch/refresh path for the already-selected currency: just apply the rate.
                 guard currency == state.selectedCurrency else { return .none }
                 state.currentUSDToDisplayRate = rate
                 return .none
 
             case let .currentCurrencyConversionRateReceived(currency, .failure(error)):
+                if state.pendingCurrency == currency {
+                    // The deferred switch failed — stay on the previous currency so no
+                    // cached USD value is ever relabeled; surface the failure to the UI.
+                    state.pendingCurrency = nil
+                    state.historicalFXAvailability = .failed(error.message)
+                    return .none
+                }
                 guard currency == state.selectedCurrency else { return .none }
                 state.historicalFXAvailability = .failed(error.message)
                 return .none
@@ -345,6 +361,30 @@ struct AppFeature {
 
 private extension AppFeature {
     static let settingsRecheckInterval: Duration = .seconds(10)
+
+    /// Applies a display-currency switch: persists the preference, sets the rate,
+    /// clears stale prices, and restarts polling in the new currency. The historical
+    /// FX availability is left untouched for non-USD (the historical refresh resolves
+    /// it) and marked available for USD, which needs no refresh.
+    func commitDisplayCurrency(
+        _ state: inout State,
+        currency: FiatCurrency,
+        rate: Decimal) -> Effect<Action> {
+        displayCurrencyPreference.save(currency)
+        state.selectedCurrency = currency
+        state.currentUSDToDisplayRate = rate
+        if currency == .usd {
+            state.historicalFXAvailability = .available
+        }
+        state.prices = [:]
+        state.priceChanges24h = [:]
+        state.lastPriceUpdate = nil
+
+        let request = PricePollingIDResolver.split(state.pricePollingIDs)
+        guard request.isEmpty == false else { return .none }
+        state.connectionStatus = .fetching
+        return pricePollingEffect(request: request, currency: currency)
+    }
 
     func currencyConversionEffect(currency: FiatCurrency) -> Effect<Action> {
         .run { send in

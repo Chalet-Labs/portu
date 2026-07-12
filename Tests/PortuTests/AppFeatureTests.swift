@@ -279,14 +279,16 @@ struct AppFeatureTests {
             }
 
         await store.send(.displayCurrencySelected(.eur)) {
-            $0.selectedCurrency = .eur
-            $0.currentUSDToDisplayRate = 1
+            $0.pendingCurrency = .eur
             $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(1))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
             $0.prices = [:]
             $0.priceChanges24h = [:]
             $0.lastPriceUpdate = nil
         }
-        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(1)))
         await store.receive(\.currencyConversionRefreshCompleted) {
             $0.historicalFXAvailability = .available
         }
@@ -328,14 +330,12 @@ struct AppFeatureTests {
         }
 
         await store.send(.displayCurrencySelected(.eur)) {
-            $0.selectedCurrency = .eur
-            $0.prices = [:]
-            $0.priceChanges24h = [:]
-            $0.lastPriceUpdate = nil
-            $0.currentUSDToDisplayRate = 1
+            $0.pendingCurrency = .eur
             $0.historicalFXAvailability = .loading
         }
         await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(currentRate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
             $0.currentUSDToDisplayRate = currentRate
         }
         let completion = CurrencyConversionRefreshResult(
@@ -377,14 +377,12 @@ struct AppFeatureTests {
         }
 
         await store.send(.displayCurrencySelected(.eur)) {
-            $0.selectedCurrency = .eur
-            $0.prices = [:]
-            $0.priceChanges24h = [:]
-            $0.lastPriceUpdate = nil
-            $0.currentUSDToDisplayRate = 1
+            $0.pendingCurrency = .eur
             $0.historicalFXAvailability = .loading
         }
         await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(currentRate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
             $0.currentUSDToDisplayRate = currentRate
         }
         #expect(store.state.historicalFXAvailability == .loading)
@@ -402,6 +400,31 @@ struct AppFeatureTests {
         #expect(capturedCurrentRequest == .eur)
         #expect(capturedHistoricalRequest?.0 == .eur)
         #expect(capturedHistoricalRequest?.1 == HistoricalPriceBackfillSettings.chartHorizonDays)
+    }
+
+    @Test func `currency switch stays on previous currency when current rate fails`() async {
+        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .usd)) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in
+                throw CurrencyConversionRefreshError(message: "offline")
+            }
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(
+            .eur, .failure(CurrencyConversionRefreshError(message: "offline")))) {
+                $0.pendingCurrency = nil
+                $0.historicalFXAvailability = .failed("offline")
+            }
+
+        // The switch never committed: previous currency and its rate are preserved,
+        // so no cached USD value is ever relabeled as EUR.
+        #expect(store.state.selectedCurrency == .usd)
+        #expect(store.state.currentUSDToDisplayRate == 1)
     }
 
     @Test func `currency change ignores stale fx refreshes`() async throws {
