@@ -16,7 +16,7 @@ struct AssetPriceChart: View {
     private var snapshots: [AssetSnapshot]
     @Query
     private var historicalPrices: [HistoricalPricePoint]
-    @Query(sort: \CurrencyConversionRatePoint.day)
+    @Query
     private var currencyRates: [CurrencyConversionRatePoint]
 
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
@@ -33,6 +33,10 @@ struct AssetPriceChart: View {
             sort: \.timestamp)
         _historicalPrices = Query(
             filter: #Predicate<HistoricalPricePoint> { $0.coinGeckoId == targetCoinGeckoId },
+            sort: \.day)
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: store.assetDetail.selectedRange.startDate)
+        _currencyRates = Query(
+            filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
             sort: \.day)
     }
 

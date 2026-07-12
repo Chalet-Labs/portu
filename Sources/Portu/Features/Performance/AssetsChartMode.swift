@@ -18,8 +18,18 @@ struct AssetsChartMode: View {
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
-    @Query(sort: \CurrencyConversionRatePoint.day)
+    @Query
     private var currencyRates: [CurrencyConversionRatePoint]
+
+    init(accountId: UUID?, startDate: Date, store: StoreOf<AppFeature>) {
+        self.accountId = accountId
+        self.startDate = startDate
+        self.store = store
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        _currencyRates = Query(
+            filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+    }
 
     private var categoryResolver: PortfolioCategoryResolver {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)

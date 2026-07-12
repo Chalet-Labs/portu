@@ -26,7 +26,7 @@ struct ValueChartMode: View {
     @Query
     private var historicalPrices: [HistoricalPricePoint]
 
-    @Query(sort: \CurrencyConversionRatePoint.day)
+    @Query
     private var currencyRates: [CurrencyConversionRatePoint]
 
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
@@ -38,6 +38,9 @@ struct ValueChartMode: View {
         let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
         _historicalPrices = Query(
             filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+        _currencyRates = Query(
+            filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
             sort: \.day)
     }
 

@@ -14,7 +14,17 @@ struct PnLChartMode: View {
 
     @Query(sort: \PortfolioSnapshot.timestamp) private var portfolioSnaps: [PortfolioSnapshot]
     @Query(sort: \AccountSnapshot.timestamp) private var accountSnaps: [AccountSnapshot]
-    @Query(sort: \CurrencyConversionRatePoint.day) private var currencyRates: [CurrencyConversionRatePoint]
+    @Query private var currencyRates: [CurrencyConversionRatePoint]
+
+    init(accountId: UUID?, startDate: Date, store: StoreOf<AppFeature>) {
+        self.accountId = accountId
+        self.startDate = startDate
+        self.store = store
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        _currencyRates = Query(
+            filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+    }
 
     private var bars: [PnLBar] {
         let rawValues: [(Date, Decimal)]
