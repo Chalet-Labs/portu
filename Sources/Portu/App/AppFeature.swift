@@ -262,8 +262,12 @@ struct AppFeature {
 
                 if currency == .usd {
                     // USD needs no FX rate, so the switch is always safe to commit now.
+                    // Cancel any in-flight non-USD conversion so it stops doing network
+                    // work and writes whose results the reducer would just discard.
                     state.pendingCurrency = nil
-                    return commitDisplayCurrency(&state, currency: .usd, rate: 1)
+                    return .merge(
+                        .cancel(id: CancelID.currencyConversion),
+                        commitDisplayCurrency(&state, currency: .usd, rate: 1))
                 }
 
                 // Non-USD: defer the switch until the current rate is known. Committing

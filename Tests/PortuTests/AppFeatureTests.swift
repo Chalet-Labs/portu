@@ -427,6 +427,30 @@ struct AppFeatureTests {
         #expect(store.state.currentUSDToDisplayRate == 1)
     }
 
+    @Test func `immediate USD switch cancels an in-flight non-USD conversion`() async {
+        let testClock = TestClock()
+        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .usd)) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in
+                try await testClock.sleep(for: .seconds(10))
+                return 1
+            }
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        // Switching to USD commits immediately and must cancel the in-flight EUR
+        // conversion; otherwise the effect lingers doing network work + writes whose
+        // result the reducer discards, and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.pendingCurrency = nil
+            $0.historicalFXAvailability = .available
+        }
+    }
+
     @Test func `currency change ignores stale fx refreshes`() async throws {
         let store = TestStore(initialState: AppFeature.State(selectedCurrency: .chf)) {
             AppFeature()
