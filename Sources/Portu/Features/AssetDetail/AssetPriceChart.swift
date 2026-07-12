@@ -34,7 +34,14 @@ struct AssetPriceChart: View {
         _historicalPrices = Query(
             filter: #Predicate<HistoricalPricePoint> { $0.coinGeckoId == targetCoinGeckoId },
             sort: \.day)
-        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: store.assetDetail.selectedRange.startDate)
+        // The range picker lives inside this view, so this @Query is not rebuilt when
+        // the selected range changes. Scope to the widest selectable range so the fetch
+        // covers every selection (avoiding stale FX gaps under EUR/CHF) while still
+        // bounding growth instead of loading all persisted rate history.
+        let earliestSelectableStart = ChartTimeRange.standard
+            .map(\.startDate)
+            .min() ?? store.assetDetail.selectedRange.startDate
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: earliestSelectableStart)
         _currencyRates = Query(
             filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
             sort: \.day)
