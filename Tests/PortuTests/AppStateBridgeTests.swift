@@ -22,7 +22,7 @@ import Testing
 struct AppStateBridgeTests {
     @Test func `bridge syncs all fields from store to AppState`() throws {
         let conversionRate = try #require(Decimal(string: "0.88"))
-        let store = try Store(initialState: AppFeature.State(
+        let store = Store(initialState: AppFeature.State(
             syncStatus: .syncing(progress: 0.5),
             connectionStatus: .fetching,
             selectedCurrency: .chf,

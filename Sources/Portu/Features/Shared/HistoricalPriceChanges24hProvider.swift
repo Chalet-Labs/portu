@@ -11,7 +11,7 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
     @Environment(AppState.self) private var appState
 
     @Query private var historicalPrices: [HistoricalPricePoint]
-    @Query(sort: \CurrencyConversionRatePoint.day)
+    @Query
     private var currencyRates: [CurrencyConversionRatePoint]
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
     private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
@@ -26,6 +26,9 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
                 SortDescriptor(\HistoricalPricePoint.day),
                 SortDescriptor(\HistoricalPricePoint.coinGeckoId)
             ])
+        _currencyRates = Query(
+            filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= startDate },
+            sort: \.day)
         self.content = content()
     }
 
