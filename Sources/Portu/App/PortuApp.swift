@@ -55,8 +55,12 @@ struct PortuApp: App {
             session: session)
 
         let displayCurrencyPreference = DisplayCurrencyPreferenceClient.liveValue
+        // Restore a saved non-USD currency as pending and start on USD; the launch FX
+        // request commits it once a real rate is known, and a failure stays on USD.
+        let savedCurrency = displayCurrencyPreference.load()
         self.store = Store(initialState: AppFeature.State(
-            selectedCurrency: displayCurrencyPreference.load(),
+            selectedCurrency: .usd,
+            pendingCurrency: savedCurrency == .usd ? nil : savedCurrency,
             storeIsEphemeral: isEphemeral)) {
                 AppFeature()
             } withDependencies: {

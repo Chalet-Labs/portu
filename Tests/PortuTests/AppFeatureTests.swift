@@ -266,6 +266,68 @@ struct AppFeatureTests {
         }
     }
 
+    @Test func `mixed poll with coin failure and empty token update clears fetching`() async {
+        struct CoinFailed: LocalizedError { var errorDescription: String? {
+            "coin failed"
+        } }
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        let testClock = TestClock()
+        let testDate = Date(timeIntervalSince1970: 1_000_000)
+
+        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .eur)) {
+            AppFeature()
+        } withDependencies: {
+            $0.priceService.fetchCoinGeckoPrices = { request, currency in
+                if request.coinGeckoIDs == ["bitcoin"] { throw CoinFailed() }
+                // Token fetch succeeds but returns nothing for the onchain identity.
+                return PriceUpdate(currency: currency, prices: [:], changes24h: [:])
+            }
+            $0.continuousClock = testClock
+            $0.pricePollingSettings.zapperFallbackInterval = { nil }
+            $0.currentDate.now = { testDate }
+        }
+
+        await store.send(.startPricePolling(["bitcoin", identity.historicalPriceID])) {
+            $0.connectionStatus = .fetching
+            $0.pricePollingIDs = ["bitcoin", identity.historicalPriceID]
+        }
+        // Without the fallback emit, neither branch would send an action and the
+        // status would stay .fetching. The swallowed coin failure now surfaces.
+        await store.receive(\.priceFetchFailed) {
+            $0.connectionStatus = .error("coin failed")
+        }
+
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
+        }
+    }
+
+    @Test func `launch FX failure keeps the display on usd instead of the restored currency`() async {
+        struct RateFailed: LocalizedError { var errorDescription: String? {
+            "offline"
+        } }
+        let store = TestStore(initialState: AppFeature.State(
+            selectedCurrency: .usd,
+            pendingCurrency: .eur)) {
+                AppFeature()
+            } withDependencies: {
+                $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in throw RateFailed() }
+            }
+
+        await store.send(.appLaunched) {
+            $0.historicalFXAvailability = .loading
+        }
+        // The restored EUR preference must not stick with a stale 1:1 rate: the launch
+        // stays on USD and surfaces the failure instead of relabeling USD balances.
+        await store.receive(\.currentCurrencyConversionRateReceived) {
+            $0.pendingCurrency = nil
+            $0.historicalFXAvailability = .failed("offline")
+        }
+        #expect(store.state.selectedCurrency == .usd)
+        #expect(store.state.currentUSDToDisplayRate == 1)
+    }
+
     @Test func `currency change clears stale prices and ignores old currency updates`() async {
         let testDate = Date(timeIntervalSince1970: 1_000_000)
         let store = TestStore(initialState: AppFeature.State(

@@ -109,12 +109,14 @@ struct AppFeature {
         Reduce { state, action in
             switch action {
             case .appLaunched:
-                // A saved non-USD currency is restored into initial state without an
-                // FX refresh, so displayed values would stay raw USD until the user
-                // toggled currencies. Kick off the conversion refresh on launch.
-                guard state.selectedCurrency != .usd else { return .none }
+                // A saved non-USD currency is restored as `pendingCurrency` with the
+                // display kept on USD, so a failed launch FX request falls back to USD
+                // instead of formatting cached USD balances as EUR/CHF at a stale 1:1
+                // rate. The rate-received handler commits the pending switch on success
+                // and clears it (staying on USD) on failure.
+                guard let pending = state.pendingCurrency else { return .none }
                 state.historicalFXAvailability = .loading
-                return currencyConversionEffect(currency: state.selectedCurrency)
+                return currencyConversionEffect(currency: pending)
 
             case let .sectionSelected(section):
                 state.selectedSection = section
@@ -479,14 +481,21 @@ private extension AppFeature {
 
         return .run { send in
             while !Task.isCancelled {
+                var didEmit = false
+                var pendingError: (any Error)?
+
                 if coinRequest.isEmpty == false {
                     do {
                         let update = try await priceService.fetchCoinGeckoPrices(coinRequest, currency)
                         await send(.pricesReceived(update))
+                        didEmit = true
                     } catch {
                         guard !Task.isCancelled else { return }
                         if tokenRequest.isEmpty {
                             await send(.priceFetchFailed(error))
+                            didEmit = true
+                        } else {
+                            pendingError = error
                         }
                     }
                 }
@@ -496,10 +505,24 @@ private extension AppFeature {
                         let update = try await priceService.fetchCoinGeckoPrices(tokenRequest, currency)
                         if coinRequest.isEmpty || update.prices.isEmpty == false || update.changes24h.isEmpty == false {
                             await send(.pricesReceived(update))
+                            didEmit = true
                         }
                     } catch {
                         guard !Task.isCancelled else { return }
                         await send(.priceFetchFailed(error))
+                        didEmit = true
+                    }
+                }
+
+                // A mixed request whose coin fetch failed and whose token fetch
+                // returned an empty update would otherwise emit nothing, leaving
+                // connectionStatus stuck at .fetching until a later successful tick.
+                // Surface the swallowed failure (or an empty update) so it clears.
+                if !didEmit {
+                    if let pendingError {
+                        await send(.priceFetchFailed(pendingError))
+                    } else {
+                        await send(.pricesReceived(PriceUpdate(currency: currency, prices: [:], changes24h: [:])))
                     }
                 }
 

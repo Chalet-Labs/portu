@@ -145,7 +145,11 @@ struct AddPositionSheet: View {
         }
 
         let livePrice = asset.coinGeckoId.flatMap { appState.prices[$0] }
-        let usdValue = usdValueOverride ?? livePrice.map { amount * $0 } ?? 0
+        let usdValue = ManualPositionPricing.usdValue(
+            amount: amount,
+            override: usdValueOverride,
+            displayPrice: livePrice,
+            usdToDisplayRate: appState.currentUSDToDisplayRate)
         let token = PositionToken(role: .balance, amount: amount, usdValue: usdValue, asset: asset)
         let position = Position(
             positionType: positionType,
@@ -161,6 +165,26 @@ struct AddPositionSheet: View {
         } catch {
             saveError = error.localizedDescription
         }
+    }
+}
+
+enum ManualPositionPricing {
+    /// Resolves the canonical USD value to persist for a manual position.
+    ///
+    /// `displayPrice` is the live price in the current display currency, so it is
+    /// converted back to USD via `usdToDisplayRate` before being applied. Without
+    /// this, adding a position while EUR/CHF is displayed would store a
+    /// display-currency notional into the canonical `usdValue`/`netUSDValue` fields
+    /// and corrupt totals after switching back to USD. An explicit override is
+    /// entered by the user as a USD amount, so it is used verbatim.
+    static func usdValue(
+        amount: Decimal,
+        override: Decimal?,
+        displayPrice: Decimal?,
+        usdToDisplayRate: Decimal) -> Decimal {
+        if let override { return override }
+        guard let displayPrice, usdToDisplayRate > 0 else { return 0 }
+        return amount * (displayPrice / usdToDisplayRate)
     }
 }
 
