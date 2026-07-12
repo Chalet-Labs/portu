@@ -510,6 +510,9 @@ enum HistoricalPriceCacheWriter {
                     row.price = dto.price
                     row.source = dto.source
                     row.fetchedAt = fetchedAt
+                    // Migrate legacy rows persisted before the currency column existed
+                    // (currency == nil, treated as USD) to an explicit value.
+                    row.currency = dto.currency
                     updated += 1
                 } else {
                     let row = HistoricalPricePoint(dto: dto, fetchedAt: fetchedAt)

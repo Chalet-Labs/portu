@@ -6,6 +6,7 @@ import SwiftData
 import Testing
 
 @MainActor
+// swiftlint:disable:next type_body_length
 struct HistoricalPriceBackfillLiveTests {
     @Test func `live backfill result counts grouped asset ids`() async throws {
         let container = try ModelContainerFactory().makeInMemory()
@@ -57,6 +58,53 @@ struct HistoricalPriceBackfillLiveTests {
         #expect(rows.count == 1)
         #expect(rows.first?.coinGeckoId == "aave")
         #expect(rows.first?.fetchedAt == Date(timeIntervalSince1970: 20))
+    }
+
+    @Test func `live backfill migrates legacy nil currency rows to usd on update`() async throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
+        let asset = Asset(id: uuid(60), symbol: "AAVE", name: "Aave", coinGeckoId: "aave")
+        let position = Position(
+            positionType: .idle,
+            tokens: [PositionToken(role: .balance, amount: 1, usdValue: 100, asset: asset)],
+            account: account)
+        account.positions = [position]
+        context.insert(account)
+
+        // Legacy cached row with an unset (nil) currency for the day the backfill produces.
+        let legacy = HistoricalPricePoint(
+            coinGeckoId: "aave",
+            day: Date(timeIntervalSince1970: 1_704_067_200),
+            usdPrice: 1)
+        legacy.currency = nil
+        context.insert(legacy)
+        try context.save()
+
+        let client = HistoricalPriceBackfillClient.live(
+            modelContext: context,
+            priceService: PriceServiceClient(
+                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                fetchHistoricalPrices: { coinGeckoId, _ in
+                    [HistoricalPriceDTO(
+                        coinGeckoId: coinGeckoId,
+                        timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+                        usdPrice: 90)]
+                },
+                invalidateCache: {}),
+            now: { Date(timeIntervalSince1970: 20) },
+            requestSpacing: .zero,
+            sleep: { _ in })
+
+        let result = try await client.run()
+        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+
+        #expect(result.updatedPoints == 1)
+        #expect(result.insertedPoints == 0)
+        #expect(rows.count == 1)
+        // The update path must migrate the legacy nil currency to an explicit .usd.
+        #expect(rows.first?.currency == .usd)
+        #expect(rows.first?.price == 90)
     }
 
     @Test func `live backfill includes assets present only in local snapshots`() async throws {
