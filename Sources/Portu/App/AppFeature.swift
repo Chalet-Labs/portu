@@ -393,6 +393,9 @@ private extension AppFeature {
                 currentRate = try await currencyConversion.fetchCurrentUSDToDisplayRate(currency)
                 await send(.currentCurrencyConversionRateReceived(currency, .success(currentRate)))
             } catch {
+                // A switch to another currency cancels this effect mid-fetch; don't let
+                // the cancellation surface as a spurious failure for the old currency.
+                guard !Task.isCancelled else { return }
                 await send(.currentCurrencyConversionRateReceived(
                     currency,
                     .failure(CurrencyConversionRefreshError(message: error.localizedDescription))))
@@ -410,6 +413,10 @@ private extension AppFeature {
                     updatedHistoricalRates: historical.updatedHistoricalRates)
                 await send(.currencyConversionRefreshCompleted(currency, .success(result)))
             } catch {
+                // Same guard as above: a currency switch cancels the in-flight refresh,
+                // and the reducer would otherwise accept the canceled failure while
+                // `selectedCurrency` still points at the old, now-abandoned currency.
+                guard !Task.isCancelled else { return }
                 await send(.currencyConversionRefreshCompleted(
                     currency,
                     .failure(CurrencyConversionRefreshError(message: error.localizedDescription))))
