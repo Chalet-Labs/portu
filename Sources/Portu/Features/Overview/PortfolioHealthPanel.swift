@@ -31,7 +31,8 @@ struct PortfolioHealthPanel: View {
             tokens: tokenEntries,
             prices: displayPrices,
             overrides: overrideSnapshots,
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            usdToDisplayRate: store.currentUSDToDisplayRate)
     }
 
     private var weights: [AssetWeight] {

@@ -24,7 +24,8 @@ enum OverviewPriceChangeFeature {
                 prices: prices,
                 changes24h: changes24h,
                 overrideMap: overrideMap,
-                settings: $0)
+                settings: $0,
+                usdToDisplayRate: fallbackUSDToDisplayRate)
         } ?? mapped
 
         return changeTokens.reduce(Decimal.zero) { total, token in
@@ -93,7 +94,8 @@ enum OverviewPriceChangeFeature {
         prices: [String: Decimal],
         changes24h: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings) -> Bool {
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal = 1) -> Bool {
         guard token.amount > 0 else { return false }
         guard token.role.isPositive || token.role.isBorrow else { return false }
         guard override?.isIgnored != true else { return false }
@@ -103,11 +105,14 @@ enum OverviewPriceChangeFeature {
             token: token,
             prices: prices,
             changes24h: changes24h,
-            override: override)
+            override: override,
+            fallbackUSDToDisplayRate: usdToDisplayRate)
         if value == 0 {
             return !settings.hideUnpriced
         }
-        if abs(value) < normalizedThreshold(settings.minimumDashboardValue) {
+        // `value` is already in the display currency, so the USD threshold must be scaled
+        // by the same rate to stay comparable.
+        if abs(value) < normalizedThreshold(settings.minimumDashboardValue) * usdToDisplayRate {
             return !settings.hideDust
         }
         return true
@@ -118,14 +123,16 @@ enum OverviewPriceChangeFeature {
         prices: [String: Decimal],
         changes24h: [String: Decimal],
         overrideMap: [UUID: TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings) -> [TokenEntry] {
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal = 1) -> [TokenEntry] {
         tokens.filter { token in
             isDashboardEligibleForChange(
                 token: token,
                 prices: prices,
                 changes24h: changes24h,
                 override: overrideMap[token.assetId],
-                settings: settings)
+                settings: settings,
+                usdToDisplayRate: usdToDisplayRate)
         }
     }
 

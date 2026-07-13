@@ -38,7 +38,8 @@ struct AssetsTab: View {
             tokens: entries,
             prices: displayPrices,
             overrides: overrideSnapshots,
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            usdToDisplayRate: appState.currentUSDToDisplayRate)
         let aggregated = AllAssetsFeature.aggregateRows(
             tokens: dashboardEntries,
             prices: displayPrices,

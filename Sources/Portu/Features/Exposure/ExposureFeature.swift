@@ -211,7 +211,8 @@ enum ExposureFeature {
                 tokens: tokens,
                 prices: prices,
                 overrides: overrides,
-                settings: settings),
+                settings: settings,
+                usdToDisplayRate: fallbackUSDToDisplayRate),
             prices: prices,
             fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
     }
@@ -248,7 +249,8 @@ enum ExposureFeature {
                     token: token,
                     prices: prices,
                     override: override,
-                    settings: settings) {
+                    settings: settings,
+                    usdToDisplayRate: fallbackUSDToDisplayRate) {
                 pollingIDs.insert(priceID)
             }
 
@@ -257,7 +259,8 @@ enum ExposureFeature {
                     token: token,
                     prices: prices,
                     override: override,
-                    settings: settings)
+                    settings: settings,
+                    usdToDisplayRate: fallbackUSDToDisplayRate)
             else { continue }
 
             let value = dashboardResolvedValue(
@@ -342,7 +345,8 @@ enum ExposureFeature {
         token: TokenEntry,
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings) -> String? {
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal) -> String? {
         guard token.amount > 0 else { return nil }
         guard token.role.isPositive || token.role.isBorrow else { return nil }
         guard let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override) else { return nil }
@@ -352,7 +356,8 @@ enum ExposureFeature {
                 token: token,
                 prices: prices,
                 override: override,
-                settings: settings) {
+                settings: settings,
+                usdToDisplayRate: usdToDisplayRate) {
             return priceID
         }
 

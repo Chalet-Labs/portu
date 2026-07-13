@@ -20,12 +20,14 @@ enum OverviewPositionVisibility {
         token: TokenEntry,
         prices: [String: Decimal],
         overrideMap: [UUID: TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings) -> Bool {
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal = 1) -> Bool {
         TokenSettingsFeature.isDashboardEligible(
             token: token,
             prices: prices,
             override: overrideMap[token.assetId],
-            settings: settings)
+            settings: settings,
+            usdToDisplayRate: usdToDisplayRate)
     }
 }
 

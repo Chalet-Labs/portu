@@ -73,7 +73,8 @@ struct PerformanceBottomPanel: View {
             tokens: mappedTokenEntries,
             prices: displayPrices,
             overrides: overrideSnapshots,
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            usdToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var dashboardVisibleAssetIDs: Set<UUID> {

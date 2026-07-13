@@ -312,7 +312,8 @@ struct OverviewPositionTabs: View {
             token: entry,
             prices: context.prices,
             overrideMap: context.overrideMap,
-            settings: context.dashboardSettings)
+            settings: context.dashboardSettings,
+            usdToDisplayRate: context.fallbackUSDToDisplayRate)
     }
 
     private func isDashboardChangeVisible(_ token: PositionToken, context: OverviewPositionContext) -> Bool {
@@ -322,7 +323,8 @@ struct OverviewPositionTabs: View {
             prices: context.prices,
             changes24h: context.changes24h,
             override: context.overrideMap[entry.assetId],
-            settings: context.dashboardSettings)
+            settings: context.dashboardSettings,
+            usdToDisplayRate: context.fallbackUSDToDisplayRate)
     }
 
     private func tokenEntry(for token: PositionToken, context: OverviewPositionContext) -> TokenEntry? {

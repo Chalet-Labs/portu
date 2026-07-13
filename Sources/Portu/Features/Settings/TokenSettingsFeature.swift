@@ -210,23 +210,33 @@ enum TokenSettingsFeature {
         tokens: [TokenEntry],
         prices: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults) -> [TokenEntry] {
+        settings: TokenDashboardSettings = .defaults,
+        usdToDisplayRate: Decimal = 1) -> [TokenEntry] {
         let overrideMap = overridesByAssetId(overrides)
         return dashboardEligibleTokens(
             tokens: tokens,
             prices: prices,
             overrideMap: overrideMap,
-            settings: settings)
+            settings: settings,
+            usdToDisplayRate: usdToDisplayRate)
     }
 
     static func dashboardEligibleTokens(
         tokens: [TokenEntry],
         prices: [String: Decimal],
         overrideMap: [UUID: TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults) -> [TokenEntry] {
+        settings: TokenDashboardSettings = .defaults,
+        usdToDisplayRate: Decimal = 1) -> [TokenEntry] {
         tokens.compactMap { token in
             let override = overrideMap[token.assetId]
-            guard isDashboardEligible(token: token, prices: prices, override: override, settings: settings) else {
+            guard
+                isDashboardEligible(
+                    token: token,
+                    prices: prices,
+                    override: override,
+                    settings: settings,
+                    usdToDisplayRate: usdToDisplayRate)
+            else {
                 return nil
             }
             return dashboardAdjustedToken(from: token, override: override)
@@ -237,17 +247,26 @@ enum TokenSettingsFeature {
         token: TokenEntry,
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings = .defaults) -> Bool {
+        settings: TokenDashboardSettings = .defaults,
+        usdToDisplayRate: Decimal = 1) -> Bool {
         guard token.amount > 0 else { return false }
         guard token.role.isPositive || token.role.isBorrow else { return false }
         guard override?.isIgnored != true else { return false }
         if override?.alwaysShow == true { return true }
 
-        guard let value = resolvedValue(token: token, prices: prices, override: override) else {
+        guard
+            let value = resolvedDisplayValue(
+                token: token,
+                prices: prices,
+                override: override,
+                usdToDisplayRate: usdToDisplayRate)
+        else {
             return !settings.hideUnpriced
         }
 
-        if absolute(value) < normalizedThreshold(settings.minimumDashboardValue) {
+        // The live price map is already in the display currency, so the USD dust
+        // threshold must be scaled by the same rate to stay comparable.
+        if absolute(value) < normalizedThreshold(settings.minimumDashboardValue) * usdToDisplayRate {
             return !settings.hideDust
         }
         return true

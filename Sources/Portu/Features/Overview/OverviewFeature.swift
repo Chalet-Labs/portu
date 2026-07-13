@@ -558,7 +558,13 @@ enum OverviewFeature {
             override: override,
             fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         if liveOrManualValue != 0 {
-            guard override?.alwaysShow == true || passesDashboardThreshold(value: liveOrManualValue, settings: settings) else {
+            guard
+                override?.alwaysShow == true ||
+                passesDashboardThreshold(
+                    value: liveOrManualValue,
+                    settings: settings,
+                    fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
+            else {
                 return nil
             }
             return liveOrManualValue
@@ -574,7 +580,13 @@ enum OverviewFeature {
         guard fallbackValue != 0 else {
             return override?.alwaysShow == true || !settings.hideUnpriced ? 0 : nil
         }
-        guard override?.alwaysShow == true || passesDashboardThreshold(value: fallbackValue, settings: settings) else {
+        guard
+            override?.alwaysShow == true ||
+            passesDashboardThreshold(
+                value: fallbackValue,
+                settings: settings,
+                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
+        else {
             return nil
         }
         return fallbackValue
@@ -582,9 +594,12 @@ enum OverviewFeature {
 
     private static func passesDashboardThreshold(
         value: Decimal,
-        settings: TokenDashboardSettings) -> Bool {
+        settings: TokenDashboardSettings,
+        fallbackUSDToDisplayRate: Decimal) -> Bool {
         let magnitude = value < 0 ? -value : value
-        if magnitude < normalizedThreshold(settings.minimumDashboardValue) {
+        // `value` is already in the display currency, so the USD threshold must be scaled
+        // by the same rate to stay comparable.
+        if magnitude < normalizedThreshold(settings.minimumDashboardValue) * fallbackUSDToDisplayRate {
             return !settings.hideDust
         }
         return true

@@ -389,6 +389,21 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(total == Decimal(string: "35.2")!)
     }
 
+    @Test func `portfolio total scales the dust threshold by the display rate`() throws {
+        let live = token(symbol: "LIVE", coinGeckoId: "live", amount: 1, usdValue: 0)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let total = try OverviewFeature.portfolioTotalValue(
+            tokens: [live],
+            prices: ["live": #require(Decimal(string: "0.6"))],
+            overrides: [],
+            mappings: [],
+            settings: settings,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.5")))
+
+        #expect(total == Decimal(string: "0.6"))
+    }
+
     @Test func `top asset slices do not convert live display prices again`() throws {
         let token = token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 2, usdValue: 120_000)
 

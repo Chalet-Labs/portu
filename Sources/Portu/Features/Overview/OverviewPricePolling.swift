@@ -8,7 +8,8 @@ extension OverviewFeature {
         watchlistIDs: [String],
         overrides: [TokenPricingOverrideSnapshot],
         settings: TokenDashboardSettings = .defaults,
-        portfolioLimit: Int = 25) -> [String] {
+        portfolioLimit: Int = 25,
+        usdToDisplayRate: Decimal = 1) -> [String] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         var candidates: [String: PollingIDCandidate] = [:]
         var insertionIndex = 0
@@ -19,7 +20,8 @@ extension OverviewFeature {
                     token: token,
                     prices: prices,
                     override: override,
-                    settings: settings)
+                    settings: settings,
+                    usdToDisplayRate: usdToDisplayRate)
             else { continue }
             upsertCandidate(
                 id: priceID,
@@ -53,7 +55,8 @@ extension OverviewFeature {
         token: TokenEntry,
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings) -> String? {
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal) -> String? {
         guard
             let priceID = TokenSettingsFeature.resolvedPriceID(
                 token: token,
@@ -65,7 +68,8 @@ extension OverviewFeature {
                 token: token,
                 prices: prices,
                 override: override,
-                settings: settings) {
+                settings: settings,
+                usdToDisplayRate: usdToDisplayRate) {
             return priceID
         }
 

@@ -121,6 +121,23 @@ struct OverviewHistoricalPriceChangeTests {
         #expect(change == 1)
     }
 
+    @Test func `portfolio change scales the dust threshold by the display rate`() throws {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        let live = token(symbol: "LIVE", amount: 1, usdValue: 0, onchainIdentity: identity)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let change = try OverviewPriceChangeFeature.portfolioChange24h(
+            tokens: [live],
+            prices: [identity.historicalPriceID: #require(Decimal(string: "0.6"))],
+            changes24h: [identity.historicalPriceID: #require(Decimal(string: "0.5"))],
+            overrides: [],
+            mappings: [],
+            settings: settings,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.5")))
+
+        #expect(change == Decimal(string: "0.3"))
+    }
+
     private func token(
         assetId: UUID = UUID(),
         symbol: String,

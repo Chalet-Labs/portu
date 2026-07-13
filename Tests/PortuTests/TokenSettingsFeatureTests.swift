@@ -322,6 +322,48 @@ struct TokenSettingsFeatureTests {
         #expect(row.value == 24000)
     }
 
+    @Test func `dashboard eligibility scales the usd threshold by the display rate for live prices`() {
+        let small = token(symbol: "SML", coinGeckoId: "sml", amount: 1, usdValue: 0)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let eligible = TokenSettingsFeature.isDashboardEligible(
+            token: small,
+            prices: ["sml": decimal("0.6")],
+            override: nil,
+            settings: settings,
+            usdToDisplayRate: decimal("0.5"))
+
+        #expect(eligible)
+    }
+
+    @Test func `dashboard eligibility still treats values below the scaled threshold as dust`() {
+        let small = token(symbol: "SML", coinGeckoId: "sml", amount: 1, usdValue: 0)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let eligible = TokenSettingsFeature.isDashboardEligible(
+            token: small,
+            prices: ["sml": decimal("0.4")],
+            override: nil,
+            settings: settings,
+            usdToDisplayRate: decimal("0.5"))
+
+        #expect(!eligible)
+    }
+
+    @Test func `dashboard eligible tokens list scales the threshold by the display rate`() {
+        let live = token(symbol: "LIVE", coinGeckoId: "live", amount: 1, usdValue: 0)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
+            tokens: [live],
+            prices: ["live": decimal("0.6")],
+            overrides: [],
+            settings: settings,
+            usdToDisplayRate: decimal("0.5"))
+
+        #expect(eligible.map(\.symbol) == ["LIVE"])
+    }
+
     @Test func `settings rows convert the manual usd price into the display currency`() throws {
         let manual = token(symbol: "MAN", amount: 2, usdValue: 0)
         let override = TokenPricingOverrideSnapshot(assetId: manual.assetId, manualPriceUSD: 10)

@@ -41,7 +41,8 @@ struct OverviewView: View {
             prices: displayPrices,
             watchlistIDs: watchlistIDs,
             overrides: overrideSnapshots,
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            usdToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var displayPrices: [String: Decimal] {
