@@ -97,7 +97,7 @@ struct TokenSettingsRowView: View {
 
     private var valueSummary: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(TokenSettingsFormat.currency(row.value))
+            Text(TokenSettingsFormat.currency(row.value, currency: row.currency))
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(SettingsDesign.primaryText)
                 .lineLimit(1)
@@ -256,8 +256,8 @@ enum ManualPriceInput {
 enum TokenSettingsFormat {
     private static let locale = Locale(identifier: "en_US_POSIX")
 
-    static func currency(_ value: Decimal) -> String {
-        "$ \(number(value))"
+    static func currency(_ value: Decimal, currency: FiatCurrency = .default) -> String {
+        "\(currency.symbol) \(number(value))"
     }
 
     static func decimal(_ value: Decimal) -> String {

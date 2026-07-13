@@ -11,6 +11,14 @@ public enum FiatCurrency: String, CaseIterable, Codable, Sendable, Equatable, Ha
         rawValue.uppercased()
     }
 
+    public var symbol: String {
+        switch self {
+        case .usd: "$"
+        case .eur: "€"
+        case .chf: "CHF"
+        }
+    }
+
     public var storageCode: String {
         rawValue
     }

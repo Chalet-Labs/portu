@@ -95,6 +95,8 @@ struct TokenSettingsTab: View {
             settings: settings,
             filter: selectedFilter,
             searchText: searchText,
+            currency: appState.selectedCurrency,
+            usdToDisplayRate: appState.currentUSDToDisplayRate,
             limit: TokenSettingsFeature.displayLimit)
     }
 

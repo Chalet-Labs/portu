@@ -86,8 +86,14 @@ struct PriceServiceClient {
                 return fetchCoinGeckoPricesOverride
             }
             let fetchPrices = fetchPrices
-            return { request, _ in
-                try await fetchPrices(request.allPriceIDs)
+            return { request, currency in
+                // The default fetcher only knows how to return USD-tagged updates. A non-USD
+                // request would be discarded by the reducer's currency guard and stall polling,
+                // so return an empty update tagged with the requested currency instead.
+                guard currency == .default else {
+                    return PricePollingIDResolver.emptyUpdate(currency: currency)
+                }
+                return try await fetchPrices(request.allPriceIDs)
             }
         }
         set { fetchCoinGeckoPricesOverride = newValue }
@@ -99,8 +105,14 @@ struct PriceServiceClient {
                 return fetchZapperPricesOverride
             }
             let fetchPrices = fetchPrices
-            return { identities, _ in
-                try await fetchPrices(identities.map(\.historicalPriceID))
+            return { identities, currency in
+                // See fetchCoinGeckoPrices: the default fetcher is USD-only, so a non-USD
+                // request returns an empty update tagged with the requested currency rather
+                // than a USD update the reducer would discard.
+                guard currency == .default else {
+                    return PricePollingIDResolver.emptyUpdate(currency: currency)
+                }
+                return try await fetchPrices(identities.map(\.historicalPriceID))
             }
         }
         set { fetchZapperPricesOverride = newValue }
