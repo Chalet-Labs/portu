@@ -105,6 +105,28 @@ struct OverviewReviewFollowUpTests {
         #expect(idle.map(\.1) == [0, 0, 0])
     }
 
+    @Test func `summary breakdowns scale the dust threshold by the display rate`() throws {
+        let assetId = UUID()
+        let manualPrice = try #require(Decimal(string: "10.50"))
+        let rate = try #require(Decimal(string: "0.5"))
+        let expectedValue = try #require(Decimal(string: "5.25"))
+        let nearDust = summaryToken(
+            token(assetId: assetId, symbol: "NEAR", category: .major, amount: 1, usdValue: 0),
+            positionType: .idle)
+        let overrides = [TokenPricingOverrideSnapshot(assetId: assetId, manualPriceUSD: manualPrice)]
+        let settings = TokenDashboardSettings(minimumDashboardValue: 10, hideUnpriced: true, hideDust: true)
+
+        let idle = OverviewSummaryCardsFeature.idleBreakdown(
+            tokens: [nearDust],
+            prices: [:],
+            overrides: overrides,
+            settings: settings,
+            categories: PortfolioCategoryDefaults.categorySnapshots,
+            fallbackUSDToDisplayRate: rate)
+
+        #expect(idle.map(\.1) == [0, 0, expectedValue])
+    }
+
     @Test func `category slices use stable ids when equal value category names collide`() throws {
         let laterID = try #require(UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB"))
         let earlierID = try #require(UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"))

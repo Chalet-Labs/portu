@@ -248,7 +248,7 @@ enum OverviewSummaryCardsFeature {
             fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         if value == 0 {
             guard override?.alwaysShow == true || !settings.hideUnpriced else { return nil }
-        } else if abs(value) < normalizedThreshold(settings.minimumDashboardValue) {
+        } else if abs(value) < normalizedThreshold(settings.minimumDashboardValue) * fallbackUSDToDisplayRate {
             guard override?.alwaysShow == true || !settings.hideDust else { return nil }
         }
 
