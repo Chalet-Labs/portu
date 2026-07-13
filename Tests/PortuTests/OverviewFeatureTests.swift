@@ -695,6 +695,22 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(ids == [visibleIdentity.historicalPriceID])
     }
 
+    @Test func `price polling ranks candidates using the display currency rate`() throws {
+        let live = token(symbol: "LIVE", coinGeckoId: "live-coin", amount: 1, usdValue: 0)
+        let fallback = token(symbol: "FALLBACK", coinGeckoId: "fallback-coin", amount: 1, usdValue: 70)
+        let rate = try #require(Decimal(string: "0.5"))
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [fallback, live],
+            prices: ["live-coin": 40],
+            watchlistIDs: [],
+            overrides: [],
+            portfolioLimit: 1,
+            usdToDisplayRate: rate)
+
+        #expect(ids == ["live-coin"])
+    }
+
     @Test func `price polling ids use token pricing overrides`() {
         let mapped = token(symbol: "MAP", coinGeckoId: "old-map", amount: 1, usdValue: 10)
 

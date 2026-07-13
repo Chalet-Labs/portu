@@ -25,7 +25,11 @@ extension OverviewFeature {
             else { continue }
             upsertCandidate(
                 id: priceID,
-                priority: pollingPriority(token: token, prices: prices, override: override),
+                priority: pollingPriority(
+                    token: token,
+                    prices: prices,
+                    override: override,
+                    fallbackUSDToDisplayRate: usdToDisplayRate),
                 insertionIndex: insertionIndex,
                 candidates: &candidates)
             insertionIndex += 1
@@ -119,9 +123,14 @@ extension OverviewFeature {
     private static func pollingPriority(
         token: TokenEntry,
         prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> Decimal {
-        let value = OverviewPositionPricing.tokenValue(token: token, prices: prices, override: override)
-        return value == 0 ? absolute(token.usdValue) : absolute(value)
+        override: TokenPricingOverrideSnapshot?,
+        fallbackUSDToDisplayRate: Decimal) -> Decimal {
+        let value = OverviewPositionPricing.tokenValue(
+            token: token,
+            prices: prices,
+            override: override,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
+        return value == 0 ? absolute(token.usdValue * fallbackUSDToDisplayRate) : absolute(value)
     }
 
     private static func normalizedThreshold(_ value: Decimal) -> Decimal {
