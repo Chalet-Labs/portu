@@ -189,7 +189,7 @@ struct AppFeatureIntervalTests {
                 #expect(request.zapperIdentities == [identity])
                 return PriceUpdate(prices: [:], changes24h: [:])
             }
-            $0.priceService.fetchZapperPrices = { identities, _ in
+            $0.priceService.fetchZapperPrices = { identities, _, _ in
                 zapperFetchCount += 1
                 #expect(identities == [identity])
                 return PriceUpdate(
@@ -236,6 +236,51 @@ struct AppFeatureIntervalTests {
         }
     }
 
+    @Test func `zapper price fallback converts using the stored display rate`() async {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        let testClock = TestClock()
+        let testDate = Date(timeIntervalSince1970: 1_000_000)
+        let storedRate: Decimal = 2
+        nonisolated(unsafe) var receivedRates: [Decimal] = []
+
+        let store = TestStore(initialState: AppFeature.State(currentUSDToDisplayRate: storedRate)) {
+            AppFeature()
+        } withDependencies: {
+            $0.priceService.fetchCoinGeckoPrices = { _, _ in
+                PriceUpdate(prices: [:], changes24h: [:])
+            }
+            $0.priceService.fetchZapperPrices = { identities, _, rate in
+                receivedRates.append(rate)
+                #expect(identities == [identity])
+                return PriceUpdate(prices: [identity.historicalPriceID: 10], changes24h: [:])
+            }
+            $0.pricePollingSettings.refreshInterval = { .seconds(100) }
+            $0.pricePollingSettings.zapperFallbackInterval = { .seconds(5) }
+            $0.continuousClock = testClock
+            $0.currentDate.now = { testDate }
+        }
+
+        await store.send(.startPricePolling([identity.historicalPriceID])) {
+            $0.connectionStatus = .fetching
+            $0.pricePollingIDs = [identity.historicalPriceID]
+        }
+        await store.receive(\.pricesReceived) {
+            $0.lastPriceUpdate = testDate
+            $0.connectionStatus = .idle
+        }
+        await store.receive(\.pricesReceived) {
+            $0.prices = [identity.historicalPriceID: 10]
+            $0.lastPriceUpdate = testDate
+        }
+
+        #expect(receivedRates == [storedRate])
+
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
+        }
+    }
+
     @Test func `zapper price fallback observes manual only changes after startup`() async {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
         let testClock = TestClock()
@@ -251,7 +296,7 @@ struct AppFeatureIntervalTests {
                 #expect(request.zapperIdentities == [identity])
                 return PriceUpdate(prices: [:], changes24h: [:])
             }
-            $0.priceService.fetchZapperPrices = { identities, _ in
+            $0.priceService.fetchZapperPrices = { identities, _, _ in
                 zapperFetchCount += 1
                 #expect(identities == [identity])
                 return PriceUpdate(
@@ -308,7 +353,7 @@ struct AppFeatureIntervalTests {
                 #expect(request.zapperIdentities == [identity])
                 return PriceUpdate(prices: [:], changes24h: [:])
             }
-            $0.priceService.fetchZapperPrices = { _, _ in
+            $0.priceService.fetchZapperPrices = { _, _, _ in
                 zapperFetchCount += 1
                 return PriceUpdate(prices: [identity.historicalPriceID: 10], changes24h: [:])
             }

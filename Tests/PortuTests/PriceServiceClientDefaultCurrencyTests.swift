@@ -28,7 +28,7 @@ struct PriceServiceClientDefaultCurrencyTests {
         let client = makeClient()
         let identity = try #require(OnchainTokenIdentity(historicalPriceID: "asset:base:0xtoken"))
 
-        let update = try await client.fetchZapperPrices([identity], .chf)
+        let update = try await client.fetchZapperPrices([identity], .chf, 1)
 
         #expect(update.currency == .chf)
         #expect(update.prices.isEmpty)

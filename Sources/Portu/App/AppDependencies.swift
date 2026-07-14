@@ -70,7 +70,7 @@ struct PriceServiceClient {
 
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
     private var fetchCoinGeckoPricesOverride: (@Sendable (PricePollingRequest, FiatCurrency) async throws -> PriceUpdate)?
-    private var fetchZapperPricesOverride: (@Sendable ([OnchainTokenIdentity], FiatCurrency) async throws -> PriceUpdate)?
+    private var fetchZapperPricesOverride: (@Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate)?
     var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
     var fetchHistoricalPricesForCurrency: @Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO]
     var fetchCurrentUSDConversionRate: @Sendable (FiatCurrency) async throws -> Decimal
@@ -99,13 +99,13 @@ struct PriceServiceClient {
         set { fetchCoinGeckoPricesOverride = newValue }
     }
 
-    var fetchZapperPrices: @Sendable ([OnchainTokenIdentity], FiatCurrency) async throws -> PriceUpdate {
+    var fetchZapperPrices: @Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate {
         get {
             if let fetchZapperPricesOverride {
                 return fetchZapperPricesOverride
             }
             let fetchPrices = fetchPrices
-            return { identities, currency in
+            return { identities, currency, _ in
                 // See fetchCoinGeckoPrices: the default fetcher is USD-only, so a non-USD
                 // request returns an empty update tagged with the requested currency rather
                 // than a USD update the reducer would discard.
@@ -121,7 +121,7 @@ struct PriceServiceClient {
     init(
         fetchPrices: @escaping @Sendable ([String]) async throws -> PriceUpdate,
         fetchCoinGeckoPrices: (@Sendable (PricePollingRequest, FiatCurrency) async throws -> PriceUpdate)? = nil,
-        fetchZapperPrices: (@Sendable ([OnchainTokenIdentity], FiatCurrency) async throws -> PriceUpdate)? = nil,
+        fetchZapperPrices: (@Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate)? = nil,
         fetchHistoricalPrices: @escaping @Sendable (String, Int) async throws -> [HistoricalPriceDTO],
         fetchHistoricalPricesForCurrency: (@Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO])? = nil,
         fetchCurrentUSDConversionRate: @escaping @Sendable (FiatCurrency) async throws -> Decimal = { _ in 1 },
@@ -150,7 +150,7 @@ extension PriceServiceClient: DependencyKey {
     static let liveValue = Self(
         fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchCoinGeckoPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        fetchZapperPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchZapperPrices: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalPricesForCurrency: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchCurrentUSDConversionRate: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
@@ -185,14 +185,13 @@ extension PriceServiceClient: DependencyKey {
                     priceService: service,
                     currency: currency)
             },
-            fetchZapperPrices: { identities, currency in
+            fetchZapperPrices: { identities, currency, usdToDisplayRate in
                 guard let zapperProvider, !identities.isEmpty else {
                     return PricePollingIDResolver.emptyUpdate(currency: currency)
                 }
                 let update = try await zapperProvider.fetchPriceUpdate(for: identities)
                 guard currency != .usd else { return update }
-                let rate = try await service.fetchCurrentUSDConversionRate(to: currency)
-                return update.convertedUSDValues(to: currency, rate: rate)
+                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate)
             },
             fetchHistoricalPrices: { coinId, days in
                 try await service.fetchHistoricalPrices(for: coinId, days: days)

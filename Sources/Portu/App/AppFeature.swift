@@ -324,7 +324,7 @@ struct AppFeature {
                 }
                 state.pricePollingIDs = request.allPriceIDs
                 state.connectionStatus = .fetching
-                return pricePollingEffect(request: request, currency: state.selectedCurrency)
+                return pricePollingEffect(request: request, currency: state.selectedCurrency, rate: state.currentUSDToDisplayRate)
 
             case let .pricesReceived(update):
                 guard update.currency == state.selectedCurrency else { return .none }
@@ -389,7 +389,7 @@ private extension AppFeature {
         let request = PricePollingIDResolver.split(state.pricePollingIDs)
         guard request.isEmpty == false else { return .none }
         state.connectionStatus = .fetching
-        return pricePollingEffect(request: request, currency: currency)
+        return pricePollingEffect(request: request, currency: currency, rate: state.currentUSDToDisplayRate)
     }
 
     func currencyConversionEffect(currency: FiatCurrency) -> Effect<Action> {
@@ -431,7 +431,7 @@ private extension AppFeature {
         .cancellable(id: CancelID.currencyConversion, cancelInFlight: true)
     }
 
-    func pricePollingEffect(request: PricePollingRequest, currency: FiatCurrency) -> Effect<Action> {
+    func pricePollingEffect(request: PricePollingRequest, currency: FiatCurrency, rate: Decimal) -> Effect<Action> {
         var effects: [Effect<Action>] = [
             coinGeckoPricePollingEffect(request: request, currency: currency)
         ]
@@ -445,7 +445,7 @@ private extension AppFeature {
                     }
 
                     do {
-                        let update = try await priceService.fetchZapperPrices(request.zapperIdentities, currency)
+                        let update = try await priceService.fetchZapperPrices(request.zapperIdentities, currency, rate)
                         await send(.pricesReceived(update))
                     } catch {
                         guard !Task.isCancelled else { return }

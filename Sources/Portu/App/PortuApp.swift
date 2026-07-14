@@ -148,7 +148,7 @@ struct PortuApp: App {
                     priceService: priceService,
                     currency: currency)
             },
-            fetchZapperPrices: { identities, currency in
+            fetchZapperPrices: { identities, currency, usdToDisplayRate in
                 guard
                     !identities.isEmpty,
                     let apiKey = zapperAPIKey(from: secretStore)
@@ -158,8 +158,7 @@ struct PortuApp: App {
                 let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
                 let update = try await zapperProvider.fetchPriceUpdate(for: identities)
                 guard currency != .usd else { return update }
-                let rate = try await priceService.fetchCurrentUSDConversionRate(to: currency)
-                return update.convertedUSDValues(to: currency, rate: rate)
+                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate)
             },
             fetchHistoricalPrices: { coinId, days in
                 try await priceService.fetchHistoricalPrices(for: coinId, days: days)
