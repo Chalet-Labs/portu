@@ -93,18 +93,13 @@ extension TokenSettingsFeature {
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
         usdToDisplayRate: Decimal) -> Decimal? {
-        if let manualPrice = sanitizedManualPrice(override?.manualPriceUSD) {
-            return manualPrice * usdToDisplayRate
+        guard let price = resolvedPrice(token: token, prices: prices, override: override) else {
+            return nil
         }
-        if
-            let priceID = resolvedPriceID(token: token, override: override),
-            let price = prices[priceID] {
-            guard isPlausible(price: price, priceID: priceID, token: token) else {
-                return nil
-            }
+        guard sanitizedManualPrice(override?.manualPriceUSD) != nil else {
             return price
         }
-        return nil
+        return price * usdToDisplayRate
     }
 
     static func resolvedDisplayValue(
