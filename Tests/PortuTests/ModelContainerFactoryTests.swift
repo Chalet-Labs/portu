@@ -31,6 +31,29 @@ struct ModelContainerFactoryTests {
         #expect(FileManager.default.fileExists(atPath: shmURL.path(percentEncoded: false)))
     }
 
+    @Test func `bootstrap logs the failure and falls back to an in-memory container`() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "PortuModelContainerFactoryBootstrapTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let storeURL = directory.appending(path: "Portu.store", directoryHint: .notDirectory)
+        try FileManager.default.createDirectory(at: storeURL, withIntermediateDirectories: true)
+
+        let factory = ModelContainerFactory(storeURL: storeURL)
+        var loggedError: (any Error)?
+
+        let result = try factory.bootstrap { error in
+            loggedError = error
+        }
+
+        #expect(result.isEphemeral == true)
+        #expect(loggedError != nil)
+        #expect(FileManager.default.fileExists(atPath: storeURL.path(percentEncoded: false)))
+    }
+
     @Test func `legacy historical price store migrates price to a USD row`() throws {
         let fileManager = FileManager.default
         let directory = fileManager.temporaryDirectory

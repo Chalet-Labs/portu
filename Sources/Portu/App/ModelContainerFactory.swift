@@ -1,4 +1,5 @@
 import Foundation
+import os
 import PortuCore
 import SwiftData
 
@@ -14,6 +15,25 @@ struct ModelContainerFactory {
     func makeForProduction() throws -> ModelContainer {
         let storeURL = try persistentStoreURL()
         return try makePersistentContainer(at: storeURL)
+    }
+
+    /// Attempts the persistent store, falling back to an ephemeral in-memory store on failure.
+    /// A failure here means the app keeps running but stops persisting data, so it is reported
+    /// via `onProductionOpenFailure` rather than swallowed.
+    func bootstrap(
+        onProductionOpenFailure: (any Error) -> Void = Self.logProductionOpenFailure) throws -> (container: ModelContainer, isEphemeral: Bool) {
+        do {
+            return try (makeForProduction(), false)
+        } catch {
+            onProductionOpenFailure(error)
+            return try (makeInMemory(), true)
+        }
+    }
+
+    private static func logProductionOpenFailure(_ error: any Error) {
+        Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app", category: "ModelContainerFactory")
+            .error(
+                "Persistent store open failed, falling back to in-memory storage: \(String(describing: error), privacy: .public)")
     }
 
     func makeInMemory() throws -> ModelContainer {

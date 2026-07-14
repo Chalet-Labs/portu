@@ -14,17 +14,14 @@ struct PortuApp: App {
 
     init() {
         let factory = ModelContainerFactory()
-        var isEphemeral = false
+        let isEphemeral: Bool
 
         do {
-            self.container = try factory.makeForProduction()
+            let bootstrap = try factory.bootstrap()
+            self.container = bootstrap.container
+            isEphemeral = bootstrap.isEphemeral
         } catch {
-            do {
-                self.container = try factory.makeInMemory()
-                isEphemeral = true
-            } catch {
-                fatalError("Failed to create even an in-memory ModelContainer: \(error)")
-            }
+            fatalError("Failed to create even an in-memory ModelContainer: \(error)")
         }
 
         do {
