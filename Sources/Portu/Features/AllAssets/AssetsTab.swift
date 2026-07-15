@@ -10,7 +10,7 @@ import UniformTypeIdentifiers
 struct AssetsTab: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -51,7 +51,7 @@ struct AssetsTab: View {
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: store.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {

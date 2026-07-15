@@ -4,7 +4,7 @@ import SwiftUI
 
 extension EnvironmentValues {
     @Entry var historicalPriceChanges24h: [String: Decimal] = [:]
-    @Entry var historicalPricesUSD: [String: Decimal] = [:]
+    @Entry var historicalDisplayPrices: [String: Decimal] = [:]
 }
 
 struct HistoricalPriceChanges24hProvider<Content: View>: View {
@@ -35,7 +35,7 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
     var body: some View {
         content
             .environment(\.historicalPriceChanges24h, historicalBackfillEnabled ? historicalChanges24h : [:])
-            .environment(\.historicalPricesUSD, historicalBackfillEnabled ? historicalPricesUSD : [:])
+            .environment(\.historicalDisplayPrices, historicalBackfillEnabled ? historicalDisplayPrices : [:])
     }
 
     private var historicalEntries: [HistoricalPriceEntry] {
@@ -53,7 +53,7 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
         OverviewHistoricalPriceChangeFeature.changes24h(from: historicalEntries)
     }
 
-    private var historicalPricesUSD: [String: Decimal] {
+    private var historicalDisplayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.latestPrices(from: historicalEntries)
     }
 }

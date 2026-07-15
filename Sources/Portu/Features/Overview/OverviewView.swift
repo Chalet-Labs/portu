@@ -8,7 +8,7 @@ import SwiftUI
 struct OverviewView: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var allTokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
     @Query private var tokenIdentityMappings: [TokenIdentityMapping]
@@ -48,7 +48,7 @@ struct OverviewView: View {
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: appState.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {

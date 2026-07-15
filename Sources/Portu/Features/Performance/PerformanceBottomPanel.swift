@@ -8,7 +8,7 @@ struct PerformanceBottomPanel: View {
     let startDate: Date
 
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
 
     @Query(sort: \AssetSnapshot.timestamp) private var snapshots: [AssetSnapshot]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
@@ -151,7 +151,7 @@ struct PerformanceBottomPanel: View {
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: appState.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 
     private var currencyConversionContext: CurrencyConversionContext {

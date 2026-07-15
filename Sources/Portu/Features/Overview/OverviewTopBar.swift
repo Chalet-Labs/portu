@@ -7,7 +7,7 @@ import SwiftUI
 struct OverviewTopBar: View {
     @Environment(AppState.self) private var appState
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var positions: [Position]
     @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
     private var tokenPricingOverrides: [TokenPricingOverride]
@@ -48,7 +48,7 @@ struct OverviewTopBar: View {
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: appState.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 
     private var priceChanges24h: [String: Decimal] {

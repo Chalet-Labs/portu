@@ -6,7 +6,7 @@ import SwiftUI
 
 struct OverviewSummaryCards: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var allPositions: [Position]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -88,7 +88,7 @@ struct OverviewSummaryCards: View {
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: appState.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 
     private var currencyCode: String {

@@ -6,7 +6,7 @@ import SwiftUI
 
 struct PortfolioHealthPanel: View {
     let store: StoreOf<AppFeature>
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -45,7 +45,7 @@ struct PortfolioHealthPanel: View {
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: store.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 
     private var metrics: DiversificationMetrics {

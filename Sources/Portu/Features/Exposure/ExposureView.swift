@@ -9,7 +9,7 @@ struct ExposureView: View {
     let store: StoreOf<AppFeature>
 
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -103,7 +103,7 @@ struct ExposureView: View {
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: store.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 }
 

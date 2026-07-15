@@ -7,7 +7,7 @@ import SwiftUI
 struct PriceWatchlist: View {
     @Environment(AppState.self) private var appState
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
@@ -73,7 +73,7 @@ struct PriceWatchlist: View {
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: appState.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 
     private var priceChanges24h: [String: Decimal] {
