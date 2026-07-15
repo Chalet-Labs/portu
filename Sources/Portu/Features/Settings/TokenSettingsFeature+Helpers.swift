@@ -87,7 +87,8 @@ extension TokenSettingsFeature {
 
     /// Settings-only price resolution. Mirrors `resolvedPrice` but converts the canonical-USD
     /// manual override into the display currency so it lines up with the already-display-currency
-    /// live prices in the Settings table. The dashboard callers keep using `resolvedPrice` (USD).
+    /// live prices in the Settings table. Dashboard callers keep using `resolvedPrice` directly —
+    /// its `prices` map is already in the display currency there, so no further conversion applies.
     static func resolvedDisplayPrice(
         token: TokenEntry,
         prices: [String: Decimal],
