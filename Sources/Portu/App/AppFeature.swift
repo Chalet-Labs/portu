@@ -322,7 +322,7 @@ struct AppFeature {
                 guard request.isEmpty == false else {
                     state.connectionStatus = .idle
                     state.pricePollingIDs = []
-                    return stopPricePollingEffect()
+                    return .cancel(id: CancelID.pricePolling)
                 }
                 state.pricePollingIDs = request.allPriceIDs
                 return restartPricePollingEffect(&state, currency: state.selectedCurrency)
@@ -342,7 +342,7 @@ struct AppFeature {
             case .stopPricePolling:
                 state.connectionStatus = .idle
                 state.pricePollingIDs = []
-                return stopPricePollingEffect()
+                return .cancel(id: CancelID.pricePolling)
 
             case .allAssets:
                 return .none
@@ -388,28 +388,24 @@ private extension AppFeature {
         state.priceChanges24h = [:]
         state.lastPriceUpdate = nil
 
-        return restartPricePollingEffect(&state, currency: currency)
+        return .merge(restartPricePollingEffect(&state, currency: currency), armDisplayRateRefresh(currency: currency))
     }
 
-    /// Restarts price polling for the current `pricePollingIDs` using the display
-    /// currency's latest stored rate. Non-USD currencies also (re)arm a periodic FX
-    /// rate refresh so a long-lived polling session doesn't keep converting fresh
-    /// prices against an increasingly stale rate; USD needs no such refresh.
+    /// Restarts price polling for the current `pricePollingIDs`, if any, using the
+    /// display currency's latest stored rate.
     func restartPricePollingEffect(_ state: inout State, currency: FiatCurrency) -> Effect<Action> {
         let request = PricePollingIDResolver.split(state.pricePollingIDs)
-        guard request.isEmpty == false else {
-            return currency == .usd ? .cancel(id: CancelID.displayRateRefresh) : .none
-        }
+        guard request.isEmpty == false else { return .none }
         state.connectionStatus = .fetching
-        let polling = pricePollingEffect(request: request, currency: currency, rate: state.currentUSDToDisplayRate)
-        guard currency != .usd else {
-            return .merge(polling, .cancel(id: CancelID.displayRateRefresh))
-        }
-        return .merge(polling, displayRateRefreshEffect(currency: currency))
+        return pricePollingEffect(request: request, currency: currency, rate: state.currentUSDToDisplayRate)
     }
 
-    func stopPricePollingEffect() -> Effect<Action> {
-        .merge(.cancel(id: CancelID.pricePolling), .cancel(id: CancelID.displayRateRefresh))
+    /// Arms (or, for USD, disarms) the periodic display-FX-rate refresh. This tracks
+    /// only the selected currency, not price polling's own start/stop — `currentUSDToDisplayRate`
+    /// is read by many non-polling views (account balances, asset detail, etc.), so the
+    /// refresh must keep running for as long as a non-USD currency is selected.
+    func armDisplayRateRefresh(currency: FiatCurrency) -> Effect<Action> {
+        currency == .usd ? .cancel(id: CancelID.displayRateRefresh) : displayRateRefreshEffect(currency: currency)
     }
 
     /// Periodically re-fetches the USD→display rate for the current display currency

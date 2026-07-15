@@ -329,6 +329,7 @@ struct AppFeatureTests {
     }
 
     @Test func `currency change clears stale prices and ignores old currency updates`() async {
+        let testClock = TestClock()
         let testDate = Date(timeIntervalSince1970: 1_000_000)
         let store = TestStore(initialState: AppFeature.State(
             selectedCurrency: .usd,
@@ -338,6 +339,7 @@ struct AppFeatureTests {
                 AppFeature()
             } withDependencies: {
                 $0.currentDate.now = { testDate.addingTimeInterval(60) }
+                $0.continuousClock = testClock
             }
 
         await store.send(.displayCurrencySelected(.eur)) {
@@ -367,9 +369,20 @@ struct AppFeatureTests {
                 $0.lastPriceUpdate = testDate.addingTimeInterval(60)
                 $0.connectionStatus = .idle
             }
+
+        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
+        // it lingers and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+            $0.prices = [:]
+            $0.priceChanges24h = [:]
+            $0.lastPriceUpdate = nil
+        }
     }
 
     @Test func `currency change refreshes current and historical fx state`() async throws {
+        let testClock = TestClock()
         let currentRate = try #require(Decimal(string: "0.92"))
         let historicalResult = HistoricalFXRefreshResult(
             currency: .eur,
@@ -389,6 +402,7 @@ struct AppFeatureTests {
                 capturedHistoricalRequest = (currency, days)
                 return historicalResult
             }
+            $0.continuousClock = testClock
         }
 
         await store.send(.displayCurrencySelected(.eur)) {
@@ -412,6 +426,13 @@ struct AppFeatureTests {
         #expect(capturedCurrentRequest == .eur)
         #expect(capturedHistoricalRequest?.0 == .eur)
         #expect(capturedHistoricalRequest?.1 == HistoricalPriceBackfillSettings.chartHorizonDays)
+
+        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
+        // it lingers and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+        }
     }
 
     @Test func `currency change publishes current fx before historical refresh finishes`() async throws {
@@ -436,6 +457,7 @@ struct AppFeatureTests {
                 try await testClock.sleep(for: .seconds(1))
                 return historicalResult
             }
+            $0.continuousClock = testClock
         }
 
         await store.send(.displayCurrencySelected(.eur)) {
@@ -462,6 +484,13 @@ struct AppFeatureTests {
         #expect(capturedCurrentRequest == .eur)
         #expect(capturedHistoricalRequest?.0 == .eur)
         #expect(capturedHistoricalRequest?.1 == HistoricalPriceBackfillSettings.chartHorizonDays)
+
+        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
+        // it lingers and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+        }
     }
 
     @Test func `currency switch stays on previous currency when current rate fails`() async {

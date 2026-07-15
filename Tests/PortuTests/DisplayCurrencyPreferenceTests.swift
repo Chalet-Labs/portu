@@ -21,6 +21,7 @@ struct DisplayCurrencyPreferenceTests {
     }
 
     @Test func `currency selection persists the chosen currency`() async {
+        let testClock = TestClock()
         nonisolated(unsafe) var savedCurrencies: [FiatCurrency] = []
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
@@ -28,6 +29,7 @@ struct DisplayCurrencyPreferenceTests {
             $0.displayCurrencyPreference.save = { currency in
                 savedCurrencies.append(currency)
             }
+            $0.continuousClock = testClock
         }
 
         await store.send(.displayCurrencySelected(.eur)) {
@@ -45,5 +47,11 @@ struct DisplayCurrencyPreferenceTests {
         // The preference is persisted only once the switch commits (after the rate
         // arrives), so a non-USD currency we could not display is never saved.
         #expect(savedCurrencies == [.eur])
+
+        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
+        // it lingers and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+        }
     }
 }

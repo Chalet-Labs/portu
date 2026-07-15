@@ -169,30 +169,41 @@ struct AppFeaturePricePollingIntervalTests {
     @Test func `display rate refresh restarts polling with a fresh fx rate`() async {
         let testClock = TestClock()
         let testDate = Date(timeIntervalSince1970: 1_000_000)
-        let storedRate: Decimal = 2
-        let refreshedRate: Decimal = 3
-        nonisolated(unsafe) var receivedRates: [Decimal] = []
-        nonisolated(unsafe) var capturedRefreshCurrency: FiatCurrency?
+        let rate: Decimal = 2
+        nonisolated(unsafe) var coinGeckoFetchCount = 0
+        nonisolated(unsafe) var fetchRateCallCount = 0
 
-        let store = TestStore(initialState: AppFeature.State(
-            selectedCurrency: .eur,
-            currentUSDToDisplayRate: storedRate)) {
-                AppFeature()
-            } withDependencies: {
-                $0.priceService.fetchCoinGeckoPrices = { request, currency, rate in
-                    receivedRates.append(rate)
-                    #expect(request.coinGeckoIDs == ["bitcoin"])
-                    return PriceUpdate(currency: currency, prices: ["bitcoin": 10], changes24h: [:])
-                }
-                $0.currencyConversion.fetchCurrentUSDToDisplayRate = { currency in
-                    capturedRefreshCurrency = currency
-                    return refreshedRate
-                }
-                $0.pricePollingSettings.refreshInterval = { .seconds(10000) }
-                $0.pricePollingSettings.zapperFallbackInterval = { nil }
-                $0.continuousClock = testClock
-                $0.currentDate.now = { testDate }
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.priceService.fetchCoinGeckoPrices = { request, currency, _ in
+                coinGeckoFetchCount += 1
+                #expect(request.coinGeckoIDs == ["bitcoin"])
+                return PriceUpdate(currency: currency, prices: ["bitcoin": 10], changes24h: [:])
             }
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in
+                fetchRateCallCount += 1
+                return rate
+            }
+            $0.pricePollingSettings.refreshInterval = { .seconds(10000) }
+            $0.pricePollingSettings.zapperFallbackInterval = { nil }
+            $0.continuousClock = testClock
+            $0.currentDate.now = { testDate }
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+            $0.currentUSDToDisplayRate = rate
+        }
+        await store.receive(\.currencyConversionRefreshCompleted) {
+            $0.historicalFXAvailability = .available
+        }
+        #expect(fetchRateCallCount == 1)
 
         await store.send(.startPricePolling(["bitcoin"])) {
             $0.connectionStatus = .fetching
@@ -203,24 +214,71 @@ struct AppFeaturePricePollingIntervalTests {
             $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
         }
-        #expect(receivedRates == [storedRate])
+        #expect(coinGeckoFetchCount == 1)
 
         // Nothing refreshes the rate until the display-rate-refresh interval elapses.
         await testClock.advance(by: .seconds(900))
-        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(refreshedRate))) {
-            $0.currentUSDToDisplayRate = refreshedRate
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate))) {
             $0.connectionStatus = .fetching
         }
         await store.receive(\.pricesReceived) {
             $0.connectionStatus = .idle
         }
 
-        #expect(receivedRates == [storedRate, refreshedRate])
-        #expect(capturedRefreshCurrency == .eur)
+        #expect(fetchRateCallCount == 2)
+        #expect(coinGeckoFetchCount == 2)
 
         await store.send(.stopPricePolling) {
             $0.connectionStatus = .idle
             $0.pricePollingIDs = []
+        }
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+            $0.prices = [:]
+            $0.lastPriceUpdate = nil
+        }
+    }
+
+    @Test func `display rate refresh keeps running without active price polling`() async {
+        let testClock = TestClock()
+        let rate: Decimal = 2
+        nonisolated(unsafe) var fetchRateCallCount = 0
+
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in
+                fetchRateCallCount += 1
+                return rate
+            }
+            $0.continuousClock = testClock
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+            $0.currentUSDToDisplayRate = rate
+        }
+        await store.receive(\.currencyConversionRefreshCompleted) {
+            $0.historicalFXAvailability = .available
+        }
+        #expect(fetchRateCallCount == 1)
+
+        // No view ever starts price polling here, yet the rate still refreshes on
+        // schedule because it is armed by the selected currency, not by polling.
+        await testClock.advance(by: .seconds(900))
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate)))
+        #expect(fetchRateCallCount == 2)
+
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+            $0.historicalFXAvailability = .available
         }
     }
 
