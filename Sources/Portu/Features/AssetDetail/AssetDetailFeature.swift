@@ -309,7 +309,11 @@ struct AssetDetailFeature {
         let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
         var selectedByDay: [Date: (priority: Int, point: HistoricalAssetPricePoint)] = [:]
 
-        for row in rows where row.day >= startDay {
+        let orderedRows = rows.sorted { lhs, rhs in
+            if lhs.fetchedAt == rhs.fetchedAt { return lhs.id.uuidString < rhs.id.uuidString }
+            return lhs.fetchedAt > rhs.fetchedAt
+        }
+        for row in orderedRows where row.day >= startDay {
             let normalizedDay = HistoricalPriceCalendar.utcStartOfDay(for: row.day)
             let candidate: (priority: Int, point: HistoricalAssetPricePoint)? = if row.fiatCurrency == displayCurrency {
                 (0, HistoricalAssetPricePoint(day: normalizedDay, price: row.price))

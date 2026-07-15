@@ -205,6 +205,34 @@ struct AssetPriceChartQueryTests {
         #expect(points.map(\.day) == [dayOne, dayTwo])
     }
 
+    @Test func `historical price points prefer the row with the latest fetchedAt on duplicate same currency rows`() {
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        let olderFetch = day
+        let newerFetch = day.addingTimeInterval(3600)
+
+        let staleRow = HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: day,
+            currency: .eur,
+            price: 90,
+            fetchedAt: olderFetch)
+        let freshRow = HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: day,
+            currency: .eur,
+            price: 92,
+            fetchedAt: newerFetch)
+
+        let points = AssetDetailFeature.historicalPricePoints(
+            [staleRow, freshRow],
+            startDate: day,
+            displayCurrency: .eur,
+            conversionContext: .usd,
+            isHistoricalBackfillEnabled: true)
+
+        #expect(points.map(\.price) == [92])
+    }
+
     @Test func `value chart points are converted with each point day rate before rendering`() throws {
         let dayOne = Date(timeIntervalSince1970: 1_704_067_200)
         let dayTwo = dayOne.addingTimeInterval(86400)
