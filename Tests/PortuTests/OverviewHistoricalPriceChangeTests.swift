@@ -92,6 +92,31 @@ struct OverviewHistoricalPriceChangeTests {
         #expect(entries.map(\.usdPrice) == [41000])
     }
 
+    @Test func `merged historical price entries normalize day to utc start of day`() {
+        let midday = Date(timeIntervalSince1970: 1_704_067_200 + 12 * 3600)
+        let normalizedDay = HistoricalPriceCalendar.utcStartOfDay(for: midday)
+
+        let usdRow = HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: midday,
+            currency: .usd,
+            price: 41000,
+            fetchedAt: midday)
+        let displayCurrencyRow = HistoricalPricePoint(
+            coinGeckoId: "ethereum",
+            day: midday,
+            currency: .eur,
+            price: 2000,
+            fetchedAt: midday)
+
+        let entries = OverviewHistoricalPriceChangeFeature.mergedHistoricalPriceEntries(
+            from: [usdRow, displayCurrencyRow],
+            displayCurrency: .eur,
+            context: .usd)
+
+        #expect(entries.allSatisfy { $0.day == normalizedDay })
+    }
+
     @Test func `merged price cache lets live prices override historical fallback`() {
         let merged = OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: ["ethereum": 2200],

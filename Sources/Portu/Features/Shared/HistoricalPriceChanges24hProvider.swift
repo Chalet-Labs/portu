@@ -87,12 +87,12 @@ extension OverviewHistoricalPriceChangeFeature {
             if row.fiatCurrency == displayCurrency {
                 selectedRows[key] = HistoricalPriceEntry(
                     coinGeckoId: historicalPriceID,
-                    day: row.day,
+                    day: key.day,
                     usdPrice: row.price)
             } else if row.fiatCurrency == .usd {
                 usdFallbackRows[key] = HistoricalPriceEntry(
                     coinGeckoId: historicalPriceID,
-                    day: row.day,
+                    day: key.day,
                     usdPrice: context.convertUSDValue(row.price, on: row.day))
             }
         }
