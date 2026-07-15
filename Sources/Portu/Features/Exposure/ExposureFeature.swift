@@ -85,13 +85,13 @@ enum ExposureLabels {
 }
 
 enum ExposureFeature {
-    static func resolveTokenUSDValue(
+    static func resolveTokenDisplayValue(
         amount: Decimal,
         coinGeckoId: String?,
         usdValue: Decimal,
         prices: [String: Decimal],
         fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
-        resolveTokenUSDValue(
+        resolveTokenDisplayValue(
             amount: amount,
             priceID: TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId),
             usdValue: usdValue,
@@ -99,7 +99,7 @@ enum ExposureFeature {
             fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
     }
 
-    static func resolveTokenUSDValue(
+    static func resolveTokenDisplayValue(
         amount: Decimal,
         priceID: String?,
         usdValue: Decimal,
@@ -119,7 +119,7 @@ enum ExposureFeature {
 
         for token in tokens {
             if token.role.isReward { continue }
-            let value = resolveTokenUSDValue(
+            let value = resolveTokenDisplayValue(
                 amount: token.amount,
                 priceID: TokenSettingsFeature.resolvedPriceID(token: token, override: nil),
                 usdValue: token.usdValue,
@@ -166,7 +166,7 @@ enum ExposureFeature {
 
         for token in tokens {
             if token.role.isReward { continue }
-            let value = resolveTokenUSDValue(
+            let value = resolveTokenDisplayValue(
                 amount: token.amount,
                 priceID: TokenSettingsFeature.resolvedPriceID(token: token, override: nil),
                 usdValue: token.usdValue,
