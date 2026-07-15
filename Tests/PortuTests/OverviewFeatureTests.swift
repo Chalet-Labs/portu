@@ -47,6 +47,23 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(Set(slices.map(\.id)).count == slices.count)
     }
 
+    @Test func `top asset slices use converted usd fallback while provider price is missing`() throws {
+        let held = UUID()
+        let tokens = [
+            token(assetId: held, symbol: "BTC", coinGeckoId: "bitcoin", amount: 1, usdValue: 60000)
+        ]
+
+        let slices = try OverviewFeature.topAssetSlices(
+            from: tokens,
+            prices: [:],
+            limit: 5,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        let slice = try #require(slices.first)
+        #expect(slices.count == 1)
+        #expect(slice.value == 54000)
+    }
+
     @Test func `top asset slices exclude sync time values when no price is available`() throws {
         let priced = UUID()
         let syncOnly = UUID()
@@ -320,7 +337,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(row.coinGeckoId == "ethereum")
     }
 
-    @Test func `price rows exclude sync time values when provider price is missing`() {
+    @Test func `price rows use converted usd fallback while provider price is missing`() throws {
         let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0x3e5a801830d63bfd3feb2885533e27648dbc17a7")
         let tokens = [
             token(
@@ -338,7 +355,9 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             changes24h: [:],
             watchlistIDs: [])
 
-        #expect(rows.isEmpty)
+        let row = try #require(rows.first)
+        #expect(rows.count == 1)
+        #expect(row.price == nil)
     }
 
     @Test func `portfolio total excludes sync time values without live or manual prices`() {

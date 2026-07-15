@@ -535,11 +535,26 @@ enum OverviewFeature {
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
         fallbackUSDToDisplayRate: Decimal) -> Decimal {
-        OverviewPositionPricing.tokenValue(
+        let liveOrManualValue = OverviewPositionPricing.tokenValue(
             token: token,
             prices: prices,
             override: override,
             fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
+        guard liveOrManualValue == 0 else { return liveOrManualValue }
+
+        // Mirrors portfolioTotalDisplayValue's sync-time fallback: a token with a
+        // resolvable priceID whose live price hasn't arrived yet still contributes
+        // its last-known sync value, so dashboard rows/slices don't drop it while
+        // prices are loading — matching the portfolio total, which already does.
+        // Only applies when the price is genuinely absent, not when one arrived
+        // but was rejected as implausible; those must stay excluded.
+        guard
+            let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override),
+            prices[priceID] == nil
+        else {
+            return 0
+        }
+        return token.usdValue * fallbackUSDToDisplayRate
     }
 
     private static func portfolioTotalDisplayValue(
