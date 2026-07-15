@@ -76,6 +76,7 @@ struct AppFeature {
         case pricePolling
         case scheduledSync
         case currencyConversion
+        case displayRateRefresh
     }
 
     @Dependency(\.syncEngine) var syncEngine
@@ -285,10 +286,11 @@ struct AppFeature {
                     state.pendingCurrency = nil
                     return commitDisplayCurrency(&state, currency: currency, rate: rate)
                 }
-                // Launch/refresh path for the already-selected currency: just apply the rate.
+                // Launch/refresh path for the already-selected currency: apply the rate
+                // and restart polling so any long-lived loop picks up the fresh value.
                 guard currency == state.selectedCurrency else { return .none }
                 state.currentUSDToDisplayRate = rate
-                return .none
+                return restartPricePollingEffect(&state, currency: currency)
 
             case let .currentCurrencyConversionRateReceived(currency, .failure(error)):
                 if state.pendingCurrency == currency {
@@ -320,11 +322,10 @@ struct AppFeature {
                 guard request.isEmpty == false else {
                     state.connectionStatus = .idle
                     state.pricePollingIDs = []
-                    return .cancel(id: CancelID.pricePolling)
+                    return stopPricePollingEffect()
                 }
                 state.pricePollingIDs = request.allPriceIDs
-                state.connectionStatus = .fetching
-                return pricePollingEffect(request: request, currency: state.selectedCurrency, rate: state.currentUSDToDisplayRate)
+                return restartPricePollingEffect(&state, currency: state.selectedCurrency)
 
             case let .pricesReceived(update):
                 guard update.currency == state.selectedCurrency else { return .none }
@@ -341,7 +342,7 @@ struct AppFeature {
             case .stopPricePolling:
                 state.connectionStatus = .idle
                 state.pricePollingIDs = []
-                return .cancel(id: CancelID.pricePolling)
+                return stopPricePollingEffect()
 
             case .allAssets:
                 return .none
@@ -367,6 +368,7 @@ struct AppFeature {
 
 private extension AppFeature {
     static let settingsRecheckInterval: Duration = .seconds(10)
+    static let displayRateRefreshInterval: Duration = .seconds(900)
 
     /// Applies a display-currency switch: persists the preference, sets the rate,
     /// clears stale prices, and restarts polling in the new currency. The historical
@@ -386,10 +388,47 @@ private extension AppFeature {
         state.priceChanges24h = [:]
         state.lastPriceUpdate = nil
 
+        return restartPricePollingEffect(&state, currency: currency)
+    }
+
+    /// Restarts price polling for the current `pricePollingIDs` using the display
+    /// currency's latest stored rate. Non-USD currencies also (re)arm a periodic FX
+    /// rate refresh so a long-lived polling session doesn't keep converting fresh
+    /// prices against an increasingly stale rate; USD needs no such refresh.
+    func restartPricePollingEffect(_ state: inout State, currency: FiatCurrency) -> Effect<Action> {
         let request = PricePollingIDResolver.split(state.pricePollingIDs)
-        guard request.isEmpty == false else { return .none }
+        guard request.isEmpty == false else {
+            return currency == .usd ? .cancel(id: CancelID.displayRateRefresh) : .none
+        }
         state.connectionStatus = .fetching
-        return pricePollingEffect(request: request, currency: currency, rate: state.currentUSDToDisplayRate)
+        let polling = pricePollingEffect(request: request, currency: currency, rate: state.currentUSDToDisplayRate)
+        guard currency != .usd else {
+            return .merge(polling, .cancel(id: CancelID.displayRateRefresh))
+        }
+        return .merge(polling, displayRateRefreshEffect(currency: currency))
+    }
+
+    func stopPricePollingEffect() -> Effect<Action> {
+        .merge(.cancel(id: CancelID.pricePolling), .cancel(id: CancelID.displayRateRefresh))
+    }
+
+    /// Periodically re-fetches the USD→display rate for the current display currency
+    /// and, on success, restarts price polling with it. A failed tick keeps the
+    /// last-known rate in use and retries on the next tick rather than surfacing an
+    /// error for what is otherwise a healthy, already-converting session.
+    func displayRateRefreshEffect(currency: FiatCurrency) -> Effect<Action> {
+        .run { send in
+            while !Task.isCancelled {
+                try await clock.sleep(for: Self.displayRateRefreshInterval)
+                do {
+                    let rate = try await currencyConversion.fetchCurrentUSDToDisplayRate(currency)
+                    await send(.currentCurrencyConversionRateReceived(currency, .success(rate)))
+                } catch {
+                    guard !Task.isCancelled else { return }
+                }
+            }
+        }
+        .cancellable(id: CancelID.displayRateRefresh, cancelInFlight: true)
     }
 
     func currencyConversionEffect(currency: FiatCurrency) -> Effect<Action> {
