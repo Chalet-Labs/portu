@@ -73,7 +73,11 @@ extension OverviewHistoricalPriceChangeFeature {
         var selectedRows: [PriceKey: HistoricalPriceEntry] = [:]
         var usdFallbackRows: [PriceKey: HistoricalPriceEntry] = [:]
 
-        for row in rows {
+        let orderedRows = rows.sorted { lhs, rhs in
+            if lhs.fetchedAt == rhs.fetchedAt { return lhs.id.uuidString < rhs.id.uuidString }
+            return lhs.fetchedAt < rhs.fetchedAt
+        }
+        for row in orderedRows {
             guard let historicalPriceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(row.coinGeckoId) else {
                 continue
             }
