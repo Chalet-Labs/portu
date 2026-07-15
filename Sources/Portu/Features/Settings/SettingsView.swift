@@ -394,7 +394,9 @@ private struct SettingsCurrencyPicker: View {
 
     private var currencyBinding: Binding<FiatCurrency> {
         Binding(
-            get: { store.selectedCurrency },
+            // A non-USD switch defers `selectedCurrency` until its FX rate arrives, so the
+            // picker must show the effective target during that window, not the old currency.
+            get: { store.pendingCurrency ?? store.selectedCurrency },
             set: { store.send(.displayCurrencySelected($0)) })
     }
 }
