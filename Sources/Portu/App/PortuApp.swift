@@ -148,7 +148,7 @@ struct PortuApp: App {
                     priceService: priceService,
                     currency: .usd)
                 guard currency != .usd else { return update }
-                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate)
+                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate, preserveChanges24h: true)
             },
             fetchZapperPrices: { identities, currency, usdToDisplayRate in
                 guard

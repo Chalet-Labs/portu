@@ -19,6 +19,21 @@ struct PriceUpdateCurrencyTests {
         #expect(converted.changes24h.isEmpty)
     }
 
+    @Test func `converting with preserveChanges24h keeps change percentages`() throws {
+        let rate = try #require(Decimal(string: "0.92"))
+        let expectedPrice = try #require(Decimal(string: "9.2"))
+        let update = PriceUpdate(
+            currency: .usd,
+            prices: ["bitcoin": 10],
+            changes24h: ["bitcoin": 0.05])
+
+        let converted = update.convertedUSDValues(to: .eur, rate: rate, preserveChanges24h: true)
+
+        #expect(converted.currency == .eur)
+        #expect(converted.prices["bitcoin"] == expectedPrice)
+        #expect(converted.changes24h == ["bitcoin": 0.05])
+    }
+
     @Test func `converting a non-usd update is a no-op that preserves prices and changes`() throws {
         let rate = try #require(Decimal(string: "0.92"))
         let update = PriceUpdate(
