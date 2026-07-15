@@ -134,8 +134,9 @@ struct PriceServiceClient {
         self.fetchCoinGeckoPricesOverride = fetchCoinGeckoPrices
         self.fetchZapperPricesOverride = fetchZapperPrices
         self.fetchHistoricalPrices = fetchHistoricalPrices
-        self.fetchHistoricalPricesForCurrency = fetchHistoricalPricesForCurrency ?? { coinId, _, days in
-            try await fetchHistoricalPrices(coinId, days)
+        self.fetchHistoricalPricesForCurrency = fetchHistoricalPricesForCurrency ?? { coinId, currency, days in
+            guard currency == .default else { return [] }
+            return try await fetchHistoricalPrices(coinId, days)
         }
         self.fetchCurrentUSDConversionRate = fetchCurrentUSDConversionRate
         self.fetchHistoricalUSDConversionRates = fetchHistoricalUSDConversionRates

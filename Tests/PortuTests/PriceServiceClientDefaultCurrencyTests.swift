@@ -34,10 +34,26 @@ struct PriceServiceClientDefaultCurrencyTests {
         #expect(update.prices.isEmpty)
     }
 
+    @Test func `default historical prices for currency getter delegates to usd fetch for the default currency`() async throws {
+        let client = makeClient()
+
+        let rows = try await client.fetchHistoricalPricesForCurrency("btc", .default, 7)
+
+        #expect(rows.map(\.coinGeckoId) == ["btc"])
+    }
+
+    @Test func `default historical prices for currency getter returns empty rows for a non-default currency`() async throws {
+        let client = makeClient()
+
+        let rows = try await client.fetchHistoricalPricesForCurrency("btc", .eur, 7)
+
+        #expect(rows.isEmpty)
+    }
+
     private func makeClient() -> PriceServiceClient {
         PriceServiceClient(
             fetchPrices: { _ in PriceUpdate(prices: ["btc": 100], changes24h: [:]) },
-            fetchHistoricalPrices: { _, _ in [] },
+            fetchHistoricalPrices: { coinId, _ in [HistoricalPriceDTO(coinGeckoId: coinId, timestamp: .now, usdPrice: 100)] },
             invalidateCache: {})
     }
 }
