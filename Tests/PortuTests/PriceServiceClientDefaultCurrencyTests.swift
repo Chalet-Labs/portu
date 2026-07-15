@@ -8,7 +8,7 @@ struct PriceServiceClientDefaultCurrencyTests {
         let client = makeClient()
         let request = PricePollingRequest(coinGeckoIDs: ["btc"], zapperIdentities: [])
 
-        let update = try await client.fetchCoinGeckoPrices(request, .default)
+        let update = try await client.fetchCoinGeckoPrices(request, .default, 1)
 
         #expect(update.currency == .usd)
         #expect(update.prices["btc"] == 100)
@@ -18,7 +18,7 @@ struct PriceServiceClientDefaultCurrencyTests {
         let client = makeClient()
         let request = PricePollingRequest(coinGeckoIDs: ["btc"], zapperIdentities: [])
 
-        let update = try await client.fetchCoinGeckoPrices(request, .eur)
+        let update = try await client.fetchCoinGeckoPrices(request, .eur, 1)
 
         #expect(update.currency == .eur)
         #expect(update.prices.isEmpty)

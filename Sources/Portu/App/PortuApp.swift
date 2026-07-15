@@ -142,11 +142,13 @@ struct PortuApp: App {
                         return try await zapperProvider.fetchPriceUpdate(for: identities)
                     }
             },
-            fetchCoinGeckoPrices: { request, currency in
-                try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
+            fetchCoinGeckoPrices: { request, currency, usdToDisplayRate in
+                let update = try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
                     request: request,
                     priceService: priceService,
-                    currency: currency)
+                    currency: .usd)
+                guard currency != .usd else { return update }
+                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate)
             },
             fetchZapperPrices: { identities, currency, usdToDisplayRate in
                 guard

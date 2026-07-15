@@ -178,7 +178,7 @@ struct AppFeatureTests {
         let store = TestStore(initialState: AppFeature.State(selectedCurrency: .chf)) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { _, currency in
+            $0.priceService.fetchCoinGeckoPrices = { _, currency, _ in
                 capturedCurrency = currency
                 return PriceUpdate(currency: currency, prices: ["bitcoin": 58000], changes24h: [:])
             }
@@ -212,7 +212,7 @@ struct AppFeatureTests {
         let store = TestStore(initialState: AppFeature.State(selectedCurrency: .eur)) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request, currency in
+            $0.priceService.fetchCoinGeckoPrices = { request, currency, _ in
                 capturedRequests.append(request)
                 #expect(request.coinGeckoIDs.isEmpty || request.zapperIdentities.isEmpty)
                 if request.coinGeckoIDs == ["bitcoin"] {
@@ -277,7 +277,7 @@ struct AppFeatureTests {
         let store = TestStore(initialState: AppFeature.State(selectedCurrency: .eur)) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request, currency in
+            $0.priceService.fetchCoinGeckoPrices = { request, currency, _ in
                 if request.coinGeckoIDs == ["bitcoin"] { throw CoinFailed() }
                 // Token fetch succeeds but returns nothing for the onchain identity.
                 return PriceUpdate(currency: currency, prices: [:], changes24h: [:])

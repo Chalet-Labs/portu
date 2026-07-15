@@ -69,7 +69,7 @@ struct PriceServiceClient {
     }
 
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
-    private var fetchCoinGeckoPricesOverride: (@Sendable (PricePollingRequest, FiatCurrency) async throws -> PriceUpdate)?
+    private var fetchCoinGeckoPricesOverride: (@Sendable (PricePollingRequest, FiatCurrency, Decimal) async throws -> PriceUpdate)?
     private var fetchZapperPricesOverride: (@Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate)?
     var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
     var fetchHistoricalPricesForCurrency: @Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO]
@@ -80,13 +80,13 @@ struct PriceServiceClient {
     var canFetchZapperHistoricalPrices: @Sendable () -> Bool
     var invalidateCache: @Sendable () async -> Void
 
-    var fetchCoinGeckoPrices: @Sendable (PricePollingRequest, FiatCurrency) async throws -> PriceUpdate {
+    var fetchCoinGeckoPrices: @Sendable (PricePollingRequest, FiatCurrency, Decimal) async throws -> PriceUpdate {
         get {
             if let fetchCoinGeckoPricesOverride {
                 return fetchCoinGeckoPricesOverride
             }
             let fetchPrices = fetchPrices
-            return { request, currency in
+            return { request, currency, _ in
                 // The default fetcher only knows how to return USD-tagged updates. A non-USD
                 // request would be discarded by the reducer's currency guard and stall polling,
                 // so return an empty update tagged with the requested currency instead.
@@ -120,7 +120,7 @@ struct PriceServiceClient {
 
     init(
         fetchPrices: @escaping @Sendable ([String]) async throws -> PriceUpdate,
-        fetchCoinGeckoPrices: (@Sendable (PricePollingRequest, FiatCurrency) async throws -> PriceUpdate)? = nil,
+        fetchCoinGeckoPrices: (@Sendable (PricePollingRequest, FiatCurrency, Decimal) async throws -> PriceUpdate)? = nil,
         fetchZapperPrices: (@Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate)? = nil,
         fetchHistoricalPrices: @escaping @Sendable (String, Int) async throws -> [HistoricalPriceDTO],
         fetchHistoricalPricesForCurrency: (@Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO])? = nil,
@@ -150,7 +150,7 @@ struct PriceServiceClient {
 extension PriceServiceClient: DependencyKey {
     static let liveValue = Self(
         fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        fetchCoinGeckoPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchCoinGeckoPrices: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchZapperPrices: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalPricesForCurrency: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
@@ -180,11 +180,13 @@ extension PriceServiceClient: DependencyKey {
                         return try await zapperProvider.fetchPriceUpdate(for: identities)
                     }
             },
-            fetchCoinGeckoPrices: { request, currency in
-                try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
+            fetchCoinGeckoPrices: { request, currency, usdToDisplayRate in
+                let update = try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
                     request: request,
                     priceService: service,
-                    currency: currency)
+                    currency: .usd)
+                guard currency != .usd else { return update }
+                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate)
             },
             fetchZapperPrices: { identities, currency, usdToDisplayRate in
                 guard let zapperProvider, !identities.isEmpty else {

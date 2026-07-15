@@ -433,7 +433,7 @@ private extension AppFeature {
 
     func pricePollingEffect(request: PricePollingRequest, currency: FiatCurrency, rate: Decimal) -> Effect<Action> {
         var effects: [Effect<Action>] = [
-            coinGeckoPricePollingEffect(request: request, currency: currency)
+            coinGeckoPricePollingEffect(request: request, currency: currency, rate: rate)
         ]
 
         if request.zapperIdentities.isEmpty == false {
@@ -471,7 +471,7 @@ private extension AppFeature {
             .cancellable(id: CancelID.pricePolling, cancelInFlight: true)
     }
 
-    func coinGeckoPricePollingEffect(request: PricePollingRequest, currency: FiatCurrency) -> Effect<Action> {
+    func coinGeckoPricePollingEffect(request: PricePollingRequest, currency: FiatCurrency, rate: Decimal) -> Effect<Action> {
         let coinRequest = PricePollingRequest(
             coinGeckoIDs: request.coinGeckoIDs,
             zapperIdentities: [])
@@ -486,7 +486,7 @@ private extension AppFeature {
 
                 if coinRequest.isEmpty == false {
                     do {
-                        let update = try await priceService.fetchCoinGeckoPrices(coinRequest, currency)
+                        let update = try await priceService.fetchCoinGeckoPrices(coinRequest, currency, rate)
                         await send(.pricesReceived(update))
                         didEmit = true
                     } catch {
@@ -502,7 +502,7 @@ private extension AppFeature {
 
                 if tokenRequest.isEmpty == false {
                     do {
-                        let update = try await priceService.fetchCoinGeckoPrices(tokenRequest, currency)
+                        let update = try await priceService.fetchCoinGeckoPrices(tokenRequest, currency, rate)
                         if coinRequest.isEmpty || update.prices.isEmpty == false || update.changes24h.isEmpty == false {
                             await send(.pricesReceived(update))
                             didEmit = true
