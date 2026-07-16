@@ -38,7 +38,8 @@ enum AssetValueFormatter {
         fallbackPrice(for: token).map { $0 * fallbackUSDToDisplayRate }
     }
 
-    /// Best available price: live CoinGecko price, or sync-time USD/amount ratio.
+    /// Best available price in the display currency: live CoinGecko price, or the
+    /// sync-time USD/amount ratio converted via `fallbackUSDToDisplayRate`.
     static func displayPrice(
         for token: PositionToken,
         livePrices: [String: Decimal],
@@ -48,7 +49,8 @@ enum AssetValueFormatter {
             ?? .zero
     }
 
-    /// Best available USD value: live price * amount, or sync-time usdValue.
+    /// Best available value in the display currency: live price * amount, or the
+    /// sync-time usdValue converted via `fallbackUSDToDisplayRate`.
     static func displayValue(
         for token: PositionToken,
         livePrices: [String: Decimal],
