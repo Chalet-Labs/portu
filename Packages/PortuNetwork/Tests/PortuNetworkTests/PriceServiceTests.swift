@@ -598,4 +598,30 @@ struct PriceServiceTests {
 
         #expect(probeCount == 1)
     }
+
+    @Test func `current conversion rate divides target by usd`() async throws {
+        MockURLProtocol.requestHandler = { _ in
+            (Data("""
+            {"rates":{"usd":{"value":2.0},"eur":{"value":0.5}}}
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let rate = try await service.fetchCurrentUSDConversionRate(to: .eur)
+
+        #expect(rate == 0.25)
+    }
+
+    @Test func `current conversion rate rejects a non-positive target rate`() async throws {
+        MockURLProtocol.requestHandler = { _ in
+            (Data("""
+            {"rates":{"usd":{"value":1.0},"eur":{"value":0}}}
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        await #expect(throws: PriceServiceError.decodingFailed) {
+            try await service.fetchCurrentUSDConversionRate(to: .eur)
+        }
+    }
 }

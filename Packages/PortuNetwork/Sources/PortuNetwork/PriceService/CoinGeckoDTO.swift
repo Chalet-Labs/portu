@@ -129,7 +129,11 @@ nonisolated struct CoinGeckoExchangeRatesResponse {
         var rates: [FiatCurrency: Decimal] = [:]
         for (key, values) in rows {
             let currency = FiatCurrency(storageCode: key)
-            guard currency.storageCode == key.lowercased(), let value = values["value"] as? NSNumber else {
+            guard
+                currency.storageCode == key.lowercased(),
+                let value = values["value"] as? NSNumber,
+                value.decimalValue > 0
+            else {
                 continue
             }
             rates[currency] = value.decimalValue
