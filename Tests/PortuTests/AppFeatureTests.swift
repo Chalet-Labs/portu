@@ -493,6 +493,69 @@ struct AppFeatureTests {
         }
     }
 
+    @Test func `currency change does not restore a stale rate after a periodic tick lands first`() async throws {
+        let testClock = TestClock()
+        let initialRate = try #require(Decimal(string: "0.92"))
+        let refreshedRate = try #require(Decimal(string: "0.95"))
+        let historicalResult = HistoricalFXRefreshResult(
+            currency: .eur,
+            insertedHistoricalRates: 3,
+            updatedHistoricalRates: 2)
+        nonisolated(unsafe) var currentRateCallCount = 0
+
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in
+                currentRateCallCount += 1
+                return currentRateCallCount == 1 ? initialRate : refreshedRate
+            }
+            $0.currencyConversion.refreshHistoricalRates = { _, _ in
+                try await testClock.sleep(for: .seconds(950))
+                return historicalResult
+            }
+            $0.continuousClock = testClock
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(initialRate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+            $0.currentUSDToDisplayRate = initialRate
+        }
+
+        // The periodic display-rate timer ticks while the historical refresh from the
+        // initial switch is still in flight, and lands a newer rate first.
+        await testClock.advance(by: .seconds(900))
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(refreshedRate))) {
+            $0.currentUSDToDisplayRate = refreshedRate
+        }
+
+        // The historical refresh completes afterward, carrying the rate captured before
+        // it started (`initialRate`) — it must not overwrite the newer periodic rate.
+        await testClock.advance(by: .seconds(50))
+        let completion = CurrencyConversionRefreshResult(
+            currency: .eur,
+            currentUSDToDisplayRate: initialRate,
+            insertedHistoricalRates: 3,
+            updatedHistoricalRates: 2)
+        await store.receive(.currencyConversionRefreshCompleted(.eur, .success(completion))) {
+            $0.historicalFXAvailability = .available
+        }
+
+        #expect(store.state.currentUSDToDisplayRate == refreshedRate)
+
+        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
+        // it lingers and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+        }
+    }
+
     @Test func `currency switch stays on previous currency when current rate fails`() async {
         let store = TestStore(initialState: AppFeature.State(selectedCurrency: .usd)) {
             AppFeature()

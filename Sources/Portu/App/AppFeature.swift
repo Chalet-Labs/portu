@@ -313,7 +313,10 @@ struct AppFeature {
                 guard currency == state.selectedCurrency, result.currency == state.selectedCurrency else {
                     return .none
                 }
-                state.currentUSDToDisplayRate = result.currentUSDToDisplayRate
+                // The rate on `result` was captured before the historical refresh started,
+                // not now — the periodic refresh timer may have already landed a newer one
+                // in the meantime. Only the availability flag from this completion applies;
+                // `currentCurrencyConversionRateReceived` is the sole owner of the rate value.
                 state.historicalFXAvailability = .available
                 return .none
 
