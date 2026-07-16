@@ -47,20 +47,25 @@ struct CurrencyConversionContext: Equatable {
             historicalUSDToDisplayRatesByDay: rates)
     }
 
-    func rate(for date: Date) -> Decimal {
+    func rate(for date: Date, today: Date = .now) -> Decimal {
         guard displayCurrency != .usd else { return 1 }
         let day = HistoricalPriceCalendar.utcStartOfDay(for: date)
+        // The historical-FX top-up fetches today's row at most once per day (see
+        // AppFeature.historicalFXTopUpEffect), so it goes stale as currentUSDToDisplayRate
+        // keeps refreshing every periodic tick. Always prefer the live spot rate for
+        // today's UTC day rather than the cached historical row.
+        guard day != HistoricalPriceCalendar.utcStartOfDay(for: today) else { return currentUSDToDisplayRate }
         return historicalUSDToDisplayRatesByDay[day] ?? currentUSDToDisplayRate
     }
 
-    func convertUSDValue(_ value: Decimal, on date: Date) -> Decimal {
-        value * rate(for: date)
+    func convertUSDValue(_ value: Decimal, on date: Date, today: Date = .now) -> Decimal {
+        value * rate(for: date, today: today)
     }
 
-    func convertUSDPoint(_ point: HistoricalPortfolioValuePoint) -> HistoricalPortfolioValuePoint {
+    func convertUSDPoint(_ point: HistoricalPortfolioValuePoint, today: Date = .now) -> HistoricalPortfolioValuePoint {
         HistoricalPortfolioValuePoint(
             date: point.date,
-            value: convertUSDValue(point.value, on: point.date),
+            value: convertUSDValue(point.value, on: point.date, today: today),
             kind: point.kind)
     }
 }
