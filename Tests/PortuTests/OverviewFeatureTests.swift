@@ -377,6 +377,25 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(total == 32)
     }
 
+    @Test func `portfolio total excludes implausible onchain provider prices instead of falling back`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xBadPrice")
+        let bad = token(
+            symbol: "BAD",
+            category: .defi,
+            amount: 1_000_000,
+            usdValue: 10,
+            onchainIdentity: identity)
+
+        let total = OverviewFeature.portfolioTotalValue(
+            tokens: [bad],
+            prices: [identity.historicalPriceID: 1_000_000],
+            overrides: [],
+            mappings: [],
+            settings: .defaults)
+
+        #expect(total == 0)
+    }
+
     @Test func `portfolio total uses converted usd fallback while selected currency prices are loading`() throws {
         let held = token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 1, usdValue: 60000)
         let borrow = token(symbol: "DEBT", coinGeckoId: "debt", role: .borrow, amount: 2, usdValue: 100)

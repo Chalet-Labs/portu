@@ -588,7 +588,13 @@ enum OverviewFeature {
         guard TokenSettingsFeature.resolvedValue(token: token, prices: prices, override: override) == nil else {
             return nil
         }
-        guard TokenSettingsFeature.resolvedPriceID(token: token, override: override) != nil else {
+        // A resolvable priceID whose price hasn't arrived yet still falls back to the
+        // sync-time value; one that arrived but was rejected as implausible must stay
+        // excluded, matching resolvedValue's fallback above.
+        guard
+            let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override),
+            prices[priceID] == nil
+        else {
             return override?.alwaysShow == true ? 0 : nil
         }
         let fallbackValue = token.usdValue * fallbackUSDToDisplayRate
