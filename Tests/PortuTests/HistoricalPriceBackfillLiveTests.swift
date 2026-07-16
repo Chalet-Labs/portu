@@ -107,6 +107,44 @@ struct HistoricalPriceBackfillLiveTests {
         #expect(rows.first?.price == 90)
     }
 
+    @Test func `live backfill preserves non-usd currency when rekeying to the canonical price id`() async throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
+        let asset = Asset(id: uuid(80), symbol: "AAVE", name: "Aave", coinGeckoId: "aave")
+        let position = Position(
+            positionType: .idle,
+            tokens: [PositionToken(role: .balance, amount: 1, usdValue: 100, asset: asset)],
+            account: account)
+        account.positions = [position]
+        context.insert(account)
+        try context.save()
+
+        let client = HistoricalPriceBackfillClient.live(
+            modelContext: context,
+            priceService: PriceServiceClient(
+                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                fetchHistoricalPrices: { coinGeckoId, _ in
+                    [HistoricalPriceDTO(
+                        coinGeckoId: coinGeckoId,
+                        timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+                        currency: .eur,
+                        price: 90)]
+                },
+                invalidateCache: {}),
+            now: { Date(timeIntervalSince1970: 20) },
+            requestSpacing: .zero,
+            sleep: { _ in })
+
+        _ = try await client.run()
+        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+
+        #expect(rows.count == 1)
+        // rekeyed(to:) must preserve the fetched currency rather than forcing .usd.
+        #expect(rows.first?.currency == .eur)
+        #expect(rows.first?.price == 90)
+    }
+
     @Test func `live backfill includes assets present only in local snapshots`() async throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
@@ -445,20 +483,5 @@ struct HistoricalPriceBackfillLiveTests {
 
     private func uuid(_ index: Int) -> UUID {
         UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index))!
-    }
-}
-
-private final class SendableArray<Element>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storage: [Element] = []
-
-    var values: [Element] {
-        lock.withLock { storage }
-    }
-
-    func append(_ value: Element) {
-        lock.withLock {
-            storage.append(value)
-        }
     }
 }

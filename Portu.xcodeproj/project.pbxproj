@@ -43,6 +43,7 @@
 		35DECC9143BD8374E60C7454 /* AssetDetailFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B8F6274FD67590BE1049ED3 /* AssetDetailFeature.swift */; };
 		39E54F71C03B1DF44496843A /* PortfolioCategoryResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 187BA85D9D8DD15A770F50DA /* PortfolioCategoryResolverTests.swift */; };
 		3B7F98D703DC7FC11BC01686 /* PricePollingIDResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F65FF1713209FB3D1DDB9C2 /* PricePollingIDResolver.swift */; };
+		3D506EB5FDC7350FB3AFF9B3 /* SendableArray.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C14B6E1BF95CE173602DD3 /* SendableArray.swift */; };
 		3E9FAAECCAB6AD25EDF404CE /* TokenSettingsFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97271DF343FF3BCB2234A40D /* TokenSettingsFeature.swift */; };
 		41D3D4320D5DBB104D837166 /* HistoricalPriceChanges24hProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE9024AF502998B64A46F8AC /* HistoricalPriceChanges24hProvider.swift */; };
 		44652004FEA936D651446318 /* PerformanceHistoricalPriceChangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F4BE776CC6D1B2E9953432 /* PerformanceHistoricalPriceChangeTests.swift */; };
@@ -342,6 +343,7 @@
 		E8A9E39F1B681F29832603FE /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		E94809A29D35ED92B6A354DA /* NetworkLogBufferTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLogBufferTests.swift; sourceTree = "<group>"; };
 		E98AA642DEA9418434E3238B /* AssetLookupCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetLookupCacheTests.swift; sourceTree = "<group>"; };
+		E9C14B6E1BF95CE173602DD3 /* SendableArray.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SendableArray.swift; sourceTree = "<group>"; };
 		EAA3330A22F4A77AABE97DDE /* OverviewPricePolling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPricePolling.swift; sourceTree = "<group>"; };
 		EB7C35F139C6EC9B7A4CA126 /* AssetHoldingsSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetHoldingsSummary.swift; sourceTree = "<group>"; };
 		EBA5184D0631578B50D57760 /* PortfolioHealthFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHealthFeature.swift; sourceTree = "<group>"; };
@@ -652,6 +654,7 @@
 				FE40A8EC06DB30B0B54BE934 /* PriceUpdateCurrencyTests.swift */,
 				2E83779E156800BF99D5B42F /* ProtocolFilterTests.swift */,
 				5A372B5E40F5617842721225 /* ReleaseAutomationTests.swift */,
+				E9C14B6E1BF95CE173602DD3 /* SendableArray.swift */,
 				726D62A9E7F60014EDC7E0EC /* SettingsTabTests.swift */,
 				ACC72A910CE88E69A0A79746 /* SidebarLayoutTests.swift */,
 				1159F8509C86C08B1C489415 /* SyncEngineScopedTests.swift */,
@@ -977,6 +980,7 @@
 				DF180AE55477034425EE7A90 /* PriceUpdateCurrencyTests.swift in Sources */,
 				199AC50AADF5D13C0A51DFBD /* ProtocolFilterTests.swift in Sources */,
 				0654CA81A46C611A8907B53C /* ReleaseAutomationTests.swift in Sources */,
+				3D506EB5FDC7350FB3AFF9B3 /* SendableArray.swift in Sources */,
 				09EFC1288E41DCA2CF416638 /* SettingsTabTests.swift in Sources */,
 				688D94778A29B329D3197E6F /* SidebarLayoutTests.swift in Sources */,
 				A53307EFF266FA209E6AEBDD /* SyncEngineScopedTests.swift in Sources */,
