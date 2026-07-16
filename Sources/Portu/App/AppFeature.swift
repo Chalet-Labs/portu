@@ -288,8 +288,13 @@ struct AppFeature {
                 }
                 // Launch/refresh path for the already-selected currency: apply the rate
                 // and restart polling so any long-lived loop picks up the fresh value.
+                // Stale prices are cleared so no view pairs an old-rate live price with
+                // the new rate until the restarted poll returns fresh ones.
                 guard currency == state.selectedCurrency else { return .none }
                 state.currentUSDToDisplayRate = rate
+                state.prices = [:]
+                state.priceChanges24h = [:]
+                state.lastPriceUpdate = nil
                 return restartPricePollingEffect(&state, currency: currency)
 
             case let .currentCurrencyConversionRateReceived(currency, .failure(error)):

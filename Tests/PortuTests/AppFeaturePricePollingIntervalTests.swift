@@ -218,10 +218,16 @@ struct AppFeaturePricePollingIntervalTests {
 
         // Nothing refreshes the rate until the display-rate-refresh interval elapses.
         await testClock.advance(by: .seconds(900))
+        // Stale prices fetched under the old rate are cleared immediately so no view
+        // pairs them with the new rate before the restarted poll returns fresh ones.
         await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate))) {
+            $0.prices = [:]
+            $0.lastPriceUpdate = nil
             $0.connectionStatus = .fetching
         }
         await store.receive(\.pricesReceived) {
+            $0.prices = ["bitcoin": 10]
+            $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
         }
 
