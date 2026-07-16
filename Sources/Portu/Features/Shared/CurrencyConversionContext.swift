@@ -17,10 +17,14 @@ struct CurrencyConversionContext: Equatable {
         historicalUSDToDisplayRatesByDay: [Date: Decimal] = [:]) {
         self.displayCurrency = displayCurrency
         self.currentUSDToDisplayRate = currentUSDToDisplayRate
+        // Sort by the original (pre-truncation) timestamp first so that when multiple
+        // entries collapse onto the same UTC day, `uniquingKeysWith` deterministically
+        // keeps the chronologically latest one — Dictionary iteration order alone is
+        // not deterministic and would otherwise pick an arbitrary winner.
         self.historicalUSDToDisplayRatesByDay = Dictionary(
-            historicalUSDToDisplayRatesByDay.map {
-                (HistoricalPriceCalendar.utcStartOfDay(for: $0.key), $0.value)
-            },
+            historicalUSDToDisplayRatesByDay
+                .sorted { $0.key < $1.key }
+                .map { (HistoricalPriceCalendar.utcStartOfDay(for: $0.key), $0.value) },
             uniquingKeysWith: { _, latest in latest })
     }
 
