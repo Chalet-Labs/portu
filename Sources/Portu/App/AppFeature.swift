@@ -32,8 +32,10 @@ struct AppFeature {
         var currentUSDToDisplayRate: Decimal = 1
         var historicalFXAvailability: CurrencyFXAvailability = .available
         // UTC day of the last successful historical-FX refresh (initial backfill or
-        // periodic top-up). Nil means no historical data has ever been fetched yet.
-        var historicalFXLastRefreshDay: Date?
+        // periodic top-up), keyed by currency so a switch never lets one currency's
+        // stale stamp suppress or under-size another currency's retry. No entry means
+        // no historical data has ever been fetched yet for that currency.
+        var historicalFXLastRefreshDayByCurrency: [FiatCurrency: Date] = [:]
         var prices: [String: Decimal] = [:]
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?
@@ -325,7 +327,7 @@ struct AppFeature {
                 // in the meantime. Only the availability flag from this completion applies;
                 // `currentCurrencyConversionRateReceived` is the sole owner of the rate value.
                 state.historicalFXAvailability = .available
-                state.historicalFXLastRefreshDay = HistoricalPriceCalendar.utcStartOfDay(for: currentDate.now())
+                state.historicalFXLastRefreshDayByCurrency[currency] = HistoricalPriceCalendar.utcStartOfDay(for: currentDate.now())
                 return .none
 
             case let .currencyConversionRefreshCompleted(currency, .failure(error)):
@@ -338,7 +340,7 @@ struct AppFeature {
                     return .none
                 }
                 state.historicalFXAvailability = .available
-                state.historicalFXLastRefreshDay = HistoricalPriceCalendar.utcStartOfDay(for: currentDate.now())
+                state.historicalFXLastRefreshDayByCurrency[currency] = HistoricalPriceCalendar.utcStartOfDay(for: currentDate.now())
                 return .none
 
             case let .historicalFXTopUpCompleted(currency, .failure(error)):
@@ -516,8 +518,9 @@ private extension AppFeature {
     /// would be wasteful.
     func historicalFXTopUpEffect(_ state: inout State, currency: FiatCurrency) -> Effect<Action> {
         let today = HistoricalPriceCalendar.utcStartOfDay(for: currentDate.now())
-        guard state.historicalFXLastRefreshDay != today else { return .none }
-        let days = state.historicalFXLastRefreshDay == nil
+        let lastRefreshDay = state.historicalFXLastRefreshDayByCurrency[currency]
+        guard lastRefreshDay != today else { return .none }
+        let days = lastRefreshDay == nil
             ? HistoricalPriceBackfillSettings.chartHorizonDays
             : Self.historicalFXTopUpDays
         return .run { send in

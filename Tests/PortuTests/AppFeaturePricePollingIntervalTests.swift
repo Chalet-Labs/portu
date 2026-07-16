@@ -202,7 +202,7 @@ struct AppFeaturePricePollingIntervalTests {
         }
         await store.receive(\.currencyConversionRefreshCompleted) {
             $0.historicalFXAvailability = .available
-            $0.historicalFXLastRefreshDay = HistoricalPriceCalendar.utcStartOfDay(for: testDate)
+            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: testDate)
         }
         #expect(fetchRateCallCount == 1)
 
@@ -273,7 +273,7 @@ struct AppFeaturePricePollingIntervalTests {
         }
         await store.receive(\.currencyConversionRefreshCompleted) {
             $0.historicalFXAvailability = .available
-            $0.historicalFXLastRefreshDay = HistoricalPriceCalendar.utcStartOfDay(for: Date(timeIntervalSince1970: 1_000_000))
+            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: Date(timeIntervalSince1970: 1_000_000))
         }
         #expect(fetchRateCallCount == 1)
 
