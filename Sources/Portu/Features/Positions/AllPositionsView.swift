@@ -5,6 +5,7 @@ import SwiftData
 import SwiftUI
 
 struct AllPositionsView: View {
+    @Environment(AppState.self) private var appState
     @Query private var allPositions: [Position]
 
     private var positions: [Position] {
@@ -27,6 +28,10 @@ struct AllPositionsView: View {
     private var groupedByType: [(PositionType, [Position])] {
         Dictionary(grouping: filteredPositions, by: \.positionType)
             .sorted { $0.key.rawValue < $1.key.rawValue }
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -54,7 +59,8 @@ struct AllPositionsView: View {
                                     .foregroundStyle(PortuTheme.dashboardText)
                                 Spacer()
                                 let total = positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
-                                Text(total, format: .currency(code: "USD"))
+                                    * appState.currentUSDToDisplayRate
+                                Text(total, format: .currency(code: currencyCode))
                                     .font(.system(size: 13, design: .monospaced))
                                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                             }

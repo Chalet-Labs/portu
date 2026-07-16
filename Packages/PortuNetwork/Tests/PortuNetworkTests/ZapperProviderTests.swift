@@ -123,7 +123,7 @@ struct ZapperProviderTests {
         let prices = try await provider.fetchHistoricalPrices(identity: identity, days: 365)
 
         #expect(prices.map(\.coinGeckoId) == [identity.historicalPriceID, identity.historicalPriceID])
-        #expect(prices.map(\.usdPrice) == [Decimal(string: "1.25"), Decimal(string: "1.5")])
+        #expect(prices.map(\.price) == [Decimal(string: "1.25"), Decimal(string: "1.5")])
     }
 
     @Test

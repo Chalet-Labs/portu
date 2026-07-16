@@ -9,7 +9,7 @@ import SwiftUI
 struct TopAssetsDonut: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var tokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -37,7 +37,8 @@ struct TopAssetsDonut: View {
             tokens: mappedTokenEntries,
             prices: displayPrices,
             overrides: overrideSnapshots,
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            usdToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var mappedTokenEntries: [TokenEntry] {
@@ -54,20 +55,22 @@ struct TopAssetsDonut: View {
                 from: dashboardTokenEntries,
                 prices: displayPrices,
                 overrides: overrideSnapshots,
-                limit: 5)
+                limit: 5,
+                fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
         case .category:
             OverviewFeature.categorySlices(
                 from: dashboardTokenEntries,
                 prices: displayPrices,
                 overrides: overrideSnapshots,
-                limit: 6)
+                limit: 6,
+                fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
         }
     }
 
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: appState.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {

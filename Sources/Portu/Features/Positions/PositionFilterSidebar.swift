@@ -7,15 +7,16 @@ struct PositionFilterSidebar: View {
     let positions: [Position]
     @Binding var selectedType: PositionType?
     @Binding var selectedProtocol: ProtocolFilter
+    @Environment(AppState.self) private var appState
 
     private var typeFilters: [(PositionType?, String, Decimal)] {
         var result: [(PositionType?, String, Decimal)] = [
-            (nil, "All", positions.reduce(Decimal.zero) { $0 + $1.netUSDValue })
+            (nil, "All", displayValue(positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }))
         ]
         for type in PositionType.allCases {
             let matching = positions.filter { $0.positionType == type }
             guard !matching.isEmpty else { continue }
-            let total = matching.reduce(Decimal.zero) { $0 + $1.netUSDValue }
+            let total = displayValue(matching.reduce(Decimal.zero) { $0 + $1.netUSDValue })
             result.append((type, type.rawValue.capitalized, total))
         }
         return result
@@ -27,11 +28,19 @@ struct PositionFilterSidebar: View {
             let id = pos.protocolId ?? "__none__"
             let name = pos.protocolName ?? "Wallet"
             var entry = byProtocol[id] ?? (name, 0)
-            entry.value += pos.netUSDValue
+            entry.value += displayValue(pos.netUSDValue)
             byProtocol[id] = entry
         }
         return byProtocol.map { (id: $0.key, name: $0.value.name, value: $0.value.value) }
             .sorted { $0.value > $1.value }
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
+    }
+
+    private func displayValue(_ usdValue: Decimal) -> Decimal {
+        usdValue * appState.currentUSDToDisplayRate
     }
 
     var body: some View {
@@ -53,7 +62,7 @@ struct PositionFilterSidebar: View {
                                 Text(label)
                                     .foregroundStyle(selectedType == type ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                                 Spacer()
-                                Text(total, format: .currency(code: "USD"))
+                                Text(total, format: .currency(code: currencyCode))
                                     .font(.caption)
                                     .foregroundStyle(PortuTheme.dashboardTertiaryText)
                             }
@@ -88,7 +97,7 @@ struct PositionFilterSidebar: View {
                                 Text(filter.name)
                                     .foregroundStyle(selectedProtocol == filterValue ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                                 Spacer()
-                                Text(filter.value, format: .currency(code: "USD"))
+                                Text(filter.value, format: .currency(code: currencyCode))
                                     .font(.caption)
                                     .foregroundStyle(PortuTheme.dashboardTertiaryText)
                             }

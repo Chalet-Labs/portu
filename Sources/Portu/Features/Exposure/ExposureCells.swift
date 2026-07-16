@@ -4,15 +4,20 @@ import SwiftUI
 
 struct ExposureSpotLiabilityCell<Row: ExposureRow>: View {
     let row: Row
+    @Environment(AppState.self) private var appState
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
+    }
 
     var body: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 0)
-            Text(ExposureFormat.currency(row.spotAssets, fractionDigits: 0))
+            Text(ExposureFormat.currency(row.spotAssets, fractionDigits: 0, currencyCode: currencyCode))
                 .foregroundStyle(PortuTheme.dashboardText)
             Text("/")
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
-            Text(ExposureFormat.currency(-row.liabilities, fractionDigits: 0))
+            Text(ExposureFormat.currency(-row.liabilities, fractionDigits: 0, currencyCode: currencyCode))
                 .foregroundStyle(row.liabilities > 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSecondaryText)
         }
         .font(DashboardStyle.monoTableFont)
@@ -22,9 +27,14 @@ struct ExposureSpotLiabilityCell<Row: ExposureRow>: View {
 struct ExposureCurrencyCell: View {
     let value: Decimal
     let fractionDigits: Int
+    @Environment(AppState.self) private var appState
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
+    }
 
     var body: some View {
-        Text(ExposureFormat.currency(value, fractionDigits: fractionDigits))
+        Text(ExposureFormat.currency(value, fractionDigits: fractionDigits, currencyCode: currencyCode))
             .font(DashboardStyle.monoTableFont)
             .foregroundStyle(value < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardText)
     }
@@ -40,11 +50,16 @@ struct ExposureDerivativesCell: View {
 
 struct ExposureNetExposureCell<Row: ExposureRow>: View {
     let row: Row
+    @Environment(AppState.self) private var appState
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
+    }
 
     var body: some View {
         HStack(spacing: 14) {
             Spacer(minLength: 0)
-            Text(ExposureFormat.currency(row.netExposure, fractionDigits: 2))
+            Text(ExposureFormat.currency(row.netExposure, fractionDigits: 2, currencyCode: currencyCode))
                 .font(DashboardStyle.monoTableFont)
                 .foregroundStyle(row.netExposure < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardGold)
                 .lineLimit(1)
@@ -124,11 +139,11 @@ enum ExposureFormat {
 
     static let placeholder = "—"
 
-    static func currency(_ value: Decimal, fractionDigits: Int) -> String {
+    static func currency(_ value: Decimal, fractionDigits: Int, currencyCode: String = "USD") -> String {
         let isNegative = value < 0
         let absoluteValue = isNegative ? -value : value
         let prefix = isNegative ? "- " : ""
-        return "\(prefix)$ \(number(absoluteValue, fractionDigits: fractionDigits))"
+        return "\(prefix)\(currencyPrefix(currencyCode)) \(number(absoluteValue, fractionDigits: fractionDigits))"
     }
 
     static func percent(_ value: Decimal, fractionDigits: Int) -> String {
@@ -144,5 +159,14 @@ enum ExposureFormat {
             .locale(locale)
             .grouping(.automatic)
             .precision(.fractionLength(fractionDigits)))
+    }
+
+    private static func currencyPrefix(_ currencyCode: String) -> String {
+        switch currencyCode.uppercased() {
+        case "USD": "$"
+        case "EUR": "€"
+        case "CHF": "CHF"
+        default: currencyCode.uppercased()
+        }
     }
 }

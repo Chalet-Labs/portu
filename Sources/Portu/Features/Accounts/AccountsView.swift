@@ -9,6 +9,7 @@ struct AccountsView: View {
 
     @Query(sort: \Account.name) private var accounts: [Account]
     @Environment(\.modelContext) private var modelContext
+    @Environment(AppState.self) private var appState
 
     @State private var sortOrder: [KeyPathComparator<AccountRowData>] = [
         KeyPathComparator(\.name)
@@ -26,7 +27,8 @@ struct AccountsView: View {
                 group: account.group,
                 isActive: account.isActive,
                 lastSyncError: account.lastSyncError,
-                totalBalance: account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue },
+                totalBalance: account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
+                    * appState.currentUSDToDisplayRate,
                 firstAddress: account.addresses.first?.address)
         }
     }
@@ -43,6 +45,10 @@ struct AccountsView: View {
 
     private var allGroups: [String] {
         AccountsFeature.extractGroups(from: accountInputs)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -180,9 +186,9 @@ struct AccountsView: View {
             }
             .width(min: 60, ideal: 80)
 
-            TableColumn("USD Balance", value: \.balance) { row in
+            TableColumn("Balance", value: \.balance) { row in
                 VStack(alignment: .trailing) {
-                    Text(row.balance, format: .currency(code: "USD"))
+                    Text(row.balance, format: .currency(code: currencyCode))
                         .font(DashboardStyle.monoTableFont)
                     if let error = row.lastSyncError {
                         Text(error)

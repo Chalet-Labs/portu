@@ -48,7 +48,7 @@ struct ExposureSummaryTests {
 
 struct ExposureTokenValueTests {
     @Test func `uses live price when available`() {
-        let value = ExposureFeature.resolveTokenUSDValue(
+        let value = ExposureFeature.resolveTokenDisplayValue(
             amount: 2, coinGeckoId: "bitcoin", usdValue: 100_000,
             prices: ["bitcoin": 65000])
 
@@ -56,7 +56,7 @@ struct ExposureTokenValueTests {
     }
 
     @Test func `falls back to usd value when no live price`() {
-        let value = ExposureFeature.resolveTokenUSDValue(
+        let value = ExposureFeature.resolveTokenDisplayValue(
             amount: 100, coinGeckoId: nil, usdValue: 500,
             prices: [:])
 
@@ -64,11 +64,33 @@ struct ExposureTokenValueTests {
     }
 
     @Test func `falls back when coinGeckoId not in prices`() {
-        let value = ExposureFeature.resolveTokenUSDValue(
+        let value = ExposureFeature.resolveTokenDisplayValue(
             amount: 10, coinGeckoId: "unknown-token", usdValue: 300,
             prices: ["bitcoin": 65000])
 
         #expect(value == 300)
+    }
+
+    @Test func `converts fallback usd value once for display currency`() throws {
+        let value = try ExposureFeature.resolveTokenDisplayValue(
+            amount: 10,
+            coinGeckoId: "unknown-token",
+            usdValue: 300,
+            prices: ["bitcoin": 65000],
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(value == 270)
+    }
+
+    @Test func `does not convert live display price again`() throws {
+        let value = try ExposureFeature.resolveTokenDisplayValue(
+            amount: 2,
+            coinGeckoId: "bitcoin",
+            usdValue: 100_000,
+            prices: ["bitcoin": 55000],
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(value == 110_000)
     }
 
     @Test func `price polling ids include positive and borrow tokens but exclude rewards`() {

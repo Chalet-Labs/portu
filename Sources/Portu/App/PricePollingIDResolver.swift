@@ -43,16 +43,21 @@ enum PricePollingIDResolver {
     static func merge(_ updates: [PriceUpdate]) -> PriceUpdate {
         var prices: [String: Decimal] = [:]
         var changes24h: [String: Decimal] = [:]
+        let currency = updates.first?.currency ?? .default
 
         for update in updates {
             prices.merge(update.prices) { _, new in new }
             changes24h.merge(update.changes24h) { _, new in new }
         }
 
-        return PriceUpdate(prices: prices, changes24h: changes24h)
+        return PriceUpdate(currency: currency, prices: prices, changes24h: changes24h)
     }
 
     static var emptyUpdate: PriceUpdate {
-        PriceUpdate(prices: [:], changes24h: [:])
+        emptyUpdate(currency: .default)
+    }
+
+    static func emptyUpdate(currency: FiatCurrency) -> PriceUpdate {
+        PriceUpdate(currency: currency, prices: [:], changes24h: [:])
     }
 }

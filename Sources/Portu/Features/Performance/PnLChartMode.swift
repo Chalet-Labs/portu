@@ -10,8 +10,21 @@ struct PnLChartMode: View {
     let startDate: Date
     let store: StoreOf<AppFeature>
 
+    @Environment(AppState.self) private var appState
+
     @Query(sort: \PortfolioSnapshot.timestamp) private var portfolioSnaps: [PortfolioSnapshot]
     @Query(sort: \AccountSnapshot.timestamp) private var accountSnaps: [AccountSnapshot]
+    @Query private var currencyRates: [CurrencyConversionRatePoint]
+
+    init(accountId: UUID?, startDate: Date, store: StoreOf<AppFeature>) {
+        self.accountId = accountId
+        self.startDate = startDate
+        self.store = store
+        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        _currencyRates = Query(
+            filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+    }
 
     private var bars: [PnLBar] {
         let rawValues: [(Date, Decimal)]
@@ -23,7 +36,20 @@ struct PnLChartMode: View {
             rawValues = filtered.map { ($0.timestamp, $0.totalValue) }
         }
         let daily = PerformanceFeature.lastPerDay(rawValues)
-        return PerformanceFeature.computePnLBars(from: daily)
+        return PerformanceFeature.computePnLBars(
+            from: daily,
+            conversionContext: currencyConversionContext)
+    }
+
+    private var currencyConversionContext: CurrencyConversionContext {
+        CurrencyConversionContext(
+            displayCurrency: appState.selectedCurrency,
+            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
+            historicalRatePoints: currencyRates)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -50,7 +76,7 @@ struct PnLChartMode: View {
                     }
                 }
                 .chartYAxis {
-                    AxisMarks(format: .currency(code: "USD").precision(.fractionLength(0)))
+                    AxisMarks(format: .currency(code: currencyCode).precision(.fractionLength(0)))
                 }
                 .frame(height: 320)
             }

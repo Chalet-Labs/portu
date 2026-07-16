@@ -8,7 +8,7 @@ struct PerformanceBottomPanel: View {
     let startDate: Date
 
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
 
     @Query(sort: \AssetSnapshot.timestamp) private var snapshots: [AssetSnapshot]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
@@ -17,6 +17,8 @@ struct PerformanceBottomPanel: View {
     private var categoryRules: [CategorySymbolRule]
     @Query
     private var historicalPrices: [HistoricalPricePoint]
+    @Query
+    private var currencyRates: [CurrencyConversionRatePoint]
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
@@ -38,6 +40,9 @@ struct PerformanceBottomPanel: View {
         let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
         _historicalPrices = Query(
             filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
+        _currencyRates = Query(
+            filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
             sort: \.day)
     }
 
@@ -68,7 +73,8 @@ struct PerformanceBottomPanel: View {
             tokens: mappedTokenEntries,
             prices: displayPrices,
             overrides: overrideSnapshots,
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            usdToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var dashboardVisibleAssetIDs: Set<UUID> {
@@ -88,7 +94,8 @@ struct PerformanceBottomPanel: View {
             .map { CategorySnapshotEntry(snapshot: $0, categoryResolver: resolver) }
         return PerformanceFeature.computeCategoryChanges(
             entries: entries,
-            visibleAssetIDs: visibleAssetIDs)
+            visibleAssetIDs: visibleAssetIDs,
+            conversionContext: currencyConversionContext)
     }
 
     private var priceChanges: [AssetPricePeriodChange] {
@@ -96,14 +103,7 @@ struct PerformanceBottomPanel: View {
         let visibleHoldings = visibleHistoricalEstimateSnapshotEntries
         guard !visibleHoldings.isEmpty else { return [] }
         let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
-        let rows = historicalPrices
-            .filter { $0.day >= startDay }
-            .map {
-                HistoricalPriceEntry(
-                    coinGeckoId: $0.coinGeckoId,
-                    day: $0.day,
-                    usdPrice: $0.usdPrice)
-            }
+        let rows = historicalPriceEntriesForDisplayCurrency(startDay: startDay)
 
         let heldRows = PerformanceFeature.historicalPriceEntriesForHeldAssets(
             rows: rows,
@@ -151,7 +151,18 @@ struct PerformanceBottomPanel: View {
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: appState.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
+    }
+
+    private var currencyConversionContext: CurrencyConversionContext {
+        CurrencyConversionContext(
+            displayCurrency: appState.selectedCurrency,
+            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
+            historicalRatePoints: currencyRates)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
@@ -202,9 +213,9 @@ struct PerformanceBottomPanel: View {
                 ForEach(categoryChanges) { change in
                     HStack {
                         Text(change.name).frame(width: 100, alignment: .leading)
-                        Text(change.startValue, format: .currency(code: "USD")).frame(width: 100)
+                        Text(change.startValue, format: .currency(code: currencyCode)).frame(width: 100)
                         Text("\u{2192}").foregroundStyle(PortuTheme.dashboardSecondaryText)
-                        Text(change.endValue, format: .currency(code: "USD")).frame(width: 100)
+                        Text(change.endValue, format: .currency(code: currencyCode)).frame(width: 100)
                         Text(change.percentChange, format: .percent.precision(.fractionLength(1)))
                             .foregroundStyle(change.percentChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
                             .frame(width: 60)
@@ -232,7 +243,7 @@ struct PerformanceBottomPanel: View {
                                 .frame(width: 120, alignment: .leading)
                                 .lineLimit(2)
                                 .truncationMode(.tail)
-                            Text(change.endPrice, format: .currency(code: "USD"))
+                            Text(change.endPrice, format: .currency(code: currencyCode))
                                 .frame(width: 90, alignment: .trailing)
                             Text(change.percentChange, format: .percent.precision(.fractionLength(1)))
                                 .foregroundStyle(change.percentChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
@@ -254,6 +265,13 @@ struct PerformanceBottomPanel: View {
     private func recordName(_ name: String, for id: String?, in names: inout [String: String]) {
         guard let normalizedID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(id) else { return }
         names[normalizedID] = names[normalizedID] ?? name
+    }
+
+    private func historicalPriceEntriesForDisplayCurrency(startDay: Date) -> [HistoricalPriceEntry] {
+        OverviewHistoricalPriceChangeFeature.mergedHistoricalPriceEntries(
+            from: historicalPrices.filter { $0.day >= startDay },
+            displayCurrency: appState.selectedCurrency,
+            context: currencyConversionContext)
     }
 
     private func displayName(for asset: Asset) -> String {

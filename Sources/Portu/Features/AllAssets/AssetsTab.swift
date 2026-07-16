@@ -9,7 +9,8 @@ import UniformTypeIdentifiers
 
 struct AssetsTab: View {
     let store: StoreOf<AppFeature>
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(AppState.self) private var appState
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -37,8 +38,12 @@ struct AssetsTab: View {
             tokens: entries,
             prices: displayPrices,
             overrides: overrideSnapshots,
-            settings: dashboardSettings)
-        let aggregated = AllAssetsFeature.aggregateRows(tokens: dashboardEntries, prices: displayPrices)
+            settings: dashboardSettings,
+            usdToDisplayRate: appState.currentUSDToDisplayRate)
+        let aggregated = AllAssetsFeature.aggregateRows(
+            tokens: dashboardEntries,
+            prices: displayPrices,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
         let filtered = AllAssetsFeature.filterRows(aggregated, searchText: store.allAssets.searchText)
         return sortRows(filtered)
     }
@@ -46,7 +51,7 @@ struct AssetsTab: View {
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: store.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
@@ -58,6 +63,10 @@ struct AssetsTab: View {
             minimumDashboardValue: Decimal(minimumDashboardValue),
             hideUnpriced: hideUnpriced,
             hideDust: hideDust)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     // MARK: - Body
@@ -178,7 +187,7 @@ struct AssetsTab: View {
 
                 HStack(spacing: 4) {
                     Spacer(minLength: 0)
-                    Text(row.price, format: .currency(code: "USD"))
+                    Text(row.price, format: .currency(code: currencyCode))
                         .font(DashboardStyle.monoTableFont)
                     if !row.hasLivePrice {
                         Image(systemName: "clock")
@@ -189,7 +198,7 @@ struct AssetsTab: View {
                 }
                 .frame(width: 132, alignment: .trailing)
 
-                Text(row.value, format: .currency(code: "USD"))
+                Text(row.value, format: .currency(code: currencyCode))
                     .font(DashboardStyle.monoTableFont)
                     .foregroundStyle(row.value < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardText)
                     .frame(width: 140, alignment: .trailing)

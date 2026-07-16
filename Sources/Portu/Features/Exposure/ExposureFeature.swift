@@ -85,40 +85,46 @@ enum ExposureLabels {
 }
 
 enum ExposureFeature {
-    static func resolveTokenUSDValue(
+    static func resolveTokenDisplayValue(
         amount: Decimal,
         coinGeckoId: String?,
         usdValue: Decimal,
-        prices: [String: Decimal]) -> Decimal {
-        resolveTokenUSDValue(
+        prices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
+        resolveTokenDisplayValue(
             amount: amount,
             priceID: TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId),
             usdValue: usdValue,
-            prices: prices)
+            prices: prices,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
     }
 
-    static func resolveTokenUSDValue(
+    static func resolveTokenDisplayValue(
         amount: Decimal,
         priceID: String?,
         usdValue: Decimal,
-        prices: [String: Decimal]) -> Decimal {
+        prices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         if let priceID, let livePrice = prices[priceID] {
             return amount * livePrice
         }
-        return usdValue
+        return usdValue * fallbackUSDToDisplayRate
     }
 
     static func computeCategoryExposure(
         tokens: [TokenEntry],
-        prices: [String: Decimal]) -> [CategoryExposure] {
+        prices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> [CategoryExposure] {
         var buckets: [PortfolioCategorySnapshot: (assets: Decimal, borrows: Decimal)] = [:]
 
         for token in tokens {
             if token.role.isReward { continue }
-            let value = resolveTokenUSDValue(
+            let value = resolveTokenDisplayValue(
                 amount: token.amount,
                 priceID: TokenSettingsFeature.resolvedPriceID(token: token, override: nil),
-                usdValue: token.usdValue, prices: prices)
+                usdValue: token.usdValue,
+                prices: prices,
+                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
             let bucket = token.portfolioCategory
             var entry = buckets[bucket] ?? (0, 0)
             if token.role.isPositive {
@@ -154,15 +160,18 @@ enum ExposureFeature {
 
     static func computeAssetExposure(
         tokens: [TokenEntry],
-        prices: [String: Decimal]) -> [AssetExposure] {
+        prices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> [AssetExposure] {
         var assetMap: [UUID: AssetAggregate] = [:]
 
         for token in tokens {
             if token.role.isReward { continue }
-            let value = resolveTokenUSDValue(
+            let value = resolveTokenDisplayValue(
                 amount: token.amount,
                 priceID: TokenSettingsFeature.resolvedPriceID(token: token, override: nil),
-                usdValue: token.usdValue, prices: prices)
+                usdValue: token.usdValue,
+                prices: prices,
+                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
             var entry = assetMap[token.assetId] ?? AssetAggregate(
                 symbol: token.symbol,
                 category: token.category,
@@ -195,33 +204,39 @@ enum ExposureFeature {
         tokens: [TokenEntry],
         prices: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults) -> [AssetExposure] {
+        settings: TokenDashboardSettings = .defaults,
+        fallbackUSDToDisplayRate: Decimal = 1) -> [AssetExposure] {
         computeAssetExposure(
             tokens: TokenSettingsFeature.dashboardEligibleTokens(
                 tokens: tokens,
                 prices: prices,
                 overrides: overrides,
-                settings: settings),
-            prices: prices)
+                settings: settings,
+                usdToDisplayRate: fallbackUSDToDisplayRate),
+            prices: prices,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
     }
 
     static func computeDashboardData(
         tokens: [TokenEntry],
         prices: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults) -> ExposureDashboardData {
+        settings: TokenDashboardSettings = .defaults,
+        fallbackUSDToDisplayRate: Decimal = 1) -> ExposureDashboardData {
         computeDashboardData(
             tokens: tokens,
             prices: prices,
             overrideMap: TokenSettingsFeature.overridesByAssetId(overrides),
-            settings: settings)
+            settings: settings,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
     }
 
     static func computeDashboardData(
         tokens: [TokenEntry],
         prices: [String: Decimal],
         overrideMap: [UUID: TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults) -> ExposureDashboardData {
+        settings: TokenDashboardSettings = .defaults,
+        fallbackUSDToDisplayRate: Decimal = 1) -> ExposureDashboardData {
         var categoryBuckets: [PortfolioCategorySnapshot: (assets: Decimal, borrows: Decimal)] = [:]
         var assetMap: [UUID: AssetAggregate] = [:]
         var pollingIDs: Set<String> = []
@@ -234,7 +249,8 @@ enum ExposureFeature {
                     token: token,
                     prices: prices,
                     override: override,
-                    settings: settings) {
+                    settings: settings,
+                    usdToDisplayRate: fallbackUSDToDisplayRate) {
                 pollingIDs.insert(priceID)
             }
 
@@ -243,14 +259,16 @@ enum ExposureFeature {
                     token: token,
                     prices: prices,
                     override: override,
-                    settings: settings)
+                    settings: settings,
+                    usdToDisplayRate: fallbackUSDToDisplayRate)
             else { continue }
 
             let value = dashboardResolvedValue(
                 token: token,
                 dashboardToken: dashboardToken,
                 prices: prices,
-                override: override)
+                override: override,
+                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
 
             var categoryEntry = categoryBuckets[dashboardToken.portfolioCategory] ?? (0, 0)
             var assetEntry = assetMap[dashboardToken.assetId] ?? AssetAggregate(
@@ -312,16 +330,23 @@ enum ExposureFeature {
         token: TokenEntry,
         dashboardToken: TokenEntry,
         prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> Decimal {
-        TokenSettingsFeature.resolvedValue(token: token, prices: prices, override: override)
-            ?? dashboardToken.usdValue
+        override: TokenPricingOverrideSnapshot?,
+        fallbackUSDToDisplayRate: Decimal) -> Decimal {
+        if let manualPrice = TokenSettingsFeature.sanitizedManualPrice(override?.manualPriceUSD) {
+            return token.amount * manualPrice * fallbackUSDToDisplayRate
+        }
+        if let value = TokenSettingsFeature.resolvedValue(token: token, prices: prices, override: override) {
+            return value
+        }
+        return dashboardToken.usdValue * fallbackUSDToDisplayRate
     }
 
     private static func dashboardPollingPriceID(
         token: TokenEntry,
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings) -> String? {
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal) -> String? {
         guard token.amount > 0 else { return nil }
         guard token.role.isPositive || token.role.isBorrow else { return nil }
         guard let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override) else { return nil }
@@ -331,7 +356,8 @@ enum ExposureFeature {
                 token: token,
                 prices: prices,
                 override: override,
-                settings: settings) {
+                settings: settings,
+                usdToDisplayRate: usdToDisplayRate) {
             return priceID
         }
 

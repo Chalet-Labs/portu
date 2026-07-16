@@ -113,6 +113,8 @@ struct TokenSettingsRow: Equatable, Identifiable {
     let visibilityStatus: TokenVisibilityStatus
     let coinGeckoId: String?
     let logoURL: String?
+    /// Currency the `price` and `value` are denominated in (the display currency).
+    let currency: FiatCurrency
     let override: TokenPricingOverrideSnapshot?
 
     init(
@@ -127,6 +129,7 @@ struct TokenSettingsRow: Equatable, Identifiable {
         visibilityStatus: TokenVisibilityStatus,
         coinGeckoId: String?,
         logoURL: String?,
+        currency: FiatCurrency = .default,
         override: TokenPricingOverrideSnapshot?) {
         self.id = assetId
         self.assetId = assetId
@@ -140,6 +143,7 @@ struct TokenSettingsRow: Equatable, Identifiable {
         self.visibilityStatus = visibilityStatus
         self.coinGeckoId = coinGeckoId
         self.logoURL = logoURL
+        self.currency = currency
         self.override = override
     }
 }
@@ -206,23 +210,33 @@ enum TokenSettingsFeature {
         tokens: [TokenEntry],
         prices: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults) -> [TokenEntry] {
+        settings: TokenDashboardSettings = .defaults,
+        usdToDisplayRate: Decimal = 1) -> [TokenEntry] {
         let overrideMap = overridesByAssetId(overrides)
         return dashboardEligibleTokens(
             tokens: tokens,
             prices: prices,
             overrideMap: overrideMap,
-            settings: settings)
+            settings: settings,
+            usdToDisplayRate: usdToDisplayRate)
     }
 
     static func dashboardEligibleTokens(
         tokens: [TokenEntry],
         prices: [String: Decimal],
         overrideMap: [UUID: TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults) -> [TokenEntry] {
+        settings: TokenDashboardSettings = .defaults,
+        usdToDisplayRate: Decimal = 1) -> [TokenEntry] {
         tokens.compactMap { token in
             let override = overrideMap[token.assetId]
-            guard isDashboardEligible(token: token, prices: prices, override: override, settings: settings) else {
+            guard
+                isDashboardEligible(
+                    token: token,
+                    prices: prices,
+                    override: override,
+                    settings: settings,
+                    usdToDisplayRate: usdToDisplayRate)
+            else {
                 return nil
             }
             return dashboardAdjustedToken(from: token, override: override)
@@ -233,17 +247,26 @@ enum TokenSettingsFeature {
         token: TokenEntry,
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings = .defaults) -> Bool {
+        settings: TokenDashboardSettings = .defaults,
+        usdToDisplayRate: Decimal = 1) -> Bool {
         guard token.amount > 0 else { return false }
         guard token.role.isPositive || token.role.isBorrow else { return false }
         guard override?.isIgnored != true else { return false }
         if override?.alwaysShow == true { return true }
 
-        guard let value = resolvedValue(token: token, prices: prices, override: override) else {
+        guard
+            let value = resolvedDisplayValue(
+                token: token,
+                prices: prices,
+                override: override,
+                usdToDisplayRate: usdToDisplayRate)
+        else {
             return !settings.hideUnpriced
         }
 
-        if absolute(value) < normalizedThreshold(settings.minimumDashboardValue) {
+        // The live price map is already in the display currency, so the USD dust
+        // threshold must be scaled by the same rate to stay comparable.
+        if absolute(value) < normalizedThreshold(settings.minimumDashboardValue) * usdToDisplayRate {
             return !settings.hideDust
         }
         return true
@@ -256,14 +279,21 @@ enum TokenSettingsFeature {
         settings: TokenDashboardSettings = .defaults,
         filter: TokenSettingsFilter,
         searchText: String,
+        currency: FiatCurrency = .default,
+        usdToDisplayRate: Decimal = 1,
         limit: Int = displayLimit) -> TokenSettingsResult {
         let overrideMap = overridesByAssetId(overrides)
+        // Live prices arrive already in the display currency; manual overrides and the dust
+        // threshold are canonical USD. Convert those so every row value shares one currency.
+        let rate = usdToDisplayRate > 0 ? usdToDisplayRate : 1
         let searchedRows = aggregateTokens(tokens).map { token in
             makeRow(
                 token: token,
                 prices: prices,
                 override: overrideMap[token.assetId],
-                settings: settings)
+                settings: settings,
+                currency: currency,
+                usdToDisplayRate: rate)
         }
         .filter { row in
             matchesSearch(row: row, searchText: searchText)
@@ -299,33 +329,6 @@ enum TokenSettingsFeature {
             onchainIdentity: token.onchainIdentity)
     }
 
-    static func resolvedPrice(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> Decimal? {
-        if let manualPrice = sanitizedManualPrice(override?.manualPriceUSD) {
-            return manualPrice
-        }
-        if
-            let priceID = resolvedPriceID(token: token, override: override),
-            let price = prices[priceID] {
-            guard isPlausible(price: price, priceID: priceID, token: token) else {
-                return nil
-            }
-            return price
-        }
-        return nil
-    }
-
-    static func resolvedValue(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> Decimal? {
-        guard token.amount != 0 else { return nil }
-        guard let price = resolvedPrice(token: token, prices: prices, override: override) else { return nil }
-        return token.amount * price
-    }
-
     private static func aggregateTokens(_ tokens: [TokenEntry]) -> [TokenEntry] {
         var aggregates: [UUID: TokenSettingsAggregate] = [:]
         for token in tokens {
@@ -351,14 +354,25 @@ enum TokenSettingsFeature {
         token: TokenEntry,
         prices: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings) -> TokenSettingsRow {
-        let price = resolvedPrice(token: token, prices: prices, override: override)
-        let value = resolvedValue(token: token, prices: prices, override: override)
+        settings: TokenDashboardSettings,
+        currency: FiatCurrency = .default,
+        usdToDisplayRate: Decimal = 1) -> TokenSettingsRow {
+        let price = resolvedDisplayPrice(
+            token: token,
+            prices: prices,
+            override: override,
+            usdToDisplayRate: usdToDisplayRate)
+        let value = resolvedDisplayValue(
+            token: token,
+            prices: prices,
+            override: override,
+            usdToDisplayRate: usdToDisplayRate)
         let source = pricingSource(token: token, prices: prices, override: override)
         let status = visibilityStatus(
             value: value,
             override: override,
-            settings: settings)
+            settings: settings,
+            usdToDisplayRate: usdToDisplayRate)
 
         return TokenSettingsRow(
             assetId: token.assetId,
@@ -372,6 +386,7 @@ enum TokenSettingsFeature {
             visibilityStatus: status,
             coinGeckoId: resolvedCoinGeckoID(token: token, override: override),
             logoURL: token.logoURL,
+            currency: currency,
             override: override)
     }
 
@@ -394,7 +409,8 @@ enum TokenSettingsFeature {
     private static func visibilityStatus(
         value: Decimal?,
         override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings) -> TokenVisibilityStatus {
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal) -> TokenVisibilityStatus {
         if override?.isIgnored == true {
             return .ignored
         }
@@ -404,7 +420,8 @@ enum TokenSettingsFeature {
         guard let value else {
             return .unpriced
         }
-        if absolute(value) < normalizedThreshold(settings.minimumDashboardValue) {
+        // `value` is in the display currency, so scale the USD threshold to match.
+        if absolute(value) < normalizedThreshold(settings.minimumDashboardValue) * usdToDisplayRate {
             return .dust
         }
         return .visible

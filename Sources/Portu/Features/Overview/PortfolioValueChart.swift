@@ -6,6 +6,8 @@ import SwiftData
 import SwiftUI
 
 struct PortfolioValueChart: View {
+    @Environment(AppState.self) private var appState
+
     @Query(sort: \PortfolioSnapshot.timestamp)
     private var snapshots: [PortfolioSnapshot]
     @Query(sort: \AssetSnapshot.timestamp)
@@ -14,6 +16,8 @@ struct PortfolioValueChart: View {
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
     @Query
     private var historicalPrices: [HistoricalPricePoint]
+    @Query
+    private var currencyRates: [CurrencyConversionRatePoint]
 
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
     private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
@@ -23,11 +27,25 @@ struct PortfolioValueChart: View {
         _historicalPrices = Query(
             filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
             sort: \.day)
+        _currencyRates = Query(
+            filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
+            sort: \.day)
     }
 
     private var filteredSnapshots: [PortfolioSnapshot] {
         let start = ChartTimeRange.oneMonth.startDate
         return snapshots.filter { $0.timestamp >= start }
+    }
+
+    private var convertedSnapshots: [(id: UUID, timestamp: Date, value: Decimal, isPartial: Bool)] {
+        let context = currencyConversionContext
+        return filteredSnapshots.map { snapshot in
+            (
+                id: snapshot.id,
+                timestamp: snapshot.timestamp,
+                value: context.convertUSDValue(snapshot.totalValue, on: snapshot.timestamp),
+                isPartial: snapshot.isPartial)
+        }
     }
 
     private var estimatedPoints: [HistoricalPortfolioValuePoint] {
@@ -47,7 +65,7 @@ struct PortfolioValueChart: View {
         return HistoricalPortfolioEstimator.estimatedValues(
             holdings: holdings,
             prices: historicalPrices.compactMap {
-                guard $0.day >= chartStartDay, $0.day < firstRealSnapshotDate else { return nil }
+                guard $0.fiatCurrency == .usd, $0.day >= chartStartDay, $0.day < firstRealSnapshotDate else { return nil }
                 return HistoricalPriceEntry(
                     coinGeckoId: $0.coinGeckoId,
                     day: $0.day,
@@ -56,6 +74,22 @@ struct PortfolioValueChart: View {
             startDate: chartStartDate,
             firstRealSnapshotDate: firstRealSnapshotDate,
             accountId: nil)
+    }
+
+    private var convertedEstimatedPoints: [HistoricalPortfolioValuePoint] {
+        let context = currencyConversionContext
+        return estimatedPoints.map { context.convertUSDPoint($0) }
+    }
+
+    private var currencyConversionContext: CurrencyConversionContext {
+        CurrencyConversionContext(
+            displayCurrency: appState.selectedCurrency,
+            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
+            historicalRatePoints: currencyRates)
+    }
+
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 
     private var historicalEstimateSnapshotEntries: [HistoricalEstimateSnapshotEntry] {
@@ -80,7 +114,8 @@ struct PortfolioValueChart: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if filteredSnapshots.isEmpty {
+            let snapshots = convertedSnapshots
+            if snapshots.isEmpty {
                 ContentUnavailableView(
                     "No Data",
                     systemImage: "chart.line.uptrend.xyaxis",
@@ -88,7 +123,7 @@ struct PortfolioValueChart: View {
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 172)
             } else {
-                let estimatedPoints = estimatedPoints
+                let estimatedPoints = convertedEstimatedPoints
                 Chart {
                     ForEach(estimatedPoints) { point in
                         LineMark(
@@ -98,10 +133,10 @@ struct PortfolioValueChart: View {
                             .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
                     }
 
-                    ForEach(filteredSnapshots, id: \.id) { snapshot in
+                    ForEach(snapshots, id: \.id) { snapshot in
                         AreaMark(
                             x: .value("Date", snapshot.timestamp),
-                            y: .value("Value", snapshot.totalValue))
+                            y: .value("Value", snapshot.value))
                             .foregroundStyle(
                                 .linearGradient(
                                     colors: [Color.accentColor.opacity(0.3), Color.accentColor.opacity(0.05)],
@@ -110,13 +145,13 @@ struct PortfolioValueChart: View {
 
                         LineMark(
                             x: .value("Date", snapshot.timestamp),
-                            y: .value("Value", snapshot.totalValue))
+                            y: .value("Value", snapshot.value))
                             .foregroundStyle(PortuTheme.dashboardGold)
 
                         if snapshot.isPartial {
                             PointMark(
                                 x: .value("Date", snapshot.timestamp),
-                                y: .value("Value", snapshot.totalValue))
+                                y: .value("Value", snapshot.value))
                                 .symbolSize(20)
                                 .foregroundStyle(PortuTheme.dashboardWarning.opacity(0.8))
                         }
@@ -128,7 +163,7 @@ struct PortfolioValueChart: View {
                         AxisTick()
                         AxisValueLabel {
                             if let amount = value.as(Double.self) {
-                                Text(OverviewPriceDisplay.axisCurrency(amount))
+                                Text(OverviewPriceDisplay.axisCurrency(amount, currencyCode: currencyCode))
                             }
                         }
                     }

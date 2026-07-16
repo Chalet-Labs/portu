@@ -467,7 +467,7 @@ enum HistoricalPriceCacheWriter {
         }
 
         let incomingKeys = dtos.map {
-            HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day)
+            HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day, currency: $0.currency)
         }
         let daysByCoinGeckoID = Dictionary(grouping: incomingKeys, by: \.coinGeckoId)
             .mapValues { Array(Set($0.map(\.day))) }
@@ -482,9 +482,9 @@ enum HistoricalPriceCacheWriter {
         }
         do {
             // SwiftData only enforces id uniqueness for this model; cache uniqueness
-            // for (coinGeckoId, day) is enforced here by scoped upsert and dedupe.
+            // for (coinGeckoId, day, currency) is enforced here by scoped upsert and dedupe.
             let groupedExisting = Dictionary(grouping: existing) {
-                HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day)
+                HistoricalPriceCacheKey(coinGeckoId: $0.coinGeckoId, day: $0.day, currency: $0.fiatCurrency)
             }
             var existingByKey: [HistoricalPriceCacheKey: HistoricalPricePoint] = [:]
             for (cacheKey, rows) in groupedExisting {
@@ -505,11 +505,14 @@ enum HistoricalPriceCacheWriter {
             var updated = 0
 
             for dto in dtos {
-                let cacheKey = HistoricalPriceCacheKey(coinGeckoId: dto.coinGeckoId, day: dto.day)
+                let cacheKey = HistoricalPriceCacheKey(coinGeckoId: dto.coinGeckoId, day: dto.day, currency: dto.currency)
                 if let row = existingByKey[cacheKey] {
-                    row.usdPrice = dto.usdPrice
+                    row.price = dto.price
                     row.source = dto.source
                     row.fetchedAt = fetchedAt
+                    // Migrate legacy rows persisted before the currency column existed
+                    // (currency == nil, treated as USD) to an explicit value.
+                    row.currency = dto.currency
                     updated += 1
                 } else {
                     let row = HistoricalPricePoint(dto: dto, fetchedAt: fetchedAt)
@@ -542,10 +545,12 @@ enum HistoricalPriceCacheWriter {
 private struct HistoricalPriceCacheKey: Hashable {
     let coinGeckoId: String
     let day: Date
+    let currency: FiatCurrency
 
-    init(coinGeckoId: String, day: Date) {
+    init(coinGeckoId: String, day: Date, currency: FiatCurrency) {
         self.coinGeckoId = coinGeckoId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         self.day = HistoricalPriceCalendar.utcStartOfDay(for: day)
+        self.currency = currency
     }
 }
 

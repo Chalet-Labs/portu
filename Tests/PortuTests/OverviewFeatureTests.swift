@@ -47,6 +47,23 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(Set(slices.map(\.id)).count == slices.count)
     }
 
+    @Test func `top asset slices use converted usd fallback while provider price is missing`() throws {
+        let held = UUID()
+        let tokens = [
+            token(assetId: held, symbol: "BTC", coinGeckoId: "bitcoin", amount: 1, usdValue: 60000)
+        ]
+
+        let slices = try OverviewFeature.topAssetSlices(
+            from: tokens,
+            prices: [:],
+            limit: 5,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        let slice = try #require(slices.first)
+        #expect(slices.count == 1)
+        #expect(slice.value == 54000)
+    }
+
     @Test func `top asset slices exclude sync time values when no price is available`() throws {
         let priced = UUID()
         let syncOnly = UUID()
@@ -320,7 +337,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(row.coinGeckoId == "ethereum")
     }
 
-    @Test func `price rows exclude sync time values when provider price is missing`() {
+    @Test func `price rows use converted usd fallback while provider price is missing`() throws {
         let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0x3e5a801830d63bfd3feb2885533e27648dbc17a7")
         let tokens = [
             token(
@@ -338,7 +355,9 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             changes24h: [:],
             watchlistIDs: [])
 
-        #expect(rows.isEmpty)
+        let row = try #require(rows.first)
+        #expect(rows.count == 1)
+        #expect(row.price == nil)
     }
 
     @Test func `portfolio total excludes sync time values without live or manual prices`() {
@@ -356,6 +375,84 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             settings: .defaults)
 
         #expect(total == 32)
+    }
+
+    @Test func `portfolio total excludes implausible onchain provider prices instead of falling back`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xBadPrice")
+        let bad = token(
+            symbol: "BAD",
+            category: .defi,
+            amount: 1_000_000,
+            usdValue: 10,
+            onchainIdentity: identity)
+
+        let total = OverviewFeature.portfolioTotalValue(
+            tokens: [bad],
+            prices: [identity.historicalPriceID: 1_000_000],
+            overrides: [],
+            mappings: [],
+            settings: .defaults)
+
+        #expect(total == 0)
+    }
+
+    @Test func `portfolio total uses converted usd fallback while selected currency prices are loading`() throws {
+        let held = token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 1, usdValue: 60000)
+        let borrow = token(symbol: "DEBT", coinGeckoId: "debt", role: .borrow, amount: 2, usdValue: 100)
+
+        let total = try OverviewFeature.portfolioTotalValue(
+            tokens: [held, borrow],
+            prices: [:],
+            overrides: [],
+            mappings: [],
+            settings: .defaults,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(total == 53910)
+    }
+
+    @Test func `portfolio total converts manual usd overrides once for display currency`() throws {
+        let manualId = UUID()
+        let live = token(symbol: "LIVE", coinGeckoId: "live", amount: 2, usdValue: 2)
+        let manual = token(assetId: manualId, symbol: "MANUAL", amount: 4, usdValue: 0)
+
+        let total = try OverviewFeature.portfolioTotalValue(
+            tokens: [live, manual],
+            prices: ["live": 5],
+            overrides: [TokenPricingOverrideSnapshot(assetId: manualId, manualPriceUSD: 7)],
+            mappings: [],
+            settings: .defaults,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(total == Decimal(string: "35.2")!)
+    }
+
+    @Test func `portfolio total scales the dust threshold by the display rate`() throws {
+        let live = token(symbol: "LIVE", coinGeckoId: "live", amount: 1, usdValue: 0)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let total = try OverviewFeature.portfolioTotalValue(
+            tokens: [live],
+            prices: ["live": #require(Decimal(string: "0.6"))],
+            overrides: [],
+            mappings: [],
+            settings: settings,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.5")))
+
+        #expect(total == Decimal(string: "0.6"))
+    }
+
+    @Test func `top asset slices do not convert live display prices again`() throws {
+        let token = token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 2, usdValue: 120_000)
+
+        let slices = try OverviewFeature.topAssetSlices(
+            from: [token],
+            prices: ["bitcoin": 55000],
+            limit: 5,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        let slice = try #require(slices.first)
+        #expect(slice.value == 110_000)
     }
 
     @Test func `asset candidates are pre grouped by normalized coin gecko id`() throws {
@@ -437,6 +534,16 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(label == "$ 20,000")
         #expect(!label.contains("US$"))
         #expect(!label.contains("'"))
+    }
+
+    @Test func `overview currency display supports eur and chf prefixes`() throws {
+        let eur = try OverviewPriceDisplay.currency(#require(Decimal(
+            string: "8889",
+            locale: Locale(identifier: "en_US_POSIX"))), currencyCode: "EUR")
+        let chf = OverviewPriceDisplay.axisCurrency(-20000, currencyCode: "CHF")
+
+        #expect(eur == "€ 8,889")
+        #expect(chf == "-CHF 20,000")
     }
 
     @Test func `overview amount display compacts very large token balances`() throws {
@@ -624,6 +731,22 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
             settings: TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true))
 
         #expect(ids == [visibleIdentity.historicalPriceID])
+    }
+
+    @Test func `price polling ranks candidates using the display currency rate`() throws {
+        let live = token(symbol: "LIVE", coinGeckoId: "live-coin", amount: 1, usdValue: 0)
+        let fallback = token(symbol: "FALLBACK", coinGeckoId: "fallback-coin", amount: 1, usdValue: 70)
+        let rate = try #require(Decimal(string: "0.5"))
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [fallback, live],
+            prices: ["live-coin": 40],
+            watchlistIDs: [],
+            overrides: [],
+            portfolioLimit: 1,
+            usdToDisplayRate: rate)
+
+        #expect(ids == ["live-coin"])
     }
 
     @Test func `price polling ids use token pricing overrides`() {

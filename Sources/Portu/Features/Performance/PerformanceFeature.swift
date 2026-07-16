@@ -254,19 +254,29 @@ struct PerformanceFeature {
         return result
     }
 
+    static func computePnLBars(
+        from dailyValues: [(Date, Decimal)],
+        conversionContext: CurrencyConversionContext) -> [PnLBar] {
+        let converted = dailyValues.map { date, value in
+            (date, conversionContext.convertUSDValue(value, on: date))
+        }
+        return computePnLBars(from: converted)
+    }
+
     /// Aggregate category snapshots by day — one chart point per (day, category).
     /// Deduplicates by taking the latest snapshot per (day, accountId, assetId),
     /// then sums across unique (accountId, assetId) combinations per (day, category).
     /// Uses UTC day boundaries to align with the historical price cache.
     static func aggregateCategorySnapshots(
-        entries: [CategorySnapshotEntry]) -> [CategoryChartPoint] {
+        entries: [CategorySnapshotEntry],
+        conversionContext: CurrencyConversionContext = .usd) -> [CategoryChartPoint] {
         let deduped = deduplicateByDayAndAsset(entries)
 
         var grouped: [Date: [String: (name: String, value: Decimal)]] = [:]
         for entry in deduped {
             let day = utcStartOfDay(for: entry.timestamp)
             var category = grouped[day, default: [:]][entry.categoryID] ?? (entry.categoryName, 0)
-            category.value += entry.usdValue
+            category.value += conversionContext.convertUSDValue(entry.usdValue, on: entry.timestamp)
             grouped[day, default: [:]][entry.categoryID] = category
         }
 
@@ -290,7 +300,8 @@ struct PerformanceFeature {
     /// Compute category start/end/change from snapshot entries.
     static func computeCategoryChanges(
         entries: [CategorySnapshotEntry],
-        visibleAssetIDs: Set<UUID>? = nil) -> [CategoryChange] {
+        visibleAssetIDs: Set<UUID>? = nil,
+        conversionContext: CurrencyConversionContext = .usd) -> [CategoryChange] {
         let scopedEntries = visibleAssetIDs.map { ids in
             entries.filter { ids.contains($0.assetId) }
         } ?? entries
@@ -307,8 +318,12 @@ struct PerformanceFeature {
         for entry in deduped {
             let day = utcStartOfDay(for: entry.timestamp)
             namesByID[entry.categoryID] = entry.categoryName
-            if day == firstDay { startValues[entry.categoryID, default: 0] += entry.usdValue }
-            if day == lastDay { endValues[entry.categoryID, default: 0] += entry.usdValue }
+            if day == firstDay {
+                startValues[entry.categoryID, default: 0] += conversionContext.convertUSDValue(entry.usdValue, on: entry.timestamp)
+            }
+            if day == lastDay {
+                endValues[entry.categoryID, default: 0] += conversionContext.convertUSDValue(entry.usdValue, on: entry.timestamp)
+            }
         }
 
         return namesByID.keys.sorted { lhs, rhs in

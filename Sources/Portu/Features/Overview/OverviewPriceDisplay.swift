@@ -4,32 +4,33 @@ enum OverviewPriceDisplay {
     static let assetLabelMaxLength = 6
     private static let priceLocale = Locale(identifier: "en_US_POSIX")
     private static let compactCurrencyThreshold = 1_000_000.0
+    private static let decimalFormatters = OverviewDecimalFormatterCache(locale: priceLocale)
 
     static func assetLabel(_ symbol: String) -> String {
         let trimmed = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
         return String(trimmed.prefix(assetLabelMaxLength))
     }
 
-    static func price(_ price: Decimal) -> String {
-        "$ \(formattedNumber(price))"
+    static func price(_ price: Decimal, currencyCode: String = "USD") -> String {
+        "\(currencyPrefix(currencyCode)) \(formattedNumber(price))"
     }
 
-    static func compactPrice(_ price: Decimal) -> String {
+    static func compactPrice(_ price: Decimal, currencyCode: String = "USD") -> String {
         let number = abs(NSDecimalNumber(decimal: price).doubleValue)
         if number > 0, number < 0.00000001 {
-            return "$ <1e-8"
+            return "\(currencyPrefix(currencyCode)) <1e-8"
         }
-        return self.price(price)
+        return self.price(price, currencyCode: currencyCode)
     }
 
-    static func currency(_ value: Decimal) -> String {
+    static func currency(_ value: Decimal, currencyCode: String = "USD") -> String {
         let number = NSDecimalNumber(decimal: value).doubleValue
-        let sign = number < 0 ? "-$ " : "$ "
+        let sign = number < 0 ? "-\(currencyPrefix(currencyCode)) " : "\(currencyPrefix(currencyCode)) "
         return sign + formattedMagnitude(abs(number), compactFractionDigits: 1)
     }
 
-    static func axisCurrency(_ value: Double) -> String {
-        let sign = value < 0 ? "-$ " : "$ "
+    static func axisCurrency(_ value: Double, currencyCode: String = "USD") -> String {
+        let sign = value < 0 ? "-\(currencyPrefix(currencyCode)) " : "\(currencyPrefix(currencyCode)) "
         return sign + standardNumber(abs(value), maximumFractionDigits: 0)
     }
 
@@ -79,13 +80,9 @@ enum OverviewPriceDisplay {
     private static func standardNumber(
         _ value: Double,
         maximumFractionDigits: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = priceLocale
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = maximumFractionDigits
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+        decimalFormatters.string(
+            from: value,
+            maximumFractionDigits: maximumFractionDigits)
     }
 
     private static func maximumFractionDigits(for absoluteValue: Double) -> Int {
@@ -93,5 +90,43 @@ enum OverviewPriceDisplay {
         if absoluteValue >= 1 { return 4 }
         if absoluteValue >= 0.0001 { return 6 }
         return 8
+    }
+
+    private static func currencyPrefix(_ currencyCode: String) -> String {
+        switch currencyCode.uppercased() {
+        case "USD": "$"
+        case "EUR": "€"
+        case "CHF": "CHF"
+        default: currencyCode.uppercased()
+        }
+    }
+}
+
+private final class OverviewDecimalFormatterCache: @unchecked Sendable {
+    private let locale: Locale
+    private let lock = NSLock()
+    private var formatters: [Int: NumberFormatter] = [:]
+
+    init(locale: Locale) {
+        self.locale = locale
+    }
+
+    func string(from value: Double, maximumFractionDigits: Int) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let formatter = formatters[maximumFractionDigits] ?? makeFormatter(maximumFractionDigits: maximumFractionDigits)
+        formatters[maximumFractionDigits] = formatter
+        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+
+    private func makeFormatter(maximumFractionDigits: Int) -> NumberFormatter {
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = true
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = maximumFractionDigits
+        return formatter
     }
 }

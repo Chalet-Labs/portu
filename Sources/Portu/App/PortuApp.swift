@@ -14,17 +14,14 @@ struct PortuApp: App {
 
     init() {
         let factory = ModelContainerFactory()
-        var isEphemeral = false
+        let isEphemeral: Bool
 
         do {
-            self.container = try factory.makeForProduction()
+            let bootstrap = try factory.bootstrap()
+            self.container = bootstrap.container
+            isEphemeral = bootstrap.isEphemeral
         } catch {
-            do {
-                self.container = try factory.makeInMemory()
-                isEphemeral = true
-            } catch {
-                fatalError("Failed to create even an in-memory ModelContainer: \(error)")
-            }
+            fatalError("Failed to create even an in-memory ModelContainer: \(error)")
         }
 
         do {
@@ -54,17 +51,28 @@ struct PortuApp: App {
             secretStore: secretStore,
             session: session)
 
-        self.store = Store(initialState: AppFeature.State(storeIsEphemeral: isEphemeral)) {
-            AppFeature()
-        } withDependencies: {
-            $0.continuousClock = ContinuousClock()
-            $0.syncEngine = .live(engine: syncEngine)
-            $0.priceService = priceServiceClient
-            $0.historicalPriceBackfill = .live(
-                modelContext: modelContext,
-                priceService: priceServiceClient,
-                dashboardSettings: { TokenDashboardSettings.fromDefaults() })
-        }
+        let displayCurrencyPreference = DisplayCurrencyPreferenceClient.liveValue
+        // Restore a saved non-USD currency as pending and start on USD; the launch FX
+        // request commits it once a real rate is known, and a failure stays on USD.
+        let savedCurrency = displayCurrencyPreference.load()
+        self.store = Store(initialState: AppFeature.State(
+            selectedCurrency: .usd,
+            pendingCurrency: savedCurrency == .usd ? nil : savedCurrency,
+            storeIsEphemeral: isEphemeral)) {
+                AppFeature()
+            } withDependencies: {
+                $0.continuousClock = ContinuousClock()
+                $0.syncEngine = .live(engine: syncEngine)
+                $0.priceService = priceServiceClient
+                $0.displayCurrencyPreference = displayCurrencyPreference
+                $0.currencyConversion = .live(
+                    modelContext: modelContext,
+                    priceService: priceServiceClient)
+                $0.historicalPriceBackfill = .live(
+                    modelContext: modelContext,
+                    priceService: priceServiceClient,
+                    dashboardSettings: { TokenDashboardSettings.fromDefaults() })
+            }
 
         // Bridge: features can trigger sync via AppState until migrated to TCA
         appState.onSyncRequested = { [store] in
@@ -134,23 +142,37 @@ struct PortuApp: App {
                         return try await zapperProvider.fetchPriceUpdate(for: identities)
                     }
             },
-            fetchCoinGeckoPrices: { request in
-                try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
+            fetchCoinGeckoPrices: { request, currency, usdToDisplayRate in
+                let update = try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
                     request: request,
-                    priceService: priceService)
+                    priceService: priceService,
+                    currency: .usd)
+                guard currency != .usd else { return update }
+                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate, preserveChanges24h: true)
             },
-            fetchZapperPrices: { identities in
+            fetchZapperPrices: { identities, currency, usdToDisplayRate in
                 guard
                     !identities.isEmpty,
                     let apiKey = zapperAPIKey(from: secretStore)
                 else {
-                    return PricePollingIDResolver.emptyUpdate
+                    return PricePollingIDResolver.emptyUpdate(currency: currency)
                 }
                 let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
-                return try await zapperProvider.fetchPriceUpdate(for: identities)
+                let update = try await zapperProvider.fetchPriceUpdate(for: identities)
+                guard currency != .usd else { return update }
+                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate)
             },
             fetchHistoricalPrices: { coinId, days in
                 try await priceService.fetchHistoricalPrices(for: coinId, days: days)
+            },
+            fetchHistoricalPricesForCurrency: { coinId, currency, days in
+                try await priceService.fetchHistoricalPrices(for: coinId, currency: currency, days: days)
+            },
+            fetchCurrentUSDConversionRate: { currency in
+                try await priceService.fetchCurrentUSDConversionRate(to: currency)
+            },
+            fetchHistoricalUSDConversionRates: { currency, days in
+                try await priceService.fetchHistoricalUSDConversionRates(to: currency, days: days)
             },
             resolveCoinGeckoIDs: { identities in
                 try await priceService.resolveCoinGeckoIDs(for: identities)

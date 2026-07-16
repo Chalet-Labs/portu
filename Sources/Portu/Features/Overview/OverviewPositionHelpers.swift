@@ -14,7 +14,8 @@ enum OverviewPriceChangeFeature {
         changes24h: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot],
-        settings: TokenDashboardSettings? = nil) -> Decimal {
+        settings: TokenDashboardSettings? = nil,
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         let mapped = mappedTokens(tokens, mappings: mappings, overrides: overrides)
         let changeTokens = settings.map {
@@ -23,7 +24,8 @@ enum OverviewPriceChangeFeature {
                 prices: prices,
                 changes24h: changes24h,
                 overrideMap: overrideMap,
-                settings: $0)
+                settings: $0,
+                usdToDisplayRate: fallbackUSDToDisplayRate)
         } ?? mapped
 
         return changeTokens.reduce(Decimal.zero) { total, token in
@@ -31,7 +33,8 @@ enum OverviewPriceChangeFeature {
                 token: token,
                 prices: prices,
                 changes24h: changes24h,
-                override: overrideMap[token.assetId])
+                override: overrideMap[token.assetId],
+                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         }
     }
 
@@ -41,7 +44,8 @@ enum OverviewPriceChangeFeature {
         changes24h: [String: Decimal],
         overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot],
-        limit: Int = 20) -> [OverviewTokenChange] {
+        limit: Int = 20,
+        fallbackUSDToDisplayRate: Decimal = 1) -> [OverviewTokenChange] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         return mappedTokens(tokens, mappings: mappings, overrides: overrides)
             .filter(\.role.isPositive)
@@ -50,7 +54,8 @@ enum OverviewPriceChangeFeature {
                     token: token,
                     prices: prices,
                     changes24h: changes24h,
-                    override: overrideMap[token.assetId])
+                    override: overrideMap[token.assetId],
+                    fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
                 guard change != 0 else { return nil }
                 return OverviewTokenChange(token: token, change: change)
             }
@@ -70,12 +75,14 @@ enum OverviewPriceChangeFeature {
         token: TokenEntry,
         prices: [String: Decimal],
         changes24h: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        override: TokenPricingOverrideSnapshot?,
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         let change = OverviewPositionPricing.change24h(
             token: token,
             prices: prices,
             changes24h: changes24h,
-            override: override)
+            override: override,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         if token.role.isBorrow {
             return -change
         }
@@ -87,7 +94,8 @@ enum OverviewPriceChangeFeature {
         prices: [String: Decimal],
         changes24h: [String: Decimal],
         override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings) -> Bool {
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal = 1) -> Bool {
         guard token.amount > 0 else { return false }
         guard token.role.isPositive || token.role.isBorrow else { return false }
         guard override?.isIgnored != true else { return false }
@@ -97,11 +105,14 @@ enum OverviewPriceChangeFeature {
             token: token,
             prices: prices,
             changes24h: changes24h,
-            override: override)
+            override: override,
+            fallbackUSDToDisplayRate: usdToDisplayRate)
         if value == 0 {
             return !settings.hideUnpriced
         }
-        if abs(value) < normalizedThreshold(settings.minimumDashboardValue) {
+        // `value` is already in the display currency, so the USD threshold must be scaled
+        // by the same rate to stay comparable.
+        if abs(value) < normalizedThreshold(settings.minimumDashboardValue) * usdToDisplayRate {
             return !settings.hideDust
         }
         return true
@@ -112,14 +123,16 @@ enum OverviewPriceChangeFeature {
         prices: [String: Decimal],
         changes24h: [String: Decimal],
         overrideMap: [UUID: TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings) -> [TokenEntry] {
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal = 1) -> [TokenEntry] {
         tokens.filter { token in
             isDashboardEligibleForChange(
                 token: token,
                 prices: prices,
                 changes24h: changes24h,
                 override: overrideMap[token.assetId],
-                settings: settings)
+                settings: settings,
+                usdToDisplayRate: usdToDisplayRate)
         }
     }
 
@@ -275,9 +288,10 @@ enum OverviewPositionPricing {
     static func price(
         token: TokenEntry,
         prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        override: TokenPricingOverrideSnapshot?,
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         if let manualPrice = override?.manualPriceUSD, manualPrice > 0 {
-            return manualPrice
+            return manualPrice * fallbackUSDToDisplayRate
         }
         guard let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override) else {
             return 0
@@ -294,9 +308,10 @@ enum OverviewPositionPricing {
     static func tokenValue(
         token: TokenEntry,
         prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        override: TokenPricingOverrideSnapshot?,
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         if let manualPrice = override?.manualPriceUSD, manualPrice > 0 {
-            return token.amount * manualPrice
+            return token.amount * manualPrice * fallbackUSDToDisplayRate
         }
         guard let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override) else {
             return 0
@@ -329,7 +344,8 @@ enum OverviewPositionPricing {
         token: TokenEntry,
         prices: [String: Decimal],
         changes24h: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        override: TokenPricingOverrideSnapshot?,
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         if let manualPrice = override?.manualPriceUSD, manualPrice > 0 {
             return 0
         }
@@ -343,14 +359,16 @@ enum OverviewPositionPricing {
             token: token,
             prices: prices,
             changes24h: changes24h,
-            override: override) * changePercent
+            override: override,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate) * changePercent
     }
 
     static func changeReferenceValue(
         token: TokenEntry,
         prices: [String: Decimal],
         changes24h: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> Decimal {
+        override: TokenPricingOverrideSnapshot?,
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         if let manualPrice = override?.manualPriceUSD, manualPrice > 0 {
             return 0
         }
@@ -362,9 +380,13 @@ enum OverviewPositionPricing {
         }
 
         if prices[priceID] != nil {
-            return tokenValue(token: token, prices: prices, override: override)
+            return tokenValue(
+                token: token,
+                prices: prices,
+                override: override,
+                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         }
-        return token.usdValue > 0 ? token.usdValue : 0
+        return token.usdValue > 0 ? token.usdValue * fallbackUSDToDisplayRate : 0
     }
 
     static func isPlausible(

@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import ComposableArchitecture
 import Foundation
 @testable import Portu
@@ -165,6 +167,29 @@ struct PerformancePnLTests {
         let bars = PerformanceFeature.computePnLBars(from: [])
         #expect(bars.isEmpty)
     }
+
+    @Test func `converts daily values before computing pnl`() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let d1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
+        let d2 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 12)))
+        let d3 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 3, hour: 12)))
+        let context = try CurrencyConversionContext(
+            displayCurrency: .eur,
+            currentUSDToDisplayRate: 1,
+            historicalUSDToDisplayRatesByDay: [
+                HistoricalPriceCalendar.utcStartOfDay(for: d1): #require(Decimal(string: "0.9")),
+                HistoricalPriceCalendar.utcStartOfDay(for: d2): #require(Decimal(string: "0.8")),
+                HistoricalPriceCalendar.utcStartOfDay(for: d3): #require(Decimal(string: "0.7"))
+            ])
+
+        let bars = PerformanceFeature.computePnLBars(
+            from: [(d1, 1000), (d2, 1100), (d3, 1200)],
+            conversionContext: context)
+
+        #expect(bars.map(\.pnl) == [-20, -40])
+        #expect(bars.map(\.cumulative) == [-20, -60])
+    }
 }
 
 // MARK: - Category Change Breakdown
@@ -247,6 +272,34 @@ struct PerformanceCategoryChangeTests {
 
         let stable = changes.first { $0.name == "Stablecoin" }
         #expect(stable?.percentChange == 0)
+    }
+
+    @Test func `category changes compute percentages from converted start and end values`() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
+        let day2 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 12)))
+        let acct = UUID()
+        let asset = UUID()
+        let context = try CurrencyConversionContext(
+            displayCurrency: .chf,
+            currentUSDToDisplayRate: 1,
+            historicalUSDToDisplayRatesByDay: [
+                HistoricalPriceCalendar.utcStartOfDay(for: day1): #require(Decimal(string: "0.5")),
+                HistoricalPriceCalendar.utcStartOfDay(for: day2): #require(Decimal(string: "1.0"))
+            ])
+
+        let changes = PerformanceFeature.computeCategoryChanges(
+            entries: [
+                CategorySnapshotEntry(accountId: acct, assetId: asset, timestamp: day1, category: .major, usdValue: 1000),
+                CategorySnapshotEntry(accountId: acct, assetId: asset, timestamp: day2, category: .major, usdValue: 1000)
+            ],
+            conversionContext: context)
+
+        let major = try #require(changes.first { $0.name == "Major" })
+        #expect(major.startValue == 500)
+        #expect(major.endValue == 1000)
+        #expect(major.percentChange == 1)
     }
 
     @Test func `category changes can be scoped to dashboard visible assets`() throws {
@@ -417,6 +470,30 @@ struct PerformanceCategoryChangeTests {
         #expect(points.count == 2)
         #expect(Set(points.map(\.categoryID)) == [firstCategoryID, secondCategoryID])
         #expect(Set(points.map(\.categoryName)) == ["Custom"])
+    }
+
+    @Test func `category chart converts deduped values before aggregation`() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let morning = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 8)))
+        let evening = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 20)))
+        let day = HistoricalPriceCalendar.utcStartOfDay(for: morning)
+        let acct = UUID()
+        let asset = UUID()
+        let context = try CurrencyConversionContext(
+            displayCurrency: .eur,
+            currentUSDToDisplayRate: 1,
+            historicalUSDToDisplayRatesByDay: [day: #require(Decimal(string: "0.8"))])
+
+        let points = PerformanceFeature.aggregateCategorySnapshots(
+            entries: [
+                CategorySnapshotEntry(accountId: acct, assetId: asset, timestamp: morning, category: .major, usdValue: 1000),
+                CategorySnapshotEntry(accountId: acct, assetId: asset, timestamp: evening, category: .major, usdValue: 1200)
+            ],
+            conversionContext: context)
+
+        #expect(points.count == 1)
+        #expect(points.first?.value == 960)
     }
 
     @Test func `omits categories with zero on both days`() throws {

@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import ComposableArchitecture
 import Foundation
 @testable import Portu
@@ -164,6 +166,53 @@ struct AssetRowAggregationTests {
         // Fallback price = positiveUSD / positiveAmount = 50 / 1_000_000
         #expect(rows[0].price == Decimal(50) / Decimal(1_000_000))
         #expect(rows[0].value == 50) // positiveUSD - borrowUSD
+    }
+
+    @Test func `converts sync-time fallback values once for display currency`() throws {
+        let assetId = UUID()
+        let tokens: [TokenEntry] = [
+            TokenEntry(
+                assetId: assetId,
+                symbol: "SHIB",
+                name: "Shiba Inu",
+                category: .meme,
+                coinGeckoId: nil,
+                role: .balance,
+                amount: 1_000_000,
+                usdValue: 50)
+        ]
+
+        let rows = try AllAssetsFeature.aggregateRows(
+            tokens: tokens,
+            prices: [:],
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(rows[0].price == Decimal(45) / Decimal(1_000_000))
+        #expect(rows[0].value == 45)
+    }
+
+    @Test func `does not convert live display currency prices again`() throws {
+        let assetId = UUID()
+        let tokens: [TokenEntry] = [
+            TokenEntry(
+                assetId: assetId,
+                symbol: "BTC",
+                name: "Bitcoin",
+                category: .major,
+                coinGeckoId: "bitcoin",
+                role: .balance,
+                amount: 2,
+                usdValue: 120_000)
+        ]
+
+        let rows = try AllAssetsFeature.aggregateRows(
+            tokens: tokens,
+            prices: ["bitcoin": 55000],
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.9")))
+
+        #expect(rows[0].price == 55000)
+        #expect(rows[0].value == 110_000)
+        #expect(rows[0].hasLivePrice == true)
     }
 
     @Test func `computes net amount with borrows`() {
@@ -460,8 +509,8 @@ struct SharePercentTests {
 
     @Test func `platforms tab mixed positive negative sum to 100 percent`() {
         let positions: [PlatformsTab.PlatformInput] = [
-            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "aave-v3", protocolName: "Aave V3", positionType: .lending, netUSDValue: 200),
-            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "compound", protocolName: "Compound", positionType: .lending, netUSDValue: -80)
+            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "aave-v3", protocolName: "Aave V3", positionType: .lending, netValue: 200),
+            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "compound", protocolName: "Compound", positionType: .lending, netValue: -80)
         ]
 
         let rows = PlatformsTab.computeRows(from: positions)
@@ -483,8 +532,8 @@ struct SharePercentTests {
         ])
 
         let platformRows = PlatformsTab.computeRows(from: [
-            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "proto-a", protocolName: "Proto A", positionType: .lending, netUSDValue: netA),
-            PlatformsTab.PlatformInput(chain: "polygon", protocolId: "proto-b", protocolName: "Proto B", positionType: .lending, netUSDValue: netB)
+            PlatformsTab.PlatformInput(chain: "ethereum", protocolId: "proto-a", protocolName: "Proto A", positionType: .lending, netValue: netA),
+            PlatformsTab.PlatformInput(chain: "polygon", protocolId: "proto-b", protocolName: "Proto B", positionType: .lending, netValue: netB)
         ])
 
         let networkSum = networkRows.reduce(Decimal.zero) { $0 + $1.sharePercent }

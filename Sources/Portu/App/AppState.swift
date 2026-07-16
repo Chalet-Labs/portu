@@ -40,6 +40,13 @@ enum SyncStatus: Hashable {
 @MainActor
 final class AppState {
     var lastPriceUpdate: Date?
+    var selectedCurrency: FiatCurrency = .default
+    var currencyCode: String {
+        selectedCurrency.displayCode
+    }
+
+    var currentUSDToDisplayRate: Decimal = 1
+    var historicalFXAvailability: CurrencyFXAvailability = .available
     var prices: [String: Decimal] = [:]
     var priceChanges24h: [String: Decimal] = [:]
     var connectionStatus: ConnectionStatus = .idle
@@ -62,6 +69,9 @@ final class AppState {
         updateIfChanged(\.syncStatus, to: store.syncStatus)
         updateIfChanged(\.connectionStatus, to: store.connectionStatus)
         updateIfChanged(\.lastPriceUpdate, to: store.lastPriceUpdate)
+        updateIfChanged(\.selectedCurrency, to: store.selectedCurrency)
+        updateIfChanged(\.currentUSDToDisplayRate, to: store.currentUSDToDisplayRate)
+        updateIfChanged(\.historicalFXAvailability, to: store.historicalFXAvailability)
         updateIfChanged(\.storeIsEphemeral, to: store.storeIsEphemeral)
     }
 

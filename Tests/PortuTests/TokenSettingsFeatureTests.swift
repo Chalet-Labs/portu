@@ -322,6 +322,117 @@ struct TokenSettingsFeatureTests {
         #expect(row.value == 24000)
     }
 
+    @Test func `dashboard eligibility scales the usd threshold by the display rate for live prices`() {
+        let small = token(symbol: "SML", coinGeckoId: "sml", amount: 1, usdValue: 0)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let eligible = TokenSettingsFeature.isDashboardEligible(
+            token: small,
+            prices: ["sml": decimal("0.6")],
+            override: nil,
+            settings: settings,
+            usdToDisplayRate: decimal("0.5"))
+
+        #expect(eligible)
+    }
+
+    @Test func `dashboard eligibility still treats values below the scaled threshold as dust`() {
+        let small = token(symbol: "SML", coinGeckoId: "sml", amount: 1, usdValue: 0)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let eligible = TokenSettingsFeature.isDashboardEligible(
+            token: small,
+            prices: ["sml": decimal("0.4")],
+            override: nil,
+            settings: settings,
+            usdToDisplayRate: decimal("0.5"))
+
+        #expect(!eligible)
+    }
+
+    @Test func `dashboard eligible tokens list scales the threshold by the display rate`() {
+        let live = token(symbol: "LIVE", coinGeckoId: "live", amount: 1, usdValue: 0)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
+            tokens: [live],
+            prices: ["live": decimal("0.6")],
+            overrides: [],
+            settings: settings,
+            usdToDisplayRate: decimal("0.5"))
+
+        #expect(eligible.map(\.symbol) == ["LIVE"])
+    }
+
+    @Test func `settings rows convert the manual usd price into the display currency`() throws {
+        let manual = token(symbol: "MAN", amount: 2, usdValue: 0)
+        let override = TokenPricingOverrideSnapshot(assetId: manual.assetId, manualPriceUSD: 10)
+
+        let result = TokenSettingsFeature.rows(
+            tokens: [manual],
+            prices: [:],
+            overrides: [override],
+            settings: .defaults,
+            filter: .all,
+            searchText: "",
+            currency: .eur,
+            usdToDisplayRate: decimal("0.9"),
+            limit: 100)
+
+        let row = try #require(result.rows.first)
+        #expect(row.pricingSource == .manual)
+        #expect(row.currency == .eur)
+        #expect(row.price == decimal("9"))
+        #expect(row.value == decimal("18"))
+    }
+
+    @Test func `settings rows keep live display currency prices untouched`() throws {
+        let live = token(symbol: "LIV", coinGeckoId: "liv", amount: 3, usdValue: 0)
+
+        let result = TokenSettingsFeature.rows(
+            tokens: [live],
+            prices: ["liv": decimal("5")],
+            overrides: [],
+            settings: .defaults,
+            filter: .all,
+            searchText: "",
+            currency: .eur,
+            usdToDisplayRate: decimal("0.9"),
+            limit: 100)
+
+        let row = try #require(result.rows.first)
+        #expect(row.pricingSource == .live)
+        #expect(row.currency == .eur)
+        #expect(row.price == decimal("5"))
+        #expect(row.value == decimal("15"))
+    }
+
+    @Test func `settings dust threshold scales with the display rate`() throws {
+        let small = token(symbol: "SML", coinGeckoId: "sml", amount: 1, usdValue: 0)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let result = TokenSettingsFeature.rows(
+            tokens: [small],
+            prices: ["sml": decimal("0.75")],
+            overrides: [],
+            settings: settings,
+            filter: .all,
+            searchText: "",
+            currency: .eur,
+            usdToDisplayRate: decimal("0.5"),
+            limit: 100)
+
+        let row = try #require(result.rows.first)
+        #expect(row.value == decimal("0.75"))
+        #expect(row.visibilityStatus == .visible)
+    }
+
+    @Test func `currency formatter uses the display currency symbol`() {
+        #expect(TokenSettingsFormat.currency(decimal("12.5"), currency: .usd) == "$ 12.5")
+        #expect(TokenSettingsFormat.currency(decimal("12.5"), currency: .eur) == "€ 12.5")
+        #expect(TokenSettingsFormat.currency(decimal("12.5"), currency: .chf) == "CHF 12.5")
+    }
+
     private func token(
         assetId: UUID = UUID(),
         symbol: String,

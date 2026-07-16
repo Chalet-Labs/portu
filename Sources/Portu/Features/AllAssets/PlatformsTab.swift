@@ -5,6 +5,7 @@ import SwiftData
 import SwiftUI
 
 struct PlatformsTab: View {
+    @Environment(AppState.self) private var appState
     @Query private var allPositions: [Position]
 
     private var positions: [Position] {
@@ -16,7 +17,7 @@ struct PlatformsTab: View {
         let protocolId: String?
         let protocolName: String?
         let positionType: PositionType
-        let netUSDValue: Decimal
+        let netValue: Decimal
     }
 
     struct PlatformRow: Identifiable {
@@ -25,11 +26,11 @@ struct PlatformsTab: View {
         var sharePercent: Decimal
         let networkCount: Int
         let positionCount: Int
-        let usdBalance: Decimal
+        let balance: Decimal
     }
 
     nonisolated static func computeRows(from positions: [PlatformInput]) -> [PlatformRow] {
-        let totalValue = positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
+        let totalValue = positions.reduce(Decimal.zero) { $0 + $1.netValue }
 
         var byProtocol: [String: (name: String, chains: Set<String>, count: Int, value: Decimal)] = [:]
 
@@ -38,7 +39,7 @@ struct PlatformsTab: View {
             let name = pos.protocolName ?? (pos.positionType == .idle ? "Idle / Wallet" : "Unknown")
             var entry = byProtocol[key] ?? (name, [], 0, 0)
             entry.count += 1
-            entry.value += pos.netUSDValue
+            entry.value += pos.netValue
             if let chain = pos.chain { entry.chains.insert(chain) } else { entry.chains.insert("off-chain") }
             byProtocol[key] = entry
         }
@@ -50,9 +51,9 @@ struct PlatformsTab: View {
                 sharePercent: totalValue != 0 ? entry.value / totalValue : 0,
                 networkCount: entry.chains.count,
                 positionCount: entry.count,
-                usdBalance: entry.value)
+                balance: entry.value)
         }
-        .sorted { $0.usdBalance > $1.usdBalance }
+        .sorted { $0.balance > $1.balance }
 
         // Round to display precision (0.1% → 3 decimal places) then adjust residual
         // so the formatted percentages always sum to exactly 100.0%
@@ -66,7 +67,7 @@ struct PlatformsTab: View {
             if
                 residual != 0,
                 let idx = rows.indices.max(by: {
-                    abs(rows[$0].usdBalance) < abs(rows[$1].usdBalance)
+                    abs(rows[$0].balance) < abs(rows[$1].balance)
                 }) {
                 rows[idx].sharePercent += residual
             }
@@ -81,8 +82,12 @@ struct PlatformsTab: View {
                 protocolId: $0.protocolId,
                 protocolName: $0.protocolName,
                 positionType: $0.positionType,
-                netUSDValue: $0.netUSDValue)
+                netValue: $0.netUSDValue * appState.currentUSDToDisplayRate)
         })
+    }
+
+    private var currencyCode: String {
+        appState.currencyCode
     }
 
     var body: some View {
@@ -94,8 +99,8 @@ struct PlatformsTab: View {
             }
             TableColumn("# Networks") { row in Text("\(row.networkCount)") }
             TableColumn("# Positions") { row in Text("\(row.positionCount)") }
-            TableColumn("USD Balance") { row in
-                Text(row.usdBalance, format: .currency(code: "USD"))
+            TableColumn("Balance") { row in
+                Text(row.balance, format: .currency(code: currencyCode))
                     .font(DashboardStyle.monoTableFont)
             }
         }

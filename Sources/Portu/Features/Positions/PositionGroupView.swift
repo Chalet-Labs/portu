@@ -31,8 +31,9 @@ struct PositionGroupView: View {
                 // Net value (signed), computed from live prices to match token rows.
                 let headerTotal = PositionGroupValue.headerTotal(
                     for: position.tokens,
-                    livePrices: appState.prices)
-                Text(headerTotal, format: .currency(code: "USD"))
+                    livePrices: appState.prices,
+                    fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
+                Text(headerTotal, format: .currency(code: currencyCode))
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(PortuTheme.changeColor(for: headerTotal))
             }
@@ -54,7 +55,7 @@ struct PositionGroupView: View {
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
 
                     let value = tokenValue(token)
-                    Text(value, format: .currency(code: "USD"))
+                    Text(value, format: .currency(code: currencyCode))
                         .font(DashboardStyle.monoTableFont)
                         .foregroundStyle(PortuTheme.dashboardText)
                         .frame(width: 100, alignment: .trailing)
@@ -64,17 +65,28 @@ struct PositionGroupView: View {
         .dashboardCard(horizontalPadding: 12, verticalPadding: 10)
     }
 
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
+    }
+
     private func tokenValue(_ token: PositionToken) -> Decimal {
-        token.resolvedUSDValue(prices: appState.prices)
+        AssetValueFormatter.displayValue(
+            for: token,
+            livePrices: appState.prices,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 }
 
 enum PositionGroupValue {
     static func headerTotal(
         for tokens: [PositionToken],
-        livePrices: [String: Decimal]) -> Decimal {
+        livePrices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         tokens.reduce(Decimal.zero) { total, token in
-            total + AssetValueFormatter.signedValue(for: token, livePrices: livePrices)
+            total + AssetValueFormatter.signedValue(
+                for: token,
+                livePrices: livePrices,
+                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         }
     }
 }

@@ -32,30 +32,44 @@ enum AssetValueFormatter {
         return token.usdValue / token.amount
     }
 
-    /// Best available price: live CoinGecko price, or sync-time USD/amount ratio.
+    static func fallbackPrice(
+        for token: PositionToken,
+        fallbackUSDToDisplayRate: Decimal) -> Decimal? {
+        fallbackPrice(for: token).map { $0 * fallbackUSDToDisplayRate }
+    }
+
+    /// Best available price in the display currency: live CoinGecko price, or the
+    /// sync-time USD/amount ratio converted via `fallbackUSDToDisplayRate`.
     static func displayPrice(
         for token: PositionToken,
-        livePrices: [String: Decimal]) -> Decimal {
+        livePrices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         livePrice(for: token, livePrices: livePrices)
-            ?? fallbackPrice(for: token)
+            ?? fallbackPrice(for: token, fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
             ?? .zero
     }
 
-    /// Best available USD value: live price * amount, or sync-time usdValue.
+    /// Best available value in the display currency: live price * amount, or the
+    /// sync-time usdValue converted via `fallbackUSDToDisplayRate`.
     static func displayValue(
         for token: PositionToken,
-        livePrices: [String: Decimal]) -> Decimal {
+        livePrices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
         if let livePrice = livePrice(for: token, livePrices: livePrices) {
             return token.amount * livePrice
         }
-        return token.usdValue
+        return token.usdValue * fallbackUSDToDisplayRate
     }
 
     /// Role-aware signed value: borrows negative, rewards zero, everything else positive.
     static func signedValue(
         for token: PositionToken,
-        livePrices: [String: Decimal]) -> Decimal {
-        let absoluteValue = displayValue(for: token, livePrices: livePrices)
+        livePrices: [String: Decimal],
+        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
+        let absoluteValue = displayValue(
+            for: token,
+            livePrices: livePrices,
+            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
         return switch token.role {
         case .borrow: -absoluteValue
         case .reward: Decimal.zero

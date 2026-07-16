@@ -7,7 +7,7 @@ import SwiftUI
 struct OverviewTopBar: View {
     @Environment(AppState.self) private var appState
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
-    @Environment(\.historicalPricesUSD) private var historicalPricesUSD
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var positions: [Position]
     @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
     private var tokenPricingOverrides: [TokenPricingOverride]
@@ -30,7 +30,8 @@ struct OverviewTopBar: View {
             prices: displayPrices,
             overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
             mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var change24h: Decimal {
@@ -40,13 +41,14 @@ struct OverviewTopBar: View {
             changes24h: priceChanges24h,
             overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
             mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings)
+            settings: dashboardSettings,
+            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: appState.prices,
-            historical: historicalPricesUSD)
+            historical: historicalDisplayPrices)
     }
 
     private var priceChanges24h: [String: Decimal] {
@@ -68,13 +70,17 @@ struct OverviewTopBar: View {
             hideDust: hideDust)
     }
 
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
+    }
+
     var body: some View {
         let currentTotalValue = totalValue
         let currentChange24h = change24h
         let currentChangePct = changePct(totalValue: currentTotalValue, change24h: currentChange24h)
 
         VStack(alignment: .leading, spacing: 18) {
-            Text(OverviewPriceDisplay.currency(currentTotalValue))
+            Text(OverviewPriceDisplay.currency(currentTotalValue, currencyCode: currencyCode))
                 .font(DashboardStyle.heroValueFont)
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
@@ -82,10 +88,10 @@ struct OverviewTopBar: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {
-                    Text(OverviewPriceDisplay.currency(currentChange24h))
+                    Text(OverviewPriceDisplay.currency(currentChange24h, currencyCode: currencyCode))
                         .lineLimit(1)
                     Spacer()
-                    Text("$ change 24h")
+                    Text("\(currencyCode) change 24h")
                         .foregroundStyle(PortuTheme.dashboardTertiaryText)
                         .lineLimit(1)
                 }

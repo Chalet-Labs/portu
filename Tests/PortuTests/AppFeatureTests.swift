@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import ComposableArchitecture
 import Foundation
 @testable import Portu
@@ -6,6 +8,7 @@ import PortuNetwork
 import Testing
 
 @MainActor
+// swiftlint:disable:next type_body_length
 struct AppFeatureTests {
     // MARK: - Section Navigation
 
@@ -151,6 +154,7 @@ struct AppFeatureTests {
 
         await store.send(.startPricePolling(["bitcoin"])) {
             $0.connectionStatus = .fetching
+            $0.pricePollingIDs = ["bitcoin"]
         }
         await store.receive(\.pricesReceived) {
             $0.prices = ["bitcoin": 65000]
@@ -160,7 +164,652 @@ struct AppFeatureTests {
         }
 
         // Stop polling to clean up the long-running effect
-        await store.send(.stopPricePolling)
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
+        }
+    }
+
+    @Test func `price polling uses selected currency`() async {
+        let testClock = TestClock()
+        let testDate = Date(timeIntervalSince1970: 1_000_000)
+        nonisolated(unsafe) var capturedCurrency: FiatCurrency?
+
+        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .chf)) {
+            AppFeature()
+        } withDependencies: {
+            $0.priceService.fetchCoinGeckoPrices = { _, currency, _ in
+                capturedCurrency = currency
+                return PriceUpdate(currency: currency, prices: ["bitcoin": 58000], changes24h: [:])
+            }
+            $0.continuousClock = testClock
+            $0.currentDate.now = { testDate }
+        }
+
+        await store.send(.startPricePolling(["bitcoin"])) {
+            $0.connectionStatus = .fetching
+            $0.pricePollingIDs = ["bitcoin"]
+        }
+        await store.receive(\.pricesReceived) {
+            $0.prices = ["bitcoin": 58000]
+            $0.lastPriceUpdate = testDate
+            $0.connectionStatus = .idle
+        }
+        #expect(capturedCurrency == .chf)
+
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
+        }
+    }
+
+    @Test func `price polling requests coin and token prices independently`() async {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        let testClock = TestClock()
+        let testDate = Date(timeIntervalSince1970: 1_000_000)
+        nonisolated(unsafe) var capturedRequests: [PricePollingRequest] = []
+
+        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .eur)) {
+            AppFeature()
+        } withDependencies: {
+            $0.priceService.fetchCoinGeckoPrices = { request, currency, _ in
+                capturedRequests.append(request)
+                #expect(request.coinGeckoIDs.isEmpty || request.zapperIdentities.isEmpty)
+                if request.coinGeckoIDs == ["bitcoin"] {
+                    return PriceUpdate(currency: currency, prices: ["bitcoin": 58000], changes24h: [:])
+                }
+                if request.zapperIdentities == [identity] {
+                    try await Task.sleep(nanoseconds: 10_000_000)
+                    return PriceUpdate(
+                        currency: currency,
+                        prices: [identity.historicalPriceID: 2],
+                        changes24h: [:])
+                }
+                return PriceUpdate(
+                    currency: currency,
+                    prices: ["bitcoin": 58000, identity.historicalPriceID: 2],
+                    changes24h: [:])
+            }
+            $0.continuousClock = testClock
+            $0.pricePollingSettings.zapperFallbackInterval = { nil }
+            $0.currentDate.now = { testDate }
+        }
+
+        await store.send(.startPricePolling(["bitcoin", identity.historicalPriceID])) {
+            $0.connectionStatus = .fetching
+            $0.pricePollingIDs = ["bitcoin", identity.historicalPriceID]
+        }
+        await store.receive(.pricesReceived(PriceUpdate(
+            currency: .eur,
+            prices: ["bitcoin": 58000],
+            changes24h: [:]))) {
+                $0.prices = ["bitcoin": 58000]
+                $0.lastPriceUpdate = testDate
+                $0.connectionStatus = .idle
+            }
+        await store.receive(.pricesReceived(PriceUpdate(
+            currency: .eur,
+            prices: [identity.historicalPriceID: 2],
+            changes24h: [:]))) {
+                $0.prices = ["bitcoin": 58000, identity.historicalPriceID: 2]
+                $0.lastPriceUpdate = testDate
+            }
+
+        #expect(capturedRequests == [
+            PricePollingRequest(coinGeckoIDs: ["bitcoin"], zapperIdentities: []),
+            PricePollingRequest(coinGeckoIDs: [], zapperIdentities: [identity])
+        ])
+
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
+        }
+    }
+
+    @Test func `mixed poll with coin failure and empty token update clears fetching`() async {
+        struct CoinFailed: LocalizedError { var errorDescription: String? {
+            "coin failed"
+        } }
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        let testClock = TestClock()
+        let testDate = Date(timeIntervalSince1970: 1_000_000)
+
+        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .eur)) {
+            AppFeature()
+        } withDependencies: {
+            $0.priceService.fetchCoinGeckoPrices = { request, currency, _ in
+                if request.coinGeckoIDs == ["bitcoin"] { throw CoinFailed() }
+                // Token fetch succeeds but returns nothing for the onchain identity.
+                return PriceUpdate(currency: currency, prices: [:], changes24h: [:])
+            }
+            $0.continuousClock = testClock
+            $0.pricePollingSettings.zapperFallbackInterval = { nil }
+            $0.currentDate.now = { testDate }
+        }
+
+        await store.send(.startPricePolling(["bitcoin", identity.historicalPriceID])) {
+            $0.connectionStatus = .fetching
+            $0.pricePollingIDs = ["bitcoin", identity.historicalPriceID]
+        }
+        // Without the fallback emit, neither branch would send an action and the
+        // status would stay .fetching. The swallowed coin failure now surfaces.
+        await store.receive(\.priceFetchFailed) {
+            $0.connectionStatus = .error("coin failed")
+        }
+
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
+        }
+    }
+
+    @Test func `launch FX failure keeps the display on usd instead of the restored currency`() async {
+        struct RateFailed: LocalizedError { var errorDescription: String? {
+            "offline"
+        } }
+        let store = TestStore(initialState: AppFeature.State(
+            selectedCurrency: .usd,
+            pendingCurrency: .eur)) {
+                AppFeature()
+            } withDependencies: {
+                $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in throw RateFailed() }
+            }
+
+        await store.send(.appLaunched) {
+            $0.historicalFXAvailability = .loading
+        }
+        // The restored EUR preference must not stick with a stale 1:1 rate: the launch
+        // stays on USD and surfaces the failure instead of relabeling USD balances.
+        await store.receive(\.currentCurrencyConversionRateReceived) {
+            $0.pendingCurrency = nil
+            $0.historicalFXAvailability = .failed("offline")
+        }
+        #expect(store.state.selectedCurrency == .usd)
+        #expect(store.state.currentUSDToDisplayRate == 1)
+    }
+
+    @Test func `currency change clears stale prices and ignores old currency updates`() async {
+        let testClock = TestClock()
+        let testDate = Date(timeIntervalSince1970: 1_000_000)
+        let store = TestStore(initialState: AppFeature.State(
+            selectedCurrency: .usd,
+            prices: ["bitcoin": 65000],
+            priceChanges24h: ["bitcoin": 0.02],
+            lastPriceUpdate: testDate)) {
+                AppFeature()
+            } withDependencies: {
+                $0.currentDate.now = { testDate.addingTimeInterval(60) }
+                $0.continuousClock = testClock
+            }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(1))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+            $0.prices = [:]
+            $0.priceChanges24h = [:]
+            $0.lastPriceUpdate = nil
+        }
+        await store.receive(\.currencyConversionRefreshCompleted) {
+            $0.historicalFXAvailability = .available
+            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: testDate.addingTimeInterval(60))
+        }
+        await store.send(.pricesReceived(PriceUpdate(
+            currency: .usd,
+            prices: ["bitcoin": 66000],
+            changes24h: ["bitcoin": 0.01])))
+        await store.send(.pricesReceived(PriceUpdate(
+            currency: .eur,
+            prices: ["bitcoin": 61000],
+            changes24h: ["bitcoin": 0.03]))) {
+                $0.prices = ["bitcoin": 61000]
+                $0.priceChanges24h = ["bitcoin": 0.03]
+                $0.lastPriceUpdate = testDate.addingTimeInterval(60)
+                $0.connectionStatus = .idle
+            }
+
+        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
+        // it lingers and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+            $0.prices = [:]
+            $0.priceChanges24h = [:]
+            $0.lastPriceUpdate = nil
+        }
+    }
+
+    @Test func `currency change refreshes current and historical fx state`() async throws {
+        let testClock = TestClock()
+        let currentRate = try #require(Decimal(string: "0.92"))
+        let historicalResult = HistoricalFXRefreshResult(
+            currency: .eur,
+            insertedHistoricalRates: 3,
+            updatedHistoricalRates: 2)
+        nonisolated(unsafe) var capturedCurrentRequest: FiatCurrency?
+        nonisolated(unsafe) var capturedHistoricalRequest: (FiatCurrency, Int)?
+
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { currency in
+                capturedCurrentRequest = currency
+                return currentRate
+            }
+            $0.currencyConversion.refreshHistoricalRates = { currency, days in
+                capturedHistoricalRequest = (currency, days)
+                return historicalResult
+            }
+            $0.continuousClock = testClock
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(currentRate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+            $0.currentUSDToDisplayRate = currentRate
+        }
+        let completion = CurrencyConversionRefreshResult(
+            currency: .eur,
+            currentUSDToDisplayRate: currentRate,
+            insertedHistoricalRates: 3,
+            updatedHistoricalRates: 2)
+        await store.receive(.currencyConversionRefreshCompleted(.eur, .success(completion))) {
+            $0.historicalFXAvailability = .available
+            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: Date(timeIntervalSince1970: 1_000_000))
+        }
+
+        #expect(capturedCurrentRequest == .eur)
+        #expect(capturedHistoricalRequest?.0 == .eur)
+        #expect(capturedHistoricalRequest?.1 == HistoricalPriceBackfillSettings.chartHorizonDays)
+
+        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
+        // it lingers and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+        }
+    }
+
+    @Test func `currency change publishes current fx before historical refresh finishes`() async throws {
+        let testClock = TestClock()
+        let currentRate = try #require(Decimal(string: "0.92"))
+        let historicalResult = HistoricalFXRefreshResult(
+            currency: .eur,
+            insertedHistoricalRates: 3,
+            updatedHistoricalRates: 2)
+        nonisolated(unsafe) var capturedCurrentRequest: FiatCurrency?
+        nonisolated(unsafe) var capturedHistoricalRequest: (FiatCurrency, Int)?
+
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { currency in
+                capturedCurrentRequest = currency
+                return currentRate
+            }
+            $0.currencyConversion.refreshHistoricalRates = { currency, days in
+                capturedHistoricalRequest = (currency, days)
+                try await testClock.sleep(for: .seconds(1))
+                return historicalResult
+            }
+            $0.continuousClock = testClock
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(currentRate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+            $0.currentUSDToDisplayRate = currentRate
+        }
+        #expect(store.state.historicalFXAvailability == .loading)
+
+        await testClock.advance(by: .seconds(1))
+        let completion = CurrencyConversionRefreshResult(
+            currency: .eur,
+            currentUSDToDisplayRate: currentRate,
+            insertedHistoricalRates: 3,
+            updatedHistoricalRates: 2)
+        await store.receive(.currencyConversionRefreshCompleted(.eur, .success(completion))) {
+            $0.historicalFXAvailability = .available
+            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: Date(timeIntervalSince1970: 1_000_000))
+        }
+
+        #expect(capturedCurrentRequest == .eur)
+        #expect(capturedHistoricalRequest?.0 == .eur)
+        #expect(capturedHistoricalRequest?.1 == HistoricalPriceBackfillSettings.chartHorizonDays)
+
+        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
+        // it lingers and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+        }
+    }
+
+    @Test func `currency change does not restore a stale rate after a periodic tick lands first`() async throws {
+        let testClock = TestClock()
+        let initialRate = try #require(Decimal(string: "0.92"))
+        let refreshedRate = try #require(Decimal(string: "0.95"))
+        let historicalResult = HistoricalFXRefreshResult(
+            currency: .eur,
+            insertedHistoricalRates: 3,
+            updatedHistoricalRates: 2)
+        nonisolated(unsafe) var currentRateCallCount = 0
+
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in
+                currentRateCallCount += 1
+                return currentRateCallCount == 1 ? initialRate : refreshedRate
+            }
+            $0.currencyConversion.refreshHistoricalRates = { _, _ in
+                try await testClock.sleep(for: .seconds(950))
+                return historicalResult
+            }
+            $0.continuousClock = testClock
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(initialRate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+            $0.currentUSDToDisplayRate = initialRate
+        }
+
+        // The periodic display-rate timer ticks while the historical refresh from the
+        // initial switch is still in flight, and lands a newer rate first.
+        await testClock.advance(by: .seconds(900))
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(refreshedRate))) {
+            $0.currentUSDToDisplayRate = refreshedRate
+        }
+
+        // The historical refresh completes afterward, carrying the rate captured before
+        // it started (`initialRate`) — it must not overwrite the newer periodic rate.
+        await testClock.advance(by: .seconds(50))
+        let completion = CurrencyConversionRefreshResult(
+            currency: .eur,
+            currentUSDToDisplayRate: initialRate,
+            insertedHistoricalRates: 3,
+            updatedHistoricalRates: 2)
+        await store.receive(.currencyConversionRefreshCompleted(.eur, .success(completion))) {
+            $0.historicalFXAvailability = .available
+            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: Date(timeIntervalSince1970: 1_000_000))
+        }
+
+        #expect(store.state.currentUSDToDisplayRate == refreshedRate)
+
+        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
+        // it lingers and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+        }
+    }
+
+    @Test func `periodic tick tops up historical fx rates after a day rolls over`() async {
+        let testClock = TestClock()
+        let day1 = Date(timeIntervalSince1970: 1_000_000)
+        let day2 = day1.addingTimeInterval(86400)
+        let rate: Decimal = 2
+        nonisolated(unsafe) var now = day1
+        nonisolated(unsafe) var historicalDaysRequested: [Int] = []
+
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in rate }
+            $0.currencyConversion.refreshHistoricalRates = { currency, days in
+                historicalDaysRequested.append(days)
+                return HistoricalFXRefreshResult(currency: currency, insertedHistoricalRates: 1, updatedHistoricalRates: 0)
+            }
+            $0.continuousClock = testClock
+            $0.currentDate.now = { now }
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+            $0.currentUSDToDisplayRate = rate
+        }
+        await store.receive(\.currencyConversionRefreshCompleted) {
+            $0.historicalFXAvailability = .available
+            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: day1)
+        }
+        #expect(historicalDaysRequested == [HistoricalPriceBackfillSettings.chartHorizonDays])
+
+        // Roll over to the next UTC day before the periodic tick fires.
+        now = day2
+        await testClock.advance(by: .seconds(900))
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate)))
+        await store.receive(\.historicalFXTopUpCompleted) {
+            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: day2)
+        }
+        // The second request uses the small top-up window, not the full backfill.
+        #expect(historicalDaysRequested == [HistoricalPriceBackfillSettings.chartHorizonDays, 2])
+
+        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
+        // it lingers and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+        }
+    }
+
+    @Test func `periodic tick retries the historical backfill after the initial fetch failed`() async {
+        let testClock = TestClock()
+        let testDate = Date(timeIntervalSince1970: 1_000_000)
+        let rate: Decimal = 2
+        nonisolated(unsafe) var historicalCallCount = 0
+        nonisolated(unsafe) var historicalDaysRequested: [Int] = []
+
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in rate }
+            $0.currencyConversion.refreshHistoricalRates = { currency, days in
+                historicalCallCount += 1
+                historicalDaysRequested.append(days)
+                if historicalCallCount == 1 {
+                    throw CurrencyConversionRefreshError(message: "offline")
+                }
+                return HistoricalFXRefreshResult(currency: currency, insertedHistoricalRates: 5, updatedHistoricalRates: 0)
+            }
+            $0.continuousClock = testClock
+            $0.currentDate.now = { testDate }
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+            $0.currentUSDToDisplayRate = rate
+        }
+        await store.receive(.currencyConversionRefreshCompleted(
+            .eur,
+            .failure(CurrencyConversionRefreshError(message: "offline")))) {
+                $0.historicalFXAvailability = .failed("offline")
+            }
+
+        // The periodic tick retries the historical backfill since none has ever succeeded.
+        await testClock.advance(by: .seconds(900))
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate)))
+        await store.receive(\.historicalFXTopUpCompleted) {
+            $0.historicalFXAvailability = .available
+            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: testDate)
+        }
+        // No successful backfill existed yet, so the retry still requests the full window.
+        #expect(historicalDaysRequested == [
+            HistoricalPriceBackfillSettings.chartHorizonDays,
+            HistoricalPriceBackfillSettings.chartHorizonDays
+        ])
+
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+        }
+    }
+
+    @Test func `switching currencies does not let one currencys stale day suppress anothers retry`() async {
+        let testClock = TestClock()
+        let testDate = Date(timeIntervalSince1970: 1_000_000)
+        let eurRate: Decimal = 2
+        let chfRate: Decimal = 3
+        nonisolated(unsafe) var historicalCallCount = 0
+        nonisolated(unsafe) var historicalRequests: [(FiatCurrency, Int)] = []
+
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { currency in
+                currency == .eur ? eurRate : chfRate
+            }
+            $0.currencyConversion.refreshHistoricalRates = { currency, days in
+                historicalCallCount += 1
+                historicalRequests.append((currency, days))
+                if currency == .chf, historicalCallCount == 2 {
+                    // CHF's initial backfill fails; its periodic retry (below) succeeds.
+                    throw CurrencyConversionRefreshError(message: "offline")
+                }
+                return HistoricalFXRefreshResult(currency: currency, insertedHistoricalRates: 1, updatedHistoricalRates: 0)
+            }
+            $0.continuousClock = testClock
+            $0.currentDate.now = { testDate }
+        }
+
+        // EUR switch succeeds fully, stamping EUR's refresh day.
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(eurRate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .eur
+            $0.currentUSDToDisplayRate = eurRate
+        }
+        await store.receive(\.currencyConversionRefreshCompleted) {
+            $0.historicalFXAvailability = .available
+            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: testDate)
+        }
+
+        // Switch to CHF — its initial historical backfill fails.
+        await store.send(.displayCurrencySelected(.chf)) {
+            $0.pendingCurrency = .chf
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(.chf, .success(chfRate))) {
+            $0.pendingCurrency = nil
+            $0.selectedCurrency = .chf
+            $0.currentUSDToDisplayRate = chfRate
+        }
+        await store.receive(.currencyConversionRefreshCompleted(
+            .chf,
+            .failure(CurrencyConversionRefreshError(message: "offline")))) {
+                $0.historicalFXAvailability = .failed("offline")
+            }
+
+        // The periodic tick for CHF must still retry — EUR's same-day stamp must not
+        // suppress it (a single shared field would), and since CHF has no cached data
+        // yet, the retry requests the full backfill window, not the small top-up.
+        await testClock.advance(by: .seconds(900))
+        await store.receive(.currentCurrencyConversionRateReceived(.chf, .success(chfRate)))
+        await store.receive(\.historicalFXTopUpCompleted) {
+            $0.historicalFXAvailability = .available
+            $0.historicalFXLastRefreshDayByCurrency[.chf] = HistoricalPriceCalendar.utcStartOfDay(for: testDate)
+        }
+
+        #expect(historicalRequests.map(\.0) == [.eur, .chf, .chf])
+        #expect(historicalRequests.last?.1 == HistoricalPriceBackfillSettings.chartHorizonDays)
+
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.selectedCurrency = .usd
+            $0.currentUSDToDisplayRate = 1
+        }
+    }
+
+    @Test func `currency switch stays on previous currency when current rate fails`() async {
+        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .usd)) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in
+                throw CurrencyConversionRefreshError(message: "offline")
+            }
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        await store.receive(.currentCurrencyConversionRateReceived(
+            .eur, .failure(CurrencyConversionRefreshError(message: "offline")))) {
+                $0.pendingCurrency = nil
+                $0.historicalFXAvailability = .failed("offline")
+            }
+
+        // The switch never committed: previous currency and its rate are preserved,
+        // so no cached USD value is ever relabeled as EUR.
+        #expect(store.state.selectedCurrency == .usd)
+        #expect(store.state.currentUSDToDisplayRate == 1)
+    }
+
+    @Test func `immediate USD switch cancels an in-flight non-USD conversion`() async {
+        let testClock = TestClock()
+        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .usd)) {
+            AppFeature()
+        } withDependencies: {
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in
+                try await testClock.sleep(for: .seconds(10))
+                return 1
+            }
+        }
+
+        await store.send(.displayCurrencySelected(.eur)) {
+            $0.pendingCurrency = .eur
+            $0.historicalFXAvailability = .loading
+        }
+        // Switching to USD commits immediately and must cancel the in-flight EUR
+        // conversion; otherwise the effect lingers doing network work + writes whose
+        // result the reducer discards, and the test store flags it as still running.
+        await store.send(.displayCurrencySelected(.usd)) {
+            $0.pendingCurrency = nil
+            $0.historicalFXAvailability = .available
+        }
+    }
+
+    @Test func `currency change ignores stale fx refreshes`() async throws {
+        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .chf)) {
+            AppFeature()
+        }
+
+        let result = try CurrencyConversionRefreshResult(
+            currency: .eur,
+            currentUSDToDisplayRate: #require(Decimal(string: "0.92")),
+            insertedHistoricalRates: 1,
+            updatedHistoricalRates: 0)
+
+        await store.send(.currencyConversionRefreshCompleted(.eur, .success(result)))
+        #expect(store.state.currentUSDToDisplayRate == 1)
+        #expect(store.state.historicalFXAvailability == .available)
     }
 
     @Test func `price polling respects configured refresh interval`() async {
@@ -182,6 +831,7 @@ struct AppFeatureTests {
 
         await store.send(.startPricePolling(["bitcoin"])) {
             $0.connectionStatus = .fetching
+            $0.pricePollingIDs = ["bitcoin"]
         }
         await store.receive(\.pricesReceived) {
             $0.prices = ["bitcoin": 1]
@@ -199,7 +849,10 @@ struct AppFeatureTests {
             $0.connectionStatus = .idle
         }
 
-        await store.send(.stopPricePolling)
+        await store.send(.stopPricePolling) {
+            $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
+        }
     }
 
     // MARK: - Price Polling Error
@@ -223,6 +876,7 @@ struct AppFeatureTests {
 
         await store.send(.startPricePolling(["bitcoin"])) {
             $0.connectionStatus = .fetching
+            $0.pricePollingIDs = ["bitcoin"]
         }
         await store.receive(\.priceFetchFailed) {
             $0.connectionStatus = .error("Rate limited")
@@ -231,6 +885,7 @@ struct AppFeatureTests {
 
         await store.send(.stopPricePolling) {
             $0.connectionStatus = .idle
+            $0.pricePollingIDs = []
         }
     }
 

@@ -66,6 +66,57 @@ struct OverviewHistoricalPriceChangeTests {
         #expect(prices["bitcoin"] == 100)
     }
 
+    @Test func `merged historical price entries pick the row with the latest fetchedAt on duplicate days`() {
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        let olderFetch = day
+        let newerFetch = day.addingTimeInterval(3600)
+
+        let freshRow = HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: day,
+            currency: .usd,
+            price: 41000,
+            fetchedAt: newerFetch)
+        let staleRow = HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: day,
+            currency: .usd,
+            price: 40000,
+            fetchedAt: olderFetch)
+
+        let entries = OverviewHistoricalPriceChangeFeature.mergedHistoricalPriceEntries(
+            from: [freshRow, staleRow],
+            displayCurrency: .usd,
+            context: .usd)
+
+        #expect(entries.map(\.usdPrice) == [41000])
+    }
+
+    @Test func `merged historical price entries normalize day to utc start of day`() {
+        let midday = Date(timeIntervalSince1970: 1_704_067_200 + 12 * 3600)
+        let normalizedDay = HistoricalPriceCalendar.utcStartOfDay(for: midday)
+
+        let usdRow = HistoricalPricePoint(
+            coinGeckoId: "bitcoin",
+            day: midday,
+            currency: .usd,
+            price: 41000,
+            fetchedAt: midday)
+        let displayCurrencyRow = HistoricalPricePoint(
+            coinGeckoId: "ethereum",
+            day: midday,
+            currency: .eur,
+            price: 2000,
+            fetchedAt: midday)
+
+        let entries = OverviewHistoricalPriceChangeFeature.mergedHistoricalPriceEntries(
+            from: [usdRow, displayCurrencyRow],
+            displayCurrency: .eur,
+            context: .usd)
+
+        #expect(entries.allSatisfy { $0.day == normalizedDay })
+    }
+
     @Test func `merged price cache lets live prices override historical fallback`() {
         let merged = OverviewHistoricalPriceChangeFeature.mergedPrices(
             live: ["ethereum": 2200],
@@ -119,6 +170,23 @@ struct OverviewHistoricalPriceChangeTests {
             settings: .defaults)
 
         #expect(change == 1)
+    }
+
+    @Test func `portfolio change scales the dust threshold by the display rate`() throws {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+        let live = token(symbol: "LIVE", amount: 1, usdValue: 0, onchainIdentity: identity)
+        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+        let change = try OverviewPriceChangeFeature.portfolioChange24h(
+            tokens: [live],
+            prices: [identity.historicalPriceID: #require(Decimal(string: "0.6"))],
+            changes24h: [identity.historicalPriceID: #require(Decimal(string: "0.5"))],
+            overrides: [],
+            mappings: [],
+            settings: settings,
+            fallbackUSDToDisplayRate: #require(Decimal(string: "0.5")))
+
+        #expect(change == Decimal(string: "0.3"))
     }
 
     private func token(

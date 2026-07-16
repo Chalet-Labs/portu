@@ -20,10 +20,14 @@ import Testing
 
 @MainActor
 struct AppStateBridgeTests {
-    @Test func `bridge syncs all fields from store to AppState`() {
+    @Test func `bridge syncs all fields from store to AppState`() throws {
+        let conversionRate = try #require(Decimal(string: "0.88"))
         let store = Store(initialState: AppFeature.State(
             syncStatus: .syncing(progress: 0.5),
             connectionStatus: .fetching,
+            selectedCurrency: .chf,
+            currentUSDToDisplayRate: conversionRate,
+            historicalFXAvailability: .loading,
             prices: ["bitcoin": 50000],
             priceChanges24h: ["bitcoin": 2.5],
             lastPriceUpdate: Date(timeIntervalSince1970: 1_000_000),
@@ -43,6 +47,9 @@ struct AppStateBridgeTests {
         #expect(appState.connectionStatus == .fetching)
         #expect(appState.lastPriceUpdate == Date(timeIntervalSince1970: 1_000_000))
         #expect(appState.storeIsEphemeral == true)
+        #expect(appState.selectedCurrency == .chf)
+        #expect(appState.currentUSDToDisplayRate == Decimal(string: "0.88")!)
+        #expect(appState.historicalFXAvailability == .loading)
     }
 
     @Test func `bridge preserves onSyncRequested callback`() {
@@ -96,6 +103,9 @@ struct AppStateBridgeTests {
         #expect(appState.connectionStatus == .idle)
         #expect(appState.lastPriceUpdate == nil)
         #expect(appState.storeIsEphemeral == false)
+        #expect(appState.selectedCurrency == .usd)
+        #expect(appState.currentUSDToDisplayRate == 1)
+        #expect(appState.historicalFXAvailability == .available)
     }
 
     @Test func `bridge propagates store changes after initial sync`() async {
