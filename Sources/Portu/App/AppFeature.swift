@@ -31,6 +31,9 @@ struct AppFeature {
         var pendingCurrency: FiatCurrency?
         var currentUSDToDisplayRate: Decimal = 1
         var historicalFXAvailability: CurrencyFXAvailability = .available
+        // UTC day of the last successful historical-FX refresh (initial backfill or
+        // periodic top-up). Nil means no historical data has ever been fetched yet.
+        var historicalFXLastRefreshDay: Date?
         var prices: [String: Decimal] = [:]
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?
@@ -60,6 +63,7 @@ struct AppFeature {
         case displayCurrencySelected(FiatCurrency)
         case currentCurrencyConversionRateReceived(FiatCurrency, Result<Decimal, CurrencyConversionRefreshError>)
         case currencyConversionRefreshCompleted(FiatCurrency, Result<CurrencyConversionRefreshResult, CurrencyConversionRefreshError>)
+        case historicalFXTopUpCompleted(FiatCurrency, Result<HistoricalFXRefreshResult, CurrencyConversionRefreshError>)
         case startPricePolling([String])
         case stopPricePolling
         case pricesReceived(PriceUpdate)
@@ -77,6 +81,7 @@ struct AppFeature {
         case scheduledSync
         case currencyConversion
         case displayRateRefresh
+        case historicalFXTopUp
     }
 
     @Dependency(\.syncEngine) var syncEngine
@@ -295,7 +300,9 @@ struct AppFeature {
                 state.prices = [:]
                 state.priceChanges24h = [:]
                 state.lastPriceUpdate = nil
-                return restartPricePollingEffect(&state, currency: currency)
+                return .merge(
+                    restartPricePollingEffect(&state, currency: currency),
+                    historicalFXTopUpEffect(&state, currency: currency))
 
             case let .currentCurrencyConversionRateReceived(currency, .failure(error)):
                 if state.pendingCurrency == currency {
@@ -318,11 +325,30 @@ struct AppFeature {
                 // in the meantime. Only the availability flag from this completion applies;
                 // `currentCurrencyConversionRateReceived` is the sole owner of the rate value.
                 state.historicalFXAvailability = .available
+                state.historicalFXLastRefreshDay = HistoricalPriceCalendar.utcStartOfDay(for: currentDate.now())
                 return .none
 
             case let .currencyConversionRefreshCompleted(currency, .failure(error)):
                 guard currency == state.selectedCurrency else { return .none }
                 state.historicalFXAvailability = .failed(error.message)
+                return .none
+
+            case let .historicalFXTopUpCompleted(currency, .success(result)):
+                guard currency == state.selectedCurrency, result.currency == state.selectedCurrency else {
+                    return .none
+                }
+                state.historicalFXAvailability = .available
+                state.historicalFXLastRefreshDay = HistoricalPriceCalendar.utcStartOfDay(for: currentDate.now())
+                return .none
+
+            case let .historicalFXTopUpCompleted(currency, .failure(error)):
+                guard currency == state.selectedCurrency else { return .none }
+                // A background top-up failure shouldn't regress an already-available
+                // chart to an error state — only surface it if there was no historical
+                // data to begin with; otherwise the next periodic tick retries.
+                if state.historicalFXAvailability != .available {
+                    state.historicalFXAvailability = .failed(error.message)
+                }
                 return .none
 
             case let .startPricePolling(coinIds):
@@ -377,6 +403,10 @@ struct AppFeature {
 private extension AppFeature {
     static let settingsRecheckInterval: Duration = .seconds(10)
     static let displayRateRefreshInterval: Duration = .seconds(900)
+    /// Small buffer window for the periodic top-up once an initial backfill already
+    /// exists — the cache writer upserts, so a 1-day overlap is harmless, and this
+    /// avoids re-requesting the full `chartHorizonDays` window on every tick.
+    static let historicalFXTopUpDays = 2
 
     /// Applies a display-currency switch: persists the preference, sets the rate,
     /// clears stale prices, and restarts polling in the new currency. The historical
@@ -396,7 +426,10 @@ private extension AppFeature {
         state.priceChanges24h = [:]
         state.lastPriceUpdate = nil
 
-        return .merge(restartPricePollingEffect(&state, currency: currency), armDisplayRateRefresh(currency: currency))
+        return .merge(
+            restartPricePollingEffect(&state, currency: currency),
+            armDisplayRateRefresh(currency: currency),
+            .cancel(id: CancelID.historicalFXTopUp))
     }
 
     /// Restarts price polling for the current `pricePollingIDs`, if any, using the
@@ -472,6 +505,33 @@ private extension AppFeature {
             }
         }
         .cancellable(id: CancelID.currencyConversion, cancelInFlight: true)
+    }
+
+    /// Triggers an incremental historical-FX top-up when the periodic display-rate
+    /// tick lands on a UTC day that has not been backfilled yet — either because a new
+    /// day rolled over since the last successful refresh, or because the initial
+    /// backfill from the currency switch never completed. Requests the full backfill
+    /// window in the latter case (no historical data exists yet) and a small buffer
+    /// otherwise, since the cache writer upserts and a full re-fetch on every tick
+    /// would be wasteful.
+    func historicalFXTopUpEffect(_ state: inout State, currency: FiatCurrency) -> Effect<Action> {
+        let today = HistoricalPriceCalendar.utcStartOfDay(for: currentDate.now())
+        guard state.historicalFXLastRefreshDay != today else { return .none }
+        let days = state.historicalFXLastRefreshDay == nil
+            ? HistoricalPriceBackfillSettings.chartHorizonDays
+            : Self.historicalFXTopUpDays
+        return .run { send in
+            do {
+                let result = try await currencyConversion.refreshHistoricalRates(currency, days)
+                await send(.historicalFXTopUpCompleted(currency, .success(result)))
+            } catch {
+                guard !Task.isCancelled else { return }
+                await send(.historicalFXTopUpCompleted(
+                    currency,
+                    .failure(CurrencyConversionRefreshError(message: error.localizedDescription))))
+            }
+        }
+        .cancellable(id: CancelID.historicalFXTopUp, cancelInFlight: true)
     }
 
     func pricePollingEffect(request: PricePollingRequest, currency: FiatCurrency, rate: Decimal) -> Effect<Action> {
