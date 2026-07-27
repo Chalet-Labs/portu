@@ -37,9 +37,20 @@ public extension ZerionProvider {
 
                 for resource in envelope.data {
                     for implementation in resource.attributes.implementations {
-                        let key = implementation.address.map {
-                            "\(implementation.chainID):\($0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
-                        } ?? implementation.chainID
+                        guard let chain = try? ZerionChainMapping.chain(for: implementation.chainID) else {
+                            continue
+                        }
+                        let returnedIdentity: OnchainTokenIdentity = if
+                            let address = implementation.address?
+                                .trimmingCharacters(in: .whitespacesAndNewlines),
+                            !address.isEmpty {
+                            OnchainTokenIdentity(chain: chain, contractAddress: address)
+                        } else {
+                            .native(on: chain)
+                        }
+                        guard let key = try? ZerionChainMapping.implementation(for: returnedIdentity) else {
+                            continue
+                        }
                         guard let identity = requested[key], let marketData = resource.attributes.marketData else {
                             continue
                         }

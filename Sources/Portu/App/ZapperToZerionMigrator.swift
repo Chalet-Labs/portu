@@ -32,6 +32,10 @@ enum ZapperToZerionMigrator {
     private static func canMigrate(_ account: Account) -> Bool {
         let explicitAddressChains = account.addresses.compactMap(\.chain)
         let cachedPositionChains = account.positions.compactMap(\.chain)
+        let isSolanaAccount = explicitAddressChains.contains(.solana) || cachedPositionChains.contains(.solana)
+        if isSolanaAccount, account.positions.contains(where: { $0.positionType != .idle }) {
+            return false
+        }
         return (explicitAddressChains + cachedPositionChains)
             .allSatisfy(ZerionChainMapping.supportsPositions(on:))
     }

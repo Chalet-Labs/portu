@@ -114,6 +114,28 @@ struct SecretStoreTests {
         #expect(try source.get(key: key) == "secret")
         #expect(try destination.get(key: key) == nil)
     }
+
+    @Test func `secret migration continues with later keys after one key fails`() throws {
+        let source = MigrationTestSecretStore()
+        let destination = MigrationTestSecretStore()
+        let failingKey = KeychainKey.exchangeAPIKey(UUID())
+        let laterKey = KeychainKey.providerAPIKey(.zerion)
+        try source.set(key: failingKey, value: "exchange-secret")
+        try source.set(key: laterKey, value: "zerion-secret")
+        destination.setErrors[failingKey.rawKey] = .interactionNotAllowed
+
+        #expect(throws: KeychainError.interactionNotAllowed) {
+            try SecretStoreMigration.migrate(
+                keys: [failingKey, laterKey],
+                from: source,
+                to: destination)
+        }
+
+        #expect(try source.get(key: failingKey) == "exchange-secret")
+        #expect(try destination.get(key: failingKey) == nil)
+        #expect(try source.get(key: laterKey) == nil)
+        #expect(try destination.get(key: laterKey) == "zerion-secret")
+    }
 }
 
 struct KeychainServiceTests {
@@ -331,12 +353,14 @@ private final class MigrationTestSecretStore: SecretStore, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [String: String] = [:]
     var setError: KeychainError?
+    var setErrors: [String: KeychainError] = [:]
 
     func get(key: KeychainKey) throws(KeychainError) -> String? {
         lock.withLock { storage[key.rawKey] }
     }
 
     func set(key: KeychainKey, value: String) throws(KeychainError) {
+        if let error = setErrors[key.rawKey] { throw error }
         if let setError { throw setError }
         lock.withLock { storage[key.rawKey] = value }
     }

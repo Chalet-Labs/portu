@@ -22,13 +22,14 @@ enum PricePollingIDResolver {
         var seenOnchainIdentities: Set<OnchainTokenIdentity> = []
 
         for id in ids {
-            let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard !normalized.isEmpty else { continue }
-            if let identity = OnchainTokenIdentity(historicalPriceID: normalized) {
+            let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            if let identity = OnchainTokenIdentity(historicalPriceID: trimmed) {
                 guard !seenOnchainIdentities.contains(identity) else { continue }
                 seenOnchainIdentities.insert(identity)
                 onchainIdentities.append(identity)
             } else {
+                let normalized = trimmed.lowercased()
                 guard !seenCoinGeckoIDs.contains(normalized) else { continue }
                 seenCoinGeckoIDs.insert(normalized)
                 coinGeckoIDs.append(normalized)

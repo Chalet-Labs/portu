@@ -6,26 +6,43 @@ public enum SecretStoreMigration {
         keys: [KeychainKey],
         from source: any SecretStore,
         to destination: any SecretStore) throws(KeychainError) {
+        var firstError: KeychainError?
         for key in keys {
-            guard let sourceValue = try source.get(key: key) else {
-                continue
-            }
-
-            if let destinationValue = try destination.get(key: key) {
-                guard destinationValue == sourceValue else {
-                    // Preserve both values rather than overwriting a newer secure
-                    // credential or deleting the only recoverable plaintext copy.
-                    continue
+            do {
+                try migrate(key: key, from: source, to: destination)
+            } catch {
+                if firstError == nil {
+                    firstError = error
                 }
-                try source.delete(key: key)
-                continue
             }
+        }
+        if let firstError {
+            throw firstError
+        }
+    }
 
-            try destination.set(key: key, value: sourceValue)
-            guard try destination.get(key: key) == sourceValue else {
-                throw .encodingFailed
+    private static func migrate(
+        key: KeychainKey,
+        from source: any SecretStore,
+        to destination: any SecretStore) throws(KeychainError) {
+        guard let sourceValue = try source.get(key: key) else {
+            return
+        }
+
+        if let destinationValue = try destination.get(key: key) {
+            guard destinationValue == sourceValue else {
+                // Preserve both values rather than overwriting a newer secure
+                // credential or deleting the only recoverable plaintext copy.
+                return
             }
             try source.delete(key: key)
+            return
         }
+
+        try destination.set(key: key, value: sourceValue)
+        guard try destination.get(key: key) == sourceValue else {
+            throw .encodingFailed
+        }
+        try source.delete(key: key)
     }
 }

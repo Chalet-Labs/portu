@@ -250,6 +250,14 @@ struct APIKeysViewModelTests {
         }
     }
 
+    @Test func `live pricing treats a failed Zerion key read as unavailable`() throws {
+        let configured = MockSecretStore()
+        try configured.set(key: .providerAPIKey(.zerion), value: " zerion-key ")
+
+        #expect(PortuApp.zerionAPIKeyIfAvailable(from: configured) == "zerion-key")
+        #expect(PortuApp.zerionAPIKeyIfAvailable(from: FailingSecretStore()) == nil)
+    }
+
     @Test func `save deletes keys when field cleared`() async throws {
         let store = MockSecretStore()
         try store.set(key: .providerAPIKey(.zerion), value: "old-key")

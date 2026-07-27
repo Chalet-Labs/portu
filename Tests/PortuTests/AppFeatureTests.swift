@@ -921,6 +921,18 @@ struct AppFeatureTests {
         #expect(request.onchainIdentities == [priority, lowerPriority])
     }
 
+    @Test func `price polling id split preserves Solana mint case`() {
+        let solana = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+
+        let request = PricePollingIDResolver.split([
+            solana.historicalPriceID,
+            "BITCOIN"
+        ])
+
+        #expect(request.coinGeckoIDs == ["bitcoin"])
+        #expect(request.onchainIdentities == [solana])
+    }
+
     @Test func `price polling updates merge coingecko and onchain results`() {
         let update = PricePollingIDResolver.merge([
             PriceUpdate(prices: ["bitcoin": 70000], changes24h: ["bitcoin": 0.02]),

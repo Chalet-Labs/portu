@@ -181,6 +181,25 @@ struct ModelContainerFactoryTests {
         #expect(Set(wallet.positions.compactMap(\.chain)) == [.ethereum, .mode])
     }
 
+    @Test func `zapper Solana wallet with cached DeFi positions remains read only`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let staking = Position(positionType: .staking, chain: .solana)
+        let wallet = Account(
+            name: "Legacy Solana staking wallet",
+            kind: .wallet,
+            dataSource: .zapper,
+            positions: [staking])
+        wallet.addresses = [WalletAddress(chain: .solana, address: "SoLanaWallet", account: wallet)]
+        context.insert(wallet)
+        try context.save()
+
+        try ZapperToZerionMigrator.migrate(in: context)
+
+        #expect(wallet.dataSource == .zapper)
+        #expect(wallet.positions.map(\.positionType) == [.staking])
+    }
+
     private func copyFixture(named name: String, to destination: URL, fileManager: FileManager) throws {
         let fixture = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

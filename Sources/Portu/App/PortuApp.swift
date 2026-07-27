@@ -162,7 +162,7 @@ struct PortuApp: App {
                     priceService: priceService) { identities in
                         guard
                             !identities.isEmpty,
-                            try zerionAPIKey(from: secretStore) != nil
+                            zerionAPIKeyIfAvailable(from: secretStore) != nil
                         else {
                             return PricePollingIDResolver.emptyUpdate
                         }
@@ -180,7 +180,7 @@ struct PortuApp: App {
             fetchOnchainFallbackPrices: { identities, currency, usdToDisplayRate in
                 guard
                     !identities.isEmpty,
-                    try zerionAPIKey(from: secretStore) != nil
+                    zerionAPIKeyIfAvailable(from: secretStore) != nil
                 else {
                     return PricePollingIDResolver.emptyUpdate(currency: currency)
                 }
@@ -220,6 +220,10 @@ struct PortuApp: App {
         let value = try secretStore.get(key: .providerAPIKey(.zerion))?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return value?.isEmpty == false ? value : nil
+    }
+
+    nonisolated static func zerionAPIKeyIfAvailable(from secretStore: any SecretStore) -> String? {
+        readAPIKey(named: "Zerion", from: secretStore, key: .providerAPIKey(.zerion))
     }
 
     nonisolated static func secretStoreService(
