@@ -132,6 +132,9 @@ struct ZerionProviderTests {
             data: JSONSerialization.data(withJSONObject: fixtureObject),
             encoding: .utf8))
             .replacingOccurrences(of: "ethereum", with: "solana")
+            .replacingOccurrences(
+                of: #""address":null"#,
+                with: #""address":"SoLanaMiNtCase""#)
         ZerionMockURLProtocol.respond { request in
             let components = try #require(URLComponents(url: request.url!, resolvingAgainstBaseURL: false))
             let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
@@ -143,7 +146,11 @@ struct ZerionProviderTests {
             session: makeZerionMockSession(),
             minimumRequestInterval: .zero))
 
-        _ = try await provider.fetchPositions(context: makeSyncContext(chain: .solana))
+        let positions = try await provider.fetchPositions(context: makeSyncContext(chain: .solana))
+        let token = try #require(positions.first?.tokens.first)
+
+        #expect(token.contractAddress == "SoLanaMiNtCase")
+        #expect(token.sourceKey == "asset:solana:SoLanaMiNtCase")
     }
 
     @Test(arguments: [Chain.mode, .opBNB, .ronin, .taiko])

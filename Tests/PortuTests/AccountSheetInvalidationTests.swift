@@ -109,6 +109,33 @@ struct AccountSheetInvalidationTests {
         #expect(store.mainThreadFlags.allSatisfy { !$0 })
     }
 
+    @Test func `retained Zapper wallet identity cannot be edited destructively`() async throws {
+        let context = try makeModelContext()
+        let account = Account(name: "Legacy", kind: .wallet, dataSource: .zapper)
+        let address = WalletAddress(chain: .bitcoin, address: "old-address", account: account)
+        account.addresses = [address]
+        context.insert(account)
+        context.insert(address)
+        insertSyncedPosition(for: account, in: context)
+        try context.save()
+
+        var draft = AccountSheetDraft.editing(account: account)
+        draft.isEVM = true
+        draft.chainAddress = "0xnew"
+
+        await #expect(throws: AccountSheetSaveError.self) {
+            try await AccountSheetSaveCoordinator.save(
+                draft: draft,
+                mode: .edit(account.id),
+                editing: account,
+                modelContext: context,
+                secretStore: InMemorySecretStore())
+        }
+
+        #expect(account.addresses.map(\.address) == ["old-address"])
+        #expect(account.positions.count == 1)
+    }
+
     private func makeModelContext() throws -> ModelContext {
         let schema = Schema([
             Account.self,

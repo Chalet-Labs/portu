@@ -166,9 +166,11 @@ public actor ZerionProvider: PortfolioDataProvider {
         }
         let amount = parsedAmount < 0 ? -parsedAmount : parsedAmount
         let value = attributes.value ?? 0
-        let address = implementation.address?
+        let trimmedAddress = implementation.address?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
+        let address = chain == .solana
+            ? trimmedAddress
+            : trimmedAddress?.lowercased()
         let identity = if let address, !address.isEmpty {
             OnchainTokenIdentity(chain: chain, contractAddress: address)
         } else {

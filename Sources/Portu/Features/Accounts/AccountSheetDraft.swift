@@ -230,6 +230,9 @@ enum AccountSheetSaveCoordinator {
                 for: account,
                 chain: chain,
                 address: draft.chainAddress)
+            if account.dataSource == .zapper, identityChanged {
+                throw AccountSheetSaveError.legacyAccountReadOnly
+            }
             account.name = draft.chainName
             account.group = nilIfEmpty(draft.chainGroup)
             account.notes = nilIfEmpty(draft.chainNotes)

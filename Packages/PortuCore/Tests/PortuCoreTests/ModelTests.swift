@@ -345,6 +345,16 @@ struct ModelTests {
         #expect(OnchainTokenIdentity(historicalPriceID: "asset:ethereum:native") == identity)
     }
 
+    @Test func `onchain identity preserves Solana mint case and normalizes EVM addresses`() {
+        let solana = OnchainTokenIdentity(chain: .solana, contractAddress: " SoLanaMiNtCase ")
+        let evm = OnchainTokenIdentity(chain: .base, contractAddress: " 0xAbCd ")
+
+        #expect(solana.contractAddress == "SoLanaMiNtCase")
+        #expect(solana.canonicalPriceID == "asset:solana:SoLanaMiNtCase")
+        #expect(OnchainTokenIdentity(historicalPriceID: solana.historicalPriceID) == solana)
+        #expect(evm.contractAddress == "0xabcd")
+    }
+
     @Test func `onchain identity parses camel case chain ids case insensitively`() throws {
         let polygon = try #require(OnchainTokenIdentity(historicalPriceID: "zapper:polygonzkevm:0xABCDEF"))
         let immutable = try #require(OnchainTokenIdentity(historicalPriceID: "zapper:immutablex:0xABCDEF"))

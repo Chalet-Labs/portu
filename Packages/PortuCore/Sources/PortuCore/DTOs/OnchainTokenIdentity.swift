@@ -17,13 +17,13 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
     }
 
     public init?(historicalPriceID: String) {
-        let normalized = historicalPriceID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let parts = normalized.split(separator: ":", omittingEmptySubsequences: false)
+        let trimmed = historicalPriceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = trimmed.split(separator: ":", omittingEmptySubsequences: false)
         guard
             parts.count == 3,
-            parts[0] == "asset" || parts[0] == "zapper",
+            parts[0].lowercased() == "asset" || parts[0].lowercased() == "zapper",
             let chain = Chain.normalized(rawValue: String(parts[1])),
-            let contractAddress = Self.normalizedContractAddress(String(parts[2]))
+            let contractAddress = Self.normalizedContractAddress(String(parts[2]), chain: chain)
         else {
             return nil
         }
@@ -32,7 +32,7 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
     }
 
     public init?(chain: Chain?, contractAddress: String?) {
-        guard let chain, let normalized = Self.normalizedContractAddress(contractAddress) else {
+        guard let chain, let normalized = Self.normalizedContractAddress(contractAddress, chain: chain) else {
             return nil
         }
         self.chain = chain
@@ -44,7 +44,7 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
     /// in debug builds on empty/whitespace input — earlier code silently kept the
     /// unnormalized string, which broke `Hashable` and `canonicalPriceID` parity.
     public init(chain: Chain, contractAddress: String) {
-        guard let normalized = Self.normalizedContractAddress(contractAddress) else {
+        guard let normalized = Self.normalizedContractAddress(contractAddress, chain: chain) else {
             assertionFailure(
                 "OnchainTokenIdentity requires a non-empty contract address; got \(contractAddress.debugDescription)")
             self.chain = chain
@@ -59,12 +59,13 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
         Self(chain: chain, contractAddress: nativeAssetSentinel)
     }
 
-    private static func normalizedContractAddress(_ address: String?) -> String? {
+    private static func normalizedContractAddress(_ address: String?, chain: Chain) -> String? {
         guard let address else { return nil }
-        let normalized = address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if normalized == "native" {
+        let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.lowercased() == "native" {
             return nativeAssetSentinel
         }
+        let normalized = chain == .solana ? trimmed : trimmed.lowercased()
         return normalized.isEmpty ? nil : normalized
     }
 }
