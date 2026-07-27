@@ -4,6 +4,7 @@ import PortuCore
 import Testing
 
 @Suite(.serialized)
+// swiftlint:disable:next type_body_length
 struct ZerionProviderTests {
     init() {
         ZerionMockURLProtocol.reset()
@@ -180,6 +181,31 @@ struct ZerionProviderTests {
         #expect(ZerionMockURLProtocol.requests.compactMap(\.url?.path) == [
             "/v1/wallets/0xa/positions",
             "/v1/wallets/0xb/positions"
+        ])
+    }
+
+    @Test func `EVM address deduplication ignores case while Solana preserves it`() async throws {
+        defer { ZerionMockURLProtocol.reset() }
+        ZerionMockURLProtocol.respond { _ in
+            .init(data: Data(#"{"data":[],"links":{}}"#.utf8), statusCode: 200, headers: [:])
+        }
+        let provider = ZerionProvider(client: ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionMockSession(),
+            minimumRequestInterval: .zero))
+        let context = makeSyncContext(addresses: [
+            ("0xAbC", nil),
+            ("0xabc", nil),
+            ("SolCase", .solana),
+            ("solcase", .solana)
+        ])
+
+        _ = try await provider.fetchPositions(context: context)
+
+        #expect(ZerionMockURLProtocol.requests.compactMap(\.url?.path) == [
+            "/v1/wallets/0xabc/positions",
+            "/v1/wallets/SolCase/positions",
+            "/v1/wallets/solcase/positions"
         ])
     }
 

@@ -73,13 +73,16 @@ public actor ZerionProvider: PortfolioDataProvider {
         for addressEntry in context.addresses {
             let address = addressEntry.address.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !address.isEmpty else { continue }
+            let normalizedAddress = addressEntry.chain == .solana
+                ? address
+                : address.lowercased()
             let chunks: [[String]] = if let chain = addressEntry.chain {
                 try [[ZerionChainMapping.positionID(for: chain)]]
             } else {
                 ZerionChainMapping.genericEVMChainIDChunks
             }
             for chainIDs in chunks {
-                keys.insert(RequestKey(address: address, chainIDs: chainIDs))
+                keys.insert(RequestKey(address: normalizedAddress, chainIDs: chainIDs))
             }
         }
         return keys.sorted {
