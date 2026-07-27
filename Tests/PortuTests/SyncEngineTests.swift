@@ -109,6 +109,21 @@ struct SyncEngineTests {
         }
     }
 
+    @Test func `provider factory preserves surviving legacy Zapper accounts as read only`() throws {
+        let secretStore = MockSecretStore()
+        try secretStore.set(key: .providerAPIKey(.zerion), value: "zerion-key")
+        let factory = ProviderFactory(secretStore: secretStore)
+        let context = SyncContext(
+            accountId: UUID(),
+            kind: .wallet,
+            addresses: [("0xabc", nil)],
+            exchangeType: nil)
+
+        #expect(throws: SyncError.unsupportedLegacyAccount) {
+            _ = try factory.makeProvider(for: .zapper, context: context)
+        }
+    }
+
     @Test func `unsupported legacy Bitcoin wallet preserves its last known positions`() async throws {
         let context = try makeModelContext()
         let secretStore = MockSecretStore()

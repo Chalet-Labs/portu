@@ -1,6 +1,6 @@
 import PortuCore
 
-enum ZerionChainMapping {
+public enum ZerionChainMapping {
     /// Verified against GET /v1/chains/ on 2026-07-26.
     static let verified: [Chain: String] = [
         .ethereum: "ethereum",
@@ -61,6 +61,10 @@ enum ZerionChainMapping {
             throw ZerionError.unsupportedChain(chain.rawValue)
         }
         return try id(for: chain)
+    }
+
+    public static func supportsPositions(on chain: Chain) -> Bool {
+        (try? positionID(for: chain)) != nil
     }
 
     static func chain(for id: String) throws -> Chain {

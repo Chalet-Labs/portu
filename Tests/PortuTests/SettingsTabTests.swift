@@ -125,6 +125,21 @@ struct SettingsTabTests {
         #expect(defaults.double(forKey: "providerIntervals.zapperPortfolioSync") == 86400)
     }
 
+    @Test func `legacy Zapper live price interval migrates once without overwriting new value`() throws {
+        let suite = "ProviderLivePriceIntervalMigration.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(0.0, forKey: "providerIntervals.zapperLivePrice")
+
+        ProviderIntervalSettings.migrateLegacyPreferences(defaults: defaults)
+
+        #expect(defaults.object(forKey: ProviderIntervalSettings.onchainLivePriceIntervalKey) as? Double == 0)
+        defaults.set(600.0, forKey: ProviderIntervalSettings.onchainLivePriceIntervalKey)
+        ProviderIntervalSettings.migrateLegacyPreferences(defaults: defaults)
+        #expect(defaults.double(forKey: ProviderIntervalSettings.onchainLivePriceIntervalKey) == 600)
+        #expect(defaults.double(forKey: "providerIntervals.zapperLivePrice") == 0)
+    }
+
     @Test func `provider interval settings convert manual only to no duration`() {
         let defaults = cleanDefaults()
 

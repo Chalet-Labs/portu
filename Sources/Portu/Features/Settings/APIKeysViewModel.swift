@@ -14,7 +14,7 @@ final class APIKeysViewModel {
 
     private let secretStore: SecretStore
 
-    init(secretStore: SecretStore = KeychainService()) {
+    init(secretStore: SecretStore = PortuApp.makeSecretStore()) {
         self.secretStore = secretStore
     }
 

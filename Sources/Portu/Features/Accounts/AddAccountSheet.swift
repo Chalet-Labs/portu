@@ -27,7 +27,7 @@ struct AddAccountSheet: View {
         canSync: Bool = false,
         isSyncBlocked: Bool = false,
         onSync: ((UUID) -> Void)? = nil,
-        secretStore: any SecretStore = KeychainService()) {
+        secretStore: any SecretStore = PortuApp.makeSecretStore()) {
         self.mode = mode
         self.account = account
         self.isSyncing = isSyncing

@@ -43,6 +43,7 @@ enum SyncError: Error, LocalizedError, Equatable {
     case accountNotFound
     case accountNotSyncable
     case accountInactive
+    case unsupportedLegacyAccount
 
     var errorDescription: String? {
         switch self {
@@ -52,6 +53,8 @@ enum SyncError: Error, LocalizedError, Equatable {
         case .accountNotFound: "Account not found"
         case .accountNotSyncable: "Account is not syncable"
         case .accountInactive: "Inactive accounts cannot be synced"
+        case .unsupportedLegacyAccount:
+            "Legacy Zapper holdings use chains that Zerion cannot sync; cached positions were preserved read-only"
         }
     }
 }

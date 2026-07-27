@@ -1,3 +1,4 @@
+import Foundation
 @testable import Portu
 import PortuCore
 import Testing
@@ -31,6 +32,41 @@ private final class FailingSecretStore: SecretStore, @unchecked Sendable {
     }
 }
 
+private final class ThreadRecordingSecretStore: SecretStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [String: String]
+    private var recordedMainThreadFlags: [Bool] = []
+
+    init(storage: [String: String] = [:]) {
+        self.storage = storage
+    }
+
+    var mainThreadFlags: [Bool] {
+        lock.withLock { recordedMainThreadFlags }
+    }
+
+    func get(key: KeychainKey) throws(KeychainError) -> String? {
+        lock.withLock {
+            recordedMainThreadFlags.append(Thread.isMainThread)
+            return storage[key.rawKey]
+        }
+    }
+
+    func set(key: KeychainKey, value: String) throws(KeychainError) {
+        lock.withLock {
+            recordedMainThreadFlags.append(Thread.isMainThread)
+            storage[key.rawKey] = value
+        }
+    }
+
+    func delete(key: KeychainKey) throws(KeychainError) {
+        lock.withLock {
+            recordedMainThreadFlags.append(Thread.isMainThread)
+            storage.removeValue(forKey: key.rawKey)
+        }
+    }
+}
+
 @MainActor
 struct APIKeysViewModelTests {
     @Test
@@ -43,9 +79,39 @@ struct APIKeysViewModelTests {
             bundleIdentifier: "com.portu.app") == "com.portu.app")
     }
 
+    @Test func `default secret store factory uses the isolated test service`() {
+        var capturedService: String?
+
+        _ = PortuApp.makeSecretStore(
+            environment: ["XCTestConfigurationFilePath": "/tmp/tests.xctestconfiguration"],
+            bundleIdentifier: "com.portu.app") { service in
+                capturedService = service
+                return MockSecretStore()
+            }
+
+        #expect(capturedService == "com.portu.app.tests")
+    }
+
     @Test func `startup migration excludes retired Zapper credential`() {
         #expect(PortuApp.providerSecretMigrationKeys.contains(.providerAPIKey(.zerion)))
         #expect(!PortuApp.providerSecretMigrationKeys.contains(.providerAPIKey(.zapper)))
+    }
+
+    @Test func `startup secret migration completes off main before dependencies read keys`() throws {
+        let key = KeychainKey.providerAPIKey(.zerion)
+        let source = ThreadRecordingSecretStore(storage: [key.rawKey: "legacy-zerion-key"])
+        let destination = ThreadRecordingSecretStore()
+
+        try PortuApp.migrateSecretsBeforeDependencyConstruction(
+            keys: [key],
+            from: source,
+            to: destination)
+
+        let migrationThreadFlags = source.mainThreadFlags + destination.mainThreadFlags
+        #expect(!migrationThreadFlags.isEmpty)
+        #expect(migrationThreadFlags.allSatisfy { !$0 })
+        #expect(try destination.get(key: key) == "legacy-zerion-key")
+        #expect(try source.get(key: key) == nil)
     }
 
     // MARK: - Initial State

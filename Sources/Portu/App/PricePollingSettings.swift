@@ -37,14 +37,27 @@ enum ProviderIntervalSettings {
     static let allowedExchangePortfolioSyncIntervalSeconds: Set<Double> = [0, 600, 3600, 21600, 86400]
 
     static func migrateLegacyPreferences(defaults: UserDefaults = .standard) {
-        let legacyPortfolioKey = "providerIntervals.zapperPortfolioSync"
+        migrateLegacyValue(
+            from: "providerIntervals.zapperLivePrice",
+            to: onchainLivePriceIntervalKey,
+            defaults: defaults)
+        migrateLegacyValue(
+            from: "providerIntervals.zapperPortfolioSync",
+            to: onchainPortfolioSyncIntervalKey,
+            defaults: defaults)
+    }
+
+    private static func migrateLegacyValue(
+        from legacyKey: String,
+        to currentKey: String,
+        defaults: UserDefaults) {
         guard
-            defaults.object(forKey: onchainPortfolioSyncIntervalKey) == nil,
-            let legacyValue = defaults.object(forKey: legacyPortfolioKey) as? Double
+            defaults.object(forKey: currentKey) == nil,
+            let legacyValue = defaults.object(forKey: legacyKey) as? Double
         else {
             return
         }
-        defaults.set(legacyValue, forKey: onchainPortfolioSyncIntervalKey)
+        defaults.set(legacyValue, forKey: currentKey)
     }
 
     static func onchainLivePriceIntervalSeconds(defaults: UserDefaults = .standard) -> Double {

@@ -2,6 +2,21 @@ import Foundation
 @testable import PortuNetwork
 import Testing
 
+private final class PacingSleepRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recordedDurations: [Duration] = []
+
+    var durations: [Duration] {
+        lock.withLock { recordedDurations }
+    }
+
+    func sleep(for duration: Duration) async throws {
+        lock.withLock {
+            recordedDurations.append(duration)
+        }
+    }
+}
+
 @Suite(.serialized)
 struct ZerionAPIClientTests {
     init() {
@@ -106,6 +121,23 @@ struct ZerionAPIClientTests {
 
         #expect(response.data.isEmpty)
         #expect(ZerionAPIClientMockURLProtocol.requests.count == 4)
+    }
+
+    @Test func `request pacing reserves later slots before sleeping`() async throws {
+        defer { ZerionAPIClientMockURLProtocol.reset() }
+        let sleepRecorder = PacingSleepRecorder()
+        let client = ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionAPIClientMockSession(),
+            minimumRequestInterval: .seconds(1),
+            pacingNow: { .zero },
+            pacingSleep: { try await sleepRecorder.sleep(for: $0) })
+
+        for _ in 0 ..< 3 {
+            let _: ZerionCollectionEnvelope<ZerionEmptyResource> = try await client.get(path: "chains/")
+        }
+
+        #expect(sleepRecorder.durations == [.seconds(1), .seconds(2)])
     }
 
     @Test func `organization quota headers are retained in a rate limit error`() async {

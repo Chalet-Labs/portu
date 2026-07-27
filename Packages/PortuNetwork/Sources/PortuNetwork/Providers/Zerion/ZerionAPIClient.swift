@@ -2,6 +2,8 @@ import Foundation
 
 public actor ZerionAPIClient {
     public typealias APIKeyProvider = @Sendable () throws -> String
+    typealias PacingNow = @Sendable () -> Duration
+    typealias PacingSleep = @Sendable (Duration) async throws -> Void
 
     private static let baseURL = URL(string: "https://api.zerion.io/v1/")!
 
@@ -11,8 +13,10 @@ public actor ZerionAPIClient {
     private let minimumRequestInterval: Duration
     private let maximumRetryAttempts: Int
     private let maximumRetryDelaySeconds: Int
-    private let clock = ContinuousClock()
-    private var lastRequestInstant: ContinuousClock.Instant?
+    private let clock: ContinuousClock
+    private let pacingNow: PacingNow
+    private let pacingSleep: PacingSleep
+    private var nextRequestTime: Duration?
 
     public init(
         apiKey: @escaping APIKeyProvider,
@@ -26,6 +30,30 @@ public actor ZerionAPIClient {
         self.maximumRetryAttempts = max(0, maximumRetryAttempts)
         self.maximumRetryDelaySeconds = max(0, maximumRetryDelaySeconds)
         self.decoder = JSONDecoder()
+        let clock = ContinuousClock()
+        let origin = clock.now
+        self.clock = clock
+        self.pacingNow = { origin.duration(to: clock.now) }
+        self.pacingSleep = { try await clock.sleep(for: $0) }
+    }
+
+    init(
+        apiKey: @escaping APIKeyProvider,
+        session: URLSession,
+        minimumRequestInterval: Duration,
+        maximumRetryAttempts: Int = 2,
+        maximumRetryDelaySeconds: Int = 10,
+        pacingNow: @escaping PacingNow,
+        pacingSleep: @escaping PacingSleep) {
+        self.apiKey = apiKey
+        self.session = session
+        self.minimumRequestInterval = minimumRequestInterval
+        self.maximumRetryAttempts = max(0, maximumRetryAttempts)
+        self.maximumRetryDelaySeconds = max(0, maximumRetryDelaySeconds)
+        self.decoder = JSONDecoder()
+        self.clock = ContinuousClock()
+        self.pacingNow = pacingNow
+        self.pacingSleep = pacingSleep
     }
 
     func get<Response: Decodable & Sendable>(
@@ -101,13 +129,12 @@ public actor ZerionAPIClient {
     }
 
     private func paceRequest() async throws {
-        if let lastRequestInstant {
-            let elapsed = lastRequestInstant.duration(to: clock.now)
-            if elapsed < minimumRequestInterval {
-                try await clock.sleep(for: minimumRequestInterval - elapsed)
-            }
+        let now = pacingNow()
+        let slot = nextRequestTime.map { max(now, $0) } ?? now
+        nextRequestTime = slot + minimumRequestInterval
+        if slot > now {
+            try await pacingSleep(slot - now)
         }
-        lastRequestInstant = clock.now
     }
 
     private func validate(_ url: URL) throws {

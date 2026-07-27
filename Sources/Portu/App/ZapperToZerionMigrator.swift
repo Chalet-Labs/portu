@@ -1,4 +1,5 @@
 import PortuCore
+import PortuNetwork
 import SwiftData
 
 enum ZapperToZerionMigrator {
@@ -8,7 +9,10 @@ enum ZapperToZerionMigrator {
         save: (ModelContext) throws -> Void = { try $0.save() }) throws {
         let accounts = try modelContext.fetch(FetchDescriptor<Account>())
         var migratedAccounts: [Account] = []
-        for account in accounts where account.kind == .wallet && account.dataSource == .zapper {
+        for account in accounts where
+            account.kind == .wallet &&
+            account.dataSource == .zapper &&
+            canMigrate(account) {
             account.dataSource = .zerion
             migratedAccounts.append(account)
         }
@@ -23,5 +27,12 @@ enum ZapperToZerionMigrator {
                 throw error
             }
         }
+    }
+
+    private static func canMigrate(_ account: Account) -> Bool {
+        let explicitAddressChains = account.addresses.compactMap(\.chain)
+        let cachedPositionChains = account.positions.compactMap(\.chain)
+        return (explicitAddressChains + cachedPositionChains)
+            .allSatisfy(ZerionChainMapping.supportsPositions(on:))
     }
 }

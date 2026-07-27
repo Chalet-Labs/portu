@@ -161,6 +161,26 @@ struct ModelContainerFactoryTests {
         #expect(wallet.dataSource == .zapper)
     }
 
+    @Test func `zapper wallet with unsupported cached holdings remains read only`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let supported = Position(positionType: .idle, chain: .ethereum)
+        let unsupported = Position(positionType: .idle, chain: .mode)
+        let wallet = Account(
+            name: "Legacy mixed wallet",
+            kind: .wallet,
+            dataSource: .zapper,
+            positions: [supported, unsupported])
+        wallet.addresses = [WalletAddress(chain: nil, address: "0xabc", account: wallet)]
+        context.insert(wallet)
+        try context.save()
+
+        try ZapperToZerionMigrator.migrate(in: context)
+
+        #expect(wallet.dataSource == .zapper)
+        #expect(Set(wallet.positions.compactMap(\.chain)) == [.ethereum, .mode])
+    }
+
     private func copyFixture(named name: String, to destination: URL, fileManager: FileManager) throws {
         let fixture = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

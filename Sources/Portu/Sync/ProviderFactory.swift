@@ -18,7 +18,9 @@ struct ProviderFactory {
             session: session))
         self.resolver = { dataSource, _ in
             switch dataSource {
-            case .zapper, .zerion:
+            case .zapper:
+                throw SyncError.unsupportedLegacyAccount
+            case .zerion:
                 guard
                     let apiKey = try secretStore.get(key: .providerAPIKey(.zerion)),
                     !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

@@ -122,7 +122,7 @@ enum AccountSheetSaveCoordinator {
         mode: AccountSheetMode,
         editing account: Account?,
         modelContext: ModelContext,
-        secretStore: any SecretStore = KeychainService()) throws {
+        secretStore: any SecretStore = PortuApp.makeSecretStore()) throws {
         switch mode {
         case .add:
             try insertAccount(from: draft, modelContext: modelContext, secretStore: secretStore)

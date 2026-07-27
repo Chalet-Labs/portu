@@ -72,8 +72,10 @@ public extension ZerionProvider {
         }
 
         var latestByDay: [Date: HistoricalPriceDTO] = [:]
+        let cutoff = Date.now.addingTimeInterval(-TimeInterval(max(days, 1)) * 86400)
         for point in envelope.data.attributes.points where point.timestamp.isFinite && point.price > 0 {
             let date = Date(timeIntervalSince1970: point.timestamp)
+            guard date >= cutoff else { continue }
             let dto = HistoricalPriceDTO(
                 coinGeckoId: identity.historicalPriceID,
                 timestamp: date,

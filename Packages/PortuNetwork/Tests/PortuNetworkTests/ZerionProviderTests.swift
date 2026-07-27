@@ -40,6 +40,47 @@ struct ZerionProviderTests {
         #expect(token.sourceKey == "asset:ethereum:native")
     }
 
+    @Test func `combined fetch follows pagination before returning positions`() async throws {
+        defer { ZerionMockURLProtocol.reset() }
+        let fixture = try #require(
+            JSONSerialization.jsonObject(with: Data(Self.positionsFixture.utf8)) as? [String: Any])
+        let rows = try #require(fixture["data"] as? [[String: Any]])
+
+        var firstPage = fixture
+        firstPage["data"] = Array(rows.prefix(1))
+        firstPage["links"] = [
+            "next": "https://api.zerion.io/v1/wallets/0xabc/positions/?page=2"
+        ]
+        let firstPageData = try JSONSerialization.data(withJSONObject: firstPage)
+
+        var secondPage = fixture
+        secondPage["data"] = Array(rows.dropFirst())
+        secondPage["links"] = [:]
+        let secondPageData = try JSONSerialization.data(withJSONObject: secondPage)
+
+        ZerionMockURLProtocol.respond { request in
+            let page = try URLComponents(
+                url: #require(request.url),
+                resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first { $0.name == "page" }?
+                .value
+            return .init(
+                data: page == "2" ? secondPageData : firstPageData,
+                statusCode: 200,
+                headers: [:])
+        }
+        let provider = ZerionProvider(client: ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionMockSession(),
+            minimumRequestInterval: .zero))
+
+        let positions = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
+
+        #expect(ZerionMockURLProtocol.requests.count == 2)
+        #expect(Set(positions.flatMap(\.tokens).map(\.symbol)) == ["ETH", "USDT", "WETH"])
+    }
+
     @Test func `complex rows group by chain dapp and group id without counting receipts`() async throws {
         defer { ZerionMockURLProtocol.reset() }
         ZerionMockURLProtocol.respond { _ in
@@ -62,9 +103,11 @@ struct ZerionProviderTests {
         #expect(!lp.tokens.contains { $0.symbol == "UNI-V2" })
     }
 
-    @Test func `unknown response chain fails the complete fetch`() async {
+    @Test func `unknown response chain skips only the malformed resource`() async throws {
         defer { ZerionMockURLProtocol.reset() }
-        let fixture = Self.positionsFixture.replacingOccurrences(of: #""id":"ethereum""#, with: #""id":"future-chain""#)
+        let fixture = Self.positionsFixture.replacingFirstOccurrence(
+            of: #""id":"ethereum""#,
+            with: #""id":"future-chain""#)
         ZerionMockURLProtocol.respond { _ in
             .init(data: Data(fixture.utf8), statusCode: 200, headers: [:])
         }
@@ -73,9 +116,9 @@ struct ZerionProviderTests {
             session: makeZerionMockSession(),
             minimumRequestInterval: .zero))
 
-        await #expect(throws: ZerionError.invalidData("unknown chain future-chain")) {
-            _ = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
-        }
+        let positions = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
+
+        #expect(Set(positions.flatMap(\.tokens).map(\.symbol)) == ["USDT", "WETH"])
     }
 
     @Test func `combined Solana fetch requests simple positions only`() async throws {
@@ -140,7 +183,7 @@ struct ZerionProviderTests {
         ])
     }
 
-    @Test func `invalid exact quantity fails before producing positions`() async {
+    @Test func `invalid exact quantity skips only the malformed resource`() async throws {
         defer { ZerionMockURLProtocol.reset() }
         let invalid = Self.positionsFixture.replacingOccurrences(
             of: #""numeric":"1.123456789012345678""#,
@@ -153,12 +196,12 @@ struct ZerionProviderTests {
             session: makeZerionMockSession(),
             minimumRequestInterval: .zero))
 
-        await #expect(throws: ZerionError.invalidData("invalid quantity")) {
-            _ = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
-        }
+        let positions = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
+
+        #expect(Set(positions.flatMap(\.tokens).map(\.symbol)) == ["USDT", "WETH"])
     }
 
-    @Test func `mismatched implementation chain fails before producing positions`() async {
+    @Test func `mismatched implementation chain skips only the malformed resource`() async throws {
         defer { ZerionMockURLProtocol.reset() }
         let invalid = Self.positionsFixture.replacingOccurrences(
             of: #""implementations": [{"chain_id":"ethereum","address":null,"decimals":18}]"#,
@@ -171,9 +214,9 @@ struct ZerionProviderTests {
             session: makeZerionMockSession(),
             minimumRequestInterval: .zero))
 
-        await #expect(throws: ZerionError.invalidData("missing ethereum implementation")) {
-            _ = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
-        }
+        let positions = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
+
+        #expect(Set(positions.flatMap(\.tokens).map(\.symbol)) == ["USDT", "WETH"])
     }
 
     @Test func `current prices match reordered implementations and normalize percent`() async throws {
@@ -239,6 +282,33 @@ struct ZerionProviderTests {
         #expect(history[0].price == 1910)
         #expect(history[0].source == .zerion)
         #expect(history[1].timestamp == Date(timeIntervalSince1970: 1_785_024_000))
+    }
+
+    @Test func `historical chart excludes points older than the requested horizon`() async throws {
+        defer { ZerionMockURLProtocol.reset() }
+        let now = Date.now
+        let oldTimestamp = Int(now.addingTimeInterval(-120 * 86400).timeIntervalSince1970)
+        let recentTimestamp = Int(now.addingTimeInterval(-30 * 86400).timeIntervalSince1970)
+        let response = """
+        {"data":{"type":"fungible_charts","id":"eth","attributes":{
+          "begin_at":"2026-01-01T00:00:00Z","end_at":"2026-07-26T00:00:00Z",
+          "points":[[\(oldTimestamp),1800],[\(recentTimestamp),2000]]
+        }}}
+        """
+        ZerionMockURLProtocol.respond { request in
+            #expect(request.url?.path == "/v1/fungibles/by-implementation/charts/year")
+            return .init(data: Data(response.utf8), statusCode: 200, headers: [:])
+        }
+        let provider = ZerionProvider(client: ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionMockSession(),
+            minimumRequestInterval: .zero))
+
+        let history = try await provider.fetchHistoricalPrices(
+            identity: .native(on: .ethereum),
+            days: 90)
+
+        #expect(history.map(\.timestamp) == [Date(timeIntervalSince1970: TimeInterval(recentTimestamp))])
     }
 
     // swiftlint:disable line_length
@@ -329,6 +399,13 @@ struct ZerionProviderTests {
     }
     """#
     // swiftlint:enable line_length
+}
+
+private extension String {
+    func replacingFirstOccurrence(of target: String, with replacement: String) -> String {
+        guard let range = range(of: target) else { return self }
+        return replacingCharacters(in: range, with: replacement)
+    }
 }
 
 @Suite(.serialized)

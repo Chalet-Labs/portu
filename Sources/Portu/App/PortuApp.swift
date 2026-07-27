@@ -6,6 +6,7 @@ import PortuNetwork
 import PortuUI
 import SwiftData
 import SwiftUI
+import Synchronization
 
 @main
 struct PortuApp: App {
@@ -49,18 +50,16 @@ struct PortuApp: App {
 
         let modelContext = container.mainContext
         ProviderIntervalSettings.migrateLegacyPreferences()
-        let secretStore = KeychainService(service: Self.secretStoreService())
+        let secretStore = Self.makeSecretStore()
         let secretMigrationKeys = Self.secretMigrationKeys(modelContext: modelContext)
-        Task.detached {
-            do {
-                try SecretStoreMigration.migrate(
-                    keys: secretMigrationKeys,
-                    from: LocalSecretStore(),
-                    to: secretStore)
-            } catch {
-                Self.keychainAccessLogger.error(
-                    "Plaintext secret migration stopped safely: \(String(describing: error), privacy: .public)")
-            }
+        do {
+            try Self.migrateSecretsBeforeDependencyConstruction(
+                keys: secretMigrationKeys,
+                from: LocalSecretStore(),
+                to: secretStore)
+        } catch {
+            Self.keychainAccessLogger.error(
+                "Plaintext secret migration stopped safely: \(String(describing: error), privacy: .public)")
         }
         let zerionClient = ZerionAPIClient(
             apiKey: { try secretStore.get(key: .providerAPIKey(.zerion)) ?? "" },
@@ -229,6 +228,46 @@ struct PortuApp: App {
         environment["XCTestConfigurationFilePath"] == nil
             ? bundleIdentifier
             : "\(bundleIdentifier).tests"
+    }
+
+    nonisolated static func makeSecretStore(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.portu.app",
+        factory: (String) -> any SecretStore = { KeychainService(service: $0) }) -> any SecretStore {
+        factory(secretStoreService(
+            environment: environment,
+            bundleIdentifier: bundleIdentifier))
+    }
+
+    nonisolated static func migrateSecretsBeforeDependencyConstruction(
+        keys: [KeychainKey],
+        from source: any SecretStore,
+        to destination: any SecretStore) throws(KeychainError) {
+        let outcome = Mutex<Result<Void, KeychainError>?>(nil)
+        let completion = DispatchSemaphore(value: 0)
+
+        Thread.detachNewThread {
+            let result: Result<Void, KeychainError>
+            do {
+                try SecretStoreMigration.migrate(
+                    keys: keys,
+                    from: source,
+                    to: destination)
+                result = .success(())
+            } catch let error as KeychainError {
+                result = .failure(error)
+            } catch {
+                result = .failure(.encodingFailed)
+            }
+            outcome.withLock { $0 = result }
+            completion.signal()
+        }
+
+        completion.wait()
+        guard let result = outcome.withLock({ $0 }) else {
+            throw .encodingFailed
+        }
+        try result.get()
     }
 
     nonisolated static func coinGeckoAPIKey(from secretStore: any SecretStore) -> String? {
