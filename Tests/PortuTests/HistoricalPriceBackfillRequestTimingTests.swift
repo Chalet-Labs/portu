@@ -70,6 +70,67 @@ struct BackfillRequestTimingTests {
         #expect(result.fetchedAssets == 1)
     }
 
+    @Test func `keychain preflight failure still backfills CoinGecko candidates`() async throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
+        let mappedAsset = Asset(
+            id: uuid(52),
+            symbol: "AAVE",
+            name: "Aave",
+            coinGeckoId: "aave")
+        let fallbackIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xFallback")
+        let fallbackAsset = Asset(
+            id: uuid(53),
+            symbol: "LOCAL",
+            name: "Local",
+            upsertChain: fallbackIdentity.chain,
+            upsertContract: fallbackIdentity.contractAddress)
+        let position = Position(
+            positionType: .idle,
+            tokens: [
+                PositionToken(role: .balance, amount: 1, usdValue: 100, asset: mappedAsset),
+                PositionToken(role: .balance, amount: 2, usdValue: 20, asset: fallbackAsset)
+            ],
+            account: account)
+        account.positions = [position]
+        context.insert(account)
+        try context.save()
+
+        let coinGeckoRequests = SendableArray<String>()
+        let onchainRequests = SendableArray<OnchainTokenIdentity>()
+        let client = HistoricalPriceBackfillClient.live(
+            modelContext: context,
+            priceService: PriceServiceClient(
+                fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
+                fetchHistoricalPrices: { coinGeckoID, _ in
+                    coinGeckoRequests.append(coinGeckoID)
+                    return [
+                        HistoricalPriceDTO(
+                            coinGeckoId: coinGeckoID,
+                            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+                            usdPrice: 90)
+                    ]
+                },
+                resolveCoinGeckoIDs: { _ in [:] },
+                fetchOnchainHistoricalPrices: { identity, _ in
+                    onchainRequests.append(identity)
+                    return []
+                },
+                canFetchOnchainHistoricalPrices: { throw KeychainError.interactionNotAllowed },
+                invalidateCache: {}),
+            requestSpacing: .zero,
+            sleep: { _ in })
+
+        let result = try await client.run()
+
+        #expect(coinGeckoRequests.values == ["aave"])
+        #expect(onchainRequests.values.isEmpty)
+        #expect(result.requestedAssets == 2)
+        #expect(result.fetchedAssets == 1)
+        #expect(result.failedCoinGeckoIDs == [fallbackIdentity.historicalPriceID])
+    }
+
     private func insertSnapshotOnlyAsset(id: UUID, coinGeckoId: String, context: ModelContext) {
         let asset = Asset(id: id, symbol: coinGeckoId.uppercased(), name: coinGeckoId, coinGeckoId: coinGeckoId)
         context.insert(asset)

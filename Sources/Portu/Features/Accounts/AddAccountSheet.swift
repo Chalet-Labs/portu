@@ -19,6 +19,7 @@ struct AddAccountSheet: View {
     @State private var draft: AccountSheetDraft
     @State private var baselineDraft: AccountSheetDraft
     @State private var didLoadCredentials = false
+    @State private var isSaving = false
     @State private var saveError: String?
 
     init(
@@ -97,7 +98,7 @@ struct AddAccountSheet: View {
         } message: {
             Text(saveError ?? "")
         }
-        .onAppear { loadCredentialsIfNeeded() }
+        .task { await loadCredentialsIfNeeded() }
     }
 
     private var header: some View {
@@ -418,10 +419,12 @@ struct AddAccountSheet: View {
 // MARK: - Sheet State
 
 private extension AddAccountSheet {
-    func loadCredentialsIfNeeded() {
+    func loadCredentialsIfNeeded() async {
         guard !didLoadCredentials, mode.isEditing, let account, account.kind == .exchange else { return }
         didLoadCredentials = true
-        draft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
+        var loadedDraft = draft
+        await loadedDraft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
+        draft = loadedDraft
         // Re-baseline so loaded credentials don't read as unsaved user edits.
         baselineDraft = draft
     }
@@ -439,7 +442,7 @@ private extension AddAccountSheet {
     }
 
     var saveEnabled: Bool {
-        AddAccountSheetSavePolicy.canSubmit(
+        !isSaving && AddAccountSheetSavePolicy.canSubmit(
             draftCanSave: draft.canSave,
             isSyncing: isSyncing,
             isSyncBlocked: isSyncBlocked)
@@ -467,16 +470,20 @@ private extension AddAccountSheet {
 
     func saveAccount() {
         guard saveEnabled else { return }
-        do {
-            try AccountSheetSaveCoordinator.save(
-                draft: draft,
-                mode: mode,
-                editing: account,
-                modelContext: modelContext,
-                secretStore: secretStore)
-            dismiss()
-        } catch {
-            saveError = error.localizedDescription
+        isSaving = true
+        Task { @MainActor in
+            defer { isSaving = false }
+            do {
+                try await AccountSheetSaveCoordinator.save(
+                    draft: draft,
+                    mode: mode,
+                    editing: account,
+                    modelContext: modelContext,
+                    secretStore: secretStore)
+                dismiss()
+            } catch {
+                saveError = error.localizedDescription
+            }
         }
     }
 }

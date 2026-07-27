@@ -54,7 +54,7 @@ enum SyncError: Error, LocalizedError, Equatable {
         case .accountNotSyncable: "Account is not syncable"
         case .accountInactive: "Inactive accounts cannot be synced"
         case .unsupportedLegacyAccount:
-            "Legacy Zapper holdings use chains that Zerion cannot sync; cached positions were preserved read-only"
+            "Legacy Zapper accounts are read-only and cannot be synced; cached positions were preserved"
         }
     }
 }

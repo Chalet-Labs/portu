@@ -124,6 +124,12 @@ struct SyncEngineTests {
         }
     }
 
+    @Test func `legacy Zapper sync error describes read only account state`() {
+        #expect(
+            SyncError.unsupportedLegacyAccount.errorDescription ==
+                "Legacy Zapper accounts are read-only and cannot be synced; cached positions were preserved")
+    }
+
     @Test func `global sync excludes retained legacy Zapper accounts`() async throws {
         let context = try makeModelContext()
         let provider = StubProvider(balances: [])

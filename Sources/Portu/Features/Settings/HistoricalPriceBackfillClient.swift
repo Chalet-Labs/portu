@@ -188,7 +188,14 @@ private struct BackfillRunner {
 
     private func fetchCandidates(_ candidates: [HistoricalBackfillCandidate]) async throws -> HistoricalBackfillFetchResult {
         var result = HistoricalBackfillFetchResult()
-        let canFetchOnchainHistoricalPrices = try priceService.canFetchOnchainHistoricalPrices()
+        let canFetchOnchainHistoricalPrices: Bool
+        do {
+            canFetchOnchainHistoricalPrices = try priceService.canFetchOnchainHistoricalPrices()
+        } catch {
+            canFetchOnchainHistoricalPrices = false
+            backfillLogger.warning(
+                "Unable to check Zerion availability; continuing with CoinGecko candidates: \(String(describing: error), privacy: .public)")
+        }
         let unavailableZerionCandidates = canFetchOnchainHistoricalPrices
             ? []
             : candidates.filter { candidate in

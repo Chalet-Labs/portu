@@ -1,10 +1,7 @@
 import Foundation
-import os
 import PortuCore
 
 public actor ZerionProvider: PortfolioDataProvider {
-    private static let logger = Logger(subsystem: "com.portu.app", category: "ZerionProvider")
-
     private struct RequestKey: Hashable {
         let address: String
         let chainIDs: [String]
@@ -96,39 +93,34 @@ public actor ZerionProvider: PortfolioDataProvider {
         var grouped: [GroupKey: (metadata: ZerionPositionResource, tokens: [TokenDTO])] = [:]
 
         for resource in resources {
-            do {
-                let chainID = try required(resource.relationships.chain.data?.id, context: "missing chain")
-                let chain = try ZerionChainMapping.chain(for: chainID)
-                let token = try token(from: resource, chain: chain, chainID: chainID)
-                let dappID = resource.relationships.dapp?.data?.id
+            let chainID = try required(resource.relationships.chain.data?.id, context: "missing chain")
+            let chain = try ZerionChainMapping.chain(for: chainID)
+            let token = try token(from: resource, chain: chain, chainID: chainID)
+            let dappID = resource.relationships.dapp?.data?.id
 
-                if resource.attributes.positionType == "wallet", dappID == nil {
-                    simple.append(PositionDTO(
-                        positionType: .idle,
-                        chain: chain,
-                        protocolId: nil,
-                        protocolName: nil,
-                        protocolLogoURL: nil,
-                        healthFactor: nil,
-                        tokens: [token]))
-                    continue
-                }
-
-                guard chain != .solana else {
-                    throw ZerionError.unsupportedChain(Chain.solana.rawValue)
-                }
-                let resolvedDappID = dappID ?? resource.attributes.protocol ?? "unknown"
-                let groupID = resource.attributes.groupID ?? resource.attributes.parent ?? resource.id
-                let module = resource.attributes.protocolModule ?? "other"
-                let key = GroupKey(chain: chain, dappID: resolvedDappID, groupID: groupID, module: module)
-                if grouped[key] == nil {
-                    grouped[key] = (resource, [])
-                }
-                grouped[key]?.tokens.append(token)
-            } catch {
-                Self.logger.error(
-                    "Skipping malformed Zerion position \(resource.id, privacy: .public): \(String(describing: error), privacy: .public)")
+            if resource.attributes.positionType == "wallet", dappID == nil {
+                simple.append(PositionDTO(
+                    positionType: .idle,
+                    chain: chain,
+                    protocolId: nil,
+                    protocolName: nil,
+                    protocolLogoURL: nil,
+                    healthFactor: nil,
+                    tokens: [token]))
+                continue
             }
+
+            guard chain != .solana else {
+                throw ZerionError.unsupportedChain(Chain.solana.rawValue)
+            }
+            let resolvedDappID = dappID ?? resource.attributes.protocol ?? "unknown"
+            let groupID = resource.attributes.groupID ?? resource.attributes.parent ?? resource.id
+            let module = resource.attributes.protocolModule ?? "other"
+            let key = GroupKey(chain: chain, dappID: resolvedDappID, groupID: groupID, module: module)
+            if grouped[key] == nil {
+                grouped[key] = (resource, [])
+            }
+            grouped[key]?.tokens.append(token)
         }
 
         let complex = grouped.map { key, group -> PositionDTO in

@@ -74,13 +74,13 @@ struct AccountSheetDraft: Equatable {
         return draft
     }
 
-    /// Builds an edit draft and eagerly loads exchange credentials. Performs keychain
-    /// I/O, so call off the view-initializer path (tests, or `loadExchangeCredentials`).
+    /// Builds an edit draft and asynchronously loads exchange credentials outside the
+    /// main actor, so it remains safe to use from tests and explicit loading tasks.
     @MainActor
-    static func editing(account: Account, secretStore: any SecretStore) -> Self {
+    static func editing(account: Account, secretStore: any SecretStore) async -> Self {
         var draft = editing(account: account)
         if account.kind == .exchange {
-            draft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
+            await draft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
         }
         return draft
     }
@@ -88,14 +88,12 @@ struct AccountSheetDraft: Equatable {
     /// Reads exchange credentials from the keychain into the draft. A read failure is
     /// recorded in `exchangeCredentialsLoaded` (rather than being silently coalesced to
     /// an empty string) so the save path can avoid clobbering secrets it never loaded.
-    mutating func loadExchangeCredentials(accountID: UUID, secretStore: any SecretStore) {
+    mutating func loadExchangeCredentials(accountID: UUID, secretStore: any SecretStore) async {
         do {
-            let apiKey = try secretStore.get(key: .exchangeAPIKey(accountID)) ?? ""
-            let apiSecret = try secretStore.get(key: .exchangeAPISecret(accountID)) ?? ""
-            let passphrase = try secretStore.get(key: .exchangePassphrase(accountID)) ?? ""
-            exchangeAPIKey = apiKey
-            exchangeAPISecret = apiSecret
-            exchangePassphrase = passphrase
+            let credentials = try await AccountCredentialStore(secretStore: secretStore).load(for: accountID)
+            exchangeAPIKey = credentials.apiKey ?? ""
+            exchangeAPISecret = credentials.apiSecret ?? ""
+            exchangePassphrase = credentials.passphrase ?? ""
             exchangeCredentialsLoaded = true
         } catch {
             exchangeCredentialsLoaded = false
@@ -122,10 +120,10 @@ enum AccountSheetSaveCoordinator {
         mode: AccountSheetMode,
         editing account: Account?,
         modelContext: ModelContext,
-        secretStore: any SecretStore = PortuApp.makeSecretStore()) throws {
+        secretStore: any SecretStore = PortuApp.makeSecretStore()) async throws {
         switch mode {
         case .add:
-            try insertAccount(from: draft, modelContext: modelContext, secretStore: secretStore)
+            try await insertAccount(from: draft, modelContext: modelContext, secretStore: secretStore)
 
         case let .edit(accountID):
             guard let account else {
@@ -140,7 +138,7 @@ enum AccountSheetSaveCoordinator {
             guard accountExists(id: accountID, modelContext: modelContext) else {
                 throw AccountSheetSaveError.missingEditedAccount
             }
-            try update(account, from: draft, modelContext: modelContext, secretStore: secretStore)
+            try await update(account, from: draft, modelContext: modelContext, secretStore: secretStore)
         }
     }
 
@@ -155,7 +153,7 @@ enum AccountSheetSaveCoordinator {
     private static func insertAccount(
         from draft: AccountSheetDraft,
         modelContext: ModelContext,
-        secretStore: any SecretStore) throws {
+        secretStore: any SecretStore) async throws {
         switch draft.selectedTab {
         case .chain:
             if !draft.isEVM, draft.specificChain == .bitcoin {
@@ -187,6 +185,7 @@ enum AccountSheetSaveCoordinator {
 
         case .exchange:
             let accountID = UUID()
+            let credentialStore = AccountCredentialStore(secretStore: secretStore)
             let account = Account(
                 id: accountID,
                 name: draft.exchangeName,
@@ -196,22 +195,23 @@ enum AccountSheetSaveCoordinator {
                 group: nilIfEmpty(draft.exchangeGroup),
                 notes: nilIfEmpty(draft.exchangeNotes))
             let emptyCredentials = ExchangeCredentialSnapshot.empty
+            let credentialsAfterSave = exchangeCredentialsAfterApplying(
+                draft,
+                previousCredentials: emptyCredentials)
 
             do {
-                try saveExchangeCredentials(
+                try await credentialStore.save(
+                    credentialsAfterSave,
                     for: accountID,
-                    from: draft,
-                    secretStore: secretStore,
                     rollbackTo: emptyCredentials)
             } catch {
-                deleteExchangeCredentialsBestEffort(accountID, secretStore: secretStore)
-                throw error
+                throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
             }
 
             do {
                 try insertAndSave(account, modelContext: modelContext)
             } catch {
-                deleteExchangeCredentialsBestEffort(accountID, secretStore: secretStore)
+                await credentialStore.deleteBestEffort(for: accountID)
                 throw error
             }
         }
@@ -222,7 +222,7 @@ enum AccountSheetSaveCoordinator {
         _ account: Account,
         from draft: AccountSheetDraft,
         modelContext: ModelContext,
-        secretStore: any SecretStore) throws {
+        secretStore: any SecretStore) async throws {
         switch account.kind {
         case .wallet:
             let chain = draft.isEVM ? nil : draft.specificChain
@@ -248,19 +248,28 @@ enum AccountSheetSaveCoordinator {
             account.notes = nilIfEmpty(draft.manualNotes)
 
         case .exchange:
+            let credentialStore = AccountCredentialStore(secretStore: secretStore)
             // Persist credentials first. If the keychain write fails the model is left
             // untouched, so autosave can't flush a renamed account that still points at
             // the old secrets.
-            let previousCredentials = try readExchangeCredentials(for: account.id, secretStore: secretStore)
+            let previousCredentials: ExchangeCredentialSnapshot
+            do {
+                previousCredentials = try await credentialStore.load(for: account.id)
+            } catch {
+                throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
+            }
             let credentialsAfterSave = exchangeCredentialsAfterApplying(
                 draft,
                 previousCredentials: previousCredentials)
             let identityChanged = account.exchangeType != draft.exchangeType || previousCredentials != credentialsAfterSave
-            try saveExchangeCredentials(
-                for: account.id,
-                from: draft,
-                secretStore: secretStore,
-                rollbackTo: previousCredentials)
+            do {
+                try await credentialStore.save(
+                    credentialsAfterSave,
+                    for: account.id,
+                    rollbackTo: previousCredentials)
+            } catch {
+                throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
+            }
             account.name = draft.exchangeName
             account.exchangeType = draft.exchangeType
             account.group = nilIfEmpty(draft.exchangeGroup)
@@ -273,7 +282,7 @@ enum AccountSheetSaveCoordinator {
                 try modelContext.save()
             } catch {
                 modelContext.rollback()
-                restoreExchangeCredentials(previousCredentials, for: account.id, secretStore: secretStore)
+                await credentialStore.restore(previousCredentials, for: account.id)
                 throw AccountSheetSaveError.accountSaveFailed(error.localizedDescription)
             }
             return
@@ -354,19 +363,26 @@ enum AccountSheetSaveCoordinator {
         _ account: Account,
         modelContext: ModelContext,
         secretStore: any SecretStore,
-        save: @MainActor (ModelContext) throws -> Void = { try $0.save() }) throws {
+        save: @MainActor (ModelContext) throws -> Void = { try $0.save() }) async throws {
         let accountID = account.id
         let isExchange = account.kind == .exchange
-        let previousCredentials = if isExchange {
-            try readExchangeCredentials(for: accountID, secretStore: secretStore)
+        let credentialStore = AccountCredentialStore(secretStore: secretStore)
+        let previousCredentials: ExchangeCredentialSnapshot
+        if isExchange {
+            do {
+                previousCredentials = try await credentialStore.load(for: accountID)
+            } catch {
+                throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
+            }
         } else {
-            ExchangeCredentialSnapshot.empty
+            previousCredentials = .empty
         }
         if isExchange {
             do {
-                try deleteExchangeCredentials(accountID, secretStore: secretStore)
+                try await credentialStore.delete(
+                    for: accountID,
+                    rollbackTo: previousCredentials)
             } catch {
-                restoreExchangeCredentials(previousCredentials, for: accountID, secretStore: secretStore)
                 throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
             }
         }
@@ -376,7 +392,7 @@ enum AccountSheetSaveCoordinator {
         } catch {
             modelContext.rollback()
             if isExchange {
-                restoreExchangeCredentials(previousCredentials, for: accountID, secretStore: secretStore)
+                await credentialStore.restore(previousCredentials, for: accountID)
             }
             throw AccountSheetSaveError.accountSaveFailed(error.localizedDescription)
         }
@@ -399,30 +415,6 @@ enum AccountSheetSaveCoordinator {
         }
     }
 
-    private static func saveExchangeCredentials(
-        for accountID: UUID,
-        from draft: AccountSheetDraft,
-        secretStore: any SecretStore,
-        rollbackTo previousCredentials: ExchangeCredentialSnapshot) throws {
-        do {
-            try secretStore.set(key: .exchangeAPIKey(accountID), value: draft.exchangeAPIKey)
-            try secretStore.set(key: .exchangeAPISecret(accountID), value: draft.exchangeAPISecret)
-            if
-                let passphrase = AddAccountExchangeSecrets.persistedPassphrase(
-                    draft.exchangePassphrase,
-                    for: draft.exchangeType) {
-                try secretStore.set(key: .exchangePassphrase(accountID), value: passphrase)
-            } else if draft.exchangeCredentialsLoaded {
-                // Only delete when we know the prior state: a blank field after a
-                // failed credential read must not be mistaken for "user cleared it".
-                try secretStore.delete(key: .exchangePassphrase(accountID))
-            }
-        } catch {
-            restoreExchangeCredentials(previousCredentials, for: accountID, secretStore: secretStore)
-            throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
-        }
-    }
-
     private static func exchangeCredentialsAfterApplying(
         _ draft: AccountSheetDraft,
         previousCredentials: ExchangeCredentialSnapshot) -> ExchangeCredentialSnapshot {
@@ -442,49 +434,19 @@ enum AccountSheetSaveCoordinator {
             passphrase: passphrase)
     }
 
-    private static func readExchangeCredentials(
-        for accountID: UUID,
-        secretStore: any SecretStore) throws -> ExchangeCredentialSnapshot {
-        do {
-            return try ExchangeCredentialSnapshot(
-                apiKey: secretStore.get(key: .exchangeAPIKey(accountID)),
-                apiSecret: secretStore.get(key: .exchangeAPISecret(accountID)),
-                passphrase: secretStore.get(key: .exchangePassphrase(accountID)))
-        } catch {
-            throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
-        }
-    }
-
-    private static func restoreExchangeCredentials(
-        _ snapshot: ExchangeCredentialSnapshot,
-        for accountID: UUID,
-        secretStore: any SecretStore) {
-        restore(snapshot.apiKey, key: .exchangeAPIKey(accountID), secretStore: secretStore)
-        restore(snapshot.apiSecret, key: .exchangeAPISecret(accountID), secretStore: secretStore)
-        restore(snapshot.passphrase, key: .exchangePassphrase(accountID), secretStore: secretStore)
-    }
-
-    private static func restore(_ value: String?, key: KeychainKey, secretStore: any SecretStore) {
-        if let value {
-            try? secretStore.set(key: key, value: value)
-        } else {
-            try? secretStore.delete(key: key)
-        }
-    }
-
     /// Removes all keychain entries for an account. Safe to call for non-exchange
     /// accounts (deletes of missing keys are no-ops); used both by the failure-cleanup
     /// paths here and by account deletion.
-    static func deleteExchangeCredentials(_ accountID: UUID, secretStore: any SecretStore) throws {
-        try secretStore.delete(key: .exchangeAPIKey(accountID))
-        try secretStore.delete(key: .exchangeAPISecret(accountID))
-        try secretStore.delete(key: .exchangePassphrase(accountID))
-    }
-
-    private static func deleteExchangeCredentialsBestEffort(_ accountID: UUID, secretStore: any SecretStore) {
-        try? secretStore.delete(key: .exchangeAPIKey(accountID))
-        try? secretStore.delete(key: .exchangeAPISecret(accountID))
-        try? secretStore.delete(key: .exchangePassphrase(accountID))
+    static func deleteExchangeCredentials(_ accountID: UUID, secretStore: any SecretStore) async throws {
+        let credentialStore = AccountCredentialStore(secretStore: secretStore)
+        do {
+            let previousCredentials = try await credentialStore.load(for: accountID)
+            try await credentialStore.delete(
+                for: accountID,
+                rollbackTo: previousCredentials)
+        } catch {
+            throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
+        }
     }
 
     private static func nilIfEmpty(_ value: String) -> String? {

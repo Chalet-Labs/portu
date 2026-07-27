@@ -6,7 +6,7 @@ import Testing
 
 @MainActor
 struct AccountSheetInvalidationTests {
-    @Test func `wallet edit clears synced positions when wallet identity changes`() throws {
+    @Test func `wallet edit clears synced positions when wallet identity changes`() async throws {
         let context = try makeModelContext()
         let account = Account(
             name: "Wallet",
@@ -25,7 +25,7 @@ struct AccountSheetInvalidationTests {
         var draft = AccountSheetDraft.editing(account: account)
         draft.chainAddress = "0xnew"
 
-        try AccountSheetSaveCoordinator.save(
+        try await AccountSheetSaveCoordinator.save(
             draft: draft,
             mode: .edit(account.id),
             editing: account,
@@ -40,7 +40,7 @@ struct AccountSheetInvalidationTests {
         #expect(try context.fetch(FetchDescriptor<PositionToken>()).isEmpty)
     }
 
-    @Test func `exchange edit clears synced positions when credentials change`() throws {
+    @Test func `exchange edit clears synced positions when credentials change`() async throws {
         let context = try makeModelContext()
         let accountID = UUID()
         let store = InMemorySecretStore()
@@ -60,10 +60,10 @@ struct AccountSheetInvalidationTests {
         try context.save()
         #expect(try context.fetch(FetchDescriptor<Position>()).count == 1)
 
-        var draft = AccountSheetDraft.editing(account: account, secretStore: store)
+        var draft = await AccountSheetDraft.editing(account: account, secretStore: store)
         draft.exchangeAPIKey = "new-key"
 
-        try AccountSheetSaveCoordinator.save(
+        try await AccountSheetSaveCoordinator.save(
             draft: draft,
             mode: .edit(accountID),
             editing: account,
@@ -77,6 +77,36 @@ struct AccountSheetInvalidationTests {
         #expect(store.storage[.exchangeAPIKey(accountID)] == "new-key")
         #expect(try context.fetch(FetchDescriptor<Position>()).isEmpty)
         #expect(try context.fetch(FetchDescriptor<PositionToken>()).isEmpty)
+    }
+
+    @Test func `exchange credential reads and writes run off the main actor`() async throws {
+        let context = try makeModelContext()
+        let accountID = UUID()
+        let store = InMemorySecretStore()
+        store.storage[.exchangeAPIKey(accountID)] = "old-key"
+        store.storage[.exchangeAPISecret(accountID)] = "old-secret"
+        let account = Account(
+            id: accountID,
+            name: "Kraken",
+            kind: .exchange,
+            exchangeType: .kraken,
+            dataSource: .exchange)
+        context.insert(account)
+        try context.save()
+
+        var draft = AccountSheetDraft.editing(account: account)
+        await draft.loadExchangeCredentials(accountID: accountID, secretStore: store)
+        draft.exchangeAPIKey = "new-key"
+        draft.exchangeAPISecret = "new-secret"
+        try await AccountSheetSaveCoordinator.save(
+            draft: draft,
+            mode: .edit(accountID),
+            editing: account,
+            modelContext: context,
+            secretStore: store)
+
+        #expect(!store.mainThreadFlags.isEmpty)
+        #expect(store.mainThreadFlags.allSatisfy { !$0 })
     }
 
     private func makeModelContext() throws -> ModelContext {

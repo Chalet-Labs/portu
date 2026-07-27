@@ -103,7 +103,7 @@ struct ZerionProviderTests {
         #expect(!lp.tokens.contains { $0.symbol == "UNI-V2" })
     }
 
-    @Test func `unknown response chain skips only the malformed resource`() async throws {
+    @Test func `unknown response chain fails the complete position response`() async throws {
         defer { ZerionMockURLProtocol.reset() }
         let fixture = Self.positionsFixture.replacingFirstOccurrence(
             of: #""id":"ethereum""#,
@@ -116,9 +116,9 @@ struct ZerionProviderTests {
             session: makeZerionMockSession(),
             minimumRequestInterval: .zero))
 
-        let positions = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
-
-        #expect(Set(positions.flatMap(\.tokens).map(\.symbol)) == ["USDT", "WETH"])
+        await #expect(throws: ZerionError.invalidData("unknown chain future-chain")) {
+            _ = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
+        }
     }
 
     @Test func `combined Solana fetch requests simple positions only`() async throws {
@@ -183,7 +183,7 @@ struct ZerionProviderTests {
         ])
     }
 
-    @Test func `invalid exact quantity skips only the malformed resource`() async throws {
+    @Test func `invalid exact quantity fails the complete position response`() async throws {
         defer { ZerionMockURLProtocol.reset() }
         let invalid = Self.positionsFixture.replacingOccurrences(
             of: #""numeric":"1.123456789012345678""#,
@@ -196,12 +196,12 @@ struct ZerionProviderTests {
             session: makeZerionMockSession(),
             minimumRequestInterval: .zero))
 
-        let positions = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
-
-        #expect(Set(positions.flatMap(\.tokens).map(\.symbol)) == ["USDT", "WETH"])
+        await #expect(throws: ZerionError.invalidData("invalid quantity")) {
+            _ = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
+        }
     }
 
-    @Test func `mismatched implementation chain skips only the malformed resource`() async throws {
+    @Test func `mismatched implementation chain fails the complete position response`() async throws {
         defer { ZerionMockURLProtocol.reset() }
         let invalid = Self.positionsFixture.replacingOccurrences(
             of: #""implementations": [{"chain_id":"ethereum","address":null,"decimals":18}]"#,
@@ -214,9 +214,9 @@ struct ZerionProviderTests {
             session: makeZerionMockSession(),
             minimumRequestInterval: .zero))
 
-        let positions = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
-
-        #expect(Set(positions.flatMap(\.tokens).map(\.symbol)) == ["USDT", "WETH"])
+        await #expect(throws: ZerionError.invalidData("missing ethereum implementation")) {
+            _ = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
+        }
     }
 
     @Test func `current prices match reordered implementations and normalize percent`() async throws {

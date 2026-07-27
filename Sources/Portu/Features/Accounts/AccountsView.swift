@@ -258,13 +258,15 @@ struct AccountsView: View {
                 .disabled(AccountRowActionPolicy.activationToggleDisabled(globalSyncIsRunning: store.syncStatus.isSyncing))
                 Divider()
                 Button("Delete", role: .destructive) {
-                    do {
-                        try AccountSheetSaveCoordinator.deleteAccount(
-                            account,
-                            modelContext: modelContext,
-                            secretStore: PortuApp.makeSecretStore())
-                    } catch {
-                        accountActionError = error.localizedDescription
+                    Task { @MainActor in
+                        do {
+                            try await AccountSheetSaveCoordinator.deleteAccount(
+                                account,
+                                modelContext: modelContext,
+                                secretStore: PortuApp.makeSecretStore())
+                        } catch {
+                            accountActionError = error.localizedDescription
+                        }
                     }
                 }
                 .disabled(AccountRowActionPolicy.deleteDisabled(globalSyncIsRunning: store.syncStatus.isSyncing))
