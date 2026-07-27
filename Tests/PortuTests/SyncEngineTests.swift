@@ -94,8 +94,8 @@ struct SyncEngineTests {
         #expect(await provider.fetchPositionsCalled)
     }
 
-    @Test func `provider factory never treats a legacy Zapper key as a Zerion key`() throws {
-        let secretStore = MockSecretStore()
+    @Test func `provider factory defers Zerion key reads off the main actor`() async throws {
+        let secretStore = ThreadRecordingSyncSecretStore()
         try secretStore.set(key: .providerAPIKey(.zapper), value: "legacy-only")
         let factory = ProviderFactory(secretStore: secretStore)
         let context = SyncContext(
@@ -104,9 +104,14 @@ struct SyncEngineTests {
             addresses: [("0xabc", .ethereum)],
             exchangeType: nil)
 
-        #expect(throws: SyncError.missingAPIKey("Zerion API key not configured")) {
-            _ = try factory.makeProvider(for: .zerion, context: context)
+        let provider = try factory.makeProvider(for: .zerion, context: context)
+        #expect(secretStore.getMainThreadFlags.isEmpty)
+
+        await #expect(throws: ZerionError.missingAPIKey) {
+            _ = try await provider.fetchPositions(context: context)
         }
+        #expect(!secretStore.getMainThreadFlags.isEmpty)
+        #expect(secretStore.getMainThreadFlags.allSatisfy { !$0 })
     }
 
     @Test func `provider factory preserves surviving legacy Zapper accounts as read only`() throws {
@@ -189,8 +194,9 @@ struct SyncEngineTests {
     @Test func `lastSyncError persisted when all syncable accounts fail`() async throws {
         let (context, engine) = try makeTestContext()
 
-        // Zerion account with no API key in MockSecretStore → resolveProvider throws missingAPIKey
+        // Zerion account with no API key reaches the provider, which fails before networking.
         let account = Account(name: "My Wallet", kind: .wallet, dataSource: .zerion)
+        account.addresses = [WalletAddress(chain: .ethereum, address: "0xabc", account: account)]
         context.insert(account)
         try context.save()
 
@@ -593,6 +599,31 @@ private final class MockSecretStore: SecretStore, @unchecked Sendable {
 
     func delete(key: KeychainKey) throws(KeychainError) {
         store.removeValue(forKey: key.rawKey)
+    }
+}
+
+private final class ThreadRecordingSyncSecretStore: SecretStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var store: [String: String] = [:]
+    private var getMainThreadFlagsStorage: [Bool] = []
+
+    var getMainThreadFlags: [Bool] {
+        lock.withLock { getMainThreadFlagsStorage }
+    }
+
+    func get(key: KeychainKey) throws(KeychainError) -> String? {
+        lock.withLock {
+            getMainThreadFlagsStorage.append(Thread.isMainThread)
+            return store[key.rawKey]
+        }
+    }
+
+    func set(key: KeychainKey, value: String) throws(KeychainError) {
+        lock.withLock { store[key.rawKey] = value }
+    }
+
+    func delete(key: KeychainKey) throws(KeychainError) {
+        _ = lock.withLock { store.removeValue(forKey: key.rawKey) }
     }
 }
 

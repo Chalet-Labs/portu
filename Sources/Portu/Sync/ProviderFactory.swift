@@ -21,12 +21,6 @@ struct ProviderFactory {
             case .zapper:
                 throw SyncError.unsupportedLegacyAccount
             case .zerion:
-                guard
-                    let apiKey = try secretStore.get(key: .providerAPIKey(.zerion)),
-                    !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                else {
-                    throw SyncError.missingAPIKey("Zerion API key not configured")
-                }
                 return sharedZerionProvider
             case .exchange:
                 return ExchangeProvider(secretStore: secretStore, session: session)

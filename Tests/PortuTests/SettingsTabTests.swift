@@ -79,6 +79,21 @@ struct SettingsTabTests {
         #expect(APIKeysSettingsLayout.inputMode(isVisible: true) == .visibleText)
     }
 
+    @Test func `older API key save completion cannot clear a newer pending edit`() {
+        var state = APIKeysPendingSaveState()
+        let firstSave = state.schedule()
+        let newerSave = state.schedule()
+
+        state.complete(firstSave)
+
+        #expect(state.hasPendingSave)
+        let shouldFlush = state.takePendingForFlush()
+        #expect(shouldFlush)
+
+        state.complete(newerSave)
+        #expect(!state.hasPendingSave)
+    }
+
     @Test func `price polling settings use shared defaults key and allowed values`() {
         let defaults = cleanDefaults()
 

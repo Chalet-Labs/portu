@@ -55,12 +55,35 @@ enum APIKeysSettingsLayout {
     }
 }
 
+struct APIKeysPendingSaveState {
+    private(set) var hasPendingSave = false
+    private var generation = 0
+
+    mutating func schedule() -> Int {
+        generation += 1
+        hasPendingSave = true
+        return generation
+    }
+
+    mutating func complete(_ completedGeneration: Int) {
+        guard completedGeneration == generation else { return }
+        hasPendingSave = false
+    }
+
+    mutating func takePendingForFlush() -> Bool {
+        guard hasPendingSave else { return false }
+        generation += 1
+        hasPendingSave = false
+        return true
+    }
+}
+
 struct APIKeysSettingsTab: View {
     @State private var viewModel = APIKeysViewModel()
     @State private var newRPCChain: Chain = .ethereum
     @State private var newRPCURL = ""
     @State private var visibleAPIKeyFields: Set<APIKeyFieldID> = []
-    @State private var hasPendingSave = false
+    @State private var pendingSaveState = APIKeysPendingSaveState()
     @State private var saveTask: Task<Void, Never>?
 
     var body: some View {
@@ -324,20 +347,23 @@ struct APIKeysSettingsTab: View {
 
     private func debounceSave() {
         guard !viewModel.isLoading, viewModel.canSave else { return }
-        hasPendingSave = true
+        let generation = pendingSaveState.schedule()
         saveTask?.cancel()
         saveTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
             await viewModel.save()
-            hasPendingSave = false
+            pendingSaveState.complete(generation)
         }
     }
 
     private func flushPendingSave() {
         saveTask?.cancel()
-        guard hasPendingSave, !viewModel.isLoading, viewModel.canSave else { return }
-        hasPendingSave = false
+        guard
+            !viewModel.isLoading,
+            viewModel.canSave,
+            pendingSaveState.takePendingForFlush()
+        else { return }
         saveTask = Task { @MainActor in
             await viewModel.save()
         }
