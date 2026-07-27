@@ -91,7 +91,7 @@ final class APIKeysViewModel {
             canSave = true
             hasLoaded = true
         } catch {
-            secretStoreError = "Unable to access API keys in Keychain. Unlock your Mac and try again."
+            secretStoreError = Self.keychainErrorMessage(action: "access", error: error)
         }
     }
 
@@ -118,7 +118,7 @@ final class APIKeysViewModel {
                 deletingRPCEndpoints: removedRPCEndpointChains)
             persistedRPCEndpointChains = currentRPCEndpointChains
         } catch {
-            secretStoreError = "Unable to save API keys in Keychain. Unlock your Mac and try again."
+            secretStoreError = Self.keychainErrorMessage(action: "save", error: error)
         }
     }
 
@@ -130,5 +130,14 @@ final class APIKeysViewModel {
 
     func removeRPCEndpoint(chain: Chain) {
         rpcEndpoints.removeValue(forKey: chain)
+    }
+
+    private static func keychainErrorMessage(action: String, error: KeychainError) -> String {
+        switch error {
+        case .interactionNotAllowed:
+            "Unable to \(action) API keys in Keychain. Unlock your Mac and try again."
+        case .encodingFailed, .unexpectedStatus:
+            "Unable to \(action) API keys in Keychain: \(error.localizedDescription)"
+        }
     }
 }

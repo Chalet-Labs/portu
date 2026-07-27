@@ -28,6 +28,9 @@ final class SyncEngine: @unchecked Sendable {
 
     func sync(scope: PortfolioSyncScope) async throws -> SyncResult {
         let activeSyncable = try fetchActiveSyncableAccounts(scope: scope)
+        guard !activeSyncable.isEmpty else {
+            return SyncResult(failedAccounts: [])
+        }
         return try await sync(activeSyncable: activeSyncable, activeManual: [])
     }
 

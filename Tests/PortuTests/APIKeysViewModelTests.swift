@@ -371,9 +371,16 @@ struct APIKeysViewModelTests {
         let vm = APIKeysViewModel(secretStore: FailingSecretStore())
         await vm.load()
 
-        #expect(vm.secretStoreError == "Unable to access API keys in Keychain. Unlock your Mac and try again.")
+        #expect(vm.secretStoreError == "Unable to access API keys in Keychain: Keychain error: -25308")
         #expect(vm.zerionAPIKey.isEmpty)
         #expect(!vm.hasLoaded)
+    }
+
+    @Test func `load explains when Keychain interaction is unavailable`() async {
+        let vm = APIKeysViewModel(secretStore: ReadFailingSecretStore())
+        await vm.load()
+
+        #expect(vm.secretStoreError == "Unable to access API keys in Keychain. Unlock your Mac and try again.")
     }
 
     @Test func `save after failed load does not mutate unreadable secrets`() async {
@@ -393,7 +400,7 @@ struct APIKeysViewModelTests {
         vm.zerionAPIKey = "some-key"
         await vm.save()
 
-        #expect(vm.secretStoreError == "Unable to save API keys in Keychain. Unlock your Mac and try again.")
+        #expect(vm.secretStoreError == "Unable to save API keys in Keychain: Keychain error: -25308")
     }
 
     @Test func `successful operations clear error`() async {

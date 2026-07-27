@@ -8,6 +8,25 @@ import Testing
 
 @MainActor
 struct SyncEngineScopedTests {
+    @Test func `scheduled onchain sync is a no op when only legacy wallets remain`() async throws {
+        let context = try makeModelContext()
+        let legacy = Account(name: "Legacy", kind: .wallet, dataSource: .zapper)
+        context.insert(legacy)
+        try context.save()
+        let engine = SyncEngine(
+            modelContext: context,
+            providerFactory: ProviderFactory(resolver: { _, _ in
+                Issue.record("An empty scoped sync must not resolve a provider")
+                return ScopedSyncStubProvider(balances: [])
+            }))
+
+        let result = try await engine.sync(scope: .onchain)
+
+        #expect(result.failedAccounts.isEmpty)
+        #expect(legacy.lastSyncedAt == nil)
+        #expect(try context.fetch(FetchDescriptor<PortfolioSnapshot>()).isEmpty)
+    }
+
     @Test func `scoped onchain sync fetches only Zerion accounts`() async throws {
         let context = try makeModelContext()
         let provider = ScopedSyncStubProvider(balances: [
