@@ -1106,4 +1106,39 @@ struct LivePriceUpdateBuilderTests {
         #expect(update.prices[identity.historicalPriceID] == Decimal(string: "2220.5"))
         #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "0.012"))
     }
+
+    @Test func `non USD onchain fallback preserves normalized 24 hour changes`() async throws {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xabc")
+        AppPriceMockURLProtocol.requestHandler = { request in
+            guard let url = request.url else { return (nil, 500) }
+            if url.path == "/api/v3/simple/token_price/base" {
+                return (Data("{}".utf8), 200)
+            }
+            if url.path == "/api/v3/exchange_rates" {
+                return (Data("""
+                {"rates":{"usd":{"value":1},"eur":{"value":0.92}}}
+                """.utf8), 200)
+            }
+            return (nil, 500)
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AppPriceMockURLProtocol.self]
+        let service = PriceService(session: URLSession(configuration: configuration), cacheTTL: 0)
+
+        let update = try await LivePriceUpdateBuilder.fetchPrices(
+            coinIds: [identity.historicalPriceID],
+            priceService: service,
+            currency: .eur,
+            fetchOnchainFallbackUpdate: { identities in
+                #expect(identities == [identity])
+                return PriceUpdate(
+                    prices: [identity.historicalPriceID: 10],
+                    changes24h: [identity.historicalPriceID: 0.05])
+            })
+
+        #expect(update.currency == .eur)
+        #expect(update.prices[identity.historicalPriceID] == Decimal(string: "9.2"))
+        #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "0.05"))
+    }
 }

@@ -1,4 +1,5 @@
 import PortuCore
+import PortuNetwork
 import PortuUI
 import SwiftData
 import SwiftUI
@@ -157,7 +158,10 @@ struct AddAccountSheet: View {
             AddAccountSupportPanel(
                 title: "VALIDATED ZERION COVERAGE:",
                 chips: [
-                    .init(title: "27 EVM chains", systemImage: "diamond.fill", tint: .purple),
+                    .init(
+                        title: "\(ZerionChainMapping.supportedEVMPositionChainCount) EVM chains",
+                        systemImage: "diamond.fill",
+                        tint: .purple),
                     .init(title: "Solana tokens", systemImage: "circle.hexagongrid.fill", tint: .green),
                     .init(title: "No Bitcoin", systemImage: "exclamationmark.triangle.fill", tint: .orange)
                 ],

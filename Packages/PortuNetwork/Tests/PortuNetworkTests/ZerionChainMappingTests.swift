@@ -56,6 +56,7 @@ struct ZerionChainMappingTests {
         let ids = chunks.flatMap(\.self)
 
         #expect(chunks.map(\.count) == [23])
+        #expect(ZerionChainMapping.supportedEVMPositionChainCount == 23)
         #expect(ids == ids.sorted())
         #expect(!ids.contains("solana"))
         #expect(!ids.contains("mode"))

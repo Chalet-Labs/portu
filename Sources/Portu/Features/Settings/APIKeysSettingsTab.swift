@@ -109,7 +109,7 @@ struct APIKeysSettingsTab: View {
                     }
             }
         }
-        .task { if !viewModel.hasLoaded { viewModel.load() } }
+        .task { if !viewModel.hasLoaded { await viewModel.load() } }
         .onChange(of: viewModel.zerionAPIKey) { _, _ in debounceSave() }
         .onChange(of: viewModel.debankAPIKey) { _, _ in debounceSave() }
         .onChange(of: viewModel.coingeckoAPIKey) { _, _ in debounceSave() }
@@ -327,7 +327,7 @@ struct APIKeysSettingsTab: View {
         saveTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
-            viewModel.save()
+            await viewModel.save()
             hasPendingSave = false
         }
     }
@@ -335,7 +335,9 @@ struct APIKeysSettingsTab: View {
     private func flushPendingSave() {
         saveTask?.cancel()
         guard hasPendingSave, !viewModel.isLoading else { return }
-        viewModel.save()
         hasPendingSave = false
+        saveTask = Task { @MainActor in
+            await viewModel.save()
+        }
     }
 }

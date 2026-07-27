@@ -49,6 +49,10 @@ public enum ZerionChainMapping {
             .chunked(size: 25)
     }
 
+    public static var supportedEVMPositionChainCount: Int {
+        verified.keys.count { $0 != .solana && supportsPositions(on: $0) }
+    }
+
     static func id(for chain: Chain) throws -> String {
         guard let id = verified[chain] else {
             throw ZerionError.unsupportedChain(chain.rawValue)

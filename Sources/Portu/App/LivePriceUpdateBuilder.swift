@@ -28,7 +28,10 @@ enum LivePriceUpdateBuilder {
                 onchainFallbackUpdate = rawOnchainFallbackUpdate
             } else {
                 let rate = try await priceService.fetchCurrentUSDConversionRate(to: currency)
-                onchainFallbackUpdate = rawOnchainFallbackUpdate.convertedUSDValues(to: currency, rate: rate)
+                onchainFallbackUpdate = rawOnchainFallbackUpdate.convertedUSDValues(
+                    to: currency,
+                    rate: rate,
+                    preserveChanges24h: true)
             }
         } catch {
             onchainFallbackUpdate = PricePollingIDResolver.emptyUpdate(currency: currency)

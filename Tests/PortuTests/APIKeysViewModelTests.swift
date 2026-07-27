@@ -36,6 +36,7 @@ private final class ThreadRecordingSecretStore: SecretStore, @unchecked Sendable
     private let lock = NSLock()
     private var storage: [String: String]
     private var recordedMainThreadFlags: [Bool] = []
+    private var recordedDeletedKeys: [KeychainKey] = []
 
     init(storage: [String: String] = [:]) {
         self.storage = storage
@@ -43,6 +44,10 @@ private final class ThreadRecordingSecretStore: SecretStore, @unchecked Sendable
 
     var mainThreadFlags: [Bool] {
         lock.withLock { recordedMainThreadFlags }
+    }
+
+    var deletedKeys: [KeychainKey] {
+        lock.withLock { recordedDeletedKeys }
     }
 
     func get(key: KeychainKey) throws(KeychainError) -> String? {
@@ -62,6 +67,7 @@ private final class ThreadRecordingSecretStore: SecretStore, @unchecked Sendable
     func delete(key: KeychainKey) throws(KeychainError) {
         lock.withLock {
             recordedMainThreadFlags.append(Thread.isMainThread)
+            recordedDeletedKeys.append(key)
             storage.removeValue(forKey: key.rawKey)
         }
     }
@@ -90,6 +96,33 @@ struct APIKeysViewModelTests {
             }
 
         #expect(capturedService == "com.portu.app.tests")
+    }
+
+    @Test func `view model keychain access runs off the main actor`() async {
+        let store = ThreadRecordingSecretStore(storage: [
+            KeychainKey.providerAPIKey(.zerion).rawKey: "zerion-key"
+        ])
+        let viewModel = APIKeysViewModel(secretStore: store)
+
+        await viewModel.load()
+        viewModel.zerionAPIKey = "updated-key"
+        await viewModel.save()
+
+        #expect(store.mainThreadFlags.isEmpty == false)
+        #expect(store.mainThreadFlags.allSatisfy { $0 == false })
+    }
+
+    @Test func `saving an API key does not delete RPC keys that were already absent`() async {
+        let store = ThreadRecordingSecretStore()
+        let viewModel = APIKeysViewModel(secretStore: store)
+        await viewModel.load()
+        viewModel.zerionAPIKey = "zerion-key"
+
+        await viewModel.save()
+
+        #expect(store.deletedKeys.contains { key in
+            if case .rpcEndpoint = key { true } else { false }
+        } == false)
     }
 
     @Test func `startup migration excludes retired Zapper credential`() {
@@ -127,27 +160,27 @@ struct APIKeysViewModelTests {
 
     // MARK: - Load
 
-    @Test func `load populates fields from store`() throws {
+    @Test func `load populates fields from store`() async throws {
         let store = MockSecretStore()
         try store.set(key: .providerAPIKey(.zerion), value: "zap-123")
         try store.set(key: .serviceAPIKey("debank"), value: "deb-456")
         try store.set(key: .serviceAPIKey("coingecko"), value: "cg-789")
 
         let vm = APIKeysViewModel(secretStore: store)
-        vm.load()
+        await vm.load()
 
         #expect(vm.zerionAPIKey == "zap-123")
         #expect(vm.debankAPIKey == "deb-456")
         #expect(vm.coingeckoAPIKey == "cg-789")
     }
 
-    @Test func `load populates RPC endpoints from store`() throws {
+    @Test func `load populates RPC endpoints from store`() async throws {
         let store = MockSecretStore()
         try store.set(key: .rpcEndpoint(.ethereum), value: "https://eth.example.com")
         try store.set(key: .rpcEndpoint(.polygon), value: "https://poly.example.com")
 
         let vm = APIKeysViewModel(secretStore: store)
-        vm.load()
+        await vm.load()
 
         #expect(vm.rpcEndpoints[.ethereum] == "https://eth.example.com")
         #expect(vm.rpcEndpoints[.polygon] == "https://poly.example.com")
@@ -155,25 +188,25 @@ struct APIKeysViewModelTests {
 
     // MARK: - Save
 
-    @Test func `save persists non empty API keys`() throws {
+    @Test func `save persists non empty API keys`() async throws {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
 
         vm.zerionAPIKey = "zap-abc"
         vm.debankAPIKey = "deb-def"
         vm.coingeckoAPIKey = "cg-ghi"
-        vm.save()
+        await vm.save()
 
         #expect(try store.get(key: .providerAPIKey(.zerion)) == "zap-abc")
         #expect(try store.get(key: .serviceAPIKey("debank")) == "deb-def")
         #expect(try store.get(key: .serviceAPIKey("coingecko")) == "cg-ghi")
     }
 
-    @Test func `historical backfill reads zerion key saved by settings`() throws {
+    @Test func `historical backfill reads zerion key saved by settings`() async throws {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
         vm.zerionAPIKey = "zap-backfill"
-        vm.save()
+        await vm.save()
 
         #expect(try PortuApp.zerionAPIKey(from: store) == "zap-backfill")
     }
@@ -184,43 +217,43 @@ struct APIKeysViewModelTests {
         }
     }
 
-    @Test func `save deletes keys when field cleared`() throws {
+    @Test func `save deletes keys when field cleared`() async throws {
         let store = MockSecretStore()
         try store.set(key: .providerAPIKey(.zerion), value: "old-key")
 
         let vm = APIKeysViewModel(secretStore: store)
-        vm.load()
+        await vm.load()
         vm.zerionAPIKey = ""
-        vm.save()
+        await vm.save()
 
         #expect(try store.get(key: .providerAPIKey(.zerion)) == nil)
     }
 
-    @Test func `save persists RPC endpoints`() throws {
+    @Test func `save persists RPC endpoints`() async throws {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
 
         vm.addRPCEndpoint(chain: .arbitrum, url: "https://arb.example.com")
-        vm.save()
+        await vm.save()
 
         #expect(try store.get(key: .rpcEndpoint(.arbitrum)) == "https://arb.example.com")
     }
 
-    @Test func `save cleared RPC endpoint deletes from store`() throws {
+    @Test func `save cleared RPC endpoint deletes from store`() async throws {
         let store = MockSecretStore()
         try store.set(key: .rpcEndpoint(.base), value: "https://base.example.com")
 
         let vm = APIKeysViewModel(secretStore: store)
-        vm.load()
+        await vm.load()
         vm.removeRPCEndpoint(chain: .base)
-        vm.save()
+        await vm.save()
 
         #expect(try store.get(key: .rpcEndpoint(.base)) == nil)
     }
 
     // MARK: - Round-Trip
 
-    @Test func `round trip save then load recovers same values`() {
+    @Test func `round trip save then load recovers same values`() async {
         let store = MockSecretStore()
 
         let writer = APIKeysViewModel(secretStore: store)
@@ -228,10 +261,10 @@ struct APIKeysViewModelTests {
         writer.debankAPIKey = "deb-rt"
         writer.coingeckoAPIKey = "cg-rt"
         writer.addRPCEndpoint(chain: .optimism, url: "https://op.example.com")
-        writer.save()
+        await writer.save()
 
         let reader = APIKeysViewModel(secretStore: store)
-        reader.load()
+        await reader.load()
 
         #expect(reader.zerionAPIKey == "zap-rt")
         #expect(reader.debankAPIKey == "deb-rt")
@@ -260,28 +293,28 @@ struct APIKeysViewModelTests {
 
     // MARK: - Error Handling
 
-    @Test func `load surfaces actionable keychain error`() {
+    @Test func `load surfaces actionable keychain error`() async {
         let vm = APIKeysViewModel(secretStore: FailingSecretStore())
-        vm.load()
+        await vm.load()
 
         #expect(vm.secretStoreError == "Unable to access API keys in Keychain. Unlock your Mac and try again.")
         #expect(vm.zerionAPIKey.isEmpty)
     }
 
-    @Test func `save surfaces actionable keychain error`() {
+    @Test func `save surfaces actionable keychain error`() async {
         let vm = APIKeysViewModel(secretStore: FailingSecretStore())
         vm.zerionAPIKey = "some-key"
-        vm.save()
+        await vm.save()
 
         #expect(vm.secretStoreError == "Unable to save API keys in Keychain. Unlock your Mac and try again.")
     }
 
-    @Test func `successful operations clear error`() {
+    @Test func `successful operations clear error`() async {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
         vm.secretStoreError = "stale error"
 
-        vm.load()
+        await vm.load()
 
         #expect(vm.secretStoreError == nil)
     }
