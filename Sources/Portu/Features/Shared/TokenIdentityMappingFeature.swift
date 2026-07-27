@@ -111,11 +111,10 @@ enum TokenIdentityMappingFeature {
     }
 
     static func normalizedHistoricalPriceID(_ id: String?) -> String? {
-        guard let normalizedID = normalizedProviderID(id) else { return nil }
-        if let identity = OnchainTokenIdentity(historicalPriceID: normalizedID) {
-            return identity.historicalPriceID
-        }
-        return normalizedID
+        guard let id else { return nil }
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return OnchainTokenIdentity.normalizedHistoricalPriceID(trimmed)
     }
 
     static func normalizedProviderID(_ id: String?) -> String? {

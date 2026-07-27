@@ -28,6 +28,16 @@ struct TokenIdentityMappingFeatureTests {
         #expect(TokenIdentityMappingFeature.normalizedHistoricalPriceID(nil) == nil)
     }
 
+    @Test func `normalized historical price id preserves Solana contract case`() {
+        let identity = OnchainTokenIdentity(
+            chain: .solana,
+            contractAddress: "AbCDefGhijkLMNopQRstuVwxyz123456789")
+
+        #expect(
+            TokenIdentityMappingFeature.normalizedHistoricalPriceID(" \(identity.historicalPriceID) ")
+                == identity.historicalPriceID)
+    }
+
     @Test func `mappings by identity dedupes by canonical identity preferring entries with coin gecko id`() throws {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
         let unresolved = try TokenIdentityMappingSnapshot(

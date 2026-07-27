@@ -365,7 +365,8 @@ final class SyncEngine: @unchecked Sendable {
 
         for pos in positions {
             guard let account = pos.account else { continue }
-            if account.dataSource != .manual, refreshedSyncableAccountIDs.contains(account.id) == false {
+            let usesStaticHoldings = account.dataSource == .manual || account.dataSource == .zapper
+            if !usesStaticHoldings, refreshedSyncableAccountIDs.contains(account.id) == false {
                 continue
             }
             let accountId = account.id

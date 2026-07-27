@@ -233,8 +233,6 @@ struct AssetPriceChart: View {
     }
 
     private static func normalizedCoinGeckoId(_ id: String?) -> String? {
-        guard let id else { return nil }
-        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.isEmpty ? nil : normalized
+        TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
     }
 }

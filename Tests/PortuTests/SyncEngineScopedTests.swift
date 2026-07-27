@@ -98,6 +98,52 @@ struct SyncEngineScopedTests {
         #expect(try context.fetch(FetchDescriptor<AccountSnapshot>()).count == 2)
     }
 
+    @Test func `scoped sync snapshots cached assets from retained legacy wallets`() async throws {
+        let context = try makeModelContext()
+        let provider = ScopedSyncStubProvider(balances: [
+            PositionDTO(
+                positionType: .idle,
+                chain: .ethereum,
+                protocolId: nil,
+                protocolName: nil,
+                protocolLogoURL: nil,
+                healthFactor: nil,
+                tokens: [makeTokenDTO(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")])
+        ])
+        let engine = SyncEngine(
+            modelContext: context,
+            providerFactory: ProviderFactory(resolver: { _, _ in provider }))
+        let refreshed = Account(name: "Refreshed", kind: .wallet, dataSource: .zerion)
+        refreshed.addresses = [WalletAddress(address: "0xrefreshed", account: refreshed)]
+
+        let retainedAsset = Asset(symbol: "LEGACY", name: "Legacy Asset", category: .other)
+        let retainedToken = PositionToken(
+            role: .balance,
+            amount: 2,
+            usdValue: 50,
+            asset: retainedAsset)
+        let retainedPosition = Position(
+            positionType: .lending,
+            chain: .solana,
+            netUSDValue: 50,
+            tokens: [retainedToken])
+        let retained = Account(name: "Retained", kind: .wallet, dataSource: .zapper)
+        retained.positions = [retainedPosition]
+
+        context.insert(retainedAsset)
+        context.insert(refreshed)
+        context.insert(retained)
+        try context.save()
+
+        _ = try await engine.sync(scope: .onchain)
+
+        let snapshots = try context.fetch(FetchDescriptor<AssetSnapshot>())
+        let retainedSnapshot = try #require(snapshots.first { $0.accountId == retained.id })
+        #expect(retainedSnapshot.assetId == retainedAsset.id)
+        #expect(retainedSnapshot.amount == 2)
+        #expect(retainedSnapshot.usdValue == 50)
+    }
+
     @Test func `account scoped sync fetches only selected account`() async throws {
         let context = try makeModelContext()
         let provider = ScopedSyncStubProvider(balances: [

@@ -89,6 +89,25 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(unresolved.isEmpty)
     }
 
+    @Test func `candidate selection preserves Solana case in fallback history key`() {
+        let identity = OnchainTokenIdentity(
+            chain: .solana,
+            contractAddress: "AbCDefGhijkLMNopQRstuVwxyz123456789")
+        let solanaToken = token(
+            assetId: uuid(1),
+            symbol: "SOLANA",
+            amount: 1,
+            usdValue: 20,
+            onchainIdentity: identity)
+
+        let candidates = HistoricalBackfillCandidateResolver.candidates(
+            tokens: [solanaToken],
+            overrides: [])
+
+        #expect(candidates.map(\.historicalPriceID) == [identity.historicalPriceID])
+        #expect(candidates.map(\.source) == [.zerion(identity)])
+    }
+
     @Test func `candidate selection stores onchain token history under canonical asset key`() {
         let identity = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xAf88d065e77c8cC2239327C5EDb3A432268e5831")
         let token = token(

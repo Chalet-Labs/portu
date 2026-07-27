@@ -438,7 +438,7 @@ private struct HistoricalBackfillCandidateKey: Hashable {
     let source: HistoricalBackfillPriceSource
 
     init(historicalPriceID: String, source: HistoricalBackfillPriceSource) {
-        self.historicalPriceID = historicalPriceID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.historicalPriceID = OnchainTokenIdentity.normalizedHistoricalPriceID(historicalPriceID)
         self.source = source
     }
 }
