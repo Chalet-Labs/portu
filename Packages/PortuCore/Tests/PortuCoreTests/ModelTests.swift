@@ -324,6 +324,20 @@ struct ModelTests {
         #expect(dto.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
     }
 
+    @Test func `historical price persistence preserves Solana mint case`() {
+        let rawDate = Date(timeIntervalSince1970: 1_704_110_456)
+        let identity = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+        let dto = HistoricalPriceDTO(
+            coinGeckoId: identity.historicalPriceID,
+            timestamp: rawDate,
+            usdPrice: 12.5)
+        let point = HistoricalPricePoint(dto: dto)
+
+        #expect(dto.coinGeckoId == "asset:solana:SoLanaMiNtCase")
+        #expect(point.coinGeckoId == "asset:solana:SoLanaMiNtCase")
+        #expect(HistoricalPriceDTO(coinGeckoId: " BITCOIN ", timestamp: rawDate, usdPrice: 1).coinGeckoId == "bitcoin")
+    }
+
     @Test func `onchain identity uses canonical asset price id and parses legacy zapper id`() throws {
         let identity = try #require(OnchainTokenIdentity(historicalPriceID: " zapper:base:0xABCDEF "))
 
@@ -412,6 +426,24 @@ struct ModelTests {
         #expect(fetched.zapperResolvedAt == updatedAt)
         #expect(fetched.createdAt == createdAt)
         #expect(fetched.updatedAt == updatedAt)
+    }
+
+    @Test func `token identity mappings preserve distinct Solana mint case`() {
+        let first = TokenIdentityMapping(
+            chain: .solana,
+            contractAddress: "SoLanaMiNtCase")
+        let second = TokenIdentityMapping(
+            chain: .solana,
+            contractAddress: "solanamintcase")
+        let evm = TokenIdentityMapping(
+            chain: .base,
+            contractAddress: "0xAbCd")
+
+        #expect(first.contractAddress == "SoLanaMiNtCase")
+        #expect(first.canonicalKey == "solana:SoLanaMiNtCase")
+        #expect(second.canonicalKey == "solana:solanamintcase")
+        #expect(first.canonicalKey != second.canonicalKey)
+        #expect(evm.contractAddress == "0xabcd")
     }
 
     @Test func `account is active by default`() {

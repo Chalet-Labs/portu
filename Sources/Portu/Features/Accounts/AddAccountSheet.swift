@@ -456,7 +456,8 @@ private extension AddAccountSheet {
         AddAccountSheetSavePolicy.canEditFields(
             isSyncing: isSyncing,
             isSyncBlocked: isSyncBlocked,
-            isLoadingCredentials: isLoadingCredentials)
+            isLoadingCredentials: isLoadingCredentials,
+            isSaving: isSaving)
     }
 
     var syncHelpText: String {

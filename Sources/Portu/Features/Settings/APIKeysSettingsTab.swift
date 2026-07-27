@@ -78,6 +78,37 @@ struct APIKeysPendingSaveState {
     }
 }
 
+enum APIKeysSettingsRetryPolicy {
+    static func shouldShow(errorMessage: String?, canSave: Bool) -> Bool {
+        errorMessage != nil && !canSave
+    }
+
+    static func isEnabled(isLoading: Bool) -> Bool {
+        !isLoading
+    }
+}
+
+@MainActor
+enum APIKeysSaveTaskCoordinator {
+    static func makeTask(
+        after previousTask: Task<Void, Never>?,
+        delay: Duration?,
+        operation: @escaping @MainActor @Sendable () async -> Void) -> Task<Void, Never> {
+        Task { @MainActor in
+            if let delay {
+                do {
+                    try await Task.sleep(for: delay)
+                } catch {
+                    return
+                }
+            }
+            await previousTask?.value
+            guard !Task.isCancelled else { return }
+            await operation()
+        }
+    }
+}
+
 struct APIKeysSettingsTab: View {
     @State private var viewModel = APIKeysViewModel()
     @State private var newRPCChain: Chain = .ethereum
@@ -122,16 +153,31 @@ struct APIKeysSettingsTab: View {
                         VStack(alignment: .leading, spacing: 22) {
                             rpcTable
                             addEndpointSection
-
-                            if let secretStoreError = viewModel.secretStoreError {
-                                SettingsInlineNotice(
-                                    title: "Keychain Error",
-                                    message: secretStoreError,
-                                    style: .error)
-                            }
                         }
                     }
                     .disabled(!viewModel.canSave)
+
+                if let secretStoreError = viewModel.secretStoreError {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SettingsInlineNotice(
+                            title: "Keychain Error",
+                            message: secretStoreError,
+                            style: .error)
+
+                        if
+                            APIKeysSettingsRetryPolicy.shouldShow(
+                                errorMessage: secretStoreError,
+                                canSave: viewModel.canSave) {
+                            Button("Retry Keychain Access") {
+                                Task { await viewModel.load() }
+                            }
+                            .buttonStyle(.plain)
+                            .settingsPrimaryButton(isDisabled: !APIKeysSettingsRetryPolicy.isEnabled(
+                                isLoading: viewModel.isLoading))
+                            .disabled(!APIKeysSettingsRetryPolicy.isEnabled(isLoading: viewModel.isLoading))
+                        }
+                    }
+                }
             }
         }
         .task { if !viewModel.hasLoaded { await viewModel.load() } }
@@ -348,23 +394,25 @@ struct APIKeysSettingsTab: View {
     private func debounceSave() {
         guard !viewModel.isLoading, viewModel.canSave else { return }
         let generation = pendingSaveState.schedule()
-        saveTask?.cancel()
-        saveTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return }
-            await viewModel.save()
-            pendingSaveState.complete(generation)
-        }
+        let previousTask = saveTask
+        previousTask?.cancel()
+        saveTask = APIKeysSaveTaskCoordinator.makeTask(
+            after: previousTask,
+            delay: .seconds(1)) {
+                await viewModel.save()
+                pendingSaveState.complete(generation)
+            }
     }
 
     private func flushPendingSave() {
-        saveTask?.cancel()
+        let previousTask = saveTask
+        previousTask?.cancel()
         guard
             !viewModel.isLoading,
             viewModel.canSave,
             pendingSaveState.takePendingForFlush()
         else { return }
-        saveTask = Task { @MainActor in
+        saveTask = APIKeysSaveTaskCoordinator.makeTask(after: previousTask, delay: nil) {
             await viewModel.save()
         }
     }

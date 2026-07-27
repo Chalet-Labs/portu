@@ -54,7 +54,7 @@ public final class HistoricalPricePoint {
         source: HistoricalPriceSource = .coingecko,
         fetchedAt: Date = .now) {
         self.id = id
-        self.coinGeckoId = coinGeckoId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.coinGeckoId = OnchainTokenIdentity.normalizedHistoricalPriceID(coinGeckoId)
         self.day = HistoricalPriceCalendar.utcStartOfDay(for: day)
         self.currency = currency
         self.price = price

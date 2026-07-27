@@ -59,6 +59,11 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
         Self(chain: chain, contractAddress: nativeAssetSentinel)
     }
 
+    public static func normalizedHistoricalPriceID(_ id: String) -> String {
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Self(historicalPriceID: trimmed)?.historicalPriceID ?? trimmed.lowercased()
+    }
+
     private static func normalizedContractAddress(_ address: String?, chain: Chain) -> String? {
         guard let address else { return nil }
         let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)

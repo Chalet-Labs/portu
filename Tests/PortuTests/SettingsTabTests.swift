@@ -94,6 +94,36 @@ struct SettingsTabTests {
         #expect(!state.hasPendingSave)
     }
 
+    @Test @MainActor
+    func `API key save task waits for the previous save`() async {
+        let order = SendableArray<Int>()
+        let first = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(50))
+            order.append(1)
+        }
+        let second = APIKeysSaveTaskCoordinator.makeTask(after: first, delay: nil) {
+            order.append(2)
+        }
+
+        await second.value
+
+        #expect(order.values == [1, 2])
+    }
+
+    @Test func `API key settings offers retry only after a failed load`() {
+        #expect(APIKeysSettingsRetryPolicy.shouldShow(
+            errorMessage: "Keychain unavailable",
+            canSave: false))
+        #expect(!APIKeysSettingsRetryPolicy.shouldShow(
+            errorMessage: nil,
+            canSave: false))
+        #expect(!APIKeysSettingsRetryPolicy.shouldShow(
+            errorMessage: "stale",
+            canSave: true))
+        #expect(APIKeysSettingsRetryPolicy.isEnabled(isLoading: false))
+        #expect(!APIKeysSettingsRetryPolicy.isEnabled(isLoading: true))
+    }
+
     @Test func `price polling settings use shared defaults key and allowed values`() {
         let defaults = cleanDefaults()
 

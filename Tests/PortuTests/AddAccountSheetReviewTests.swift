@@ -60,18 +60,27 @@ struct AddAccountSheetSavePolicyTests {
         #expect(AddAccountSheetSavePolicy.canEditFields(
             isSyncing: false,
             isSyncBlocked: false,
-            isLoadingCredentials: false))
+            isLoadingCredentials: false,
+            isSaving: false))
         #expect(!AddAccountSheetSavePolicy.canEditFields(
             isSyncing: true,
             isSyncBlocked: false,
-            isLoadingCredentials: false))
+            isLoadingCredentials: false,
+            isSaving: false))
         #expect(!AddAccountSheetSavePolicy.canEditFields(
             isSyncing: false,
             isSyncBlocked: true,
-            isLoadingCredentials: false))
+            isLoadingCredentials: false,
+            isSaving: false))
         #expect(!AddAccountSheetSavePolicy.canEditFields(
             isSyncing: false,
             isSyncBlocked: false,
-            isLoadingCredentials: true))
+            isLoadingCredentials: true,
+            isSaving: false))
+        #expect(!AddAccountSheetSavePolicy.canEditFields(
+            isSyncing: false,
+            isSyncBlocked: false,
+            isLoadingCredentials: false,
+            isSaving: true))
     }
 }

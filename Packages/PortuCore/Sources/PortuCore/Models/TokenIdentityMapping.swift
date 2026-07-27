@@ -28,7 +28,7 @@ public final class TokenIdentityMapping {
         lastZapperFailureAt: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now) {
-        let normalizedContract = Self.normalizedContractAddress(contractAddress)
+        let normalizedContract = Self.normalizedContractAddress(contractAddress, chain: chain)
         self.id = id
         self.canonicalKey = Self.canonicalKey(chain: chain, contractAddress: normalizedContract)
         self.chain = chain
@@ -84,7 +84,7 @@ public final class TokenIdentityMapping {
     /// assigning `chain` or `contractAddress` directly — those properties have to be
     /// `var` for SwiftData, but mutating them in isolation desynchronizes the index.
     public func updateIdentity(_ identity: OnchainTokenIdentity, at updatedAt: Date = .now) {
-        let normalizedContract = Self.normalizedContractAddress(identity.contractAddress)
+        let normalizedContract = Self.normalizedContractAddress(identity.contractAddress, chain: identity.chain)
         chain = identity.chain
         contractAddress = normalizedContract
         canonicalKey = Self.canonicalKey(chain: identity.chain, contractAddress: normalizedContract)
@@ -96,11 +96,12 @@ public final class TokenIdentityMapping {
     }
 
     public static func canonicalKey(chain: Chain, contractAddress: String) -> String {
-        "\(chain.rawValue):\(normalizedContractAddress(contractAddress))"
+        "\(chain.rawValue):\(normalizedContractAddress(contractAddress, chain: chain))"
     }
 
-    public static func normalizedContractAddress(_ address: String) -> String {
-        address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    public static func normalizedContractAddress(_ address: String, chain: Chain) -> String {
+        let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        return chain == .solana ? trimmed : trimmed.lowercased()
     }
 
     public static func normalizedProviderID(_ id: String?) -> String? {
