@@ -36,7 +36,7 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(candidates.first?.assetIds == [first.assetId, second.assetId])
     }
 
-    @Test func `candidate selection auto maps onchain assets and falls back to zapper ids`() {
+    @Test func `candidate selection auto maps onchain assets and falls back to canonical onchain ids`() {
         let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
         let fallbackIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xFallback")
         let mapped = token(
@@ -60,12 +60,12 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(candidates.map(\.historicalPriceID) == [fallbackIdentity.historicalPriceID, mappedIdentity.historicalPriceID])
         #expect(candidates.map(\.assetIds) == [[fallback.assetId], [mapped.assetId]])
         #expect(candidates.map(\.source) == [
-            .zapper(fallbackIdentity),
+            .zerion(fallbackIdentity),
             .coingecko("mapped-token")
         ])
     }
 
-    @Test func `candidate selection uses cached identity mappings before zapper fallback`() {
+    @Test func `candidate selection uses cached identity mappings before onchain fallback`() {
         let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
         let mapped = token(
             assetId: uuid(1),
@@ -358,7 +358,7 @@ struct HistoricalPriceBackfillFeatureTests {
 
     @Test func `preflight unavailable error round trips its kind through the reducer`() async {
         let preflight = HistoricalBackfillError(
-            message: "Configure a Zapper API key.",
+            message: "Configure a Zerion API key.",
             kind: .preflightUnavailable)
         #expect(preflight.kind == .preflightUnavailable)
 
@@ -372,7 +372,7 @@ struct HistoricalPriceBackfillFeatureTests {
             $0.status = .running
         }
         await store.receive(\.backfillCompleted) {
-            $0.status = .failed("Configure a Zapper API key.")
+            $0.status = .failed("Configure a Zerion API key.")
         }
     }
 

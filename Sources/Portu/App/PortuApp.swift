@@ -1,4 +1,5 @@
 import ComposableArchitecture
+import Foundation
 import os
 import PortuCore
 import PortuNetwork
@@ -12,6 +13,7 @@ struct PortuApp: App {
     @State private var appState = AppState()
     let container: ModelContainer
 
+    // swiftlint:disable:next function_body_length
     init() {
         let factory = ModelContainerFactory()
         let isEphemeral: Bool
@@ -31,6 +33,13 @@ struct PortuApp: App {
                 .error("Portfolio category seeding failed: \(String(describing: error), privacy: .public)")
         }
 
+        do {
+            try ZapperToZerionMigrator.migrate(in: container.mainContext)
+        } catch {
+            Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app", category: "ZapperToZerionMigrator")
+                .error("Account provider migration failed: \(String(describing: error), privacy: .public)")
+        }
+
         #if DEBUG
             let debugEnabled = DebugMode.isEnabled()
             let session: URLSession = debugEnabled ? NetworkLogger.debugSession() : .shared
@@ -38,18 +47,38 @@ struct PortuApp: App {
             let session: URLSession = .shared
         #endif
 
-        let secretStore = LocalSecretStore()
         let modelContext = container.mainContext
+        ProviderIntervalSettings.migrateLegacyPreferences()
+        let secretStore = KeychainService(service: Self.secretStoreService())
+        let secretMigrationKeys = Self.secretMigrationKeys(modelContext: modelContext)
+        Task.detached {
+            do {
+                try SecretStoreMigration.migrate(
+                    keys: secretMigrationKeys,
+                    from: LocalSecretStore(),
+                    to: secretStore)
+            } catch {
+                Self.keychainAccessLogger.error(
+                    "Plaintext secret migration stopped safely: \(String(describing: error), privacy: .public)")
+            }
+        }
+        let zerionClient = ZerionAPIClient(
+            apiKey: { try secretStore.get(key: .providerAPIKey(.zerion)) ?? "" },
+            session: session)
+        let zerionProvider = ZerionProvider(client: zerionClient)
         let syncEngine = SyncEngine(
             modelContext: modelContext,
-            providerFactory: ProviderFactory(secretStore: secretStore, session: session))
+            providerFactory: ProviderFactory(
+                secretStore: secretStore,
+                session: session,
+                zerionProvider: zerionProvider))
         let priceService = PriceService(session: session) {
             Self.coinGeckoAPIKey(from: secretStore)
         }
         let priceServiceClient = Self.makePriceServiceClient(
             priceService: priceService,
             secretStore: secretStore,
-            session: session)
+            zerionProvider: zerionProvider)
 
         let displayCurrencyPreference = DisplayCurrencyPreferenceClient.liveValue
         // Restore a saved non-USD currency as pending and start on USD; the launch FX
@@ -126,7 +155,7 @@ struct PortuApp: App {
     private static func makePriceServiceClient(
         priceService: PriceService,
         secretStore: any SecretStore,
-        session: URLSession) -> PriceServiceClient {
+        zerionProvider: ZerionProvider) -> PriceServiceClient {
         PriceServiceClient(
             fetchPrices: { coinIds in
                 try await LivePriceUpdateBuilder.fetchPrices(
@@ -134,12 +163,11 @@ struct PortuApp: App {
                     priceService: priceService) { identities in
                         guard
                             !identities.isEmpty,
-                            let apiKey = zapperAPIKey(from: secretStore)
+                            try zerionAPIKey(from: secretStore) != nil
                         else {
                             return PricePollingIDResolver.emptyUpdate
                         }
-                        let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
-                        return try await zapperProvider.fetchPriceUpdate(for: identities)
+                        return try await zerionProvider.fetchPriceUpdate(for: identities)
                     }
             },
             fetchCoinGeckoPrices: { request, currency, usdToDisplayRate in
@@ -150,17 +178,19 @@ struct PortuApp: App {
                 guard currency != .usd else { return update }
                 return update.convertedUSDValues(to: currency, rate: usdToDisplayRate, preserveChanges24h: true)
             },
-            fetchZapperPrices: { identities, currency, usdToDisplayRate in
+            fetchOnchainFallbackPrices: { identities, currency, usdToDisplayRate in
                 guard
                     !identities.isEmpty,
-                    let apiKey = zapperAPIKey(from: secretStore)
+                    try zerionAPIKey(from: secretStore) != nil
                 else {
                     return PricePollingIDResolver.emptyUpdate(currency: currency)
                 }
-                let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
-                let update = try await zapperProvider.fetchPriceUpdate(for: identities)
+                let update = try await zerionProvider.fetchPriceUpdate(for: identities)
                 guard currency != .usd else { return update }
-                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate)
+                return update.convertedUSDValues(
+                    to: currency,
+                    rate: usdToDisplayRate,
+                    preserveChanges24h: true)
             },
             fetchHistoricalPrices: { coinId, days in
                 try await priceService.fetchHistoricalPrices(for: coinId, days: days)
@@ -177,28 +207,62 @@ struct PortuApp: App {
             resolveCoinGeckoIDs: { identities in
                 try await priceService.resolveCoinGeckoIDs(for: identities)
             },
-            fetchZapperHistoricalPrices: { identity, days in
-                guard let apiKey = zapperAPIKey(from: secretStore) else {
-                    throw PriceServiceClient.ClientError.zapperProviderUnavailable
+            fetchOnchainHistoricalPrices: { identity, days in
+                guard try zerionAPIKey(from: secretStore) != nil else {
+                    throw PriceServiceClient.ClientError.onchainProviderUnavailable
                 }
-                let zapperProvider = ZapperProvider(apiKey: apiKey, session: session)
-                return try await zapperProvider.fetchHistoricalPrices(identity: identity, days: days)
+                return try await zerionProvider.fetchHistoricalPrices(identity: identity, days: days)
             },
-            canFetchZapperHistoricalPrices: { zapperAPIKey(from: secretStore) != nil },
+            canFetchOnchainHistoricalPrices: { try zerionAPIKey(from: secretStore) != nil },
             invalidateCache: { await priceService.invalidateCache() })
     }
 
-    nonisolated static func zapperAPIKey(from secretStore: any SecretStore) -> String? {
-        readAPIKey(named: "Zapper", from: secretStore, key: .providerAPIKey(.zapper))
+    nonisolated static func zerionAPIKey(from secretStore: any SecretStore) throws -> String? {
+        let value = try secretStore.get(key: .providerAPIKey(.zerion))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value?.isEmpty == false ? value : nil
+    }
+
+    nonisolated static func secretStoreService(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.portu.app") -> String {
+        environment["XCTestConfigurationFilePath"] == nil
+            ? bundleIdentifier
+            : "\(bundleIdentifier).tests"
     }
 
     nonisolated static func coinGeckoAPIKey(from secretStore: any SecretStore) -> String? {
         readAPIKey(named: "CoinGecko", from: secretStore, key: .serviceAPIKey("coingecko"))
     }
 
-    private static let keychainAccessLogger = Logger(
+    nonisolated private static let keychainAccessLogger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app",
         category: "KeychainAccess")
+
+    nonisolated static let providerSecretMigrationKeys: Set<KeychainKey> = [
+        .providerAPIKey(.zerion),
+        .serviceAPIKey("coingecko"),
+        .serviceAPIKey("debank")
+    ]
+
+    @MainActor
+    private static func secretMigrationKeys(modelContext: ModelContext) -> [KeychainKey] {
+        // The retired Zapper credential is intentionally left untouched. Older
+        // login-keychain ACLs can require user interaction, and Portu no longer
+        // needs this credential at runtime.
+        var keys = providerSecretMigrationKeys
+        for chain in Chain.allCases {
+            keys.insert(.rpcEndpoint(chain))
+        }
+        if let accounts = try? modelContext.fetch(FetchDescriptor<Account>()) {
+            for account in accounts {
+                keys.insert(.exchangeAPIKey(account.id))
+                keys.insert(.exchangeAPISecret(account.id))
+                keys.insert(.exchangePassphrase(account.id))
+            }
+        }
+        return keys.sorted { $0.rawKey < $1.rawKey }
+    }
 
     nonisolated private static func readAPIKey(
         named provider: String,

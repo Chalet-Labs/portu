@@ -27,7 +27,7 @@ struct AddAccountSheet: View {
         canSync: Bool = false,
         isSyncBlocked: Bool = false,
         onSync: ((UUID) -> Void)? = nil,
-        secretStore: any SecretStore = LocalSecretStore()) {
+        secretStore: any SecretStore = KeychainService()) {
         self.mode = mode
         self.account = account
         self.isSyncing = isSyncing
@@ -155,17 +155,14 @@ struct AddAccountSheet: View {
     private var chainAccountTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             AddAccountSupportPanel(
-                title: "CHAINS WE SUPPORT:",
+                title: "VALIDATED ZERION COVERAGE:",
                 chips: [
-                    .init(title: "Ethereum & L2s", systemImage: "diamond.fill", tint: .purple),
-                    .init(title: "Solana", systemImage: "circle.hexagongrid.fill", tint: .green),
-                    .init(title: "Bitcoin", systemImage: "bitcoinsign.circle.fill", tint: .orange),
-                    .init(title: "Base", systemImage: "b.circle.fill", tint: .blue),
-                    .init(title: "Polygon", systemImage: "hexagon.fill", tint: .purple),
-                    .init(title: "+ 6 more...", systemImage: nil, tint: PortuTheme.dashboardSecondaryText)
+                    .init(title: "27 EVM chains", systemImage: "diamond.fill", tint: .purple),
+                    .init(title: "Solana tokens", systemImage: "circle.hexagongrid.fill", tint: .green),
+                    .init(title: "No Bitcoin", systemImage: "exclamationmark.triangle.fill", tint: .orange)
                 ],
                 searchPlaceholder: "Search chain to test support",
-                linkTitle: "See full list")
+                linkTitle: nil)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 10) {
@@ -197,7 +194,7 @@ struct AddAccountSheet: View {
                         text: $draft.chainGroup)
                 }
 
-                InlineSourceNote(text: "Data source: Zapper API")
+                InlineSourceNote(text: "Data source: Zerion API")
             }
         }
     }
@@ -213,7 +210,7 @@ struct AddAccountSheet: View {
 
                 Divider()
 
-                ForEach([Chain.solana, .bitcoin], id: \.self) { chain in
+                ForEach([Chain.solana], id: \.self) { chain in
                     Button(chain.addAccountTitle) {
                         draft.specificChain = chain
                         draft.isEVM = false

@@ -116,7 +116,7 @@ struct AssetPriceChartQueryTests {
         #expect(effectiveID == "bitcoin")
     }
 
-    @Test func `effective historical coin gecko id falls back to zapper key for onchain assets`() {
+    @Test func `effective historical coin gecko id falls back to onchain key for onchain assets`() {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
 
         let effectiveID = AssetDetailFeature.effectiveHistoricalCoinGeckoID(

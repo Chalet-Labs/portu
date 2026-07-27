@@ -3,6 +3,7 @@ import Foundation
 enum AccountSheetSaveError: Error, LocalizedError, Equatable {
     case missingEditedAccount
     case editedAccountMismatch
+    case unsupportedChain(String)
     case credentialSaveFailed(String)
     case accountSaveFailed(String)
 
@@ -12,6 +13,8 @@ enum AccountSheetSaveError: Error, LocalizedError, Equatable {
             "The account being edited is no longer available."
         case .editedAccountMismatch:
             "The account being edited does not match the open sheet."
+        case let .unsupportedChain(chain):
+            "\(chain) is not supported by Zerion. Existing data remains available read-only."
         case let .credentialSaveFailed(message):
             "Failed to save credentials: \(message)"
         case let .accountSaveFailed(message):

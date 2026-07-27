@@ -4,7 +4,7 @@ import PortuCore
 @MainActor
 @Observable
 final class APIKeysViewModel {
-    var zapperAPIKey = ""
+    var zerionAPIKey = ""
     var debankAPIKey = ""
     var coingeckoAPIKey = ""
     var rpcEndpoints: [Chain: String] = [:]
@@ -14,7 +14,7 @@ final class APIKeysViewModel {
 
     private let secretStore: SecretStore
 
-    init(secretStore: SecretStore = LocalSecretStore()) {
+    init(secretStore: SecretStore = KeychainService()) {
         self.secretStore = secretStore
     }
 
@@ -23,7 +23,7 @@ final class APIKeysViewModel {
         defer { isLoading = false; hasLoaded = true }
         secretStoreError = nil
         do {
-            zapperAPIKey = try secretStore.get(key: .providerAPIKey(.zapper)) ?? ""
+            zerionAPIKey = try secretStore.get(key: .providerAPIKey(.zerion)) ?? ""
             debankAPIKey = try secretStore.get(key: .serviceAPIKey("debank")) ?? ""
             coingeckoAPIKey = try secretStore.get(key: .serviceAPIKey("coingecko")) ?? ""
 
@@ -34,14 +34,14 @@ final class APIKeysViewModel {
                 }
             }
         } catch {
-            secretStoreError = "Unable to load API keys from local storage. Try restarting the app."
+            secretStoreError = "Unable to access API keys in Keychain. Unlock your Mac and try again."
         }
     }
 
     func save() {
         secretStoreError = nil
         do {
-            try saveKey(.providerAPIKey(.zapper), value: zapperAPIKey)
+            try saveKey(.providerAPIKey(.zerion), value: zerionAPIKey)
             try saveKey(.serviceAPIKey("debank"), value: debankAPIKey)
             try saveKey(.serviceAPIKey("coingecko"), value: coingeckoAPIKey)
 
@@ -53,7 +53,7 @@ final class APIKeysViewModel {
                 }
             }
         } catch {
-            secretStoreError = "Unable to save API keys to local storage."
+            secretStoreError = "Unable to save API keys in Keychain. Unlock your Mac and try again."
         }
     }
 

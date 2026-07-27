@@ -33,12 +33,27 @@ private final class FailingSecretStore: SecretStore, @unchecked Sendable {
 
 @MainActor
 struct APIKeysViewModelTests {
+    @Test
+    func `host uses an isolated keychain service`() {
+        #expect(PortuApp.secretStoreService(
+            environment: ["XCTestConfigurationFilePath": "/tmp/tests.xctestconfiguration"],
+            bundleIdentifier: "com.portu.app") == "com.portu.app.tests")
+        #expect(PortuApp.secretStoreService(
+            environment: [:],
+            bundleIdentifier: "com.portu.app") == "com.portu.app")
+    }
+
+    @Test func `startup migration excludes retired Zapper credential`() {
+        #expect(PortuApp.providerSecretMigrationKeys.contains(.providerAPIKey(.zerion)))
+        #expect(!PortuApp.providerSecretMigrationKeys.contains(.providerAPIKey(.zapper)))
+    }
+
     // MARK: - Initial State
 
     @Test func `initial state is empty`() {
         let vm = APIKeysViewModel(secretStore: MockSecretStore())
 
-        #expect(vm.zapperAPIKey.isEmpty)
+        #expect(vm.zerionAPIKey.isEmpty)
         #expect(vm.debankAPIKey.isEmpty)
         #expect(vm.coingeckoAPIKey.isEmpty)
         #expect(vm.rpcEndpoints.isEmpty)
@@ -48,14 +63,14 @@ struct APIKeysViewModelTests {
 
     @Test func `load populates fields from store`() throws {
         let store = MockSecretStore()
-        try store.set(key: .providerAPIKey(.zapper), value: "zap-123")
+        try store.set(key: .providerAPIKey(.zerion), value: "zap-123")
         try store.set(key: .serviceAPIKey("debank"), value: "deb-456")
         try store.set(key: .serviceAPIKey("coingecko"), value: "cg-789")
 
         let vm = APIKeysViewModel(secretStore: store)
         vm.load()
 
-        #expect(vm.zapperAPIKey == "zap-123")
+        #expect(vm.zerionAPIKey == "zap-123")
         #expect(vm.debankAPIKey == "deb-456")
         #expect(vm.coingeckoAPIKey == "cg-789")
     }
@@ -78,35 +93,41 @@ struct APIKeysViewModelTests {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
 
-        vm.zapperAPIKey = "zap-abc"
+        vm.zerionAPIKey = "zap-abc"
         vm.debankAPIKey = "deb-def"
         vm.coingeckoAPIKey = "cg-ghi"
         vm.save()
 
-        #expect(try store.get(key: .providerAPIKey(.zapper)) == "zap-abc")
+        #expect(try store.get(key: .providerAPIKey(.zerion)) == "zap-abc")
         #expect(try store.get(key: .serviceAPIKey("debank")) == "deb-def")
         #expect(try store.get(key: .serviceAPIKey("coingecko")) == "cg-ghi")
     }
 
-    @Test func `historical backfill reads zapper key saved by settings`() {
+    @Test func `historical backfill reads zerion key saved by settings`() throws {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
-        vm.zapperAPIKey = "zap-backfill"
+        vm.zerionAPIKey = "zap-backfill"
         vm.save()
 
-        #expect(PortuApp.zapperAPIKey(from: store) == "zap-backfill")
+        #expect(try PortuApp.zerionAPIKey(from: store) == "zap-backfill")
+    }
+
+    @Test func `locked keychain is not interpreted as a missing Zerion key`() {
+        #expect(throws: KeychainError.unexpectedStatus(-25308)) {
+            _ = try PortuApp.zerionAPIKey(from: FailingSecretStore())
+        }
     }
 
     @Test func `save deletes keys when field cleared`() throws {
         let store = MockSecretStore()
-        try store.set(key: .providerAPIKey(.zapper), value: "old-key")
+        try store.set(key: .providerAPIKey(.zerion), value: "old-key")
 
         let vm = APIKeysViewModel(secretStore: store)
         vm.load()
-        vm.zapperAPIKey = ""
+        vm.zerionAPIKey = ""
         vm.save()
 
-        #expect(try store.get(key: .providerAPIKey(.zapper)) == nil)
+        #expect(try store.get(key: .providerAPIKey(.zerion)) == nil)
     }
 
     @Test func `save persists RPC endpoints`() throws {
@@ -137,7 +158,7 @@ struct APIKeysViewModelTests {
         let store = MockSecretStore()
 
         let writer = APIKeysViewModel(secretStore: store)
-        writer.zapperAPIKey = "zap-rt"
+        writer.zerionAPIKey = "zap-rt"
         writer.debankAPIKey = "deb-rt"
         writer.coingeckoAPIKey = "cg-rt"
         writer.addRPCEndpoint(chain: .optimism, url: "https://op.example.com")
@@ -146,7 +167,7 @@ struct APIKeysViewModelTests {
         let reader = APIKeysViewModel(secretStore: store)
         reader.load()
 
-        #expect(reader.zapperAPIKey == "zap-rt")
+        #expect(reader.zerionAPIKey == "zap-rt")
         #expect(reader.debankAPIKey == "deb-rt")
         #expect(reader.coingeckoAPIKey == "cg-rt")
         #expect(reader.rpcEndpoints[.optimism] == "https://op.example.com")
@@ -173,20 +194,20 @@ struct APIKeysViewModelTests {
 
     // MARK: - Error Handling
 
-    @Test func `load surfaces local storage error`() {
+    @Test func `load surfaces actionable keychain error`() {
         let vm = APIKeysViewModel(secretStore: FailingSecretStore())
         vm.load()
 
-        #expect(vm.secretStoreError != nil)
-        #expect(vm.zapperAPIKey.isEmpty)
+        #expect(vm.secretStoreError == "Unable to access API keys in Keychain. Unlock your Mac and try again.")
+        #expect(vm.zerionAPIKey.isEmpty)
     }
 
-    @Test func `save surfaces local storage error`() {
+    @Test func `save surfaces actionable keychain error`() {
         let vm = APIKeysViewModel(secretStore: FailingSecretStore())
-        vm.zapperAPIKey = "some-key"
+        vm.zerionAPIKey = "some-key"
         vm.save()
 
-        #expect(vm.secretStoreError != nil)
+        #expect(vm.secretStoreError == "Unable to save API keys in Keychain. Unlock your Mac and try again.")
     }
 
     @Test func `successful operations clear error`() {

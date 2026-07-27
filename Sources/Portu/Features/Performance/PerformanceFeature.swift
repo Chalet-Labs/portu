@@ -28,9 +28,8 @@ struct CategoryChange: Identifiable, Equatable {
 }
 
 /// Period price change keyed by historical price ID. The ID is `<coinGeckoId>` for
-/// CoinGecko-priced assets and `zapper:<chain>:<contract>` for onchain assets whose
-/// prices come from Zapper, matching the cache's `HistoricalPricePoint.coinGeckoId`
-/// convention.
+/// CoinGecko-priced assets and `asset:<chain>:<contract-or-native>` for onchain assets.
+/// Legacy `zapper:` cache keys are normalized before reaching this type.
 struct AssetPricePeriodChange: Identifiable, Equatable {
     var id: String {
         historicalPriceID

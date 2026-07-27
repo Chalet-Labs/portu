@@ -263,10 +263,10 @@ private struct GeneralSettingsTab: View {
 
     @AppStorage(PricePollingSettings.refreshIntervalKey)
     private var refreshInterval = PricePollingSettings.defaultRefreshIntervalSeconds
-    @AppStorage(ProviderIntervalSettings.zapperLivePriceIntervalKey)
-    private var zapperLivePriceInterval = ProviderIntervalSettings.defaultZapperLivePriceIntervalSeconds
-    @AppStorage(ProviderIntervalSettings.zapperPortfolioSyncIntervalKey)
-    private var zapperPortfolioSyncInterval = ProviderIntervalSettings.defaultZapperPortfolioSyncIntervalSeconds
+    @AppStorage(ProviderIntervalSettings.onchainLivePriceIntervalKey)
+    private var onchainLivePriceInterval = ProviderIntervalSettings.defaultOnchainLivePriceIntervalSeconds
+    @AppStorage(ProviderIntervalSettings.onchainPortfolioSyncIntervalKey)
+    private var onchainPortfolioSyncInterval = ProviderIntervalSettings.defaultOnchainPortfolioSyncIntervalSeconds
     @AppStorage(ProviderIntervalSettings.exchangePortfolioSyncIntervalKey)
     private var exchangePortfolioSyncInterval = ProviderIntervalSettings.defaultExchangePortfolioSyncIntervalSeconds
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
@@ -290,11 +290,11 @@ private struct GeneralSettingsTab: View {
                                 options: .coinGeckoLivePrices)
 
                             SettingsIntervalRow(
-                                title: "Zapper live price fallback",
+                                title: "Zerion live price fallback",
                                 subtitle: "Default: 1 hour. Used only for onchain tokens CoinGecko cannot price.",
-                                selection: $zapperLivePriceInterval,
-                                fallbackSeconds: ProviderIntervalSettings.defaultZapperLivePriceIntervalSeconds,
-                                options: .zapperLivePriceFallback)
+                                selection: $onchainLivePriceInterval,
+                                fallbackSeconds: ProviderIntervalSettings.defaultOnchainLivePriceIntervalSeconds,
+                                options: .onchainLivePriceFallback)
                         }
                     }
 
@@ -304,11 +304,11 @@ private struct GeneralSettingsTab: View {
                     icon: .priceUpdates) {
                         VStack(alignment: .leading, spacing: 10) {
                             SettingsIntervalRow(
-                                title: "Zapper portfolio sync",
-                                subtitle: "Default: 6 hours. Manual only disables scheduled Zapper portfolio refreshes.",
-                                selection: $zapperPortfolioSyncInterval,
-                                fallbackSeconds: ProviderIntervalSettings.defaultZapperPortfolioSyncIntervalSeconds,
-                                options: .zapperPortfolioSync)
+                                title: "Zerion portfolio sync",
+                                subtitle: "Default: 6 hours. Manual only disables scheduled Zerion portfolio refreshes.",
+                                selection: $onchainPortfolioSyncInterval,
+                                fallbackSeconds: ProviderIntervalSettings.defaultOnchainPortfolioSyncIntervalSeconds,
+                                options: .onchainPortfolioSync)
 
                             SettingsIntervalRow(
                                 title: "Exchange portfolio sync",
@@ -321,7 +321,7 @@ private struct GeneralSettingsTab: View {
 
                 SettingsSectionCard(
                     title: HistoricalPriceBackfillSettings.sectionTitle,
-                    subtitle: "Cache daily prices from CoinGecko and Zapper separately from Portu snapshots.",
+                    subtitle: "Cache daily prices from CoinGecko and Zerion separately from Portu snapshots.",
                     icon: .priceUpdates) {
                         VStack(alignment: .leading, spacing: 14) {
                             SettingsSwitchRow(
@@ -415,7 +415,7 @@ enum HistoricalBackfillStatusFormatter {
         case .idle:
             "No historical backfill run in this session."
         case .running:
-            "Fetching historical prices from CoinGecko and Zapper..."
+            "Fetching historical prices from CoinGecko and Zerion..."
         case .clearing:
             "Clearing historical price cache..."
         case let .succeeded(result):

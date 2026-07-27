@@ -65,6 +65,8 @@ struct SecretStoreTests {
     @Test func `rawKey format is stable`() {
         let id = UUID()
         #expect(KeychainKey.providerAPIKey(.zapper).rawKey == "portu.provider.zapper.apiKey")
+        #expect(KeychainKey.providerAPIKey(.zerion).rawKey == "portu.provider.zerion.apiKey")
+        #expect(KeychainKey.providerAPIKey(.zerion) != .providerAPIKey(.zapper))
         #expect(KeychainKey.exchangeAPIKey(id).rawKey == "portu.exchange.\(id.uuidString).apiKey")
         #expect(KeychainKey.exchangeAPISecret(id).rawKey == "portu.exchange.\(id.uuidString).apiSecret")
         #expect(KeychainKey.exchangePassphrase(id).rawKey == "portu.exchange.\(id.uuidString).passphrase")
@@ -85,6 +87,32 @@ struct SecretStoreTests {
         try store.delete(key: .providerAPIKey(.zapper))
 
         #expect(try store.get(key: .providerAPIKey(.zapper)) == nil)
+    }
+
+    @Test func `secret migration verifies keychain copy before removing plaintext`() throws {
+        let source = MigrationTestSecretStore()
+        let destination = MigrationTestSecretStore()
+        let key = KeychainKey.serviceAPIKey("coingecko")
+        try source.set(key: key, value: "secret")
+
+        try SecretStoreMigration.migrate(keys: [key], from: source, to: destination)
+
+        #expect(try destination.get(key: key) == "secret")
+        #expect(try source.get(key: key) == nil)
+    }
+
+    @Test func `secret migration leaves plaintext when keychain write fails`() throws {
+        let source = MigrationTestSecretStore()
+        let destination = MigrationTestSecretStore()
+        let key = KeychainKey.serviceAPIKey("coingecko")
+        try source.set(key: key, value: "secret")
+        destination.setError = .interactionNotAllowed
+
+        #expect(throws: KeychainError.interactionNotAllowed) {
+            try SecretStoreMigration.migrate(keys: [key], from: source, to: destination)
+        }
+        #expect(try source.get(key: key) == "secret")
+        #expect(try destination.get(key: key) == nil)
     }
 }
 
@@ -157,6 +185,72 @@ struct KeychainServiceTests {
         #expect(recorder.addedQueries.isEmpty)
         #expect(recorder.deletedQueries.isEmpty)
     }
+
+    @Test func `repeated gets read a credential from keychain only once`() throws {
+        let storedValue = "zerion-token"
+        let storedData = try #require(storedValue.data(using: .utf8))
+        let recorder = KeychainOperationRecorder()
+        let store = KeychainService(
+            service: "com.portu.tests.\(UUID().uuidString)",
+            copyMatching: { query, result in
+                _ = recorder.appendCopy(query.dictionaryValue)
+                result?.pointee = storedData as CFData
+                return errSecSuccess
+            })
+
+        #expect(try store.get(key: .providerAPIKey(.zerion)) == storedValue)
+        #expect(try store.get(key: .providerAPIKey(.zerion)) == storedValue)
+        #expect(recorder.copyQueries.count == 1)
+    }
+
+    @Test func `successful writes and deletes update the read cache`() throws {
+        let oldData = Data("old-token".utf8)
+        let recorder = KeychainOperationRecorder()
+        let store = KeychainService(
+            service: "com.portu.tests.\(UUID().uuidString)",
+            copyMatching: { query, result in
+                _ = recorder.appendCopy(query.dictionaryValue)
+                result?.pointee = oldData as CFData
+                return errSecSuccess
+            },
+            add: { _, _ in errSecSuccess },
+            delete: { _ in errSecSuccess })
+        let key = KeychainKey.providerAPIKey(.zerion)
+
+        #expect(try store.get(key: key) == "old-token")
+        try store.set(key: key, value: "new-token")
+        #expect(try store.get(key: key) == "new-token")
+        try store.delete(key: key)
+        #expect(try store.get(key: key) == nil)
+        #expect(recorder.copyQueries.count == 1)
+    }
+
+    @Test func `security operations are serialized across service instances`() async {
+        let probe = KeychainConcurrencyProbe()
+        let first = KeychainService(
+            service: "com.portu.tests.first",
+            copyMatching: { _, _ in
+                probe.performBlockingOperation()
+                return errSecItemNotFound
+            })
+        let second = KeychainService(
+            service: "com.portu.tests.second",
+            copyMatching: { _, _ in
+                probe.performBlockingOperation()
+                return errSecItemNotFound
+            })
+
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0 ..< 12 {
+                group.addTask {
+                    let store = index.isMultiple(of: 2) ? first : second
+                    _ = try? store.get(key: .providerAPIKey(.zerion))
+                }
+            }
+        }
+
+        #expect(probe.maximumConcurrentOperations == 1)
+    }
 }
 
 private final class KeychainOperationRecorder: @unchecked Sendable {
@@ -194,6 +288,46 @@ private final class KeychainOperationRecorder: @unchecked Sendable {
         lock.withLock {
             deletedQueryStorage.append(query)
         }
+    }
+}
+
+private final class KeychainConcurrencyProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var activeOperations = 0
+    private var maximumConcurrentOperationsStorage = 0
+
+    var maximumConcurrentOperations: Int {
+        lock.withLock { maximumConcurrentOperationsStorage }
+    }
+
+    func performBlockingOperation() {
+        lock.withLock {
+            activeOperations += 1
+            maximumConcurrentOperationsStorage = max(maximumConcurrentOperationsStorage, activeOperations)
+        }
+        Thread.sleep(forTimeInterval: 0.05)
+        lock.withLock {
+            activeOperations -= 1
+        }
+    }
+}
+
+private final class MigrationTestSecretStore: SecretStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [String: String] = [:]
+    var setError: KeychainError?
+
+    func get(key: KeychainKey) throws(KeychainError) -> String? {
+        lock.withLock { storage[key.rawKey] }
+    }
+
+    func set(key: KeychainKey, value: String) throws(KeychainError) {
+        if let setError { throw setError }
+        lock.withLock { storage[key.rawKey] = value }
+    }
+
+    func delete(key: KeychainKey) throws(KeychainError) {
+        _ = lock.withLock { storage.removeValue(forKey: key.rawKey) }
     }
 }
 

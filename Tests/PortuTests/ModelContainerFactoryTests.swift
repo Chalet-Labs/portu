@@ -100,6 +100,67 @@ struct ModelContainerFactoryTests {
         #expect(price.price == expectedPrice)
     }
 
+    @Test func `persisted Zapper wallet migration is idempotent and preserves account graph`() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "PortuZapperMigrationTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appending(path: "Portu.store", directoryHint: .notDirectory)
+        let factory = ModelContainerFactory(storeURL: storeURL)
+        let walletID = UUID()
+        let positionID = UUID()
+        let assetID = UUID()
+
+        do {
+            let container = try factory.makeForProduction()
+            let context = container.mainContext
+            let asset = Asset(id: assetID, symbol: "ETH", name: "Ethereum")
+            let token = PositionToken(role: .balance, amount: 1, usdValue: 2000, asset: asset)
+            let position = Position(id: positionID, positionType: .idle, netUSDValue: 2000, tokens: [token])
+            let wallet = Account(
+                id: walletID,
+                name: "Legacy",
+                kind: .wallet,
+                dataSource: .zapper,
+                positions: [position])
+            let address = WalletAddress(chain: nil, address: "0xabc", account: wallet)
+            wallet.addresses = [address]
+            context.insert(wallet)
+            context.insert(Account(name: "Manual", kind: .manual, dataSource: .manual))
+            try context.save()
+        }
+
+        let reopened = try factory.makeForProduction()
+        let context = reopened.mainContext
+        try ZapperToZerionMigrator.migrate(in: context)
+        try ZapperToZerionMigrator.migrate(in: context)
+
+        let accounts = try context.fetch(FetchDescriptor<Account>())
+        let wallet = try #require(accounts.first { $0.id == walletID })
+        let manual = try #require(accounts.first { $0.kind == .manual })
+        #expect(wallet.dataSource == .zerion)
+        #expect(wallet.addresses.map(\.address) == ["0xabc"])
+        #expect(wallet.positions.map(\.id) == [positionID])
+        #expect(wallet.positions.first?.tokens.first?.asset?.id == assetID)
+        #expect(manual.dataSource == .manual)
+    }
+
+    @Test func `zapper wallet migration rolls back when saving fails`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let wallet = Account(name: "Legacy", kind: .wallet, dataSource: .zapper)
+        context.insert(wallet)
+        try context.save()
+
+        #expect(throws: MigrationSaveError.forced) {
+            try ZapperToZerionMigrator.migrate(in: context) { _ in
+                throw MigrationSaveError.forced
+            }
+        }
+
+        #expect(wallet.dataSource == .zapper)
+    }
+
     private func copyFixture(named name: String, to destination: URL, fileManager: FileManager) throws {
         let fixture = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -113,4 +174,8 @@ struct ModelContainerFactoryTests {
             try fileManager.copyItem(at: source, to: target)
         }
     }
+}
+
+private enum MigrationSaveError: Error {
+    case forced
 }

@@ -6,7 +6,7 @@ import Testing
 struct PriceServiceClientDefaultCurrencyTests {
     @Test func `default coin gecko getter returns the usd update for the default currency`() async throws {
         let client = makeClient()
-        let request = PricePollingRequest(coinGeckoIDs: ["btc"], zapperIdentities: [])
+        let request = PricePollingRequest(coinGeckoIDs: ["btc"], onchainIdentities: [])
 
         let update = try await client.fetchCoinGeckoPrices(request, .default, 1)
 
@@ -16,7 +16,7 @@ struct PriceServiceClientDefaultCurrencyTests {
 
     @Test func `default coin gecko getter returns an empty tagged update for a non-default currency`() async throws {
         let client = makeClient()
-        let request = PricePollingRequest(coinGeckoIDs: ["btc"], zapperIdentities: [])
+        let request = PricePollingRequest(coinGeckoIDs: ["btc"], onchainIdentities: [])
 
         let update = try await client.fetchCoinGeckoPrices(request, .eur, 1)
 
@@ -24,11 +24,11 @@ struct PriceServiceClientDefaultCurrencyTests {
         #expect(update.prices.isEmpty)
     }
 
-    @Test func `default zapper getter returns an empty tagged update for a non-default currency`() async throws {
+    @Test func `default onchain fallback getter returns an empty tagged update for a non-default currency`() async throws {
         let client = makeClient()
         let identity = try #require(OnchainTokenIdentity(historicalPriceID: "asset:base:0xtoken"))
 
-        let update = try await client.fetchZapperPrices([identity], .chf, 1)
+        let update = try await client.fetchOnchainFallbackPrices([identity], .chf, 1)
 
         #expect(update.currency == .chf)
         #expect(update.prices.isEmpty)

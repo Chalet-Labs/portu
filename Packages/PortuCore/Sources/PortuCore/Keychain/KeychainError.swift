@@ -1,6 +1,6 @@
 import Foundation
 
-public enum KeychainError: Error, Sendable, LocalizedError {
+public enum KeychainError: Error, Sendable, LocalizedError, Equatable {
     case unexpectedStatus(OSStatus)
     case encodingFailed
     case interactionNotAllowed

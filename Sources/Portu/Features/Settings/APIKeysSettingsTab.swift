@@ -7,7 +7,7 @@ enum APIKeyInputMode: Equatable {
 }
 
 private enum APIKeyFieldID: Hashable {
-    case zapper
+    case zerion
     case debank
     case coingecko
 }
@@ -22,13 +22,13 @@ private struct APIKeyFieldDescriptor {
 }
 
 private extension APIKeyFieldDescriptor {
-    static let zapper = Self(
-        id: .zapper,
-        title: "Zapper",
+    static let zerion = Self(
+        id: .zerion,
+        title: "Zerion",
         systemImage: SettingsIconography.apiKeyFieldSystemImage,
         foreground: SettingsDesign.accentPrimary,
         background: SettingsDesign.primaryGlyphBackground,
-        hint: nil)
+        hint: "Create a personal key at dashboard.zerion.io.")
 
     static let debank = Self(
         id: .debank,
@@ -68,12 +68,12 @@ struct APIKeysSettingsTab: View {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Provider API Keys",
-                    subtitle: "Stored locally on this Mac.",
+                    subtitle: "Stored securely in Keychain on this Mac.",
                     icon: .apiKeys) {
                         VStack(spacing: 0) {
                             apiKeyField(
-                                .zapper,
-                                text: $viewModel.zapperAPIKey)
+                                .zerion,
+                                text: $viewModel.zerionAPIKey)
 
                             SettingsDivider()
                                 .padding(.vertical, 8)
@@ -101,7 +101,7 @@ struct APIKeysSettingsTab: View {
 
                             if let secretStoreError = viewModel.secretStoreError {
                                 SettingsInlineNotice(
-                                    title: "Storage Error",
+                                    title: "Keychain Error",
                                     message: secretStoreError,
                                     style: .error)
                             }
@@ -110,7 +110,7 @@ struct APIKeysSettingsTab: View {
             }
         }
         .task { if !viewModel.hasLoaded { viewModel.load() } }
-        .onChange(of: viewModel.zapperAPIKey) { _, _ in debounceSave() }
+        .onChange(of: viewModel.zerionAPIKey) { _, _ in debounceSave() }
         .onChange(of: viewModel.debankAPIKey) { _, _ in debounceSave() }
         .onChange(of: viewModel.coingeckoAPIKey) { _, _ in debounceSave() }
         .onDisappear { flushPendingSave() }

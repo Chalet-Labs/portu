@@ -33,7 +33,7 @@ struct ModelTests {
         let account = Account(
             name: "My Wallet",
             kind: .wallet,
-            dataSource: .zapper)
+            dataSource: .zerion)
         context.insert(account)
         try context.save()
 
@@ -41,7 +41,7 @@ struct ModelTests {
         #expect(fetched.count == 1)
         #expect(fetched[0].name == "My Wallet")
         #expect(fetched[0].kind == .wallet)
-        #expect(fetched[0].dataSource == .zapper)
+        #expect(fetched[0].dataSource == .zerion)
         #expect(fetched[0].isActive == true)
         #expect(fetched[0].lastSyncError == nil)
     }
@@ -50,7 +50,7 @@ struct ModelTests {
         let container = try makeTestContainer()
         let context = container.mainContext
 
-        let account = Account(name: "Test", kind: .wallet, dataSource: .zapper)
+        let account = Account(name: "Test", kind: .wallet, dataSource: .zerion)
         let addr = WalletAddress(address: "0xabc123")
         account.addresses.append(addr)
         context.insert(account)
@@ -68,7 +68,7 @@ struct ModelTests {
         let container = try makeTestContainer()
         let context = container.mainContext
 
-        let account = Account(name: "Test", kind: .wallet, dataSource: .zapper)
+        let account = Account(name: "Test", kind: .wallet, dataSource: .zerion)
         let position = Position(positionType: .idle, chain: .ethereum, netUSDValue: 1000)
         account.positions.append(position)
         context.insert(account)
@@ -132,7 +132,7 @@ struct ModelTests {
         let asset = Asset(symbol: "BTC", name: "Bitcoin", coinGeckoId: "bitcoin", category: .major)
         let token = PositionToken(role: .balance, amount: 1, usdValue: 67500, asset: asset)
         let position = Position(positionType: .idle, netUSDValue: 67500, tokens: [token])
-        let account = Account(name: "Hardware", kind: .wallet, dataSource: .zapper, positions: [position])
+        let account = Account(name: "Hardware", kind: .wallet, dataSource: .zerion, positions: [position])
         context.insert(account)
         context.insert(asset)
         try context.save()
@@ -335,6 +335,14 @@ struct ModelTests {
         #expect(OnchainTokenIdentity(historicalPriceID: "zapper:unknown:0xabc") == nil)
     }
 
+    @Test func `native identity uses a stable canonical sentinel`() {
+        let identity = OnchainTokenIdentity.native(on: .ethereum)
+
+        #expect(identity.contractAddress == OnchainTokenIdentity.nativeAssetSentinel)
+        #expect(identity.historicalPriceID == "asset:ethereum:native")
+        #expect(OnchainTokenIdentity(historicalPriceID: identity.historicalPriceID) == identity)
+    }
+
     @Test func `onchain identity parses camel case chain ids case insensitively`() throws {
         let polygon = try #require(OnchainTokenIdentity(historicalPriceID: "zapper:polygonzkevm:0xABCDEF"))
         let immutable = try #require(OnchainTokenIdentity(historicalPriceID: "zapper:immutablex:0xABCDEF"))
@@ -395,7 +403,7 @@ struct ModelTests {
     }
 
     @Test func `account is active by default`() {
-        let account = Account(name: "Test", kind: .wallet, dataSource: .zapper)
+        let account = Account(name: "Test", kind: .wallet, dataSource: .zerion)
         #expect(account.isActive == true)
     }
 

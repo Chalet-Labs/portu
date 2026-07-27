@@ -11,7 +11,7 @@ struct AccountSheetInvalidationTests {
         let account = Account(
             name: "Wallet",
             kind: .wallet,
-            dataSource: .zapper,
+            dataSource: .zerion,
             lastSyncedAt: Date(timeIntervalSince1970: 1000),
             lastSyncError: "old failure")
         context.insert(account)

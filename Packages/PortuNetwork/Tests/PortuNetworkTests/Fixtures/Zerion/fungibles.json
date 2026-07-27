@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "type": "fungibles",
+      "id": "fixture-contract",
+      "attributes": {
+        "market_data": {"price": 2.5, "changes": {"percent_1d": -4.25}},
+        "implementations": [{"chain_id": "base", "address": "0x0000000000000000000000000000000000000001", "decimals": 18}]
+      }
+    },
+    {
+      "type": "fungibles",
+      "id": "fixture-native",
+      "attributes": {
+        "market_data": {"price": 2000, "changes": {"percent_1d": 5}},
+        "implementations": [{"chain_id": "ethereum", "address": null, "decimals": 18}]
+      }
+    }
+  ],
+  "links": {}
+}

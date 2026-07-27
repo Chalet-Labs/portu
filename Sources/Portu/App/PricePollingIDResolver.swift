@@ -3,14 +3,14 @@ import PortuCore
 
 struct PricePollingRequest: Equatable {
     var coinGeckoIDs: [String]
-    var zapperIdentities: [OnchainTokenIdentity]
+    var onchainIdentities: [OnchainTokenIdentity]
 
     var isEmpty: Bool {
-        coinGeckoIDs.isEmpty && zapperIdentities.isEmpty
+        coinGeckoIDs.isEmpty && onchainIdentities.isEmpty
     }
 
     var allPriceIDs: [String] {
-        coinGeckoIDs + zapperIdentities.map(\.historicalPriceID)
+        coinGeckoIDs + onchainIdentities.map(\.historicalPriceID)
     }
 }
 
@@ -18,16 +18,16 @@ enum PricePollingIDResolver {
     static func split(_ ids: [String]) -> PricePollingRequest {
         var coinGeckoIDs: [String] = []
         var seenCoinGeckoIDs: Set<String> = []
-        var zapperIdentities: [OnchainTokenIdentity] = []
-        var seenZapperIdentities: Set<OnchainTokenIdentity> = []
+        var onchainIdentities: [OnchainTokenIdentity] = []
+        var seenOnchainIdentities: Set<OnchainTokenIdentity> = []
 
         for id in ids {
             let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard !normalized.isEmpty else { continue }
             if let identity = OnchainTokenIdentity(historicalPriceID: normalized) {
-                guard !seenZapperIdentities.contains(identity) else { continue }
-                seenZapperIdentities.insert(identity)
-                zapperIdentities.append(identity)
+                guard !seenOnchainIdentities.contains(identity) else { continue }
+                seenOnchainIdentities.insert(identity)
+                onchainIdentities.append(identity)
             } else {
                 guard !seenCoinGeckoIDs.contains(normalized) else { continue }
                 seenCoinGeckoIDs.insert(normalized)
@@ -37,7 +37,7 @@ enum PricePollingIDResolver {
 
         return PricePollingRequest(
             coinGeckoIDs: coinGeckoIDs,
-            zapperIdentities: zapperIdentities)
+            onchainIdentities: onchainIdentities)
     }
 
     static func merge(_ updates: [PriceUpdate]) -> PriceUpdate {

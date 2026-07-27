@@ -640,7 +640,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(ids == ["unpriced"])
     }
 
-    @Test func `price polling ids include zapper key for eligible unmapped onchain holdings`() {
+    @Test func `price polling ids include onchain key for eligible unmapped onchain holdings`() {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
         let local = token(symbol: "LOCAL", amount: 2, usdValue: 8, onchainIdentity: identity)
 
@@ -763,7 +763,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(ids == ["new-map"])
     }
 
-    @Test func `price rows use zapper live price and change for unmapped onchain holdings`() throws {
+    @Test func `price rows use Zerion live price and change for unmapped onchain holdings`() throws {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
         let local = token(symbol: "LOCAL", amount: 4, usdValue: 20, onchainIdentity: identity)
 
@@ -807,24 +807,24 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(change == 0)
     }
 
-    @Test func `portfolio change uses cached coingecko mappings and zapper fallback ids`() {
+    @Test func `portfolio change uses cached coingecko mappings and onchain fallback ids`() {
         let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
-        let zapperIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xZapper")
+        let onchainIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xProvider")
         let borrowIdentity = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xBorrow")
         let mapped = token(symbol: "MAP", amount: 2, usdValue: 20, onchainIdentity: mappedIdentity)
-        let zapper = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: zapperIdentity)
+        let onchainToken = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: onchainIdentity)
         let borrow = token(symbol: "DEBT", role: .borrow, amount: 4, usdValue: 16, onchainIdentity: borrowIdentity)
 
         let change = OverviewPriceChangeFeature.portfolioChange24h(
-            tokens: [mapped, zapper, borrow],
+            tokens: [mapped, onchainToken, borrow],
             prices: [
                 mappedIdentity.historicalPriceID: 10,
-                zapperIdentity.historicalPriceID: 5,
+                onchainIdentity.historicalPriceID: 5,
                 borrowIdentity.historicalPriceID: 4
             ],
             changes24h: [
                 mappedIdentity.historicalPriceID: 0.10,
-                zapperIdentity.historicalPriceID: -0.20,
+                onchainIdentity.historicalPriceID: -0.20,
                 borrowIdentity.historicalPriceID: 0.25
             ],
             overrides: [],
@@ -835,21 +835,21 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(change == -5)
     }
 
-    @Test func `key change tokens include mapped coingecko and zapper priced holdings`() {
+    @Test func `key change tokens include mapped coingecko and onchain-priced holdings`() {
         let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
-        let zapperIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xZapper")
+        let onchainIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xProvider")
         let mapped = token(symbol: "MAP", amount: 2, usdValue: 20, onchainIdentity: mappedIdentity)
-        let zapper = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: zapperIdentity)
+        let onchainToken = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: onchainIdentity)
 
         let changes = OverviewPriceChangeFeature.keyChangeTokens(
-            tokens: [mapped, zapper],
+            tokens: [mapped, onchainToken],
             prices: [
                 mappedIdentity.historicalPriceID: 10,
-                zapperIdentity.historicalPriceID: 5
+                onchainIdentity.historicalPriceID: 5
             ],
             changes24h: [
                 mappedIdentity.historicalPriceID: 0.10,
-                zapperIdentity.historicalPriceID: -0.20
+                onchainIdentity.historicalPriceID: -0.20
             ],
             overrides: [],
             mappings: [

@@ -1,6 +1,10 @@
 import Foundation
 
 public struct OnchainTokenIdentity: Hashable, Sendable {
+    /// Provider-neutral placeholder used when an API represents a native asset
+    /// without a contract address.
+    public static let nativeAssetSentinel = "native"
+
     public let chain: Chain
     public let contractAddress: String
 
@@ -49,6 +53,10 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
         }
         self.chain = chain
         self.contractAddress = normalized
+    }
+
+    public static func native(on chain: Chain) -> Self {
+        Self(chain: chain, contractAddress: nativeAssetSentinel)
     }
 
     private static func normalizedContractAddress(_ address: String?) -> String? {

@@ -94,9 +94,7 @@ final class SyncEngine: @unchecked Sendable {
 
         let provider = try resolveProvider(for: account, context: context)
 
-        let balances = try await provider.fetchBalances(context: context)
-        let defi = try await provider.fetchDeFiPositions(context: context)
-        let allDTOs = balances + defi
+        let allDTOs = try await provider.fetchPositions(context: context)
 
         // ── Build phase: stage rebuild data as value types ──
         // No @Model objects are constructed here — `Position` and `PositionToken`
@@ -453,8 +451,8 @@ final class SyncEngine: @unchecked Sendable {
     private func fetchActiveSyncableAccounts(scope: PortfolioSyncScope) throws -> [Account] {
         try fetchActiveSyncableAccounts().filter { account in
             switch scope {
-            case .zapper:
-                account.dataSource == .zapper
+            case .onchain:
+                account.dataSource == .zerion || account.dataSource == .zapper
             case .exchange:
                 account.dataSource == .exchange
             }

@@ -122,7 +122,7 @@ enum AccountSheetSaveCoordinator {
         mode: AccountSheetMode,
         editing account: Account?,
         modelContext: ModelContext,
-        secretStore: any SecretStore = LocalSecretStore()) throws {
+        secretStore: any SecretStore = KeychainService()) throws {
         switch mode {
         case .add:
             try insertAccount(from: draft, modelContext: modelContext, secretStore: secretStore)
@@ -158,10 +158,13 @@ enum AccountSheetSaveCoordinator {
         secretStore: any SecretStore) throws {
         switch draft.selectedTab {
         case .chain:
+            if !draft.isEVM, draft.specificChain == .bitcoin {
+                throw AccountSheetSaveError.unsupportedChain("Bitcoin")
+            }
             let account = Account(
                 name: draft.chainName,
                 kind: .wallet,
-                dataSource: .zapper,
+                dataSource: .zerion,
                 group: nilIfEmpty(draft.chainGroup),
                 notes: nilIfEmpty(draft.chainNotes))
             modelContext.insert(account)

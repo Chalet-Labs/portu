@@ -11,11 +11,11 @@ Portu is local-first. Portfolio data stays on your Mac, provider credentials are
 ## Features
 
 - Unified overview with total portfolio value, 24h movement, allocation breakdowns, top assets, and a price watchlist.
-- Wallet and DeFi position sync through Zapper.
+- Wallet and DeFi position sync through Zerion for supported EVM networks, plus Solana token balances.
 - Exchange accounts for Kraken, Coinbase, and Binance.
 - Manual accounts for assets or positions that are not available from a provider.
 - Exposure, performance, all-assets, all-positions, account, and asset-detail views.
-- Live and historical pricing through CoinGecko, with Zapper fallback for onchain tokens that CoinGecko cannot price.
+- Live and historical pricing through CoinGecko, with Zerion fallback for onchain tokens that CoinGecko cannot price.
 - Historical price backfill for local performance charts.
 - Token settings for CoinGecko ID overrides, pricing overrides, hidden dust, and unpriced assets.
 - Custom RPC settings and configurable provider sync intervals.
@@ -31,7 +31,9 @@ Release builds publish a `Portu-<version>.dmg` plus a SHA-256 checksum. The rele
 
 ## API Keys
 
-Users currently need a Zapper API key for wallet and DeFi sync. Create one at [build.zapper.xyz](https://build.zapper.xyz/), then add it in Portu under `Settings > API Keys > Zapper`.
+Users need a personal Zerion API key for wallet and DeFi sync. Create one at [dashboard.zerion.io](https://dashboard.zerion.io/), then add it in Portu under `Settings > API Keys > Zerion`.
+
+Zerion coverage is intentionally bounded: Bitcoin, Moonbeam, Immutable X, and Hyperliquid wallet sync are not available, and Solana DeFi positions are not supported. Existing cached data is retained when a legacy account cannot be migrated.
 
 Optional credentials:
 
@@ -39,12 +41,13 @@ Optional credentials:
 - Exchange API keys: required only for Kraken, Coinbase, or Binance exchange accounts.
 
 Use read-only exchange API credentials where the exchange supports them. Portu stores provider secrets locally in macOS Keychain.
+Wallet addresses are sent directly from the app to the configured portfolio and pricing providers; Portu has no proxy or backend that receives them.
 
 ## Getting Started
 
 1. Download the latest DMG from [Releases](https://github.com/Chalet-Labs/portu/releases/latest).
 2. Open Portu and go to `Settings > API Keys`.
-3. Add your Zapper API key from [build.zapper.xyz](https://build.zapper.xyz/).
+3. Add your Zerion API key from [dashboard.zerion.io](https://dashboard.zerion.io/).
 4. Add a wallet, exchange, or manual account from the Accounts view.
 5. Sync the account and use Overview, Exposure, Performance, All Assets, and All Positions to inspect the portfolio.
 
@@ -77,7 +80,7 @@ For a full local build, launch, and process verification:
 Portu is generated from `project.yml` and split into three SwiftPM packages:
 
 - `PortuCore`: models, DTOs, Keychain access, local storage protocols, and shared domain types.
-- `PortuNetwork`: Zapper, CoinGecko, Kraken, Coinbase, and Binance provider clients.
+- `PortuNetwork`: Zerion, CoinGecko, Kraken, Coinbase, and Binance provider clients.
 - `PortuUI`: shared SwiftUI theme and reusable UI components.
 
 The macOS app target in `Sources/Portu` owns app state, feature views, settings, and sync orchestration.

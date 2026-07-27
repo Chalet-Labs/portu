@@ -24,40 +24,51 @@ enum PricePollingSettings {
 enum ProviderIntervalSettings {
     static let manualOnlySeconds = 0.0
 
-    static let zapperLivePriceIntervalKey = "providerIntervals.zapperLivePrice"
-    static let zapperPortfolioSyncIntervalKey = "providerIntervals.zapperPortfolioSync"
+    static let onchainLivePriceIntervalKey = "providerIntervals.onchainLivePrice"
+    static let onchainPortfolioSyncIntervalKey = "providerIntervals.onchainPortfolioSync"
     static let exchangePortfolioSyncIntervalKey = "providerIntervals.exchangePortfolioSync"
 
-    static let defaultZapperLivePriceIntervalSeconds = 3600.0
-    static let defaultZapperPortfolioSyncIntervalSeconds = 21600.0
+    static let defaultOnchainLivePriceIntervalSeconds = 3600.0
+    static let defaultOnchainPortfolioSyncIntervalSeconds = 21600.0
     static let defaultExchangePortfolioSyncIntervalSeconds = 3600.0
 
-    static let allowedZapperLivePriceIntervalSeconds: Set<Double> = [0, 600, 3600, 21600, 86400]
-    static let allowedZapperPortfolioSyncIntervalSeconds: Set<Double> = [0, 3600, 21600, 86400]
+    static let allowedOnchainLivePriceIntervalSeconds: Set<Double> = [0, 600, 3600, 21600, 86400]
+    static let allowedOnchainPortfolioSyncIntervalSeconds: Set<Double> = [0, 3600, 21600, 86400]
     static let allowedExchangePortfolioSyncIntervalSeconds: Set<Double> = [0, 600, 3600, 21600, 86400]
 
-    static func zapperLivePriceIntervalSeconds(defaults: UserDefaults = .standard) -> Double {
+    static func migrateLegacyPreferences(defaults: UserDefaults = .standard) {
+        let legacyPortfolioKey = "providerIntervals.zapperPortfolioSync"
+        guard
+            defaults.object(forKey: onchainPortfolioSyncIntervalKey) == nil,
+            let legacyValue = defaults.object(forKey: legacyPortfolioKey) as? Double
+        else {
+            return
+        }
+        defaults.set(legacyValue, forKey: onchainPortfolioSyncIntervalKey)
+    }
+
+    static func onchainLivePriceIntervalSeconds(defaults: UserDefaults = .standard) -> Double {
         intervalSeconds(
-            key: zapperLivePriceIntervalKey,
-            defaultValue: defaultZapperLivePriceIntervalSeconds,
-            allowedValues: allowedZapperLivePriceIntervalSeconds,
+            key: onchainLivePriceIntervalKey,
+            defaultValue: defaultOnchainLivePriceIntervalSeconds,
+            allowedValues: allowedOnchainLivePriceIntervalSeconds,
             defaults: defaults)
     }
 
-    static func zapperLivePriceInterval(defaults: UserDefaults = .standard) -> Duration? {
-        duration(for: zapperLivePriceIntervalSeconds(defaults: defaults))
+    static func onchainLivePriceInterval(defaults: UserDefaults = .standard) -> Duration? {
+        duration(for: onchainLivePriceIntervalSeconds(defaults: defaults))
     }
 
-    static func zapperPortfolioSyncIntervalSeconds(defaults: UserDefaults = .standard) -> Double {
+    static func onchainPortfolioSyncIntervalSeconds(defaults: UserDefaults = .standard) -> Double {
         intervalSeconds(
-            key: zapperPortfolioSyncIntervalKey,
-            defaultValue: defaultZapperPortfolioSyncIntervalSeconds,
-            allowedValues: allowedZapperPortfolioSyncIntervalSeconds,
+            key: onchainPortfolioSyncIntervalKey,
+            defaultValue: defaultOnchainPortfolioSyncIntervalSeconds,
+            allowedValues: allowedOnchainPortfolioSyncIntervalSeconds,
             defaults: defaults)
     }
 
-    static func zapperPortfolioSyncInterval(defaults: UserDefaults = .standard) -> Duration? {
-        duration(for: zapperPortfolioSyncIntervalSeconds(defaults: defaults))
+    static func onchainPortfolioSyncInterval(defaults: UserDefaults = .standard) -> Duration? {
+        duration(for: onchainPortfolioSyncIntervalSeconds(defaults: defaults))
     }
 
     static func exchangePortfolioSyncIntervalSeconds(defaults: UserDefaults = .standard) -> Double {

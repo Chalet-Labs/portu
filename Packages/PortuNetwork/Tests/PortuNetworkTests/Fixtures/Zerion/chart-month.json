@@ -1,0 +1,11 @@
+{
+  "data": {
+    "type": "fungible_charts",
+    "id": "fixture-native",
+    "attributes": {
+      "begin_at": "2026-07-25T00:00:00Z",
+      "end_at": "2026-07-26T00:00:00Z",
+      "points": [[1784937600, 1900], [1784941200, 1910], [1785024000, 1920]]
+    }
+  }
+}

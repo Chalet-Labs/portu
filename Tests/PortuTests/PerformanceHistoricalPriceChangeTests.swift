@@ -102,7 +102,7 @@ struct PerformanceHistoricalPriceChangeTests {
         #expect(filtered.map(\.coinGeckoId) == ["bitcoin", "solana"])
     }
 
-    @Test func `filters historical price rows to held zapper ids for unmapped onchain assets`() {
+    @Test func `filters historical price rows to held onchain ids for unmapped onchain assets`() {
         let account = UUID()
         let asset = UUID()
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
@@ -160,7 +160,7 @@ struct PerformanceHistoricalPriceChangeTests {
         ])
     }
 
-    @Test func `earliest estimate holdings use zapper id when coin gecko id is absent`() {
+    @Test func `earliest estimate holdings use canonical onchain id when coin gecko id is absent`() {
         let account = UUID()
         let asset = UUID()
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")

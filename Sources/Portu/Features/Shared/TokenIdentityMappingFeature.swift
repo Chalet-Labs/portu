@@ -103,7 +103,7 @@ enum TokenIdentityMappingFeature {
         return knownContractCoinGeckoIDs[TokenIdentityMapping.canonicalKey(for: identity)]
     }
 
-    static func nonZapperPriceID(_ id: String?) -> String? {
+    static func nonOnchainPriceID(_ id: String?) -> String? {
         guard let id = normalizedProviderID(id), OnchainTokenIdentity(historicalPriceID: id) == nil else {
             return nil
         }

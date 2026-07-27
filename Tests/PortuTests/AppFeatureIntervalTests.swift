@@ -14,7 +14,7 @@ struct AppFeatureIntervalTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.providerSyncSettings.zapperPortfolioSyncInterval = { .seconds(10) }
+            $0.providerSyncSettings.onchainPortfolioSyncInterval = { .seconds(10) }
             $0.providerSyncSettings.exchangePortfolioSyncInterval = { .seconds(21) }
             $0.syncEngine.syncScope = { scope in
                 syncedScopes.append(scope)
@@ -31,23 +31,23 @@ struct AppFeatureIntervalTests {
 
         now = now.addingTimeInterval(1)
         await testClock.advance(by: .seconds(1))
-        await store.receive(.scheduledSyncDue(.zapper)) {
+        await store.receive(.scheduledSyncDue(.onchain)) {
             $0.syncStatus = .syncing(progress: 0)
         }
         await store.receive(\.scheduledSyncCompleted) {
             $0.syncStatus = .idle
         }
-        #expect(syncedScopes == [.zapper])
+        #expect(syncedScopes == [.onchain])
 
         now = now.addingTimeInterval(10)
         await testClock.advance(by: .seconds(10))
-        await store.receive(.scheduledSyncDue(.zapper)) {
+        await store.receive(.scheduledSyncDue(.onchain)) {
             $0.syncStatus = .syncing(progress: 0)
         }
         await store.receive(\.scheduledSyncCompleted) {
             $0.syncStatus = .idle
         }
-        #expect(syncedScopes == [.zapper, .zapper])
+        #expect(syncedScopes == [.onchain, .onchain])
 
         now = now.addingTimeInterval(1)
         await testClock.advance(by: .seconds(1))
@@ -57,7 +57,7 @@ struct AppFeatureIntervalTests {
         await store.receive(\.scheduledSyncCompleted) {
             $0.syncStatus = .idle
         }
-        #expect(syncedScopes == [.zapper, .zapper, .exchange])
+        #expect(syncedScopes == [.onchain, .onchain, .exchange])
 
         await store.send(.stopScheduledSync)
     }
@@ -65,16 +65,16 @@ struct AppFeatureIntervalTests {
     @Test func `scheduled provider sync observes manual only changes after startup`() async {
         let testClock = TestClock()
         nonisolated(unsafe) var now = Date(timeIntervalSince1970: 1_000_000)
-        nonisolated(unsafe) var zapperInterval: Duration?
+        nonisolated(unsafe) var onchainInterval: Duration?
         nonisolated(unsafe) var syncCount = 0
 
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.providerSyncSettings.zapperPortfolioSyncInterval = { zapperInterval }
+            $0.providerSyncSettings.onchainPortfolioSyncInterval = { onchainInterval }
             $0.providerSyncSettings.exchangePortfolioSyncInterval = { nil }
             $0.syncEngine.syncScope = { scope in
-                #expect(scope == .zapper)
+                #expect(scope == .onchain)
                 syncCount += 1
                 return SyncResult(failedAccounts: [])
             }
@@ -87,10 +87,10 @@ struct AppFeatureIntervalTests {
         await testClock.advance(by: .seconds(30))
         #expect(syncCount == 0)
 
-        zapperInterval = .seconds(10)
+        onchainInterval = .seconds(10)
         now = now.addingTimeInterval(10)
         await testClock.advance(by: .seconds(10))
-        await store.receive(.scheduledSyncDue(.zapper)) {
+        await store.receive(.scheduledSyncDue(.onchain)) {
             $0.syncStatus = .syncing(progress: 0)
         }
         await store.receive(\.scheduledSyncCompleted) {
@@ -98,7 +98,7 @@ struct AppFeatureIntervalTests {
         }
         #expect(syncCount == 1)
 
-        zapperInterval = nil
+        onchainInterval = nil
         now = now.addingTimeInterval(30)
         await testClock.advance(by: .seconds(30))
         #expect(syncCount == 1)
@@ -114,7 +114,7 @@ struct AppFeatureIntervalTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.providerSyncSettings.zapperPortfolioSyncInterval = { nil }
+            $0.providerSyncSettings.onchainPortfolioSyncInterval = { nil }
             $0.providerSyncSettings.exchangePortfolioSyncInterval = { nil }
             $0.syncEngine.syncScope = { _ in
                 syncCount += 1
@@ -140,7 +140,7 @@ struct AppFeatureIntervalTests {
             initialState: AppFeature.State(syncStatus: .syncing(progress: 0.25))) {
                 AppFeature()
             } withDependencies: {
-                $0.providerSyncSettings.zapperPortfolioSyncInterval = { .seconds(5) }
+                $0.providerSyncSettings.onchainPortfolioSyncInterval = { .seconds(5) }
                 $0.providerSyncSettings.exchangePortfolioSyncInterval = { nil }
                 $0.syncEngine.syncScope = { _ in
                     syncCount += 1
@@ -153,7 +153,7 @@ struct AppFeatureIntervalTests {
         await store.send(.startScheduledSync)
         now = now.addingTimeInterval(5)
         await testClock.advance(by: .seconds(5))
-        await store.receive(.scheduledSyncDue(.zapper))
+        await store.receive(.scheduledSyncDue(.onchain))
         #expect(syncCount == 0)
 
         await store.send(.stopScheduledSync)

@@ -68,11 +68,11 @@ struct TokenIdentityMappingFeatureTests {
         #expect(TokenIdentityMappingFeature.knownContractCoinGeckoID(for: identity) == nil)
     }
 
-    @Test func `non zapper price id rejects asset prefixed historical price ids`() {
+    @Test func `non-provider price id rejects asset prefixed historical price ids`() {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
-        #expect(TokenIdentityMappingFeature.nonZapperPriceID(identity.historicalPriceID) == nil)
-        #expect(TokenIdentityMappingFeature.nonZapperPriceID("bitcoin") == "bitcoin")
-        #expect(TokenIdentityMappingFeature.nonZapperPriceID(nil) == nil)
+        #expect(TokenIdentityMappingFeature.nonOnchainPriceID(identity.historicalPriceID) == nil)
+        #expect(TokenIdentityMappingFeature.nonOnchainPriceID("bitcoin") == "bitcoin")
+        #expect(TokenIdentityMappingFeature.nonOnchainPriceID(nil) == nil)
     }
 
     @Test func `price id prefers native coin gecko id when identity is zero address on eth like chain`() {

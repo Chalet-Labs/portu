@@ -6,8 +6,9 @@ struct EnumTests {
     // MARK: - DataSource
 
     @Test func `data source cases`() {
-        #expect(DataSource.allCases.count == 3)
+        #expect(DataSource.allCases.count == 4)
         #expect(DataSource.allCases.contains(.zapper))
+        #expect(DataSource.allCases.contains(.zerion))
         #expect(DataSource.allCases.contains(.exchange))
         #expect(DataSource.allCases.contains(.manual))
     }

@@ -7,14 +7,25 @@ struct ProviderFactory {
 
     private let resolver: Resolver
 
-    init(secretStore: any SecretStore, session: URLSession = .shared) {
+    init(
+        secretStore: any SecretStore,
+        session: URLSession = .shared,
+        zerionProvider: ZerionProvider? = nil) {
+        let sharedZerionProvider = zerionProvider ?? ZerionProvider(client: ZerionAPIClient(
+            apiKey: {
+                try secretStore.get(key: .providerAPIKey(.zerion)) ?? ""
+            },
+            session: session))
         self.resolver = { dataSource, _ in
             switch dataSource {
-            case .zapper:
-                guard let apiKey = try secretStore.get(key: .providerAPIKey(.zapper)) else {
-                    throw SyncError.missingAPIKey("Zapper API key not configured")
+            case .zapper, .zerion:
+                guard
+                    let apiKey = try secretStore.get(key: .providerAPIKey(.zerion)),
+                    !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                else {
+                    throw SyncError.missingAPIKey("Zerion API key not configured")
                 }
-                return ZapperProvider(apiKey: apiKey, session: session)
+                return sharedZerionProvider
             case .exchange:
                 return ExchangeProvider(secretStore: secretStore, session: session)
             case .manual:

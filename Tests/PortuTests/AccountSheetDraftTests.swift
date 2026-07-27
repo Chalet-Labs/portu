@@ -10,7 +10,7 @@ struct AccountSheetDraftTests {
         let account = Account(
             name: "Hardware Wallet",
             kind: .wallet,
-            dataSource: .zapper,
+            dataSource: .zerion,
             group: "Cold",
             notes: "Long-term storage")
         account.addresses = [WalletAddress(chain: .solana, address: "So11111111111111111111111111111111111111112", account: account)]
@@ -220,7 +220,7 @@ struct AccountSheetDraftTests {
 
     @Test func `wallet edit replaces all addresses with a single row`() throws {
         let context = try makeModelContext()
-        let account = Account(name: "Multi", kind: .wallet, dataSource: .zapper)
+        let account = Account(name: "Multi", kind: .wallet, dataSource: .zerion)
         account.addresses = [
             WalletAddress(chain: nil, address: "0xaaa", account: account),
             WalletAddress(chain: .solana, address: "sol111", account: account)
@@ -351,7 +351,7 @@ struct AccountSheetDraftTests {
 
     @Test func `set account active saves the account state`() throws {
         let context = try makeModelContext()
-        let account = Account(name: "Archived", kind: .wallet, dataSource: .zapper, isActive: false)
+        let account = Account(name: "Archived", kind: .wallet, dataSource: .zerion, isActive: false)
         context.insert(account)
         try context.save()
 
@@ -363,7 +363,7 @@ struct AccountSheetDraftTests {
 
     @Test func `set account active rolls back when save fails`() throws {
         let context = try makeModelContext()
-        let account = Account(name: "Active", kind: .wallet, dataSource: .zapper, isActive: true)
+        let account = Account(name: "Active", kind: .wallet, dataSource: .zerion, isActive: true)
         context.insert(account)
         try context.save()
 

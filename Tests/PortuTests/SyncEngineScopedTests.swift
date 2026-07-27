@@ -8,7 +8,7 @@ import Testing
 
 @MainActor
 struct SyncEngineScopedTests {
-    @Test func `scoped zapper sync fetches only zapper accounts`() async throws {
+    @Test func `scoped onchain sync fetches only Zerion accounts`() async throws {
         let context = try makeModelContext()
         let provider = ScopedSyncStubProvider(balances: [
             PositionDTO(
@@ -26,15 +26,15 @@ struct SyncEngineScopedTests {
             return provider
         })
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
-        let wallet = Account(name: "Wallet", kind: .wallet, dataSource: .zapper)
+        let wallet = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
         let exchange = Account(name: "Kraken", kind: .exchange, exchangeType: .kraken, dataSource: .exchange)
         context.insert(wallet)
         context.insert(exchange)
         try context.save()
 
-        let result = try await engine.sync(scope: .zapper)
+        let result = try await engine.sync(scope: .onchain)
 
-        #expect(resolvedSources.withLock { $0 } == [.zapper])
+        #expect(resolvedSources.withLock { $0 } == [.zerion])
         #expect(wallet.lastSyncedAt != nil)
         #expect(exchange.lastSyncedAt == nil)
         #expect(result.failedAccounts.isEmpty)
@@ -59,7 +59,7 @@ struct SyncEngineScopedTests {
             return provider
         })
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
-        let wallet = Account(name: "Wallet", kind: .wallet, dataSource: .zapper)
+        let wallet = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
         let exchange = Account(name: "Kraken", kind: .exchange, exchangeType: .kraken, dataSource: .exchange)
         context.insert(wallet)
         context.insert(exchange)
@@ -92,12 +92,12 @@ struct SyncEngineScopedTests {
             return provider
         })
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
-        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zapper)
+        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zerion)
         selected.addresses = [WalletAddress(address: "0xselected", account: selected)]
         let staleAsset = Asset(symbol: "OLD", name: "Old Token", category: .major)
         let staleToken = PositionToken(role: .balance, amount: 1, usdValue: 100, asset: staleAsset)
         let stalePosition = Position(positionType: .idle, chain: .ethereum, netUSDValue: 100, tokens: [staleToken])
-        let other = Account(name: "Other", kind: .wallet, dataSource: .zapper)
+        let other = Account(name: "Other", kind: .wallet, dataSource: .zerion)
         other.addresses = [WalletAddress(address: "0xother", account: other)]
         other.positions = [stalePosition]
         context.insert(staleAsset)
@@ -135,12 +135,12 @@ struct SyncEngineScopedTests {
                 healthFactor: nil,
                 tokens: [makeTokenDTO(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum")])
         ])
-        let succeeded = Account(name: "Succeeded", kind: .wallet, dataSource: .zapper)
+        let succeeded = Account(name: "Succeeded", kind: .wallet, dataSource: .zerion)
         succeeded.addresses = [WalletAddress(address: "0xsucceeded", account: succeeded)]
         let staleAsset = Asset(symbol: "OLD", name: "Old Token", category: .major)
         let staleToken = PositionToken(role: .balance, amount: 1, usdValue: 100, asset: staleAsset)
         let stalePosition = Position(positionType: .idle, chain: .ethereum, netUSDValue: 100, tokens: [staleToken])
-        let failed = Account(name: "Failed", kind: .wallet, dataSource: .zapper)
+        let failed = Account(name: "Failed", kind: .wallet, dataSource: .zerion)
         failed.addresses = [WalletAddress(address: "0xfailed", account: failed)]
         failed.positions = [stalePosition]
         let failedID = failed.id
@@ -179,7 +179,7 @@ struct SyncEngineScopedTests {
         ])
         let factory = ProviderFactory(resolver: { _, _ in provider })
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
-        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zapper)
+        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zerion)
         selected.addresses = [WalletAddress(address: "0xselected", account: selected)]
         let manual = Account(name: "Manual", kind: .manual, dataSource: .manual)
         context.insert(selected)
@@ -206,9 +206,9 @@ struct SyncEngineScopedTests {
         ])
         let factory = ProviderFactory(resolver: { _, _ in provider })
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
-        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zapper)
+        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zerion)
         selected.addresses = [WalletAddress(address: "0xselected", account: selected)]
-        let other = Account(name: "Other", kind: .wallet, dataSource: .zapper, isActive: false)
+        let other = Account(name: "Other", kind: .wallet, dataSource: .zerion, isActive: false)
         other.addresses = [WalletAddress(address: "0xother", account: other)]
         context.insert(selected)
         context.insert(other)
@@ -242,9 +242,9 @@ struct SyncEngineScopedTests {
         ])
         let factory = ProviderFactory(resolver: { _, _ in provider })
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
-        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zapper)
+        let selected = Account(name: "Selected", kind: .wallet, dataSource: .zerion)
         selected.addresses = [WalletAddress(address: "0xselected", account: selected)]
-        let other = Account(name: "Other", kind: .wallet, dataSource: .zapper)
+        let other = Account(name: "Other", kind: .wallet, dataSource: .zerion)
         other.addresses = [WalletAddress(address: "0xother", account: other)]
         context.insert(selected)
         context.insert(other)
@@ -304,7 +304,7 @@ struct SyncEngineScopedTests {
 
     @Test func `account scoped sync rejects inactive account`() async throws {
         let context = try makeModelContext()
-        let inactive = Account(name: "Inactive", kind: .wallet, dataSource: .zapper, isActive: false)
+        let inactive = Account(name: "Inactive", kind: .wallet, dataSource: .zerion, isActive: false)
         context.insert(inactive)
         try context.save()
         let engine = SyncEngine(

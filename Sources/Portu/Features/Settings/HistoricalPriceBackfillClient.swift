@@ -176,42 +176,42 @@ private struct BackfillRunner {
                 throw CancellationError()
             } catch {
                 backfillLogger.warning(
-                    "Identity resolution retry failed; falling back to Zapper where possible: \(String(describing: error), privacy: .public)")
+                    "Identity resolution retry failed; falling back to Zerion where possible: \(String(describing: error), privacy: .public)")
                 return [:]
             }
         } catch {
             backfillLogger.warning(
-                "Identity resolution failed; falling back to Zapper where possible: \(String(describing: error), privacy: .public)")
+                "Identity resolution failed; falling back to Zerion where possible: \(String(describing: error), privacy: .public)")
             return [:]
         }
     }
 
     private func fetchCandidates(_ candidates: [HistoricalBackfillCandidate]) async throws -> HistoricalBackfillFetchResult {
         var result = HistoricalBackfillFetchResult()
-        let canFetchZapperHistoricalPrices = priceService.canFetchZapperHistoricalPrices()
-        let unavailableZapperCandidates = canFetchZapperHistoricalPrices
+        let canFetchOnchainHistoricalPrices = try priceService.canFetchOnchainHistoricalPrices()
+        let unavailableZerionCandidates = canFetchOnchainHistoricalPrices
             ? []
             : candidates.filter { candidate in
-                if case .zapper = candidate.source { return true }
+                if case .zerion = candidate.source { return true }
                 return false
             }
-        let runnableCandidates = canFetchZapperHistoricalPrices
+        let runnableCandidates = canFetchOnchainHistoricalPrices
             ? candidates
             : candidates.filter { candidate in
-                if case .zapper = candidate.source { return false }
+                if case .zerion = candidate.source { return false }
                 return true
             }
 
         let totalCandidateCount = candidates.count
-        result.failures.append(contentsOf: unavailableZapperCandidates.map(\.historicalPriceID))
+        result.failures.append(contentsOf: unavailableZerionCandidates.map(\.historicalPriceID))
 
-        // If every candidate is pre-classified as a failure (typically: all-Zapper with no key)
+        // If every candidate is pre-classified as a failure (typically: all-Zerion with no key)
         // surface that as an explicit error rather than a "succeeded with N failures" run.
         if totalCandidateCount > 0, runnableCandidates.isEmpty {
             backfillLogger.warning(
-                "Backfill blocked: \(unavailableZapperCandidates.count, privacy: .public) onchain candidate(s) require a Zapper API key.")
+                "Backfill blocked: \(unavailableZerionCandidates.count, privacy: .public) onchain candidate(s) require a Zerion API key.")
             throw HistoricalBackfillError(
-                message: "No backfill candidates can be fetched. Configure a Zapper API key in Settings → API Keys to backfill onchain tokens.",
+                message: "No backfill candidates can be fetched. Configure a Zerion API key in Settings → API Keys to backfill onchain tokens.",
                 kind: .preflightUnavailable)
         }
 
@@ -263,14 +263,14 @@ private struct BackfillRunner {
                     coinGeckoID,
                     HistoricalPriceBackfillSettings.chartHorizonDays)
             }
-        case let .zapper(identity):
+        case let .zerion(identity):
             do {
-                return try await priceService.fetchZapperHistoricalPrices(
+                return try await priceService.fetchOnchainHistoricalPrices(
                     identity,
                     HistoricalPriceBackfillSettings.chartHorizonDays)
-            } catch ZapperError.rateLimited {
+            } catch ZerionError.rateLimited {
                 try await sleep(rateLimitRetryDelay)
-                return try await priceService.fetchZapperHistoricalPrices(
+                return try await priceService.fetchOnchainHistoricalPrices(
                     identity,
                     HistoricalPriceBackfillSettings.chartHorizonDays)
             }

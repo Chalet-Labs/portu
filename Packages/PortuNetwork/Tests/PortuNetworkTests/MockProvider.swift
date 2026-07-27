@@ -31,3 +31,19 @@ actor MockProvider: PortfolioDataProvider {
         return defiToReturn
     }
 }
+
+func makeSyncContext(chain: Chain? = nil) -> SyncContext {
+    SyncContext(
+        accountId: UUID(),
+        kind: .wallet,
+        addresses: [("0xabc", chain)],
+        exchangeType: nil)
+}
+
+func makeSyncContext(addresses: [(String, Chain?)]) -> SyncContext {
+    SyncContext(
+        accountId: UUID(),
+        kind: .wallet,
+        addresses: addresses,
+        exchangeType: nil)
+}

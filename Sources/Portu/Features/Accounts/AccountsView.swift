@@ -262,7 +262,7 @@ struct AccountsView: View {
                         try AccountSheetSaveCoordinator.deleteAccount(
                             account,
                             modelContext: modelContext,
-                            secretStore: LocalSecretStore())
+                            secretStore: KeychainService())
                     } catch {
                         accountActionError = error.localizedDescription
                     }

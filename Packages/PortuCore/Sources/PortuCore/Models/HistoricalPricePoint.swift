@@ -4,6 +4,7 @@ import SwiftData
 public enum HistoricalPriceSource: String, Codable, Sendable, Equatable {
     case coingecko
     case zapper
+    case zerion
 }
 
 @Model

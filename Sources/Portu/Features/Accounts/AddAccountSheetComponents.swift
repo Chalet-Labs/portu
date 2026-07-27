@@ -56,7 +56,7 @@ struct AddAccountSupportPanel: View {
     let title: String
     let chips: [AddAccountSupportChip.Model]
     let searchPlaceholder: String?
-    let linkTitle: String
+    let linkTitle: String?
     var linkURL: URL?
 
     var body: some View {
@@ -74,22 +74,24 @@ struct AddAccountSupportPanel: View {
 
                 Spacer(minLength: 8)
 
-                Button {
-                    if let linkURL {
-                        openURL(linkURL)
+                if let linkTitle {
+                    Button {
+                        if let linkURL {
+                            openURL(linkURL)
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text(linkTitle)
+                            Image(systemName: "arrow.up.forward.square")
+                                .font(.caption)
+                        }
+                        .font(.system(size: 13))
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(linkTitle)
-                        Image(systemName: "arrow.up.forward.square")
-                            .font(.caption)
-                    }
-                    .font(.system(size: 13))
-                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .buttonStyle(.plain)
+                    .disabled(linkURL == nil)
+                    .help(linkURL == nil ? "Support documentation link is not configured yet." : "Open support documentation")
                 }
-                .buttonStyle(.plain)
-                .disabled(linkURL == nil)
-                .help(linkURL == nil ? "Support documentation link is not configured yet." : "Open support documentation")
             }
 
             if let searchPlaceholder {

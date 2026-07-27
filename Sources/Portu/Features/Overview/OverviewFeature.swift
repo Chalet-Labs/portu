@@ -378,7 +378,7 @@ enum OverviewFeature {
             fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
             .prefix(max(portfolioLimit, 0)) {
             let priceID = TokenIdentityMappingFeature.normalizedProviderID(aggregate.priceID)
-            let coinGeckoId = TokenIdentityMappingFeature.nonZapperPriceID(priceID)
+            let coinGeckoId = TokenIdentityMappingFeature.nonOnchainPriceID(priceID)
             let rowID = aggregate.rowID
             guard !seenRowIDs.contains(rowID) else {
                 continue
@@ -469,7 +469,7 @@ enum OverviewFeature {
                 category: token.category,
                 portfolioCategory: token.portfolioCategory,
                 coinGeckoId: OverviewWatchlistStore.normalizedID(token.coinGeckoId)
-                    ?? TokenIdentityMappingFeature.nonZapperPriceID(priceID),
+                    ?? TokenIdentityMappingFeature.nonOnchainPriceID(priceID),
                 priceID: priceID,
                 value: 0,
                 amount: 0,
@@ -477,7 +477,7 @@ enum OverviewFeature {
             aggregate.assetIds.insert(token.assetId)
             aggregate.coinGeckoId = aggregate.coinGeckoId
                 ?? OverviewWatchlistStore.normalizedID(token.coinGeckoId)
-                ?? TokenIdentityMappingFeature.nonZapperPriceID(priceID)
+                ?? TokenIdentityMappingFeature.nonOnchainPriceID(priceID)
             aggregate.priceID = aggregate.priceID ?? priceID
             aggregate.logoURL = aggregate.logoURL ?? token.logoURL
             aggregate.value += resolvedValue(
@@ -649,7 +649,7 @@ enum OverviewFeature {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedSymbol = trimmedSymbol.uppercased()
         guard
-            TokenIdentityMappingFeature.nonZapperPriceID(priceID) == nil,
+            TokenIdentityMappingFeature.nonOnchainPriceID(priceID) == nil,
             let canonicalNames = reservedMarketSymbols[normalizedSymbol],
             !trimmedName.isEmpty
         else {

@@ -143,7 +143,7 @@ struct TokenSettingsFeatureTests {
         #expect(entries.first?.onchainIdentity == identity)
     }
 
-    @Test func `settings rows use zapper live price for unmapped onchain tokens`() throws {
+    @Test func `settings rows use Zerion live price for unmapped onchain tokens`() throws {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
         let local = token(symbol: "LOCAL", amount: 2, usdValue: 0, onchainIdentity: identity)
 

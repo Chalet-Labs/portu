@@ -256,7 +256,7 @@ struct ViewRenderSmokeTests {
             id: id,
             name: "Primary Wallet",
             kind: .wallet,
-            dataSource: .zapper,
+            dataSource: .zerion,
             lastSyncedAt: now)
         let ethToken = PositionToken(role: .balance, amount: 2, usdValue: 6000, asset: assets.eth)
         let usdcToken = PositionToken(role: .supply, amount: 4000, usdValue: 4000, asset: assets.usdc)
