@@ -37,7 +37,7 @@ struct ZerionProviderTests {
         #expect(token.amount == Decimal(string: "1.123456789012345678"))
         #expect(token.usdValue == 0)
         #expect(token.contractAddress == OnchainTokenIdentity.nativeAssetSentinel)
-        #expect(token.sourceKey == "asset:ethereum:native")
+        #expect(token.sourceKey == "asset:ethereum:0x0000000000000000000000000000000000000000")
     }
 
     @Test func `combined fetch follows pagination before returning positions`() async throws {
@@ -252,6 +252,36 @@ struct ZerionProviderTests {
         #expect(update.changes24h[native.historicalPriceID] == Decimal(string: "0.05"))
         #expect(update.prices[contract.historicalPriceID] == Decimal(string: "2.5"))
         #expect(update.changes24h[contract.historicalPriceID] == Decimal(string: "-0.0425"))
+    }
+
+    @Test func `current prices skip unsupported identities without dropping supported prices`() async throws {
+        defer { ZerionMockURLProtocol.reset() }
+        ZerionMockURLProtocol.respond { request in
+            let components = try #require(URLComponents(url: request.url!, resolvingAgainstBaseURL: false))
+            let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
+            #expect(query["filter[fungible_implementations]"] == "base:0xabc")
+            return .init(data: Data(#"""
+            {"data":[
+              {"type":"fungibles","id":"supported","attributes":{
+                "market_data":{"price":2.5,"changes":{"percent_1d":1}},
+                "implementations":[{"chain_id":"base","address":"0xAbC","decimals":18}]
+              }}
+            ],"links":{}}
+            """#.utf8), statusCode: 200, headers: [:])
+        }
+        let provider = ZerionProvider(client: ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionMockSession(),
+            minimumRequestInterval: .zero))
+        let supported = OnchainTokenIdentity(chain: .base, contractAddress: "0xABC")
+        let unsupported = OnchainTokenIdentity(chain: .bitcoin, contractAddress: "native")
+
+        let update = try await provider.fetchPriceUpdate(for: [unsupported, supported])
+
+        #expect(update.prices.count == 1)
+        #expect(update.prices[supported.historicalPriceID] == Decimal(string: "2.5"))
+        #expect(update.changes24h.count == 1)
+        #expect(update.changes24h[supported.historicalPriceID] == Decimal(string: "0.01"))
     }
 
     @Test func `historical chart uses seconds and keeps latest point per UTC day`() async throws {

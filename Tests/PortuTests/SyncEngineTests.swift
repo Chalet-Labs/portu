@@ -71,7 +71,7 @@ struct SyncEngineTests {
             usdValue: 2000,
             chain: .ethereum,
             contractAddress: OnchainTokenIdentity.nativeAssetSentinel,
-            sourceKey: "asset:ethereum:native")
+            sourceKey: "asset:ethereum:0x0000000000000000000000000000000000000000")
         let provider = CombinedOnlyProvider(positions: [PositionDTO(
             positionType: .idle,
             chain: .ethereum,
@@ -122,6 +122,30 @@ struct SyncEngineTests {
         #expect(throws: SyncError.unsupportedLegacyAccount) {
             _ = try factory.makeProvider(for: .zapper, context: context)
         }
+    }
+
+    @Test func `global sync excludes retained legacy Zapper accounts`() async throws {
+        let context = try makeModelContext()
+        let provider = StubProvider(balances: [])
+        let factory = ProviderFactory(resolver: { dataSource, _ in
+            guard dataSource == .zerion else {
+                throw SyncTestError.unexpectedLegacySync
+            }
+            return provider
+        })
+        let engine = SyncEngine(modelContext: context, providerFactory: factory)
+        let wallet = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
+        let legacy = Account(name: "Legacy", kind: .wallet, dataSource: .zapper)
+        context.insert(wallet)
+        context.insert(legacy)
+        try context.save()
+
+        let result = try await engine.sync()
+
+        #expect(result.failedAccounts.isEmpty)
+        #expect(wallet.lastSyncedAt != nil)
+        #expect(legacy.lastSyncedAt == nil)
+        #expect(legacy.lastSyncError == nil)
     }
 
     @Test func `unsupported legacy Bitcoin wallet preserves its last known positions`() async throws {
@@ -588,6 +612,7 @@ private actor StubProvider: PortfolioDataProvider {
 
 private enum SyncTestError: Error {
     case forcedUpsertFailure
+    case unexpectedLegacySync
 }
 
 private actor CombinedOnlyProvider: PortfolioDataProvider {

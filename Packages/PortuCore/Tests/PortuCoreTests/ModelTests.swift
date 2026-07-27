@@ -335,12 +335,14 @@ struct ModelTests {
         #expect(OnchainTokenIdentity(historicalPriceID: "zapper:unknown:0xabc") == nil)
     }
 
-    @Test func `native identity uses a stable canonical sentinel`() {
+    @Test func `native identity preserves the existing zero address convention`() {
         let identity = OnchainTokenIdentity.native(on: .ethereum)
 
         #expect(identity.contractAddress == OnchainTokenIdentity.nativeAssetSentinel)
-        #expect(identity.historicalPriceID == "asset:ethereum:native")
+        #expect(identity.contractAddress == "0x0000000000000000000000000000000000000000")
+        #expect(identity.historicalPriceID == "asset:ethereum:0x0000000000000000000000000000000000000000")
         #expect(OnchainTokenIdentity(historicalPriceID: identity.historicalPriceID) == identity)
+        #expect(OnchainTokenIdentity(historicalPriceID: "asset:ethereum:native") == identity)
     }
 
     @Test func `onchain identity parses camel case chain ids case insensitively`() throws {

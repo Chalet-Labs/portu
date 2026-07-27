@@ -407,15 +407,18 @@ struct AccountSyncEligibilityTests {
         #expect(AccountSyncEligibility.isSyncable(isActive: false, dataSource: .zerion) == false)
         #expect(AccountSyncEligibility.isSyncable(isActive: false, dataSource: .exchange) == false)
         #expect(AccountSyncEligibility.isSyncable(isActive: true, dataSource: .manual) == false)
+        #expect(AccountSyncEligibility.isSyncable(isActive: true, dataSource: .zapper) == false)
     }
 
     @MainActor
     @Test func `account isSyncable mirrors the shared rule`() {
         let syncable = Account(name: "W", kind: .wallet, dataSource: .zerion)
         let manual = Account(name: "M", kind: .manual, dataSource: .manual)
+        let legacy = Account(name: "L", kind: .wallet, dataSource: .zapper)
         let inactive = Account(name: "I", kind: .wallet, dataSource: .zerion, isActive: false)
         #expect(syncable.isSyncable)
         #expect(manual.isSyncable == false)
+        #expect(legacy.isSyncable == false)
         #expect(inactive.isSyncable == false)
     }
 }

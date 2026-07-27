@@ -27,8 +27,10 @@ struct SyncEngineScopedTests {
         })
         let engine = SyncEngine(modelContext: context, providerFactory: factory)
         let wallet = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
+        let legacy = Account(name: "Legacy", kind: .wallet, dataSource: .zapper)
         let exchange = Account(name: "Kraken", kind: .exchange, exchangeType: .kraken, dataSource: .exchange)
         context.insert(wallet)
+        context.insert(legacy)
         context.insert(exchange)
         try context.save()
 
@@ -36,9 +38,12 @@ struct SyncEngineScopedTests {
 
         #expect(resolvedSources.withLock { $0 } == [.zerion])
         #expect(wallet.lastSyncedAt != nil)
+        #expect(legacy.lastSyncedAt == nil)
         #expect(exchange.lastSyncedAt == nil)
         #expect(result.failedAccounts.isEmpty)
-        #expect(try context.fetch(FetchDescriptor<AccountSnapshot>()).count == 2)
+        let accountSnapshots = try context.fetch(FetchDescriptor<AccountSnapshot>())
+        #expect(accountSnapshots.count == 3)
+        #expect(accountSnapshots.first { $0.accountId == legacy.id }?.isFresh == false)
     }
 
     @Test func `scoped exchange sync fetches only exchange accounts`() async throws {

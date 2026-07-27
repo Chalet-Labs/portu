@@ -11,9 +11,12 @@ public extension ZerionProvider {
             return PriceUpdate(prices: [:], changes24h: [:])
         }
 
-        let requested = try Dictionary(uniqueKeysWithValues: unique.map {
-            try (ZerionChainMapping.implementation(for: $0), $0)
-        })
+        let requested = unique.reduce(into: [String: OnchainTokenIdentity]()) { result, identity in
+            guard let implementation = try? ZerionChainMapping.implementation(for: identity) else {
+                return
+            }
+            result[implementation] = identity
+        }
         var prices: [String: Decimal] = [:]
         var changes: [String: Decimal] = [:]
 

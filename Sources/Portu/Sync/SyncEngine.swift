@@ -36,7 +36,7 @@ final class SyncEngine: @unchecked Sendable {
         guard account.isActive else {
             throw SyncError.accountInactive
         }
-        guard account.dataSource != .manual else {
+        guard account.isSyncable else {
             throw SyncError.accountNotSyncable
         }
 
@@ -441,7 +441,7 @@ final class SyncEngine: @unchecked Sendable {
 
     private func fetchActiveSyncableAccounts() throws -> [Account] {
         let descriptor = FetchDescriptor<Account>()
-        return try modelContext.fetch(descriptor).filter { $0.isActive && $0.dataSource != .manual }
+        return try modelContext.fetch(descriptor).filter(\.isSyncable)
     }
 
     private func hasActiveSyncableAccounts(outside accountIDs: Set<UUID>) throws -> Bool {
@@ -452,7 +452,7 @@ final class SyncEngine: @unchecked Sendable {
         try fetchActiveSyncableAccounts().filter { account in
             switch scope {
             case .onchain:
-                account.dataSource == .zerion || account.dataSource == .zapper
+                account.dataSource == .zerion
             case .exchange:
                 account.dataSource == .exchange
             }

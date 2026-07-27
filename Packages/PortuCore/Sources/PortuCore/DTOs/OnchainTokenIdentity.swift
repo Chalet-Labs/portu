@@ -1,9 +1,9 @@
 import Foundation
 
 public struct OnchainTokenIdentity: Hashable, Sendable {
-    /// Provider-neutral placeholder used when an API represents a native asset
-    /// without a contract address.
-    public static let nativeAssetSentinel = "native"
+    /// Existing provider-neutral convention for native assets on EVM-compatible
+    /// chains. APIs that omit a native contract address normalize to this value.
+    public static let nativeAssetSentinel = "0x0000000000000000000000000000000000000000"
 
     public let chain: Chain
     public let contractAddress: String
@@ -62,6 +62,9 @@ public struct OnchainTokenIdentity: Hashable, Sendable {
     private static func normalizedContractAddress(_ address: String?) -> String? {
         guard let address else { return nil }
         let normalized = address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized == "native" {
+            return nativeAssetSentinel
+        }
         return normalized.isEmpty ? nil : normalized
     }
 }
