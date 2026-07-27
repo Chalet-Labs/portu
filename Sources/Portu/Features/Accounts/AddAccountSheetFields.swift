@@ -8,12 +8,19 @@ enum AddAccountAccessibility {
 }
 
 enum AddAccountSheetSavePolicy {
-    static func canSubmit(draftCanSave: Bool, isSyncing: Bool, isSyncBlocked: Bool) -> Bool {
-        draftCanSave && !isSyncing && !isSyncBlocked
+    static func canSubmit(
+        draftCanSave: Bool,
+        isSyncing: Bool,
+        isSyncBlocked: Bool,
+        isLoadingCredentials: Bool) -> Bool {
+        draftCanSave && !isSyncing && !isSyncBlocked && !isLoadingCredentials
     }
 
-    static func canEditFields(isSyncing: Bool, isSyncBlocked: Bool) -> Bool {
-        !isSyncing && !isSyncBlocked
+    static func canEditFields(
+        isSyncing: Bool,
+        isSyncBlocked: Bool,
+        isLoadingCredentials: Bool) -> Bool {
+        !isSyncing && !isSyncBlocked && !isLoadingCredentials
     }
 }
 

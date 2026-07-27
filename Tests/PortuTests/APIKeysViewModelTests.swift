@@ -149,6 +149,26 @@ struct APIKeysViewModelTests {
     @Test func `startup migration excludes retired Zapper credential`() {
         #expect(PortuApp.providerSecretMigrationKeys.contains(.providerAPIKey(.zerion)))
         #expect(!PortuApp.providerSecretMigrationKeys.contains(.providerAPIKey(.zapper)))
+        #expect(PortuApp.retiredPlaintextSecretKeys == [.providerAPIKey(.zapper)])
+    }
+
+    @Test func `startup migration deletes retired Zapper plaintext without copying it`() throws {
+        let zapperKey = KeychainKey.providerAPIKey(.zapper)
+        let zerionKey = KeychainKey.providerAPIKey(.zerion)
+        let source = ThreadRecordingSecretStore(storage: [
+            zapperKey.rawKey: "retired-zapper-key",
+            zerionKey.rawKey: "zerion-key"
+        ])
+        let destination = ThreadRecordingSecretStore()
+
+        try PortuApp.migrateSecretsBeforeDependencyConstruction(
+            keys: [zerionKey],
+            from: source,
+            to: destination)
+
+        #expect(try source.get(key: zapperKey) == nil)
+        #expect(try destination.get(key: zapperKey) == nil)
+        #expect(try destination.get(key: zerionKey) == "zerion-key")
     }
 
     @Test func `startup secret migration completes off main before dependencies read keys`() throws {
@@ -193,6 +213,7 @@ struct APIKeysViewModelTests {
         #expect(vm.zerionAPIKey == "zap-123")
         #expect(vm.debankAPIKey == "deb-456")
         #expect(vm.coingeckoAPIKey == "cg-789")
+        #expect(vm.hasLoaded)
     }
 
     @Test func `load populates RPC endpoints from store`() async throws {
@@ -352,6 +373,7 @@ struct APIKeysViewModelTests {
 
         #expect(vm.secretStoreError == "Unable to access API keys in Keychain. Unlock your Mac and try again.")
         #expect(vm.zerionAPIKey.isEmpty)
+        #expect(!vm.hasLoaded)
     }
 
     @Test func `save after failed load does not mutate unreadable secrets`() async {

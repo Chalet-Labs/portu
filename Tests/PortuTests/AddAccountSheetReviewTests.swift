@@ -29,15 +29,49 @@ struct AddAccountAccessibilityTests {
 
 struct AddAccountSheetSavePolicyTests {
     @Test func `save policy blocks submit while syncing`() {
-        #expect(AddAccountSheetSavePolicy.canSubmit(draftCanSave: true, isSyncing: false, isSyncBlocked: false))
-        #expect(!AddAccountSheetSavePolicy.canSubmit(draftCanSave: false, isSyncing: false, isSyncBlocked: false))
-        #expect(!AddAccountSheetSavePolicy.canSubmit(draftCanSave: true, isSyncing: true, isSyncBlocked: false))
-        #expect(!AddAccountSheetSavePolicy.canSubmit(draftCanSave: true, isSyncing: false, isSyncBlocked: true))
+        #expect(AddAccountSheetSavePolicy.canSubmit(
+            draftCanSave: true,
+            isSyncing: false,
+            isSyncBlocked: false,
+            isLoadingCredentials: false))
+        #expect(!AddAccountSheetSavePolicy.canSubmit(
+            draftCanSave: false,
+            isSyncing: false,
+            isSyncBlocked: false,
+            isLoadingCredentials: false))
+        #expect(!AddAccountSheetSavePolicy.canSubmit(
+            draftCanSave: true,
+            isSyncing: true,
+            isSyncBlocked: false,
+            isLoadingCredentials: false))
+        #expect(!AddAccountSheetSavePolicy.canSubmit(
+            draftCanSave: true,
+            isSyncing: false,
+            isSyncBlocked: true,
+            isLoadingCredentials: false))
+        #expect(!AddAccountSheetSavePolicy.canSubmit(
+            draftCanSave: true,
+            isSyncing: false,
+            isSyncBlocked: false,
+            isLoadingCredentials: true))
     }
 
     @Test func `save policy blocks field editing while syncing`() {
-        #expect(AddAccountSheetSavePolicy.canEditFields(isSyncing: false, isSyncBlocked: false))
-        #expect(!AddAccountSheetSavePolicy.canEditFields(isSyncing: true, isSyncBlocked: false))
-        #expect(!AddAccountSheetSavePolicy.canEditFields(isSyncing: false, isSyncBlocked: true))
+        #expect(AddAccountSheetSavePolicy.canEditFields(
+            isSyncing: false,
+            isSyncBlocked: false,
+            isLoadingCredentials: false))
+        #expect(!AddAccountSheetSavePolicy.canEditFields(
+            isSyncing: true,
+            isSyncBlocked: false,
+            isLoadingCredentials: false))
+        #expect(!AddAccountSheetSavePolicy.canEditFields(
+            isSyncing: false,
+            isSyncBlocked: true,
+            isLoadingCredentials: false))
+        #expect(!AddAccountSheetSavePolicy.canEditFields(
+            isSyncing: false,
+            isSyncBlocked: false,
+            isLoadingCredentials: true))
     }
 }

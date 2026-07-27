@@ -245,6 +245,7 @@ struct PortuApp: App {
 
     nonisolated static func migrateSecretsBeforeDependencyConstruction(
         keys: [KeychainKey],
+        retiredKeys: Set<KeychainKey> = retiredPlaintextSecretKeys,
         from source: any SecretStore,
         to destination: any SecretStore) throws(KeychainError) {
         let outcome = Mutex<Result<Void, KeychainError>?>(nil)
@@ -252,17 +253,35 @@ struct PortuApp: App {
 
         Thread.detachNewThread {
             let result: Result<Void, KeychainError>
+            var firstError: KeychainError?
+            for key in retiredKeys.sorted(by: { $0.rawKey < $1.rawKey }) {
+                do {
+                    try source.delete(key: key)
+                } catch let error as KeychainError {
+                    if firstError == nil {
+                        firstError = error
+                    }
+                } catch {
+                    if firstError == nil {
+                        firstError = .encodingFailed
+                    }
+                }
+            }
             do {
                 try SecretStoreMigration.migrate(
                     keys: keys,
                     from: source,
                     to: destination)
-                result = .success(())
             } catch let error as KeychainError {
-                result = .failure(error)
+                if firstError == nil {
+                    firstError = error
+                }
             } catch {
-                result = .failure(.encodingFailed)
+                if firstError == nil {
+                    firstError = .encodingFailed
+                }
             }
+            result = firstError.map(Result.failure) ?? .success(())
             outcome.withLock { $0 = result }
             completion.signal()
         }
@@ -288,11 +307,14 @@ struct PortuApp: App {
         .serviceAPIKey("debank")
     ]
 
+    nonisolated static let retiredPlaintextSecretKeys: Set<KeychainKey> = [
+        .providerAPIKey(.zapper)
+    ]
+
     @MainActor
     private static func secretMigrationKeys(modelContext: ModelContext) -> [KeychainKey] {
-        // The retired Zapper credential is intentionally left untouched. Older
-        // login-keychain ACLs can require user interaction, and Portu no longer
-        // needs this credential at runtime.
+        // Retired plaintext credentials are deleted separately without copying
+        // them into the destination Keychain.
         var keys = providerSecretMigrationKeys
         for chain in Chain.allCases {
             keys.insert(.rpcEndpoint(chain))

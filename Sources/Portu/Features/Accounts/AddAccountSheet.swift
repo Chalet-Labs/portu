@@ -19,6 +19,7 @@ struct AddAccountSheet: View {
     @State private var draft: AccountSheetDraft
     @State private var baselineDraft: AccountSheetDraft
     @State private var didLoadCredentials = false
+    @State private var isLoadingCredentials: Bool
     @State private var isSaving = false
     @State private var saveError: String?
 
@@ -46,6 +47,7 @@ struct AddAccountSheet: View {
         }
         _draft = State(initialValue: initialDraft)
         _baselineDraft = State(initialValue: initialDraft)
+        _isLoadingCredentials = State(initialValue: mode.isEditing && account?.kind == .exchange)
     }
 
     var body: some View {
@@ -422,6 +424,7 @@ private extension AddAccountSheet {
     func loadCredentialsIfNeeded() async {
         guard !didLoadCredentials, mode.isEditing, let account, account.kind == .exchange else { return }
         didLoadCredentials = true
+        defer { isLoadingCredentials = false }
         var loadedDraft = draft
         await loadedDraft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
         draft = loadedDraft
@@ -438,18 +441,22 @@ private extension AddAccountSheet {
     }
 
     var syncButtonEnabled: Bool {
-        canSync && !isSyncing && !isSyncBlocked && !hasUnsavedChanges
+        canSync && !isSyncing && !isSyncBlocked && !isLoadingCredentials && !hasUnsavedChanges
     }
 
     var saveEnabled: Bool {
         !isSaving && AddAccountSheetSavePolicy.canSubmit(
             draftCanSave: draft.canSave,
             isSyncing: isSyncing,
-            isSyncBlocked: isSyncBlocked)
+            isSyncBlocked: isSyncBlocked,
+            isLoadingCredentials: isLoadingCredentials)
     }
 
     var fieldsEditable: Bool {
-        AddAccountSheetSavePolicy.canEditFields(isSyncing: isSyncing, isSyncBlocked: isSyncBlocked)
+        AddAccountSheetSavePolicy.canEditFields(
+            isSyncing: isSyncing,
+            isSyncBlocked: isSyncBlocked,
+            isLoadingCredentials: isLoadingCredentials)
     }
 
     var syncHelpText: String {

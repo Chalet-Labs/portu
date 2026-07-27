@@ -78,7 +78,8 @@ final class APIKeysViewModel {
     func load() async {
         isLoading = true
         canSave = false
-        defer { isLoading = false; hasLoaded = true }
+        hasLoaded = false
+        defer { isLoading = false }
         secretStoreError = nil
         do {
             let secrets = try await secretStore.load()
@@ -88,6 +89,7 @@ final class APIKeysViewModel {
             rpcEndpoints = secrets.rpcEndpoints
             persistedRPCEndpointChains = Set(secrets.rpcEndpoints.keys)
             canSave = true
+            hasLoaded = true
         } catch {
             secretStoreError = "Unable to access API keys in Keychain. Unlock your Mac and try again."
         }
