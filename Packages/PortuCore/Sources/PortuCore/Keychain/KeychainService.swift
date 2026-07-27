@@ -156,7 +156,8 @@ public struct KeychainService: SecretStore {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawKey
+            kSecAttrAccount as String: key.rawKey,
+            kSecUseDataProtectionKeychain as String: true
         ]
     }
 

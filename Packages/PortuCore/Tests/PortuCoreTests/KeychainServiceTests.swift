@@ -117,7 +117,7 @@ struct SecretStoreTests {
 }
 
 struct KeychainServiceTests {
-    @Test func `set stores values in standard keychain with ThisDeviceOnly accessibility`() throws {
+    @Test func `set stores values in data protection keychain with ThisDeviceOnly accessibility`() throws {
         let recorder = KeychainOperationRecorder()
         let store = KeychainService(
             service: "com.portu.tests",
@@ -133,7 +133,7 @@ struct KeychainServiceTests {
         try store.set(key: .providerAPIKey(.zapper), value: "zapper-token")
 
         let addQuery = try #require(recorder.addedQueries.first)
-        #expect(!addQuery.usesDataProtectionKeychain)
+        #expect(addQuery.usesDataProtectionKeychain)
         #expect(addQuery.accessibility == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
         #expect(recorder.deletedQueries.isEmpty)
     }
@@ -155,7 +155,7 @@ struct KeychainServiceTests {
         #expect(updateAttributes.accessibility == (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String))
     }
 
-    @Test func `get reads standard keychain`() throws {
+    @Test func `get reads data protection keychain`() throws {
         let storedValue = "zapper-token"
         let storedData = try #require(storedValue.data(using: .utf8))
         let recorder = KeychainOperationRecorder()
@@ -181,9 +181,24 @@ struct KeychainServiceTests {
 
         #expect(value == storedValue)
         #expect(copyQueries.count == 1)
-        #expect(!copyQueries[0].usesDataProtectionKeychain)
+        #expect(copyQueries[0].usesDataProtectionKeychain)
         #expect(recorder.addedQueries.isEmpty)
         #expect(recorder.deletedQueries.isEmpty)
+    }
+
+    @Test func `delete uses data protection keychain`() throws {
+        let recorder = KeychainOperationRecorder()
+        let store = KeychainService(
+            service: "com.portu.tests",
+            delete: { query in
+                recorder.appendDeleted(query.dictionaryValue)
+                return errSecSuccess
+            })
+
+        try store.delete(key: .providerAPIKey(.zerion))
+
+        let deleteQuery = try #require(recorder.deletedQueries.first)
+        #expect(deleteQuery.usesDataProtectionKeychain)
     }
 
     @Test func `repeated gets read a credential from keychain only once`() throws {

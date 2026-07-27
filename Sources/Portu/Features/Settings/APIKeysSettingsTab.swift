@@ -90,6 +90,7 @@ struct APIKeysSettingsTab: View {
                                 text: $viewModel.coingeckoAPIKey)
                         }
                     }
+                    .disabled(!viewModel.canSave)
 
                 SettingsSectionCard(
                     title: "Custom RPCs",
@@ -107,6 +108,7 @@ struct APIKeysSettingsTab: View {
                             }
                         }
                     }
+                    .disabled(!viewModel.canSave)
             }
         }
         .task { if !viewModel.hasLoaded { await viewModel.load() } }
@@ -321,7 +323,7 @@ struct APIKeysSettingsTab: View {
     }
 
     private func debounceSave() {
-        guard !viewModel.isLoading else { return }
+        guard !viewModel.isLoading, viewModel.canSave else { return }
         hasPendingSave = true
         saveTask?.cancel()
         saveTask = Task { @MainActor in
@@ -334,7 +336,7 @@ struct APIKeysSettingsTab: View {
 
     private func flushPendingSave() {
         saveTask?.cancel()
-        guard hasPendingSave, !viewModel.isLoading else { return }
+        guard hasPendingSave, !viewModel.isLoading, viewModel.canSave else { return }
         hasPendingSave = false
         saveTask = Task { @MainActor in
             await viewModel.save()

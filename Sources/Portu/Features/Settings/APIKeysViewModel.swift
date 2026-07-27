@@ -18,8 +18,11 @@ private actor APIKeysSecretStore {
     func load() throws(KeychainError) -> APIKeysSecrets {
         var rpcEndpoints: [Chain: String] = [:]
         for chain in Chain.allCases {
-            if let url = try secretStore.get(key: .rpcEndpoint(chain)), !url.isEmpty {
-                rpcEndpoints[chain] = url
+            if let url = try secretStore.get(key: .rpcEndpoint(chain)) {
+                let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    rpcEndpoints[chain] = trimmed
+                }
             }
         }
         return try APIKeysSecrets(
@@ -63,6 +66,7 @@ final class APIKeysViewModel {
     var secretStoreError: String?
     private(set) var isLoading = false
     private(set) var hasLoaded = false
+    private(set) var canSave = true
 
     private let secretStore: APIKeysSecretStore
     private var persistedRPCEndpointChains: Set<Chain> = []
@@ -73,6 +77,7 @@ final class APIKeysViewModel {
 
     func load() async {
         isLoading = true
+        canSave = false
         defer { isLoading = false; hasLoaded = true }
         secretStoreError = nil
         do {
@@ -82,19 +87,28 @@ final class APIKeysViewModel {
             coingeckoAPIKey = secrets.coingeckoAPIKey
             rpcEndpoints = secrets.rpcEndpoints
             persistedRPCEndpointChains = Set(secrets.rpcEndpoints.keys)
+            canSave = true
         } catch {
             secretStoreError = "Unable to access API keys in Keychain. Unlock your Mac and try again."
         }
     }
 
     func save() async {
+        guard canSave else { return }
         secretStoreError = nil
+        let normalizedRPCEndpoints = rpcEndpoints.reduce(into: [Chain: String]()) { endpoints, entry in
+            let trimmed = entry.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                endpoints[entry.key] = trimmed
+            }
+        }
+        rpcEndpoints = normalizedRPCEndpoints
         let secrets = APIKeysSecrets(
             zerionAPIKey: zerionAPIKey,
             debankAPIKey: debankAPIKey,
             coingeckoAPIKey: coingeckoAPIKey,
-            rpcEndpoints: rpcEndpoints)
-        let currentRPCEndpointChains = Set(rpcEndpoints.keys)
+            rpcEndpoints: normalizedRPCEndpoints)
+        let currentRPCEndpointChains = Set(normalizedRPCEndpoints.keys)
         let removedRPCEndpointChains = persistedRPCEndpointChains.subtracting(currentRPCEndpointChains)
         do {
             try await secretStore.save(

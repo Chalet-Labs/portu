@@ -32,6 +32,27 @@ private final class FailingSecretStore: SecretStore, @unchecked Sendable {
     }
 }
 
+private final class ReadFailingSecretStore: SecretStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var mutationCountStorage = 0
+
+    var mutationCount: Int {
+        lock.withLock { mutationCountStorage }
+    }
+
+    func get(key _: KeychainKey) throws(KeychainError) -> String? {
+        throw .interactionNotAllowed
+    }
+
+    func set(key _: KeychainKey, value _: String) throws(KeychainError) {
+        lock.withLock { mutationCountStorage += 1 }
+    }
+
+    func delete(key _: KeychainKey) throws(KeychainError) {
+        lock.withLock { mutationCountStorage += 1 }
+    }
+}
+
 private final class ThreadRecordingSecretStore: SecretStore, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [String: String]
@@ -186,6 +207,18 @@ struct APIKeysViewModelTests {
         #expect(vm.rpcEndpoints[.polygon] == "https://poly.example.com")
     }
 
+    @Test func `load trims RPC endpoints and ignores whitespace only values`() async throws {
+        let store = MockSecretStore()
+        try store.set(key: .rpcEndpoint(.ethereum), value: " \n ")
+        try store.set(key: .rpcEndpoint(.polygon), value: "  https://poly.example.com/path  \n")
+
+        let vm = APIKeysViewModel(secretStore: store)
+        await vm.load()
+
+        #expect(vm.rpcEndpoints[.ethereum] == nil)
+        #expect(vm.rpcEndpoints[.polygon] == "https://poly.example.com/path")
+    }
+
     // MARK: - Save
 
     @Test func `save persists non empty API keys`() async throws {
@@ -251,6 +284,18 @@ struct APIKeysViewModelTests {
         #expect(try store.get(key: .rpcEndpoint(.base)) == nil)
     }
 
+    @Test func `save treats whitespace only RPC endpoint as removed`() async throws {
+        let store = MockSecretStore()
+        try store.set(key: .rpcEndpoint(.base), value: "https://base.example.com")
+
+        let vm = APIKeysViewModel(secretStore: store)
+        await vm.load()
+        vm.rpcEndpoints[.base] = " \n "
+        await vm.save()
+
+        #expect(try store.get(key: .rpcEndpoint(.base)) == nil)
+    }
+
     // MARK: - Round-Trip
 
     @Test func `round trip save then load recovers same values`() async {
@@ -299,6 +344,18 @@ struct APIKeysViewModelTests {
 
         #expect(vm.secretStoreError == "Unable to access API keys in Keychain. Unlock your Mac and try again.")
         #expect(vm.zerionAPIKey.isEmpty)
+    }
+
+    @Test func `save after failed load does not mutate unreadable secrets`() async {
+        let store = ReadFailingSecretStore()
+        let vm = APIKeysViewModel(secretStore: store)
+        await vm.load()
+        vm.zerionAPIKey = "replacement"
+
+        await vm.save()
+
+        #expect(store.mutationCount == 0)
+        #expect(vm.secretStoreError == "Unable to access API keys in Keychain. Unlock your Mac and try again.")
     }
 
     @Test func `save surfaces actionable keychain error`() async {
