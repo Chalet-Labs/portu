@@ -39,6 +39,9 @@ final class SyncEngine: @unchecked Sendable {
         guard account.isActive else {
             throw SyncError.accountInactive
         }
+        guard account.dataSource != .zapper else {
+            throw SyncError.unsupportedLegacyAccount
+        }
         guard account.isSyncable else {
             throw SyncError.accountNotSyncable
         }

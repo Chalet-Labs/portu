@@ -141,6 +141,7 @@
 		C611822B0FDAB77F03272477 /* PositionFilterSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A4E3AD17570EE2020F98B9D /* PositionFilterSidebar.swift */; };
 		C7F69E2CED8EA46E3C1E4136 /* PortuNetwork in Frameworks */ = {isa = PBXBuildFile; productRef = 054FEF9C1195A150D56A76CA /* PortuNetwork */; };
 		CBB2399EDE69E054EDEFED12 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C652E9A00074B7A22943B6A7 /* SyncEngine.swift */; };
+		CFC30415788A774E28D05A82 /* SyncEngineLegacyAccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C098AACD3A503135E31467D1 /* SyncEngineLegacyAccountTests.swift */; };
 		CFE9060530486693BFF3461C /* AssetPositionsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F756C31F93737292F0F09AB /* AssetPositionsTable.swift */; };
 		D12FE9896DEB2426C63EE6CD /* PriceWatchlist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324795298041BC4BF594505C /* PriceWatchlist.swift */; };
 		D274E559468D7FD5BA3B3DE1 /* PortuUI in Frameworks */ = {isa = PBXBuildFile; productRef = C25A3843B24FFDF40B5B1172 /* PortuUI */; };
@@ -322,6 +323,7 @@
 		BE9024AF502998B64A46F8AC /* HistoricalPriceChanges24hProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceChanges24hProvider.swift; sourceTree = "<group>"; };
 		BEA37039B203CA0B14A05EFD /* OverviewPositionTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPositionTabs.swift; sourceTree = "<group>"; };
 		C0412B0DAC1B4988B6325F2A /* TokenIdentityMappingFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenIdentityMappingFeatureTests.swift; sourceTree = "<group>"; };
+		C098AACD3A503135E31467D1 /* SyncEngineLegacyAccountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineLegacyAccountTests.swift; sourceTree = "<group>"; };
 		C1E06309E68FBD62B4957310 /* PortfolioCategorySeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioCategorySeeder.swift; sourceTree = "<group>"; };
 		C30F8524EBB19474FFA3871C /* AssetPriceChartTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetPriceChartTests.swift; sourceTree = "<group>"; };
 		C375F4CE08E3AAE9016A076E /* OverviewPositionHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPositionHelpers.swift; sourceTree = "<group>"; };
@@ -660,6 +662,7 @@
 				E9C14B6E1BF95CE173602DD3 /* SendableArray.swift */,
 				726D62A9E7F60014EDC7E0EC /* SettingsTabTests.swift */,
 				ACC72A910CE88E69A0A79746 /* SidebarLayoutTests.swift */,
+				C098AACD3A503135E31467D1 /* SyncEngineLegacyAccountTests.swift */,
 				1159F8509C86C08B1C489415 /* SyncEngineScopedTests.swift */,
 				FB29EB7B31D9B8FE27EDCC5A /* SyncEngineTests.swift */,
 				C0412B0DAC1B4988B6325F2A /* TokenIdentityMappingFeatureTests.swift */,
@@ -987,6 +990,7 @@
 				3D506EB5FDC7350FB3AFF9B3 /* SendableArray.swift in Sources */,
 				09EFC1288E41DCA2CF416638 /* SettingsTabTests.swift in Sources */,
 				688D94778A29B329D3197E6F /* SidebarLayoutTests.swift in Sources */,
+				CFC30415788A774E28D05A82 /* SyncEngineLegacyAccountTests.swift in Sources */,
 				A53307EFF266FA209E6AEBDD /* SyncEngineScopedTests.swift in Sources */,
 				E73D6C01F3051356E0E4D2FE /* SyncEngineTests.swift in Sources */,
 				462A7D62D2D04E4AF70BC552 /* TokenIdentityMappingFeatureTests.swift in Sources */,
