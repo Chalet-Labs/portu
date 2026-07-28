@@ -15,9 +15,24 @@ has_identity() {
       '
 }
 
-if has_identity; then
+identity_is_leaf() {
+  security find-certificate -c "$IDENTITY_NAME" -p "$LOGIN_KEYCHAIN" 2>/dev/null \
+    | openssl x509 -noout -text 2>/dev/null \
+    | grep -q 'CA:FALSE'
+}
+
+if has_identity && identity_is_leaf; then
   echo "$IDENTITY_NAME"
   exit 0
+fi
+
+if has_identity; then
+  echo "Replacing the legacy '$IDENTITY_NAME' root identity with a leaf identity…" >&2
+  security delete-identity \
+    -c "$IDENTITY_NAME" \
+    -t \
+    "$LOGIN_KEYCHAIN" \
+    >/dev/null
 fi
 
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/portu-signing.XXXXXX")"
@@ -38,8 +53,8 @@ openssl req \
   -days 3650 \
   -nodes \
   -subj "/CN=$IDENTITY_NAME/O=Portu Local Development" \
-  -addext "basicConstraints=critical,CA:TRUE" \
-  -addext "keyUsage=critical,digitalSignature,keyCertSign" \
+  -addext "basicConstraints=critical,CA:FALSE" \
+  -addext "keyUsage=critical,digitalSignature" \
   -addext "extendedKeyUsage=codeSigning" \
   -keyout "$PRIVATE_KEY" \
   -out "$CERTIFICATE" \
@@ -61,7 +76,7 @@ security import "$IDENTITY" \
   >/dev/null
 
 security add-trusted-cert \
-  -r trustRoot \
+  -r trustAsRoot \
   -p codeSign \
   -k "$LOGIN_KEYCHAIN" \
   "$CERTIFICATE"

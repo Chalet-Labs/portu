@@ -142,7 +142,11 @@ struct ReleaseAutomationTests {
         #expect(runScript.contains("CODE_SIGN_IDENTITY=\"$CODE_SIGN_IDENTITY_NAME\""))
         #expect(runScript.contains("CODE_SIGN_STYLE=Manual"))
         #expect(signingScript.contains("security find-identity"))
+        #expect(signingScript.contains("CA:FALSE"))
+        #expect(!signingScript.contains("keyCertSign"))
         #expect(signingScript.contains("extendedKeyUsage=codeSigning"))
+        #expect(signingScript.contains("-r trustAsRoot"))
+        #expect(signingScript.contains("security delete-identity"))
         #expect(signingScript.contains("-T /usr/bin/codesign"))
     }
 
