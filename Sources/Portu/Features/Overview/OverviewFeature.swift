@@ -377,7 +377,7 @@ enum OverviewFeature {
             overrides: overrides,
             fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
             .prefix(max(portfolioLimit, 0)) {
-            let priceID = TokenIdentityMappingFeature.normalizedProviderID(aggregate.priceID)
+            let priceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(aggregate.priceID)
             let coinGeckoId = TokenIdentityMappingFeature.nonOnchainPriceID(priceID)
             let rowID = aggregate.rowID
             guard !seenRowIDs.contains(rowID) else {
@@ -515,7 +515,7 @@ enum OverviewFeature {
         for token: TokenEntry,
         priceID: String?) -> String {
         let normalizedSymbol = token.symbol.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if let priceID = TokenIdentityMappingFeature.normalizedProviderID(priceID) {
+        if let priceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(priceID) {
             return "price:\(priceID):symbol:\(normalizedSymbol)"
         }
         return "asset:\(token.assetId.uuidString)"
@@ -629,7 +629,7 @@ enum OverviewFeature {
     private static func displayPrice(
         for aggregate: AssetAggregate,
         prices: [String: Decimal]) -> Decimal? {
-        guard let priceID = TokenIdentityMappingFeature.normalizedProviderID(aggregate.priceID) else {
+        guard let priceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(aggregate.priceID) else {
             return aggregate.fallbackPrice
         }
         guard let price = prices[priceID] else { return nil }

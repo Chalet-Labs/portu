@@ -256,6 +256,26 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(row.isWatchlisted)
     }
 
+    @Test func `price rows preserve distinct mixed case Solana mint prices`() {
+        let upper = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+        let lower = OnchainTokenIdentity(chain: .solana, contractAddress: "solanamintcase")
+        let tokens = [
+            token(symbol: "CASE", amount: 1, usdValue: 2, onchainIdentity: upper),
+            token(symbol: "CASE", amount: 1, usdValue: 3, onchainIdentity: lower)
+        ]
+
+        let rows = OverviewFeature.priceRows(
+            tokens: tokens,
+            assetsByCoinGeckoId: [:],
+            prices: [upper.historicalPriceID: 2, lower.historicalPriceID: 3],
+            changes24h: [upper.historicalPriceID: 0.02, lower.historicalPriceID: 0.03],
+            watchlistIDs: [])
+
+        #expect(rows.count == 2)
+        #expect(Set(rows.compactMap(\.price)) == [2, 3])
+        #expect(Set(rows.compactMap(\.change24h)) == [0.02, 0.03])
+    }
+
     @Test func `price rows keep distinct portfolio assets with the same coin gecko id`() {
         let aave = UUID()
         let bridgedAave = UUID()

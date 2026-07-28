@@ -7,6 +7,7 @@ struct APIKeyNormalizationTests {
     @Test func `save trims API keys and updates bound values`() async throws {
         let store = InMemorySecretStore()
         let viewModel = APIKeysViewModel(secretStore: store)
+        await viewModel.load()
         viewModel.zerionAPIKey = "  zerion-key \n"
         viewModel.debankAPIKey = "\tdebank-key "
         viewModel.coingeckoAPIKey = " coingecko-key\n"

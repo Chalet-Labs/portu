@@ -101,7 +101,7 @@ final class APIKeysViewModel {
     var secretStoreError: String?
     private(set) var isLoading = false
     private(set) var hasLoaded = false
-    private(set) var canSave = true
+    private(set) var canSave = false
 
     private let secretStore: APIKeysSecretStore
     private var persistedRPCEndpointChains: Set<Chain> = []

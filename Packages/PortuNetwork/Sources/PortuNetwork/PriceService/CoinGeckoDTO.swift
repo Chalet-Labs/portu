@@ -90,7 +90,10 @@ nonisolated struct CoinGeckoTokenPriceResponse {
     let pricesByAddress: [String: Decimal]
     let changes24hByAddress: [String: Decimal]
 
-    init(data: Data, currency: FiatCurrency = .default) throws(PriceServiceError) {
+    init(
+        data: Data,
+        currency: FiatCurrency = .default,
+        chain: Chain) throws(PriceServiceError) {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else {
             throw .decodingFailed
         }
@@ -100,8 +103,14 @@ nonisolated struct CoinGeckoTokenPriceResponse {
         let priceKey = currency.coinGeckoParameter
         let changeKey = "\(priceKey)_24h_change"
         for (address, values) in json {
-            let normalizedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard !normalizedAddress.isEmpty else { continue }
+            guard
+                let normalizedAddress = OnchainTokenIdentity(
+                    chain: Optional(chain),
+                    contractAddress: Optional(address))?
+                    .contractAddress
+            else {
+                continue
+            }
             if let value = values[priceKey] as? NSNumber {
                 prices[normalizedAddress] = value.decimalValue
             }
@@ -145,7 +154,7 @@ nonisolated struct CoinGeckoExchangeRatesResponse {
 nonisolated struct CoinGeckoOnchainTokenMapResponse {
     let coinGeckoIDsByAddress: [String: String]
 
-    init(data: Data) throws(PriceServiceError) {
+    init(data: Data, chain: Chain) throws(PriceServiceError) {
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let rows = json["data"] as? [[String: Any]]
@@ -164,9 +173,12 @@ nonisolated struct CoinGeckoOnchainTokenMapResponse {
             else {
                 continue
             }
-            let normalizedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let normalizedAddress = OnchainTokenIdentity(
+                chain: Optional(chain),
+                contractAddress: Optional(address))?
+                .contractAddress
             let normalizedCoinGeckoID = coinGeckoID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard !normalizedAddress.isEmpty, !normalizedCoinGeckoID.isEmpty else {
+            guard let normalizedAddress, !normalizedCoinGeckoID.isEmpty else {
                 continue
             }
             result[normalizedAddress] = normalizedCoinGeckoID

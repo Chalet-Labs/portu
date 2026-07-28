@@ -85,7 +85,7 @@ private final class PartiallyFailingSecretStore: SecretStore, @unchecked Sendabl
     }
 }
 
-private final class ThreadRecordingSecretStore: SecretStore, @unchecked Sendable {
+final class ThreadRecordingSecretStore: SecretStore, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [String: String]
     private var recordedMainThreadFlags: [Bool] = []
@@ -190,54 +190,6 @@ struct APIKeysViewModelTests {
         } == false)
     }
 
-    @Test func `startup migration excludes retired Zapper credential`() {
-        #expect(PortuApp.providerSecretMigrationKeys.contains(.providerAPIKey(.zerion)))
-        #expect(!PortuApp.providerSecretMigrationKeys.contains(.providerAPIKey(.zapper)))
-        #expect(PortuApp.retiredPlaintextSecretKeys == [.providerAPIKey(.zapper)])
-    }
-
-    @Test func `startup migration deletes retired Zapper plaintext without copying it`() async throws {
-        let zapperKey = KeychainKey.providerAPIKey(.zapper)
-        let zerionKey = KeychainKey.providerAPIKey(.zerion)
-        let source = ThreadRecordingSecretStore(storage: [
-            zapperKey.rawKey: "retired-zapper-key",
-            zerionKey.rawKey: "zerion-key"
-        ])
-        let destination = ThreadRecordingSecretStore()
-        let store = MigratingSecretStore(source: source, destination: destination)
-
-        try await PortuApp.migrateSecrets(
-            keys: [zerionKey],
-            using: store)
-
-        #expect(try source.get(key: zapperKey) == nil)
-        #expect(try destination.get(key: zapperKey) == nil)
-        #expect(try destination.get(key: zerionKey) == "zerion-key")
-    }
-
-    @Test func `startup secret migration runs off main through destination first fallback store`() async throws {
-        let key = KeychainKey.providerAPIKey(.zerion)
-        let source = ThreadRecordingSecretStore(storage: [key.rawKey: "legacy-zerion-key"])
-        let destination = ThreadRecordingSecretStore()
-        let store = MigratingSecretStore(source: source, destination: destination)
-
-        #expect(try store.get(key: key) == "legacy-zerion-key")
-        let preMigrationSourceReadCount = source.mainThreadFlags.count
-        let preMigrationDestinationReadCount = destination.mainThreadFlags.count
-
-        try await PortuApp.migrateSecrets(
-            keys: [key],
-            using: store)
-
-        let migrationThreadFlags =
-            Array(source.mainThreadFlags.dropFirst(preMigrationSourceReadCount))
-                + Array(destination.mainThreadFlags.dropFirst(preMigrationDestinationReadCount))
-        #expect(!migrationThreadFlags.isEmpty)
-        #expect(migrationThreadFlags.allSatisfy { !$0 })
-        #expect(try destination.get(key: key) == "legacy-zerion-key")
-        #expect(try source.get(key: key) == nil)
-    }
-
     // MARK: - Initial State
 
     @Test func `initial state is empty`() {
@@ -247,6 +199,7 @@ struct APIKeysViewModelTests {
         #expect(vm.debankAPIKey.isEmpty)
         #expect(vm.coingeckoAPIKey.isEmpty)
         #expect(vm.rpcEndpoints.isEmpty)
+        #expect(!vm.canSave)
     }
 
     // MARK: - Load
@@ -295,6 +248,7 @@ struct APIKeysViewModelTests {
     @Test func `save persists non empty API keys`() async throws {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
+        await vm.load()
 
         vm.zerionAPIKey = "zap-abc"
         vm.debankAPIKey = "deb-def"
@@ -309,6 +263,7 @@ struct APIKeysViewModelTests {
     @Test func `historical backfill reads zerion key saved by settings`() async throws {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
+        await vm.load()
         vm.zerionAPIKey = "zap-backfill"
         await vm.save()
 
@@ -344,6 +299,7 @@ struct APIKeysViewModelTests {
     @Test func `save persists RPC endpoints`() async throws {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
+        await vm.load()
 
         vm.addRPCEndpoint(chain: .arbitrum, url: "https://arb.example.com")
         await vm.save()
@@ -381,6 +337,7 @@ struct APIKeysViewModelTests {
         let store = MockSecretStore()
 
         let writer = APIKeysViewModel(secretStore: store)
+        await writer.load()
         writer.zerionAPIKey = "zap-rt"
         writer.debankAPIKey = "deb-rt"
         writer.coingeckoAPIKey = "cg-rt"
@@ -446,16 +403,20 @@ struct APIKeysViewModelTests {
     }
 
     @Test func `save surfaces actionable keychain error`() async {
-        let vm = APIKeysViewModel(secretStore: FailingSecretStore())
+        let store = InMemorySecretStore()
+        let vm = APIKeysViewModel(secretStore: store)
+        await vm.load()
+        store.throwOnSet = true
         vm.zerionAPIKey = "some-key"
         let succeeded = await vm.save()
 
         #expect(!succeeded)
-        #expect(vm.secretStoreError == "Unable to save API keys in Keychain: Keychain error: -25308")
+        #expect(vm.secretStoreError == "Unable to save API keys in Keychain. Unlock your Mac and try again.")
     }
 
     @Test func `save reports success only after secrets persist`() async {
         let vm = APIKeysViewModel(secretStore: MockSecretStore())
+        await vm.load()
         vm.zerionAPIKey = "some-key"
 
         let succeeded = await vm.save()
