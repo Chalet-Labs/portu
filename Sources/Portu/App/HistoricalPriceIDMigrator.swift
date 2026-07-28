@@ -3,7 +3,7 @@ import PortuCore
 import SwiftData
 
 enum HistoricalPriceIDMigrator {
-    static let completionDefaultsKey = "migration.historicalPriceIDs.v1.completed"
+    static let completionDefaultsKey = "migration.historicalPriceIDs.v2.completed"
 
     private struct CacheKey: Hashable {
         let coinGeckoID: String
@@ -19,14 +19,19 @@ enum HistoricalPriceIDMigrator {
         fetch: (ModelContext) throws -> [HistoricalPricePoint] = {
             try $0.fetch(FetchDescriptor<HistoricalPricePoint>())
         },
+        fetchAssets: (ModelContext) throws -> [Asset] = {
+            try $0.fetch(FetchDescriptor<Asset>())
+        },
         save: (ModelContext) throws -> Void = { try $0.save() }) throws {
         guard storeIsEphemeral == false else { return }
         guard defaults.bool(forKey: completionDefaultsKey) == false else { return }
 
+        let solanaPriceIDs = try solanaPriceIDLookup(assets: fetchAssets(modelContext))
         let rows = try fetch(modelContext)
         let groupedRows = Dictionary(grouping: rows) { row in
-            CacheKey(
-                coinGeckoID: OnchainTokenIdentity.normalizedHistoricalPriceID(row.coinGeckoId),
+            let normalizedID = OnchainTokenIdentity.normalizedHistoricalPriceID(row.coinGeckoId)
+            return CacheKey(
+                coinGeckoID: solanaPriceIDs[normalizedID.lowercased()] ?? normalizedID,
                 day: row.day,
                 currency: row.fiatCurrency)
         }
@@ -62,5 +67,24 @@ enum HistoricalPriceIDMigrator {
             }
         }
         defaults.set(true, forKey: completionDefaultsKey)
+    }
+
+    private static func solanaPriceIDLookup(assets: [Asset]) -> [String: String] {
+        let groupedIDs = Dictionary(grouping: assets.compactMap { asset -> (String, String)? in
+            guard
+                let identity = OnchainTokenIdentity(
+                    chain: asset.upsertChain,
+                    contractAddress: asset.upsertContract),
+                identity.chain == .solana
+            else {
+                return nil
+            }
+            return (identity.historicalPriceID.lowercased(), identity.historicalPriceID)
+        }, by: \.0)
+
+        return groupedIDs.compactMapValues { candidates in
+            let canonicalIDs = Set(candidates.map(\.1))
+            return canonicalIDs.count == 1 ? canonicalIDs.first : nil
+        }
     }
 }

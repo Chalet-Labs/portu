@@ -222,6 +222,29 @@ struct ModelContainerFactoryTests {
         #expect(survivor.price == 2)
     }
 
+    @Test func `historical price id migration restores Solana mint case from assets`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let defaults = try migrationDefaults()
+        let asset = Asset(
+            symbol: "TOKEN",
+            name: "Token",
+            upsertChain: .solana,
+            upsertContract: "SoLanaMiNtCase")
+        let row = HistoricalPricePoint(
+            coinGeckoId: "zapper:solana:solanamintcase",
+            day: Date(timeIntervalSince1970: 1_700_000_000),
+            price: 2)
+        context.insert(asset)
+        context.insert(row)
+        try context.save()
+
+        try HistoricalPriceIDMigrator.migrate(in: context, defaults: defaults)
+
+        let migrated = try #require(context.fetch(FetchDescriptor<HistoricalPricePoint>()).first)
+        #expect(migrated.coinGeckoId == "asset:solana:SoLanaMiNtCase")
+    }
+
     @Test func `completed historical price id migration skips subsequent cache fetches`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
