@@ -123,6 +123,18 @@ struct ReleaseAutomationTests {
         #expect(!fileExists("scripts/mark_github_release_prerelease.sh"))
     }
 
+    @Test func `local run script uses a stable development signing identity`() throws {
+        let runScript = try string("script/build_and_run.sh")
+        let signingScript = try string("script/ensure_local_signing_identity.sh")
+
+        #expect(runScript.contains("ensure_local_signing_identity.sh"))
+        #expect(runScript.contains("CODE_SIGN_IDENTITY=\"$CODE_SIGN_IDENTITY_NAME\""))
+        #expect(runScript.contains("CODE_SIGN_STYLE=Manual"))
+        #expect(signingScript.contains("security find-identity"))
+        #expect(signingScript.contains("extendedKeyUsage=codeSigning"))
+        #expect(signingScript.contains("-T /usr/bin/codesign"))
+    }
+
     @Test func `app version is supplied by xcode build settings`() throws {
         let infoPlist = try string("Sources/Portu/Resources/Info.plist")
         let project = try string("project.yml")

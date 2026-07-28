@@ -152,6 +152,44 @@ struct SecretStoreTests {
 }
 
 struct KeychainServiceTests {
+    @Test func `keychain selection falls back without data protection entitlements`() {
+        #expect(KeychainService.shouldUseDataProtectionKeychain(
+            applicationIdentifier: nil,
+            accessGroups: nil) == false)
+    }
+
+    @Test func `keychain selection uses data protection with an authorized app identity`() {
+        #expect(KeychainService.shouldUseDataProtectionKeychain(
+            applicationIdentifier: "TEAMID.com.portu.app",
+            accessGroups: nil))
+        #expect(KeychainService.shouldUseDataProtectionKeychain(
+            applicationIdentifier: nil,
+            accessGroups: ["TEAMID.com.portu.app"]))
+    }
+
+    @Test func `set can use file keychain when data protection entitlement is unavailable`() throws {
+        let recorder = KeychainOperationRecorder()
+        let store = KeychainService(
+            service: "com.portu.tests",
+            add: { attributes, _ in
+                recorder.appendAdded(attributes.dictionaryValue)
+                return errSecSuccess
+            },
+            delete: { query in
+                recorder.appendDeleted(query.dictionaryValue)
+                return errSecSuccess
+            },
+            useDataProtectionKeychain: false)
+
+        try store.set(key: .providerAPIKey(.zerion), value: "zerion-token")
+        try store.delete(key: .providerAPIKey(.zerion))
+
+        let addQuery = try #require(recorder.addedQueries.first)
+        let deleteQuery = try #require(recorder.deletedQueries.first)
+        #expect(addQuery.usesDataProtectionKeychain == false)
+        #expect(deleteQuery.usesDataProtectionKeychain == false)
+    }
+
     @Test func `set stores values in data protection keychain with ThisDeviceOnly accessibility`() throws {
         let recorder = KeychainOperationRecorder()
         let store = KeychainService(
