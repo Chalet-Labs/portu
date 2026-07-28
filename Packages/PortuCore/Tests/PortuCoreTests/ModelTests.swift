@@ -324,7 +324,9 @@ struct ModelTests {
         #expect(dto.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
     }
 
-    @Test func `historical price persistence preserves Solana mint case`() {
+    @Test func `historical price persistence preserves Solana mint case`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
         let rawDate = Date(timeIntervalSince1970: 1_704_110_456)
         let identity = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
         let dto = HistoricalPriceDTO(
@@ -336,6 +338,12 @@ struct ModelTests {
         #expect(dto.coinGeckoId == "asset:solana:SoLanaMiNtCase")
         #expect(point.coinGeckoId == "asset:solana:SoLanaMiNtCase")
         #expect(HistoricalPriceDTO(coinGeckoId: " BITCOIN ", timestamp: rawDate, usdPrice: 1).coinGeckoId == "bitcoin")
+
+        context.insert(point)
+        try context.save()
+
+        let fetched = try #require(try context.fetch(FetchDescriptor<HistoricalPricePoint>()).first)
+        #expect(fetched.coinGeckoId == "asset:solana:SoLanaMiNtCase")
     }
 
     @Test func `onchain identity uses canonical asset price id and parses legacy zapper id`() throws {

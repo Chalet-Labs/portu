@@ -76,10 +76,13 @@ final class APIKeysViewModel {
     }
 
     func load() async {
+        guard !isLoading else { return }
         isLoading = true
         canSave = false
-        hasLoaded = false
-        defer { isLoading = false }
+        defer {
+            isLoading = false
+            hasLoaded = true
+        }
         secretStoreError = nil
         do {
             let secrets = try await secretStore.load()
@@ -89,7 +92,6 @@ final class APIKeysViewModel {
             rpcEndpoints = secrets.rpcEndpoints
             persistedRPCEndpointChains = Set(secrets.rpcEndpoints.keys)
             canSave = true
-            hasLoaded = true
         } catch {
             secretStoreError = Self.keychainErrorMessage(action: "access", error: error)
         }

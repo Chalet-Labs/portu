@@ -385,7 +385,7 @@ struct APIKeysViewModelTests {
 
         #expect(vm.secretStoreError == "Unable to access API keys in Keychain: Keychain error: -25308")
         #expect(vm.zerionAPIKey.isEmpty)
-        #expect(!vm.hasLoaded)
+        #expect(vm.hasLoaded)
     }
 
     @Test func `load explains when Keychain interaction is unavailable`() async {
