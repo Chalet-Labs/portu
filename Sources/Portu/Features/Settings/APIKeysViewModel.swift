@@ -132,8 +132,9 @@ final class APIKeysViewModel {
         }
     }
 
-    func save() async {
-        guard canSave else { return }
+    @discardableResult
+    func save() async -> Bool {
+        guard canSave else { return false }
         secretStoreError = nil
         let normalizedRPCEndpoints = rpcEndpoints.reduce(into: [Chain: String]()) { endpoints, entry in
             let trimmed = entry.value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -154,8 +155,10 @@ final class APIKeysViewModel {
                 secrets,
                 deletingRPCEndpoints: removedRPCEndpointChains)
             persistedRPCEndpointChains = currentRPCEndpointChains
+            return true
         } catch {
             secretStoreError = Self.keychainErrorMessage(action: "save", error: error)
+            return false
         }
     }
 

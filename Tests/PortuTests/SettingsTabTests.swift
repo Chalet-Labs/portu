@@ -79,7 +79,7 @@ struct SettingsTabTests {
         #expect(APIKeysSettingsLayout.inputMode(isVisible: true) == .visibleText)
     }
 
-    @Test func `older API key save completion cannot clear a newer pending edit`() {
+    @Test func `older API key save completion cannot clear a newer pending edit`() throws {
         var state = APIKeysPendingSaveState()
         let firstSave = state.schedule()
         let newerSave = state.schedule()
@@ -87,11 +87,26 @@ struct SettingsTabTests {
         state.complete(firstSave)
 
         #expect(state.hasPendingSave)
-        let shouldFlush = state.takePendingForFlush()
-        #expect(shouldFlush)
+        let flushGeneration = state.generationForFlush()
+        #expect(flushGeneration != nil)
 
         state.complete(newerSave)
+        #expect(state.hasPendingSave)
+        try state.complete(#require(flushGeneration))
         #expect(!state.hasPendingSave)
+    }
+
+    @Test func `failed API key save remains pending for retry and flush`() throws {
+        var state = APIKeysPendingSaveState()
+        let failedSave = state.schedule()
+
+        state.complete(failedSave, succeeded: false)
+
+        #expect(state.hasPendingSave)
+        let pendingFlushGeneration = state.generationForFlush()
+        let flushGeneration = try #require(pendingFlushGeneration)
+        state.complete(flushGeneration, succeeded: false)
+        #expect(state.hasPendingSave)
     }
 
     @Test @MainActor
@@ -110,14 +125,14 @@ struct SettingsTabTests {
         #expect(order.values == [1, 2])
     }
 
-    @Test func `API key settings offers retry only after a failed load`() {
+    @Test func `API key settings offers retry after load or save failures`() {
         #expect(APIKeysSettingsRetryPolicy.shouldShow(
             errorMessage: "Keychain unavailable",
             canSave: false))
         #expect(!APIKeysSettingsRetryPolicy.shouldShow(
             errorMessage: nil,
             canSave: false))
-        #expect(!APIKeysSettingsRetryPolicy.shouldShow(
+        #expect(APIKeysSettingsRetryPolicy.shouldShow(
             errorMessage: "stale",
             canSave: true))
         #expect(APIKeysSettingsRetryPolicy.isEnabled(isLoading: false))

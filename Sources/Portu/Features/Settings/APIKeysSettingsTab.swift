@@ -65,22 +65,21 @@ struct APIKeysPendingSaveState {
         return generation
     }
 
-    mutating func complete(_ completedGeneration: Int) {
-        guard completedGeneration == generation else { return }
+    mutating func complete(_ completedGeneration: Int, succeeded: Bool = true) {
+        guard succeeded, completedGeneration == generation else { return }
         hasPendingSave = false
     }
 
-    mutating func takePendingForFlush() -> Bool {
-        guard hasPendingSave else { return false }
+    mutating func generationForFlush() -> Int? {
+        guard hasPendingSave else { return nil }
         generation += 1
-        hasPendingSave = false
-        return true
+        return generation
     }
 }
 
 enum APIKeysSettingsRetryPolicy {
-    static func shouldShow(errorMessage: String?, canSave: Bool) -> Bool {
-        errorMessage != nil && !canSave
+    static func shouldShow(errorMessage: String?, canSave _: Bool) -> Bool {
+        errorMessage != nil
     }
 
     static func isEnabled(isLoading: Bool) -> Bool {
@@ -169,7 +168,11 @@ struct APIKeysSettingsTab: View {
                                 errorMessage: secretStoreError,
                                 canSave: viewModel.canSave) {
                             Button("Retry Keychain Access") {
-                                Task { await viewModel.load() }
+                                if viewModel.canSave {
+                                    flushPendingSave()
+                                } else {
+                                    Task { await viewModel.load() }
+                                }
                             }
                             .buttonStyle(.plain)
                             .settingsPrimaryButton(isDisabled: !APIKeysSettingsRetryPolicy.isEnabled(
@@ -399,8 +402,8 @@ struct APIKeysSettingsTab: View {
         saveTask = APIKeysSaveTaskCoordinator.makeTask(
             after: previousTask,
             delay: .seconds(1)) {
-                await viewModel.save()
-                pendingSaveState.complete(generation)
+                let succeeded = await viewModel.save()
+                pendingSaveState.complete(generation, succeeded: succeeded)
             }
     }
 
@@ -410,10 +413,11 @@ struct APIKeysSettingsTab: View {
         guard
             !viewModel.isLoading,
             viewModel.canSave,
-            pendingSaveState.takePendingForFlush()
+            let generation = pendingSaveState.generationForFlush()
         else { return }
         saveTask = APIKeysSaveTaskCoordinator.makeTask(after: previousTask, delay: nil) {
-            await viewModel.save()
+            let succeeded = await viewModel.save()
+            pendingSaveState.complete(generation, succeeded: succeeded)
         }
     }
 }

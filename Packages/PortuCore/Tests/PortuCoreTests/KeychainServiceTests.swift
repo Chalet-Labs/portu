@@ -115,6 +115,19 @@ struct SecretStoreTests {
         #expect(try destination.get(key: key) == nil)
     }
 
+    @Test func `secret migration removes conflicting plaintext and keeps secure value`() throws {
+        let source = MigrationTestSecretStore()
+        let destination = MigrationTestSecretStore()
+        let key = KeychainKey.serviceAPIKey("coingecko")
+        try source.set(key: key, value: "obsolete-plaintext")
+        try destination.set(key: key, value: "authoritative-secure")
+
+        try SecretStoreMigration.migrate(keys: [key], from: source, to: destination)
+
+        #expect(try source.get(key: key) == nil)
+        #expect(try destination.get(key: key) == "authoritative-secure")
+    }
+
     @Test func `secret migration continues with later keys after one key fails`() throws {
         let source = MigrationTestSecretStore()
         let destination = MigrationTestSecretStore()

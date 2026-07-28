@@ -29,12 +29,9 @@ public enum SecretStoreMigration {
             return
         }
 
-        if let destinationValue = try destination.get(key: key) {
-            guard destinationValue == sourceValue else {
-                // Preserve both values rather than overwriting a newer secure
-                // credential or deleting the only recoverable plaintext copy.
-                return
-            }
+        if try destination.get(key: key) != nil {
+            // A readable secure value is authoritative, including when it is
+            // newer than the legacy plaintext value.
             try source.delete(key: key)
             return
         }

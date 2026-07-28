@@ -448,9 +448,20 @@ struct APIKeysViewModelTests {
     @Test func `save surfaces actionable keychain error`() async {
         let vm = APIKeysViewModel(secretStore: FailingSecretStore())
         vm.zerionAPIKey = "some-key"
-        await vm.save()
+        let succeeded = await vm.save()
 
+        #expect(!succeeded)
         #expect(vm.secretStoreError == "Unable to save API keys in Keychain: Keychain error: -25308")
+    }
+
+    @Test func `save reports success only after secrets persist`() async {
+        let vm = APIKeysViewModel(secretStore: MockSecretStore())
+        vm.zerionAPIKey = "some-key"
+
+        let succeeded = await vm.save()
+
+        #expect(succeeded)
+        #expect(vm.secretStoreError == nil)
     }
 
     @Test func `save rolls back earlier keychain mutations when a later write fails`() async throws {
