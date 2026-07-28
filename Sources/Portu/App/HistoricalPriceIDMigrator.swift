@@ -3,6 +3,8 @@ import PortuCore
 import SwiftData
 
 enum HistoricalPriceIDMigrator {
+    static let completionDefaultsKey = "migration.historicalPriceIDs.v1.completed"
+
     private struct CacheKey: Hashable {
         let coinGeckoID: String
         let day: Date
@@ -12,8 +14,14 @@ enum HistoricalPriceIDMigrator {
     @MainActor
     static func migrate(
         in modelContext: ModelContext,
+        defaults: UserDefaults = .standard,
+        fetch: (ModelContext) throws -> [HistoricalPricePoint] = {
+            try $0.fetch(FetchDescriptor<HistoricalPricePoint>())
+        },
         save: (ModelContext) throws -> Void = { try $0.save() }) throws {
-        let rows = try modelContext.fetch(FetchDescriptor<HistoricalPricePoint>())
+        guard defaults.bool(forKey: completionDefaultsKey) == false else { return }
+
+        let rows = try fetch(modelContext)
         let groupedRows = Dictionary(grouping: rows) { row in
             CacheKey(
                 coinGeckoID: OnchainTokenIdentity.normalizedHistoricalPriceID(row.coinGeckoId),
@@ -23,7 +31,10 @@ enum HistoricalPriceIDMigrator {
         var hasChanges = false
 
         for (key, candidates) in groupedRows {
-            guard candidates.contains(where: { $0.coinGeckoId != key.coinGeckoID }) else {
+            guard
+                candidates.count > 1
+                || candidates.contains(where: { $0.coinGeckoId != key.coinGeckoID })
+            else {
                 continue
             }
             let sortedCandidates = candidates.sorted { lhs, rhs in
@@ -40,12 +51,14 @@ enum HistoricalPriceIDMigrator {
             hasChanges = true
         }
 
-        guard hasChanges else { return }
-        do {
-            try save(modelContext)
-        } catch {
-            modelContext.rollback()
-            throw error
+        if hasChanges {
+            do {
+                try save(modelContext)
+            } catch {
+                modelContext.rollback()
+                throw error
+            }
         }
+        defaults.set(true, forKey: completionDefaultsKey)
     }
 }

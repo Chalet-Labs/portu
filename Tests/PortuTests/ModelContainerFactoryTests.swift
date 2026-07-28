@@ -164,6 +164,7 @@ struct ModelContainerFactoryTests {
     @Test func `historical price id migration canonicalizes legacy rows and deduplicates`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
+        let defaults = try migrationDefaults()
         let day = Date(timeIntervalSince1970: 1_700_000_000)
         let canonicalID = "asset:base:0xabc"
         let olderCanonical = HistoricalPricePoint(
@@ -181,8 +182,8 @@ struct ModelContainerFactoryTests {
         context.insert(newerLegacy)
         try context.save()
 
-        try HistoricalPriceIDMigrator.migrate(in: context)
-        try HistoricalPriceIDMigrator.migrate(in: context)
+        try HistoricalPriceIDMigrator.migrate(in: context, defaults: defaults)
+        try HistoricalPriceIDMigrator.migrate(in: context, defaults: defaults)
 
         let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
         let survivor = try #require(rows.first)
@@ -192,9 +193,63 @@ struct ModelContainerFactoryTests {
         #expect(survivor.price == 2)
     }
 
+    @Test func `historical price id migration deduplicates already canonical rows`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let defaults = try migrationDefaults()
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+        let canonicalID = "asset:base:0xabc"
+        let older = HistoricalPricePoint(
+            coinGeckoId: canonicalID,
+            day: day,
+            price: 1,
+            fetchedAt: day)
+        let newer = HistoricalPricePoint(
+            coinGeckoId: canonicalID,
+            day: day,
+            price: 2,
+            fetchedAt: day.addingTimeInterval(60))
+        context.insert(older)
+        context.insert(newer)
+        try context.save()
+
+        try HistoricalPriceIDMigrator.migrate(in: context, defaults: defaults)
+
+        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+        let survivor = try #require(rows.first)
+        #expect(rows.count == 1)
+        #expect(survivor.id == newer.id)
+        #expect(survivor.price == 2)
+    }
+
+    @Test func `completed historical price id migration skips subsequent cache fetches`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let defaults = try migrationDefaults()
+        var fetchCount = 0
+
+        try HistoricalPriceIDMigrator.migrate(
+            in: context,
+            defaults: defaults,
+            fetch: { _ in
+                fetchCount += 1
+                return []
+            })
+        try HistoricalPriceIDMigrator.migrate(
+            in: context,
+            defaults: defaults,
+            fetch: { _ in
+                fetchCount += 1
+                return []
+            })
+
+        #expect(fetchCount == 1)
+    }
+
     @Test func `historical price id migration rolls back when saving fails`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
+        let defaults = try migrationDefaults()
         let row = HistoricalPricePoint(
             coinGeckoId: "asset:base:0xabc",
             day: .now,
@@ -204,13 +259,14 @@ struct ModelContainerFactoryTests {
         try context.save()
 
         #expect(throws: MigrationSaveError.forced) {
-            try HistoricalPriceIDMigrator.migrate(in: context) { _ in
+            try HistoricalPriceIDMigrator.migrate(in: context, defaults: defaults) { _ in
                 throw MigrationSaveError.forced
             }
         }
 
         let persisted = try #require(context.fetch(FetchDescriptor<HistoricalPricePoint>()).first)
         #expect(persisted.coinGeckoId == "zapper:base:0xabc")
+        #expect(defaults.bool(forKey: HistoricalPriceIDMigrator.completionDefaultsKey) == false)
     }
 
     @Test func `zapper wallet with unsupported cached holdings remains read only`() throws {
@@ -264,6 +320,13 @@ struct ModelContainerFactoryTests {
             let target = URL(fileURLWithPath: destination.path(percentEncoded: false) + suffix)
             try fileManager.copyItem(at: source, to: target)
         }
+    }
+
+    private func migrationDefaults() throws -> UserDefaults {
+        let suiteName = "HistoricalPriceIDMigratorTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
     }
 }
 
