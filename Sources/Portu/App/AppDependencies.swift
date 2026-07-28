@@ -77,7 +77,7 @@ struct PriceServiceClient {
     var fetchHistoricalUSDConversionRates: @Sendable (FiatCurrency, Int) async throws -> [CurrencyConversionRate]
     var resolveCoinGeckoIDs: @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String]
     var fetchOnchainHistoricalPrices: @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO]
-    var canFetchOnchainHistoricalPrices: @Sendable () throws -> Bool
+    var canFetchOnchainHistoricalPrices: @Sendable () async throws -> Bool
     var invalidateCache: @Sendable () async -> Void
 
     var fetchCoinGeckoPrices: @Sendable (PricePollingRequest, FiatCurrency, Decimal) async throws -> PriceUpdate {
@@ -128,7 +128,7 @@ struct PriceServiceClient {
         fetchHistoricalUSDConversionRates: @escaping @Sendable (FiatCurrency, Int) async throws -> [CurrencyConversionRate] = { _, _ in [] },
         resolveCoinGeckoIDs: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String] = { _ in [:] },
         fetchOnchainHistoricalPrices: @escaping @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO] = { _, _ in [] },
-        canFetchOnchainHistoricalPrices: @escaping @Sendable () throws -> Bool = { true },
+        canFetchOnchainHistoricalPrices: @escaping @Sendable () async throws -> Bool = { true },
         invalidateCache: @escaping @Sendable () async -> Void) {
         self.fetchPrices = fetchPrices
         self.fetchCoinGeckoPricesOverride = fetchCoinGeckoPrices

@@ -8,6 +8,20 @@ import SwiftData
 import SwiftUI
 import Synchronization
 
+actor APIKeyAvailabilityReader {
+    private let secretStore: any SecretStore
+
+    init(secretStore: any SecretStore) {
+        self.secretStore = secretStore
+    }
+
+    func hasAPIKey(_ key: KeychainKey) throws -> Bool {
+        let value = try secretStore.get(key: key)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value?.isEmpty == false
+    }
+}
+
 @main
 struct PortuApp: App {
     let store: StoreOf<AppFeature>
@@ -155,14 +169,15 @@ struct PortuApp: App {
         priceService: PriceService,
         secretStore: any SecretStore,
         zerionProvider: ZerionProvider) -> PriceServiceClient {
-        PriceServiceClient(
+        let apiKeyAvailability = APIKeyAvailabilityReader(secretStore: secretStore)
+        return PriceServiceClient(
             fetchPrices: { coinIds in
                 try await LivePriceUpdateBuilder.fetchPrices(
                     coinIds: coinIds,
                     priceService: priceService) { identities in
                         guard
                             !identities.isEmpty,
-                            zerionAPIKeyIfAvailable(from: secretStore) != nil
+                            try await apiKeyAvailability.hasAPIKey(.providerAPIKey(.zerion))
                         else {
                             return PricePollingIDResolver.emptyUpdate
                         }
@@ -180,7 +195,7 @@ struct PortuApp: App {
             fetchOnchainFallbackPrices: { identities, currency, usdToDisplayRate in
                 guard
                     !identities.isEmpty,
-                    zerionAPIKeyIfAvailable(from: secretStore) != nil
+                    try await apiKeyAvailability.hasAPIKey(.providerAPIKey(.zerion))
                 else {
                     return PricePollingIDResolver.emptyUpdate(currency: currency)
                 }
@@ -207,12 +222,14 @@ struct PortuApp: App {
                 try await priceService.resolveCoinGeckoIDs(for: identities)
             },
             fetchOnchainHistoricalPrices: { identity, days in
-                guard try zerionAPIKey(from: secretStore) != nil else {
+                guard try await apiKeyAvailability.hasAPIKey(.providerAPIKey(.zerion)) else {
                     throw PriceServiceClient.ClientError.onchainProviderUnavailable
                 }
                 return try await zerionProvider.fetchHistoricalPrices(identity: identity, days: days)
             },
-            canFetchOnchainHistoricalPrices: { try zerionAPIKey(from: secretStore) != nil },
+            canFetchOnchainHistoricalPrices: {
+                try await apiKeyAvailability.hasAPIKey(.providerAPIKey(.zerion))
+            },
             invalidateCache: { await priceService.invalidateCache() })
     }
 

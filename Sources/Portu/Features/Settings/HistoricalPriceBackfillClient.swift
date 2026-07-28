@@ -190,7 +190,7 @@ private struct BackfillRunner {
         var result = HistoricalBackfillFetchResult()
         let canFetchOnchainHistoricalPrices: Bool
         do {
-            canFetchOnchainHistoricalPrices = try priceService.canFetchOnchainHistoricalPrices()
+            canFetchOnchainHistoricalPrices = try await priceService.canFetchOnchainHistoricalPrices()
         } catch {
             canFetchOnchainHistoricalPrices = false
             backfillLogger.warning(

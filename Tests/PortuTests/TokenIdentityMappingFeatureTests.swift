@@ -78,7 +78,7 @@ struct TokenIdentityMappingFeatureTests {
         #expect(TokenIdentityMappingFeature.knownContractCoinGeckoID(for: identity) == nil)
     }
 
-    @Test func `non-provider price id rejects asset prefixed historical price ids`() {
+    @Test func `non-onchain price id rejects asset prefixed historical price ids`() {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
         #expect(TokenIdentityMappingFeature.nonOnchainPriceID(identity.historicalPriceID) == nil)
         #expect(TokenIdentityMappingFeature.nonOnchainPriceID("bitcoin") == "bitcoin")

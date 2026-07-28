@@ -133,6 +133,18 @@ struct APIKeysViewModelTests {
         #expect(store.mainThreadFlags.allSatisfy { $0 == false })
     }
 
+    @Test func `API key availability reads run off the main actor`() async throws {
+        let store = ThreadRecordingSecretStore(storage: [
+            KeychainKey.providerAPIKey(.zerion).rawKey: "zerion-key"
+        ])
+        let reader = APIKeyAvailabilityReader(secretStore: store)
+
+        let isAvailable = try await reader.hasAPIKey(.providerAPIKey(.zerion))
+
+        #expect(isAvailable)
+        #expect(store.mainThreadFlags == [false])
+    }
+
     @Test func `saving an API key does not delete RPC keys that were already absent`() async {
         let store = ThreadRecordingSecretStore()
         let viewModel = APIKeysViewModel(secretStore: store)
