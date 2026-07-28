@@ -5,6 +5,9 @@ import PortuNetwork
 import SwiftData
 import Testing
 
+// The sync regression suite intentionally keeps its shared SwiftData helpers together.
+// swiftlint:disable file_length type_body_length
+
 @MainActor
 struct SyncEngineTests {
     /// Use a fresh ModelContainer per test — reusing container.mainContext across
@@ -59,6 +62,131 @@ struct SyncEngineTests {
         #expect(result.failedAccounts.isEmpty)
     }
 
+    @Test func `sync uses provider combined position fetch`() async throws {
+        let context = try makeModelContext()
+        let token = makeTokenDTO(
+            symbol: "ETH",
+            name: "Ethereum",
+            amount: 1,
+            usdValue: 2000,
+            chain: .ethereum,
+            contractAddress: OnchainTokenIdentity.nativeAssetSentinel,
+            sourceKey: "asset:ethereum:0x0000000000000000000000000000000000000000")
+        let provider = CombinedOnlyProvider(positions: [PositionDTO(
+            positionType: .idle,
+            chain: .ethereum,
+            protocolId: nil,
+            protocolName: nil,
+            protocolLogoURL: nil,
+            healthFactor: nil,
+            tokens: [token])])
+        let engine = SyncEngine(
+            modelContext: context,
+            providerFactory: ProviderFactory(resolver: { _, _ in provider }))
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
+        context.insert(account)
+        try context.save()
+
+        let result = try await engine.sync()
+
+        #expect(result.failedAccounts.isEmpty)
+        #expect(account.positions.count == 1)
+        #expect(await provider.fetchPositionsCalled)
+    }
+
+    @Test func `provider factory defers Zerion key reads off the main actor`() async throws {
+        let secretStore = ThreadRecordingSyncSecretStore()
+        try secretStore.set(key: .providerAPIKey(.zapper), value: "legacy-only")
+        let factory = ProviderFactory(secretStore: secretStore)
+        let context = SyncContext(
+            accountId: UUID(),
+            kind: .wallet,
+            addresses: [("0xabc", .ethereum)],
+            exchangeType: nil)
+
+        let provider = try factory.makeProvider(for: .zerion, context: context)
+        #expect(secretStore.getMainThreadFlags.isEmpty)
+
+        await #expect(throws: ZerionError.missingAPIKey) {
+            _ = try await provider.fetchPositions(context: context)
+        }
+        #expect(!secretStore.getMainThreadFlags.isEmpty)
+        #expect(secretStore.getMainThreadFlags.allSatisfy { !$0 })
+    }
+
+    @Test func `provider factory preserves surviving legacy Zapper accounts as read only`() throws {
+        let secretStore = MockSecretStore()
+        try secretStore.set(key: .providerAPIKey(.zerion), value: "zerion-key")
+        let factory = ProviderFactory(secretStore: secretStore)
+        let context = SyncContext(
+            accountId: UUID(),
+            kind: .wallet,
+            addresses: [("0xabc", nil)],
+            exchangeType: nil)
+
+        #expect(throws: SyncError.unsupportedLegacyAccount) {
+            _ = try factory.makeProvider(for: .zapper, context: context)
+        }
+    }
+
+    @Test func `legacy Zapper sync error describes read only account state`() {
+        #expect(
+            SyncError.unsupportedLegacyAccount.errorDescription ==
+                "Legacy Zapper accounts are read-only and cannot be synced; cached positions were preserved")
+    }
+
+    @Test func `global sync excludes retained legacy Zapper accounts`() async throws {
+        let context = try makeModelContext()
+        let provider = StubProvider(balances: [])
+        let factory = ProviderFactory(resolver: { dataSource, _ in
+            guard dataSource == .zerion else {
+                throw SyncTestError.unexpectedLegacySync
+            }
+            return provider
+        })
+        let engine = SyncEngine(modelContext: context, providerFactory: factory)
+        let wallet = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
+        let legacy = Account(name: "Legacy", kind: .wallet, dataSource: .zapper)
+        context.insert(wallet)
+        context.insert(legacy)
+        try context.save()
+
+        let result = try await engine.sync()
+
+        #expect(result.failedAccounts.isEmpty)
+        #expect(wallet.lastSyncedAt != nil)
+        #expect(legacy.lastSyncedAt == nil)
+        #expect(legacy.lastSyncError == nil)
+    }
+
+    @Test func `unsupported legacy Bitcoin wallet preserves its last known positions`() async throws {
+        let context = try makeModelContext()
+        let secretStore = MockSecretStore()
+        try secretStore.set(key: .providerAPIKey(.zerion), value: "test-key")
+        let provider = ZerionProvider(client: ZerionAPIClient(apiKey: { "test-key" }))
+        let engine = SyncEngine(
+            modelContext: context,
+            providerFactory: ProviderFactory(secretStore: secretStore, zerionProvider: provider))
+        let asset = Asset(symbol: "BTC", name: "Bitcoin")
+        let token = PositionToken(role: .balance, amount: 1, usdValue: 100_000, asset: asset)
+        let oldPosition = Position(positionType: .idle, chain: .bitcoin, netUSDValue: 100_000, tokens: [token])
+        let account = Account(
+            name: "Legacy Bitcoin",
+            kind: .wallet,
+            dataSource: .zerion,
+            positions: [oldPosition])
+        account.addresses = [WalletAddress(chain: .bitcoin, address: "fixture-bitcoin", account: account)]
+        context.insert(account)
+        try context.save()
+
+        await #expect(throws: SyncError.allAccountsFailed) {
+            _ = try await engine.sync()
+        }
+
+        #expect(account.positions.map(\.id) == [oldPosition.id])
+        #expect(account.lastSyncError?.contains("bitcoin") == true)
+    }
+
     // MARK: - Error Persistence
 
     /// Regression test for: lastSyncError is set in memory but never saved before
@@ -66,8 +194,9 @@ struct SyncEngineTests {
     @Test func `lastSyncError persisted when all syncable accounts fail`() async throws {
         let (context, engine) = try makeTestContext()
 
-        // Zapper account with no API key in MockSecretStore → resolveProvider throws missingAPIKey
-        let account = Account(name: "My Wallet", kind: .wallet, dataSource: .zapper)
+        // Zerion account with no API key reaches the provider, which fails before networking.
+        let account = Account(name: "My Wallet", kind: .wallet, dataSource: .zerion)
+        account.addresses = [WalletAddress(chain: .ethereum, address: "0xabc", account: account)]
         context.insert(account)
         try context.save()
 
@@ -217,7 +346,7 @@ struct SyncEngineTests {
         context.insert(oldAsset)
         let oldToken = PositionToken(role: .balance, amount: 50, usdValue: 1000, asset: oldAsset)
         let oldPosition = Position(positionType: .idle, netUSDValue: 1000, tokens: [oldToken])
-        let account = Account(name: "Test Wallet", kind: .wallet, dataSource: .zapper, positions: [oldPosition])
+        let account = Account(name: "Test Wallet", kind: .wallet, dataSource: .zerion, positions: [oldPosition])
         context.insert(account)
         try context.save()
 
@@ -260,7 +389,7 @@ struct SyncEngineTests {
         context.insert(oldAsset)
         let oldToken = PositionToken(role: .balance, amount: 50, usdValue: 1000, asset: oldAsset)
         let oldPosition = Position(positionType: .idle, netUSDValue: 1000, tokens: [oldToken])
-        let account = Account(name: "Test Wallet", kind: .wallet, dataSource: .zapper, positions: [oldPosition])
+        let account = Account(name: "Test Wallet", kind: .wallet, dataSource: .zerion, positions: [oldPosition])
         context.insert(account)
         try context.save()
 
@@ -303,7 +432,7 @@ struct SyncEngineTests {
         context.insert(oldAsset)
         let oldToken = PositionToken(role: .balance, amount: 50, usdValue: 1000, asset: oldAsset)
         let oldPosition = Position(positionType: .idle, netUSDValue: 1000, tokens: [oldToken])
-        let account = Account(name: "Test Wallet", kind: .wallet, dataSource: .zapper, positions: [oldPosition])
+        let account = Account(name: "Test Wallet", kind: .wallet, dataSource: .zerion, positions: [oldPosition])
         context.insert(account)
         try context.save()
 
@@ -353,8 +482,8 @@ struct SyncEngineTests {
         let account = Account(
             name: "Large Wallet",
             kind: .wallet,
-            dataSource: .zapper,
-            lastSyncError: "Zapper GraphQL error: Payment required")
+            dataSource: .zerion,
+            lastSyncError: "Zerion API error: Payment required")
         context.insert(account)
         try context.save()
 
@@ -473,10 +602,35 @@ private final class MockSecretStore: SecretStore, @unchecked Sendable {
     }
 }
 
+private final class ThreadRecordingSyncSecretStore: SecretStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var store: [String: String] = [:]
+    private var getMainThreadFlagsStorage: [Bool] = []
+
+    var getMainThreadFlags: [Bool] {
+        lock.withLock { getMainThreadFlagsStorage }
+    }
+
+    func get(key: KeychainKey) throws(KeychainError) -> String? {
+        lock.withLock {
+            getMainThreadFlagsStorage.append(Thread.isMainThread)
+            return store[key.rawKey]
+        }
+    }
+
+    func set(key: KeychainKey, value: String) throws(KeychainError) {
+        lock.withLock { store[key.rawKey] = value }
+    }
+
+    func delete(key: KeychainKey) throws(KeychainError) {
+        _ = lock.withLock { store.removeValue(forKey: key.rawKey) }
+    }
+}
+
 // MARK: - StubProvider
 
 /// Actor type to match the `PortfolioDataProvider` actor pattern used by real
-/// providers (ZapperProvider, ExchangeProvider) per the project guidelines.
+/// providers (ZerionProvider, ExchangeProvider) per the project guidelines.
 private actor StubProvider: PortfolioDataProvider {
     nonisolated var capabilities: ProviderCapabilities {
         ProviderCapabilities()
@@ -495,4 +649,30 @@ private actor StubProvider: PortfolioDataProvider {
 
 private enum SyncTestError: Error {
     case forcedUpsertFailure
+    case unexpectedLegacySync
 }
+
+private actor CombinedOnlyProvider: PortfolioDataProvider {
+    nonisolated var capabilities: ProviderCapabilities {
+        ProviderCapabilities(supportsTokenBalances: true, supportsDeFiPositions: true)
+    }
+
+    let positions: [PositionDTO]
+    var fetchPositionsCalled = false
+
+    init(positions: [PositionDTO]) {
+        self.positions = positions
+    }
+
+    func fetchPositions(context _: SyncContext) async throws -> [PositionDTO] {
+        fetchPositionsCalled = true
+        return positions
+    }
+
+    func fetchBalances(context _: SyncContext) async throws -> [PositionDTO] {
+        Issue.record("SyncEngine should use the combined provider operation")
+        return []
+    }
+}
+
+// swiftlint:enable file_length type_body_length

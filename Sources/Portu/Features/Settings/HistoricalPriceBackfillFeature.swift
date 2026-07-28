@@ -21,7 +21,7 @@ struct HistoricalBackfillCandidate: Equatable, Identifiable {
 
 enum HistoricalBackfillPriceSource: Equatable {
     case coingecko(String)
-    case zapper(OnchainTokenIdentity)
+    case zerion(OnchainTokenIdentity)
 }
 
 struct HistoricalBackfillSnapshotEntry: Equatable {
@@ -77,12 +77,12 @@ struct HistoricalBackfillError: LocalizedError, Equatable {
     /// guidance (configure key vs retry vs unlock keychain) instead of just an
     /// opaque message.
     enum Kind: Equatable {
-        /// CoinGecko/Zapper returned 429 and the runner exhausted its retry.
+        /// CoinGecko/Zerion returned 429 and the runner exhausted its retry.
         case rateLimited
         /// Provider rejected our credentials (or none were configured).
         case unauthorized(provider: String)
         /// Backfill couldn't be started because nothing was fetchable — for example
-        /// every candidate is onchain but no Zapper key is configured.
+        /// every candidate is onchain but no Zerion key is configured.
         case preflightUnavailable
         /// Uncategorized failure; the message is the only signal.
         case other
@@ -360,7 +360,7 @@ enum HistoricalBackfillCandidateResolver {
             grouped[
                 HistoricalBackfillCandidateKey(
                     historicalPriceID: onchainIdentity.historicalPriceID,
-                    source: .zapper(onchainIdentity)),
+                    source: .zerion(onchainIdentity)),
                 default: []
             ].insert(asset.assetId)
         }
@@ -438,7 +438,7 @@ private struct HistoricalBackfillCandidateKey: Hashable {
     let source: HistoricalBackfillPriceSource
 
     init(historicalPriceID: String, source: HistoricalBackfillPriceSource) {
-        self.historicalPriceID = historicalPriceID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.historicalPriceID = OnchainTokenIdentity.normalizedHistoricalPriceID(historicalPriceID)
         self.source = source
     }
 }
@@ -449,8 +449,8 @@ extension HistoricalBackfillPriceSource: Hashable {
         case let .coingecko(id):
             hasher.combine("coingecko")
             hasher.combine(id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
-        case let .zapper(identity):
-            hasher.combine("zapper")
+        case let .zerion(identity):
+            hasher.combine("zerion")
             hasher.combine(identity)
         }
     }
@@ -548,7 +548,7 @@ private struct HistoricalPriceCacheKey: Hashable {
     let currency: FiatCurrency
 
     init(coinGeckoId: String, day: Date, currency: FiatCurrency) {
-        self.coinGeckoId = coinGeckoId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.coinGeckoId = OnchainTokenIdentity.normalizedHistoricalPriceID(coinGeckoId)
         self.day = HistoricalPriceCalendar.utcStartOfDay(for: day)
         self.currency = currency
     }

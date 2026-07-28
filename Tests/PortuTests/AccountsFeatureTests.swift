@@ -86,7 +86,7 @@ struct AccountRowMappingTests {
     @Test func `maps wallet account with full address`() {
         let input = AccountInput(
             id: UUID(), name: "My Wallet", kind: .wallet,
-            exchangeType: nil, dataSource: .zapper, group: "DeFi", isActive: true,
+            exchangeType: nil, dataSource: .zerion, group: "DeFi", isActive: true,
             lastSyncError: nil, totalBalance: 50000,
             firstAddress: "0x1234567890abcdef1234567890abcdef12345678")
 
@@ -133,7 +133,7 @@ struct AccountRowMappingTests {
     @Test func `maps missing wallet address as em dash`() {
         let input = AccountInput(
             id: UUID(), name: "Addressless Wallet", kind: .wallet,
-            exchangeType: nil, dataSource: .zapper, group: nil, isActive: true,
+            exchangeType: nil, dataSource: .zerion, group: nil, isActive: true,
             lastSyncError: nil, totalBalance: 0,
             firstAddress: nil)
 
@@ -159,7 +159,7 @@ struct AccountRowMappingTests {
     @Test func `inactive syncable source is not row syncable`() {
         let input = AccountInput(
             id: UUID(), name: "Inactive", kind: .wallet,
-            exchangeType: nil, dataSource: .zapper, group: nil, isActive: false,
+            exchangeType: nil, dataSource: .zerion, group: nil, isActive: false,
             lastSyncError: nil, totalBalance: 0,
             firstAddress: "0x123")
 
@@ -171,7 +171,7 @@ struct AccountRowMappingTests {
     @Test func `short address not truncated`() {
         let input = AccountInput(
             id: UUID(), name: "Short", kind: .wallet,
-            exchangeType: nil, dataSource: .zapper, group: nil, isActive: true,
+            exchangeType: nil, dataSource: .zerion, group: nil, isActive: true,
             lastSyncError: nil, totalBalance: 0,
             firstAddress: "abc123")
 
@@ -199,7 +199,7 @@ struct AccountRowFilteringTests {
     private let activeRow = AccountRowData(
         id: UUID(), name: "Active Wallet", group: "DeFi",
         address: "0x123", type: "Wallet", balance: 5000,
-        dataSource: .zapper, isActive: true, lastSyncError: nil)
+        dataSource: .zerion, isActive: true, lastSyncError: nil)
     private let inactiveRow = AccountRowData(
         id: UUID(), name: "Old Exchange", group: "CEX",
         address: "Kraken", type: "Exchange", balance: 0,
@@ -252,7 +252,7 @@ struct AccountRowFilteringTests {
         let defiRow = AccountRowData(
             id: UUID(), name: "DeFi Wallet 2", group: "DeFi",
             address: "0x456", type: "Wallet", balance: 3000,
-            dataSource: .zapper, isActive: true, lastSyncError: nil)
+            dataSource: .zerion, isActive: true, lastSyncError: nil)
 
         let filtered = AccountsFeature.filterAccountRows(
             [activeRow, inactiveRow, defiRow],
@@ -272,7 +272,7 @@ struct AccountGroupExtractionTests {
                 name: "A",
                 kind: .wallet,
                 exchangeType: nil,
-                dataSource: .zapper,
+                dataSource: .zerion,
                 group: "DeFi",
                 isActive: true,
                 lastSyncError: nil,
@@ -294,7 +294,7 @@ struct AccountGroupExtractionTests {
                 name: "C",
                 kind: .wallet,
                 exchangeType: nil,
-                dataSource: .zapper,
+                dataSource: .zerion,
                 group: "DeFi",
                 isActive: true,
                 lastSyncError: nil,
@@ -399,23 +399,26 @@ struct AccountFormValidationTests {
 
 struct AccountSyncEligibilityTests {
     @Test func `active non-manual accounts are syncable`() {
-        #expect(AccountSyncEligibility.isSyncable(isActive: true, dataSource: .zapper))
+        #expect(AccountSyncEligibility.isSyncable(isActive: true, dataSource: .zerion))
         #expect(AccountSyncEligibility.isSyncable(isActive: true, dataSource: .exchange))
     }
 
     @Test func `inactive or manual accounts are not syncable`() {
-        #expect(AccountSyncEligibility.isSyncable(isActive: false, dataSource: .zapper) == false)
+        #expect(AccountSyncEligibility.isSyncable(isActive: false, dataSource: .zerion) == false)
         #expect(AccountSyncEligibility.isSyncable(isActive: false, dataSource: .exchange) == false)
         #expect(AccountSyncEligibility.isSyncable(isActive: true, dataSource: .manual) == false)
+        #expect(AccountSyncEligibility.isSyncable(isActive: true, dataSource: .zapper) == false)
     }
 
     @MainActor
     @Test func `account isSyncable mirrors the shared rule`() {
-        let syncable = Account(name: "W", kind: .wallet, dataSource: .zapper)
+        let syncable = Account(name: "W", kind: .wallet, dataSource: .zerion)
         let manual = Account(name: "M", kind: .manual, dataSource: .manual)
-        let inactive = Account(name: "I", kind: .wallet, dataSource: .zapper, isActive: false)
+        let legacy = Account(name: "L", kind: .wallet, dataSource: .zapper)
+        let inactive = Account(name: "I", kind: .wallet, dataSource: .zerion, isActive: false)
         #expect(syncable.isSyncable)
         #expect(manual.isSyncable == false)
+        #expect(legacy.isSyncable == false)
         #expect(inactive.isSyncable == false)
     }
 }
@@ -426,7 +429,7 @@ struct AccountRowActionPolicyTests {
     @Test func `sync help prioritizes the selected syncing row`() {
         #expect(AccountRowActionPolicy.syncHelp(
             isActive: true,
-            dataSource: .zapper,
+            dataSource: .zerion,
             isSyncingThisAccount: true,
             globalSyncIsRunning: true) == "Syncing this account...")
     }
@@ -434,7 +437,7 @@ struct AccountRowActionPolicyTests {
     @Test func `sync help reports another sync for different row`() {
         #expect(AccountRowActionPolicy.syncHelp(
             isActive: true,
-            dataSource: .zapper,
+            dataSource: .zerion,
             isSyncingThisAccount: false,
             globalSyncIsRunning: true) == "Another sync is already running.")
     }

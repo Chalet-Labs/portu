@@ -28,6 +28,9 @@ final class SyncEngine: @unchecked Sendable {
 
     func sync(scope: PortfolioSyncScope) async throws -> SyncResult {
         let activeSyncable = try fetchActiveSyncableAccounts(scope: scope)
+        guard !activeSyncable.isEmpty else {
+            return SyncResult(failedAccounts: [])
+        }
         return try await sync(activeSyncable: activeSyncable, activeManual: [])
     }
 
@@ -36,7 +39,10 @@ final class SyncEngine: @unchecked Sendable {
         guard account.isActive else {
             throw SyncError.accountInactive
         }
-        guard account.dataSource != .manual else {
+        guard account.dataSource != .zapper else {
+            throw SyncError.unsupportedLegacyAccount
+        }
+        guard account.isSyncable else {
             throw SyncError.accountNotSyncable
         }
 
@@ -94,9 +100,7 @@ final class SyncEngine: @unchecked Sendable {
 
         let provider = try resolveProvider(for: account, context: context)
 
-        let balances = try await provider.fetchBalances(context: context)
-        let defi = try await provider.fetchDeFiPositions(context: context)
-        let allDTOs = balances + defi
+        let allDTOs = try await provider.fetchPositions(context: context)
 
         // ── Build phase: stage rebuild data as value types ──
         // No @Model objects are constructed here — `Position` and `PositionToken`
@@ -364,7 +368,8 @@ final class SyncEngine: @unchecked Sendable {
 
         for pos in positions {
             guard let account = pos.account else { continue }
-            if account.dataSource != .manual, refreshedSyncableAccountIDs.contains(account.id) == false {
+            let usesStaticHoldings = account.dataSource == .manual || account.dataSource == .zapper
+            if !usesStaticHoldings, refreshedSyncableAccountIDs.contains(account.id) == false {
                 continue
             }
             let accountId = account.id
@@ -443,7 +448,7 @@ final class SyncEngine: @unchecked Sendable {
 
     private func fetchActiveSyncableAccounts() throws -> [Account] {
         let descriptor = FetchDescriptor<Account>()
-        return try modelContext.fetch(descriptor).filter { $0.isActive && $0.dataSource != .manual }
+        return try modelContext.fetch(descriptor).filter(\.isSyncable)
     }
 
     private func hasActiveSyncableAccounts(outside accountIDs: Set<UUID>) throws -> Bool {
@@ -453,8 +458,8 @@ final class SyncEngine: @unchecked Sendable {
     private func fetchActiveSyncableAccounts(scope: PortfolioSyncScope) throws -> [Account] {
         try fetchActiveSyncableAccounts().filter { account in
             switch scope {
-            case .zapper:
-                account.dataSource == .zapper
+            case .onchain:
+                account.dataSource == .zerion
             case .exchange:
                 account.dataSource == .exchange
             }

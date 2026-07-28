@@ -51,6 +51,50 @@ jobs:
       - name: Test app
         run: just test
 
+      - name: Install release signing assets
+        env:
+          PORTU_SIGNING_CERTIFICATE_P12_BASE64: ${{ secrets.PORTU_SIGNING_CERTIFICATE_P12_BASE64 }}
+          PORTU_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.PORTU_SIGNING_CERTIFICATE_PASSWORD }}
+          PORTU_PROVISIONING_PROFILE_BASE64: ${{ secrets.PORTU_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/portu-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          CERTIFICATE_PATH="$RUNNER_TEMP/portu-signing.p12"
+          PROFILE_PATH="$RUNNER_TEMP/portu.provisionprofile"
+          PROFILE_PLIST="$RUNNER_TEMP/portu-profile.plist"
+
+          echo "$PORTU_SIGNING_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+          echo "$PORTU_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PROFILE_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$PORTU_SIGNING_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+
+          security cms -D -i "$PROFILE_PATH" > "$PROFILE_PLIST"
+          PROFILE_UUID="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$PROFILE_PLIST")"
+          PROFILE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :Name' "$PROFILE_PLIST")"
+          TEAM_ID="$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$PROFILE_PLIST")"
+          SIGNING_IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk '/[0-9A-F]{40}/ { print $2; exit }')"
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+          cp "$PROFILE_PATH" "$PROFILES_DIR/$PROFILE_UUID.provisionprofile"
+
+          {
+            echo "PORTU_CODE_SIGN_IDENTITY=$SIGNING_IDENTITY"
+            echo "PORTU_DEVELOPMENT_TEAM=$TEAM_ID"
+            echo "PORTU_PROVISIONING_PROFILE_SPECIFIER=$PROFILE_NAME"
+          } >> "$GITHUB_ENV"
+
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}

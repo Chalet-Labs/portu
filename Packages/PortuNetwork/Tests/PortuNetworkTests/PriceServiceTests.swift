@@ -224,6 +224,33 @@ struct PriceServiceTests {
         #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "-0.0125"))
     }
 
+    @Test func `fetch token price update preserves distinct Solana response address case`() async throws {
+        let upper = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+        let lower = OnchainTokenIdentity(chain: .solana, contractAddress: "solanamintcase")
+        MockURLProtocol.requestHandler = { _ in
+            (Data("""
+            {
+              "SoLanaMiNtCase": {
+                "usd": 2.50,
+                "usd_24h_change": 4
+              },
+              "solanamintcase": {
+                "usd": 3.50,
+                "usd_24h_change": 5
+              }
+            }
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let update = try await service.fetchTokenPriceUpdate(for: [upper, lower])
+
+        #expect(update.prices[upper.historicalPriceID] == Decimal(string: "2.5"))
+        #expect(update.prices[lower.historicalPriceID] == Decimal(string: "3.5"))
+        #expect(update.changes24h[upper.historicalPriceID] == Decimal(string: "0.04"))
+        #expect(update.changes24h[lower.historicalPriceID] == Decimal(string: "0.05"))
+    }
+
     @Test func `fetch token price update keeps partial results when rate limited`() async throws {
         let base = OnchainTokenIdentity(chain: .base, contractAddress: "0xBase")
         let ethereum = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xEth")
@@ -514,6 +541,29 @@ struct PriceServiceTests {
 
         #expect(capturedURL?.path == "/api/v3/onchain/networks/eth/tokens/multi/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
         #expect(resolved[identity] == "usd-coin")
+    }
+
+    @Test func `resolve coingecko ids preserves Solana response address case`() async throws {
+        let identity = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+        MockURLProtocol.requestHandler = { _ in
+            (Data("""
+            {
+              "data": [
+                {
+                  "attributes": {
+                    "address": "SoLanaMiNtCase",
+                    "coingecko_coin_id": "case-token"
+                  }
+                }
+              ]
+            }
+            """.utf8), 200)
+        }
+
+        let service = PriceService(session: session, cacheTTL: 0)
+        let resolved = try await service.resolveCoinGeckoIDs(for: [identity])
+
+        #expect(resolved[identity] == "case-token")
     }
 
     @Test func `rate limiter rejects excessive requests`() async throws {

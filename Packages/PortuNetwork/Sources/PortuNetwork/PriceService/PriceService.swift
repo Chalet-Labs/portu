@@ -206,7 +206,7 @@ public actor PriceService {
                 let data = try await rateLimitedFetch(
                     pathComponents: ["onchain", "networks", networkID, "tokens", "multi", addresses],
                     queryItems: [])
-                let parsed = try CoinGeckoOnchainTokenMapResponse(data: data)
+                let parsed = try CoinGeckoOnchainTokenMapResponse(data: data, chain: chain)
                 for identity in chunk {
                     if let coinGeckoID = parsed.coinGeckoIDsByAddress[identity.contractAddress] {
                         resolved[identity] = coinGeckoID
@@ -337,11 +337,17 @@ public actor PriceService {
         from data: Data,
         identities: [OnchainTokenIdentity],
         currency: FiatCurrency) throws(PriceServiceError) -> PriceUpdate {
-        let parsed = try CoinGeckoTokenPriceResponse(data: data, currency: currency)
+        guard let chain = identities.first?.chain else {
+            return PriceUpdate(currency: currency, prices: [:], changes24h: [:])
+        }
+        let parsed = try CoinGeckoTokenPriceResponse(
+            data: data,
+            currency: currency,
+            chain: chain)
         var prices: [String: Decimal] = [:]
         var changes24h: [String: Decimal] = [:]
         for identity in identities {
-            let address = identity.contractAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let address = identity.contractAddress
             let priceID = identity.historicalPriceID
             if let price = parsed.pricesByAddress[address] {
                 prices[priceID] = price

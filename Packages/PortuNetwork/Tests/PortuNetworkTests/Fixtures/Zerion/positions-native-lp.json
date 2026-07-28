@@ -1,0 +1,78 @@
+{
+  "data": [
+    {
+      "type": "positions",
+      "id": "fixture-native",
+      "attributes": {
+        "name": "Asset",
+        "position_type": "wallet",
+        "quantity": {"int": "1123456789012345678", "decimals": 18, "float": 1.123, "numeric": "1.123456789012345678"},
+        "value": null,
+        "price": null,
+        "fungible_info": {
+          "name": "Ethereum",
+          "symbol": "ETH",
+          "icon": {"url": "https://example.invalid/eth.png"},
+          "flags": {"verified": true},
+          "implementations": [{"chain_id": "ethereum", "address": null, "decimals": 18}]
+        },
+        "flags": {"displayable": true, "is_trash": false}
+      },
+      "relationships": {
+        "chain": {"data": {"type": "chains", "id": "ethereum"}},
+        "fungible": {"data": {"type": "fungibles", "id": "fixture-eth"}}
+      }
+    },
+    {
+      "type": "positions",
+      "id": "fixture-lp-weth",
+      "attributes": {
+        "name": "Pool",
+        "protocol": "Fixture DEX",
+        "protocol_module": "liquidity_pool",
+        "group_id": "fixture-lp-group",
+        "position_type": "deposit",
+        "quantity": {"int": "1", "decimals": 18, "float": 0.1, "numeric": "0.1"},
+        "value": 210,
+        "fungible_info": {
+          "name": "Wrapped Ether",
+          "symbol": "WETH",
+          "flags": {"verified": true},
+          "implementations": [{"chain_id": "ethereum", "address": "0x0000000000000000000000000000000000000001", "decimals": 18}]
+        },
+        "flags": {"displayable": true, "is_trash": false},
+        "application_metadata": {"name": "Fixture DEX"}
+      },
+      "relationships": {
+        "chain": {"data": {"type": "chains", "id": "ethereum"}},
+        "dapp": {"data": {"type": "dapps", "id": "fixture-dex"}}
+      }
+    },
+    {
+      "type": "positions",
+      "id": "fixture-lp-usdc",
+      "attributes": {
+        "name": "Pool",
+        "protocol": "Fixture DEX",
+        "protocol_module": "liquidity_pool",
+        "group_id": "fixture-lp-group",
+        "position_type": "deposit",
+        "quantity": {"int": "200000000", "decimals": 6, "float": 200, "numeric": "200.000000"},
+        "value": 200,
+        "fungible_info": {
+          "name": "USD Coin",
+          "symbol": "USDC",
+          "flags": {"verified": true},
+          "implementations": [{"chain_id": "ethereum", "address": "0x0000000000000000000000000000000000000002", "decimals": 6}]
+        },
+        "flags": {"displayable": true, "is_trash": false},
+        "application_metadata": {"name": "Fixture DEX"}
+      },
+      "relationships": {
+        "chain": {"data": {"type": "chains", "id": "ethereum"}},
+        "dapp": {"data": {"type": "dapps", "id": "fixture-dex"}}
+      }
+    }
+  ],
+  "links": {"self": "https://api.zerion.io/v1/wallets/fixture-wallet/positions/"}
+}

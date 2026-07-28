@@ -10,7 +10,7 @@ public final class Position {
     /// nil = off-chain (exchange custody, manual entry)
     public var chain: Chain?
 
-    /// Zapper protocol identifier
+    /// Provider protocol identifier
     public var protocolId: String?
     public var protocolName: String?
 

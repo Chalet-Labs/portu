@@ -256,6 +256,26 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(row.isWatchlisted)
     }
 
+    @Test func `price rows preserve distinct mixed case Solana mint prices`() {
+        let upper = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+        let lower = OnchainTokenIdentity(chain: .solana, contractAddress: "solanamintcase")
+        let tokens = [
+            token(symbol: "CASE", amount: 1, usdValue: 2, onchainIdentity: upper),
+            token(symbol: "CASE", amount: 1, usdValue: 3, onchainIdentity: lower)
+        ]
+
+        let rows = OverviewFeature.priceRows(
+            tokens: tokens,
+            assetsByCoinGeckoId: [:],
+            prices: [upper.historicalPriceID: 2, lower.historicalPriceID: 3],
+            changes24h: [upper.historicalPriceID: 0.02, lower.historicalPriceID: 0.03],
+            watchlistIDs: [])
+
+        #expect(rows.count == 2)
+        #expect(Set(rows.compactMap(\.price)) == [2, 3])
+        #expect(Set(rows.compactMap(\.change24h)) == [0.02, 0.03])
+    }
+
     @Test func `price rows keep distinct portfolio assets with the same coin gecko id`() {
         let aave = UUID()
         let bridgedAave = UUID()
@@ -640,9 +660,22 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(ids == ["unpriced"])
     }
 
-    @Test func `price polling ids include zapper key for eligible unmapped onchain holdings`() {
+    @Test func `price polling ids include onchain key for eligible unmapped onchain holdings`() {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
         let local = token(symbol: "LOCAL", amount: 2, usdValue: 8, onchainIdentity: identity)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [local],
+            prices: [:],
+            watchlistIDs: [],
+            overrides: [])
+
+        #expect(ids == [identity.historicalPriceID])
+    }
+
+    @Test func `price polling ids preserve mixed case Solana mint`() {
+        let identity = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+        let local = token(symbol: "SOLTOKEN", amount: 2, usdValue: 8, onchainIdentity: identity)
 
         let ids = OverviewFeature.pricePollingIDs(
             tokens: [local],
@@ -763,7 +796,7 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(ids == ["new-map"])
     }
 
-    @Test func `price rows use zapper live price and change for unmapped onchain holdings`() throws {
+    @Test func `price rows use Zerion live price and change for unmapped onchain holdings`() throws {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
         let local = token(symbol: "LOCAL", amount: 4, usdValue: 20, onchainIdentity: identity)
 
@@ -807,24 +840,24 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(change == 0)
     }
 
-    @Test func `portfolio change uses cached coingecko mappings and zapper fallback ids`() {
+    @Test func `portfolio change uses cached coingecko mappings and onchain fallback ids`() {
         let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
-        let zapperIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xZapper")
+        let onchainIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xProvider")
         let borrowIdentity = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xBorrow")
         let mapped = token(symbol: "MAP", amount: 2, usdValue: 20, onchainIdentity: mappedIdentity)
-        let zapper = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: zapperIdentity)
+        let onchainToken = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: onchainIdentity)
         let borrow = token(symbol: "DEBT", role: .borrow, amount: 4, usdValue: 16, onchainIdentity: borrowIdentity)
 
         let change = OverviewPriceChangeFeature.portfolioChange24h(
-            tokens: [mapped, zapper, borrow],
+            tokens: [mapped, onchainToken, borrow],
             prices: [
                 mappedIdentity.historicalPriceID: 10,
-                zapperIdentity.historicalPriceID: 5,
+                onchainIdentity.historicalPriceID: 5,
                 borrowIdentity.historicalPriceID: 4
             ],
             changes24h: [
                 mappedIdentity.historicalPriceID: 0.10,
-                zapperIdentity.historicalPriceID: -0.20,
+                onchainIdentity.historicalPriceID: -0.20,
                 borrowIdentity.historicalPriceID: 0.25
             ],
             overrides: [],
@@ -835,21 +868,21 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(change == -5)
     }
 
-    @Test func `key change tokens include mapped coingecko and zapper priced holdings`() {
+    @Test func `key change tokens include mapped coingecko and onchain-priced holdings`() {
         let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
-        let zapperIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xZapper")
+        let onchainIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xProvider")
         let mapped = token(symbol: "MAP", amount: 2, usdValue: 20, onchainIdentity: mappedIdentity)
-        let zapper = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: zapperIdentity)
+        let onchainToken = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: onchainIdentity)
 
         let changes = OverviewPriceChangeFeature.keyChangeTokens(
-            tokens: [mapped, zapper],
+            tokens: [mapped, onchainToken],
             prices: [
                 mappedIdentity.historicalPriceID: 10,
-                zapperIdentity.historicalPriceID: 5
+                onchainIdentity.historicalPriceID: 5
             ],
             changes24h: [
                 mappedIdentity.historicalPriceID: 0.10,
-                zapperIdentity.historicalPriceID: -0.20
+                onchainIdentity.historicalPriceID: -0.20
             ],
             overrides: [],
             mappings: [

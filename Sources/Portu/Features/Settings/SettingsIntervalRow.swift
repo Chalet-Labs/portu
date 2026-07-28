@@ -20,7 +20,7 @@ extension [SettingsIntervalOption] {
         SettingsIntervalOption(seconds: 86400, title: "24 hours")
     ]
 
-    static let zapperLivePriceFallback: Self = [
+    static let onchainLivePriceFallback: Self = [
         SettingsIntervalOption(seconds: 0, title: "Manual only"),
         SettingsIntervalOption(seconds: 600, title: "10 minutes"),
         SettingsIntervalOption(seconds: 3600, title: "1 hour"),
@@ -28,7 +28,7 @@ extension [SettingsIntervalOption] {
         SettingsIntervalOption(seconds: 86400, title: "24 hours")
     ]
 
-    static let zapperPortfolioSync: Self = [
+    static let onchainPortfolioSync: Self = [
         SettingsIntervalOption(seconds: 0, title: "Manual only"),
         SettingsIntervalOption(seconds: 3600, title: "1 hour"),
         SettingsIntervalOption(seconds: 21600, title: "6 hours"),

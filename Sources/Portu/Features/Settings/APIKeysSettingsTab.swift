@@ -7,7 +7,7 @@ enum APIKeyInputMode: Equatable {
 }
 
 private enum APIKeyFieldID: Hashable {
-    case zapper
+    case zerion
     case debank
     case coingecko
 }
@@ -22,13 +22,13 @@ private struct APIKeyFieldDescriptor {
 }
 
 private extension APIKeyFieldDescriptor {
-    static let zapper = Self(
-        id: .zapper,
-        title: "Zapper",
+    static let zerion = Self(
+        id: .zerion,
+        title: "Zerion",
         systemImage: SettingsIconography.apiKeyFieldSystemImage,
         foreground: SettingsDesign.accentPrimary,
         background: SettingsDesign.primaryGlyphBackground,
-        hint: nil)
+        hint: "Create a personal key at dashboard.zerion.io.")
 
     static let debank = Self(
         id: .debank,
@@ -55,25 +55,82 @@ enum APIKeysSettingsLayout {
     }
 }
 
+struct APIKeysPendingSaveState {
+    private(set) var hasPendingSave = false
+    private var generation = 0
+
+    mutating func schedule() -> Int {
+        generation += 1
+        hasPendingSave = true
+        return generation
+    }
+
+    mutating func complete(_ completedGeneration: Int, succeeded: Bool = true) {
+        guard succeeded, completedGeneration == generation else { return }
+        hasPendingSave = false
+    }
+
+    mutating func generationForFlush() -> Int? {
+        guard hasPendingSave else { return nil }
+        generation += 1
+        return generation
+    }
+}
+
+enum APIKeysSettingsRetryPolicy {
+    static func shouldShow(errorMessage: String?, canSave _: Bool) -> Bool {
+        errorMessage != nil
+    }
+
+    static func isEnabled(isLoading: Bool) -> Bool {
+        !isLoading
+    }
+}
+
+@MainActor
+enum APIKeysSaveTaskCoordinator {
+    static func makeTask(
+        after previousTask: Task<Void, Never>?,
+        delay: Duration?,
+        operation: @escaping @MainActor @Sendable () async -> Void) -> Task<Void, Never> {
+        Task { @MainActor in
+            if let delay {
+                do {
+                    try await Task.sleep(for: delay)
+                } catch {
+                    return
+                }
+            }
+            await previousTask?.value
+            guard !Task.isCancelled else { return }
+            await operation()
+        }
+    }
+}
+
 struct APIKeysSettingsTab: View {
-    @State private var viewModel = APIKeysViewModel()
+    @State private var viewModel: APIKeysViewModel
     @State private var newRPCChain: Chain = .ethereum
     @State private var newRPCURL = ""
     @State private var visibleAPIKeyFields: Set<APIKeyFieldID> = []
-    @State private var hasPendingSave = false
+    @State private var pendingSaveState = APIKeysPendingSaveState()
     @State private var saveTask: Task<Void, Never>?
+
+    init(secretStore: any SecretStore = PortuApp.makeSecretStore()) {
+        _viewModel = State(initialValue: APIKeysViewModel(secretStore: secretStore))
+    }
 
     var body: some View {
         SettingsPage(tab: .apiKeys, badge: .autoSave) {
             VStack(alignment: .leading, spacing: 14) {
                 SettingsSectionCard(
                     title: "Provider API Keys",
-                    subtitle: "Stored locally on this Mac.",
+                    subtitle: "Stored securely in Keychain on this Mac.",
                     icon: .apiKeys) {
                         VStack(spacing: 0) {
                             apiKeyField(
-                                .zapper,
-                                text: $viewModel.zapperAPIKey)
+                                .zerion,
+                                text: $viewModel.zerionAPIKey)
 
                             SettingsDivider()
                                 .padding(.vertical, 8)
@@ -90,6 +147,7 @@ struct APIKeysSettingsTab: View {
                                 text: $viewModel.coingeckoAPIKey)
                         }
                     }
+                    .disabled(!viewModel.canSave)
 
                 SettingsSectionCard(
                     title: "Custom RPCs",
@@ -98,19 +156,39 @@ struct APIKeysSettingsTab: View {
                         VStack(alignment: .leading, spacing: 22) {
                             rpcTable
                             addEndpointSection
-
-                            if let secretStoreError = viewModel.secretStoreError {
-                                SettingsInlineNotice(
-                                    title: "Storage Error",
-                                    message: secretStoreError,
-                                    style: .error)
-                            }
                         }
                     }
+                    .disabled(!viewModel.canSave)
+
+                if let secretStoreError = viewModel.secretStoreError {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SettingsInlineNotice(
+                            title: "Keychain Error",
+                            message: secretStoreError,
+                            style: .error)
+
+                        if
+                            APIKeysSettingsRetryPolicy.shouldShow(
+                                errorMessage: secretStoreError,
+                                canSave: viewModel.canSave) {
+                            Button("Retry Keychain Access") {
+                                if viewModel.canSave {
+                                    flushPendingSave()
+                                } else {
+                                    Task { await viewModel.load() }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .settingsPrimaryButton(isDisabled: !APIKeysSettingsRetryPolicy.isEnabled(
+                                isLoading: viewModel.isLoading))
+                            .disabled(!APIKeysSettingsRetryPolicy.isEnabled(isLoading: viewModel.isLoading))
+                        }
+                    }
+                }
             }
         }
-        .task { if !viewModel.hasLoaded { viewModel.load() } }
-        .onChange(of: viewModel.zapperAPIKey) { _, _ in debounceSave() }
+        .task { if !viewModel.hasLoaded { await viewModel.load() } }
+        .onChange(of: viewModel.zerionAPIKey) { _, _ in debounceSave() }
         .onChange(of: viewModel.debankAPIKey) { _, _ in debounceSave() }
         .onChange(of: viewModel.coingeckoAPIKey) { _, _ in debounceSave() }
         .onDisappear { flushPendingSave() }
@@ -321,21 +399,29 @@ struct APIKeysSettingsTab: View {
     }
 
     private func debounceSave() {
-        guard !viewModel.isLoading else { return }
-        hasPendingSave = true
-        saveTask?.cancel()
-        saveTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return }
-            viewModel.save()
-            hasPendingSave = false
-        }
+        guard !viewModel.isLoading, viewModel.canSave else { return }
+        let generation = pendingSaveState.schedule()
+        let previousTask = saveTask
+        previousTask?.cancel()
+        saveTask = APIKeysSaveTaskCoordinator.makeTask(
+            after: previousTask,
+            delay: .seconds(1)) {
+                let succeeded = await viewModel.save()
+                pendingSaveState.complete(generation, succeeded: succeeded)
+            }
     }
 
     private func flushPendingSave() {
-        saveTask?.cancel()
-        guard hasPendingSave, !viewModel.isLoading else { return }
-        viewModel.save()
-        hasPendingSave = false
+        let previousTask = saveTask
+        previousTask?.cancel()
+        guard
+            !viewModel.isLoading,
+            viewModel.canSave,
+            let generation = pendingSaveState.generationForFlush()
+        else { return }
+        saveTask = APIKeysSaveTaskCoordinator.makeTask(after: previousTask, delay: nil) {
+            let succeeded = await viewModel.save()
+            pendingSaveState.complete(generation, succeeded: succeeded)
+        }
     }
 }

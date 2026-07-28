@@ -29,7 +29,7 @@
             let token = PositionToken(role: .balance, amount: 10, usdValue: 500)
             let position = Position(positionType: .idle, netUSDValue: 500, tokens: [token])
             let account = Account(
-                name: "My Wallet", kind: .wallet, dataSource: .zapper,
+                name: "My Wallet", kind: .wallet, dataSource: .zerion,
                 positions: [position], lastSyncedAt: syncDate, lastSyncError: "timeout")
             context.insert(account)
             try context.save()
@@ -42,7 +42,7 @@
             let item = json[0]
             #expect(item["name"] as? String == "My Wallet")
             #expect(item["kind"] as? String == "wallet")
-            #expect(item["dataSource"] as? String == "zapper")
+            #expect(item["dataSource"] as? String == "zerion")
             #expect(item["isActive"] as? Bool == true)
             #expect(item["positionCount"] as? Int == 1)
             #expect(item["lastSyncedAt"] != nil)
@@ -70,7 +70,7 @@
                 positionType: .lending, chain: .ethereum,
                 protocolName: "Aave", netUSDValue: 1000)
             let account = Account(
-                name: "Wallet", kind: .wallet, dataSource: .zapper,
+                name: "Wallet", kind: .wallet, dataSource: .zerion,
                 positions: [position])
             context.insert(account)
             try context.save()
@@ -94,8 +94,8 @@
 
             let pos1 = Position(positionType: .idle, netUSDValue: 100)
             let pos2 = Position(positionType: .staking, netUSDValue: 200)
-            let account1 = Account(name: "A", kind: .wallet, dataSource: .zapper, positions: [pos1])
-            let account2 = Account(name: "B", kind: .wallet, dataSource: .zapper, positions: [pos2])
+            let account1 = Account(name: "A", kind: .wallet, dataSource: .zerion, positions: [pos1])
+            let account2 = Account(name: "B", kind: .wallet, dataSource: .zerion, positions: [pos2])
             context.insert(account1)
             context.insert(account2)
             try context.save()

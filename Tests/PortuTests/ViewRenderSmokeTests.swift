@@ -114,6 +114,19 @@ struct ViewRenderSmokeTests {
         render(view)
     }
 
+    @Test func `credential views retain the injected migration-aware store`() {
+        let store = makeStore(section: .accounts)
+        let secretStore = InMemorySecretStore()
+
+        let contentView = ContentView(store: store, secretStore: secretStore)
+        let settingsView = SettingsView(store: store, secretStore: secretStore)
+        let accountsView = AccountsView(store: store, secretStore: secretStore)
+
+        #expect(contentView.secretStore as AnyObject === secretStore)
+        #expect(settingsView.secretStore as AnyObject === secretStore)
+        #expect(accountsView.secretStore as AnyObject === secretStore)
+    }
+
     @Test func `category settings tab renders without crashing`() throws {
         let container = try makeContainer()
 
@@ -256,7 +269,7 @@ struct ViewRenderSmokeTests {
             id: id,
             name: "Primary Wallet",
             kind: .wallet,
-            dataSource: .zapper,
+            dataSource: .zerion,
             lastSyncedAt: now)
         let ethToken = PositionToken(role: .balance, amount: 2, usdValue: 6000, asset: assets.eth)
         let usdcToken = PositionToken(role: .supply, amount: 4000, usdValue: 4000, asset: assets.usdc)

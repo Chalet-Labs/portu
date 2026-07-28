@@ -36,7 +36,7 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(candidates.first?.assetIds == [first.assetId, second.assetId])
     }
 
-    @Test func `candidate selection auto maps onchain assets and falls back to zapper ids`() {
+    @Test func `candidate selection auto maps onchain assets and falls back to canonical onchain ids`() {
         let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
         let fallbackIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xFallback")
         let mapped = token(
@@ -60,12 +60,12 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(candidates.map(\.historicalPriceID) == [fallbackIdentity.historicalPriceID, mappedIdentity.historicalPriceID])
         #expect(candidates.map(\.assetIds) == [[fallback.assetId], [mapped.assetId]])
         #expect(candidates.map(\.source) == [
-            .zapper(fallbackIdentity),
+            .zerion(fallbackIdentity),
             .coingecko("mapped-token")
         ])
     }
 
-    @Test func `candidate selection uses cached identity mappings before zapper fallback`() {
+    @Test func `candidate selection uses cached identity mappings before onchain fallback`() {
         let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
         let mapped = token(
             assetId: uuid(1),
@@ -87,6 +87,25 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(candidates.map(\.historicalPriceID) == [mappedIdentity.historicalPriceID])
         #expect(candidates.map(\.source) == [.coingecko("cached-token")])
         #expect(unresolved.isEmpty)
+    }
+
+    @Test func `candidate selection preserves Solana case in fallback history key`() {
+        let identity = OnchainTokenIdentity(
+            chain: .solana,
+            contractAddress: "AbCDefGhijkLMNopQRstuVwxyz123456789")
+        let solanaToken = token(
+            assetId: uuid(1),
+            symbol: "SOLANA",
+            amount: 1,
+            usdValue: 20,
+            onchainIdentity: identity)
+
+        let candidates = HistoricalBackfillCandidateResolver.candidates(
+            tokens: [solanaToken],
+            overrides: [])
+
+        #expect(candidates.map(\.historicalPriceID) == [identity.historicalPriceID])
+        #expect(candidates.map(\.source) == [.zerion(identity)])
     }
 
     @Test func `candidate selection stores onchain token history under canonical asset key`() {
@@ -204,6 +223,34 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(result.updated == 0)
         #expect(rows.map(\.fiatCurrency) == [.eur, .usd])
         #expect(rows.map(\.price) == [37000, 40000])
+    }
+
+    @Test func `cache writer preserves distinct Solana mint case without duplicate updates`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        let uppercaseID = "asset:solana:AbCDefGhijkLMNopQRstuVwxyz123456789"
+        let lowercaseID = "asset:solana:abcdefghijklmnopqrstuvwxyz123456789"
+
+        let firstWrite = try HistoricalPriceCacheWriter.upsert(
+            [
+                HistoricalPriceDTO(coinGeckoId: uppercaseID, timestamp: day, usdPrice: 10),
+                HistoricalPriceDTO(coinGeckoId: lowercaseID, timestamp: day, usdPrice: 20)
+            ],
+            in: context)
+        let secondWrite = try HistoricalPriceCacheWriter.upsert(
+            [HistoricalPriceDTO(coinGeckoId: uppercaseID, timestamp: day, usdPrice: 15)],
+            in: context)
+
+        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+            .sorted { $0.coinGeckoId < $1.coinGeckoId }
+        #expect(firstWrite.inserted == 2)
+        #expect(firstWrite.updated == 0)
+        #expect(secondWrite.inserted == 0)
+        #expect(secondWrite.updated == 1)
+        #expect(rows.count == 2)
+        #expect(rows.first { $0.coinGeckoId == uppercaseID }?.usdPrice == 15)
+        #expect(rows.first { $0.coinGeckoId == lowercaseID }?.usdPrice == 20)
     }
 
     @Test func `cache writer converges duplicate existing rows for same coin gecko id and day`() throws {
@@ -358,7 +405,7 @@ struct HistoricalPriceBackfillFeatureTests {
 
     @Test func `preflight unavailable error round trips its kind through the reducer`() async {
         let preflight = HistoricalBackfillError(
-            message: "Configure a Zapper API key.",
+            message: "Configure a Zerion API key.",
             kind: .preflightUnavailable)
         #expect(preflight.kind == .preflightUnavailable)
 
@@ -372,7 +419,7 @@ struct HistoricalPriceBackfillFeatureTests {
             $0.status = .running
         }
         await store.receive(\.backfillCompleted) {
-            $0.status = .failed("Configure a Zapper API key.")
+            $0.status = .failed("Configure a Zerion API key.")
         }
     }
 

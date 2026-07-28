@@ -46,7 +46,7 @@ extension OverviewFeature {
         var seen = Set(result)
 
         for watchlistID in watchlistIDs {
-            let normalizedID = OverviewWatchlistStore.normalize(watchlistID)
+            let normalizedID = normalizePollingID(watchlistID)
             guard !normalizedID.isEmpty, !seen.contains(normalizedID) else { continue }
             result.append(normalizedID)
             seen.insert(normalizedID)
@@ -106,7 +106,7 @@ extension OverviewFeature {
         priority: Decimal,
         insertionIndex: Int,
         candidates: inout [String: PollingIDCandidate]) {
-        let normalizedID = OverviewWatchlistStore.normalize(id)
+        let normalizedID = normalizePollingID(id)
         guard !normalizedID.isEmpty else { return }
 
         if var existing = candidates[normalizedID] {
@@ -118,6 +118,10 @@ extension OverviewFeature {
                 priority: priority,
                 firstIndex: insertionIndex)
         }
+    }
+
+    private static func normalizePollingID(_ id: String) -> String {
+        OnchainTokenIdentity.normalizedHistoricalPriceID(id)
     }
 
     private static func pollingPriority(

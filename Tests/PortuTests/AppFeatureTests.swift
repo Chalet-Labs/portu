@@ -214,11 +214,11 @@ struct AppFeatureTests {
         } withDependencies: {
             $0.priceService.fetchCoinGeckoPrices = { request, currency, _ in
                 capturedRequests.append(request)
-                #expect(request.coinGeckoIDs.isEmpty || request.zapperIdentities.isEmpty)
+                #expect(request.coinGeckoIDs.isEmpty || request.onchainIdentities.isEmpty)
                 if request.coinGeckoIDs == ["bitcoin"] {
                     return PriceUpdate(currency: currency, prices: ["bitcoin": 58000], changes24h: [:])
                 }
-                if request.zapperIdentities == [identity] {
+                if request.onchainIdentities == [identity] {
                     try await Task.sleep(nanoseconds: 10_000_000)
                     return PriceUpdate(
                         currency: currency,
@@ -231,7 +231,7 @@ struct AppFeatureTests {
                     changes24h: [:])
             }
             $0.continuousClock = testClock
-            $0.pricePollingSettings.zapperFallbackInterval = { nil }
+            $0.pricePollingSettings.onchainFallbackInterval = { nil }
             $0.currentDate.now = { testDate }
         }
 
@@ -256,8 +256,8 @@ struct AppFeatureTests {
             }
 
         #expect(capturedRequests == [
-            PricePollingRequest(coinGeckoIDs: ["bitcoin"], zapperIdentities: []),
-            PricePollingRequest(coinGeckoIDs: [], zapperIdentities: [identity])
+            PricePollingRequest(coinGeckoIDs: ["bitcoin"], onchainIdentities: []),
+            PricePollingRequest(coinGeckoIDs: [], onchainIdentities: [identity])
         ])
 
         await store.send(.stopPricePolling) {
@@ -283,7 +283,7 @@ struct AppFeatureTests {
                 return PriceUpdate(currency: currency, prices: [:], changes24h: [:])
             }
             $0.continuousClock = testClock
-            $0.pricePollingSettings.zapperFallbackInterval = { nil }
+            $0.pricePollingSettings.onchainFallbackInterval = { nil }
             $0.currentDate.now = { testDate }
         }
 
@@ -889,7 +889,7 @@ struct AppFeatureTests {
         }
     }
 
-    @Test func `price polling ids split coingecko ids from zapper identities`() {
+    @Test func `price polling ids split coingecko ids from onchain identities`() {
         let baseToken = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
         let ethToken = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xToken")
         let polygonZkToken = OnchainTokenIdentity(chain: .polygonZkEVM, contractAddress: "0xToken")
@@ -905,7 +905,7 @@ struct AppFeatureTests {
         ])
 
         #expect(request.coinGeckoIDs == ["bitcoin"])
-        #expect(request.zapperIdentities == [baseToken, ethToken, polygonZkToken])
+        #expect(request.onchainIdentities == [baseToken, ethToken, polygonZkToken])
     }
 
     @Test func `price polling id split preserves first seen identity priority`() {
@@ -918,10 +918,22 @@ struct AppFeatureTests {
             priority.historicalPriceID
         ])
 
-        #expect(request.zapperIdentities == [priority, lowerPriority])
+        #expect(request.onchainIdentities == [priority, lowerPriority])
     }
 
-    @Test func `price polling updates merge coingecko and zapper results`() {
+    @Test func `price polling id split preserves Solana mint case`() {
+        let solana = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+
+        let request = PricePollingIDResolver.split([
+            solana.historicalPriceID,
+            "BITCOIN"
+        ])
+
+        #expect(request.coinGeckoIDs == ["bitcoin"])
+        #expect(request.onchainIdentities == [solana])
+    }
+
+    @Test func `price polling updates merge coingecko and onchain results`() {
         let update = PricePollingIDResolver.merge([
             PriceUpdate(prices: ["bitcoin": 70000], changes24h: ["bitcoin": 0.02]),
             PriceUpdate(prices: ["asset:base:0xtoken": 3], changes24h: ["asset:base:0xtoken": -0.01])
@@ -1037,8 +1049,8 @@ nonisolated final class AppPriceMockURLProtocol: URLProtocol, @unchecked Sendabl
 
 @Suite(.serialized)
 struct LivePriceUpdateBuilderTests {
-    @Test func `zapper fallback failure preserves coingecko prices`() async throws {
-        struct ZapperUnavailable: Error {}
+    @Test func `onchain fallback failure preserves coingecko prices`() async throws {
+        struct OnchainUnavailable: Error {}
 
         let identity = OnchainTokenIdentity(
             chain: .base,
@@ -1063,9 +1075,9 @@ struct LivePriceUpdateBuilderTests {
         let update = try await LivePriceUpdateBuilder.fetchPrices(
             coinIds: ["ethereum", identity.historicalPriceID],
             priceService: service,
-            fetchZapperUpdate: { identities in
+            fetchOnchainFallbackUpdate: { identities in
                 #expect(identities == [identity])
-                throw ZapperUnavailable()
+                throw OnchainUnavailable()
             })
 
         #expect(update.prices["ethereum"] == Decimal(string: "2220.5"))
@@ -1097,7 +1109,7 @@ struct LivePriceUpdateBuilderTests {
         let update = try await LivePriceUpdateBuilder.fetchPrices(
             coinIds: ["ethereum", identity.historicalPriceID],
             priceService: service,
-            fetchZapperUpdate: { identities in
+            fetchOnchainFallbackUpdate: { identities in
                 #expect(identities.isEmpty)
                 return PricePollingIDResolver.emptyUpdate
             })
@@ -1105,5 +1117,40 @@ struct LivePriceUpdateBuilderTests {
         #expect(update.prices["ethereum"] == nil)
         #expect(update.prices[identity.historicalPriceID] == Decimal(string: "2220.5"))
         #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "0.012"))
+    }
+
+    @Test func `non USD onchain fallback preserves normalized 24 hour changes`() async throws {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xabc")
+        AppPriceMockURLProtocol.requestHandler = { request in
+            guard let url = request.url else { return (nil, 500) }
+            if url.path == "/api/v3/simple/token_price/base" {
+                return (Data("{}".utf8), 200)
+            }
+            if url.path == "/api/v3/exchange_rates" {
+                return (Data("""
+                {"rates":{"usd":{"value":1},"eur":{"value":0.92}}}
+                """.utf8), 200)
+            }
+            return (nil, 500)
+        }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AppPriceMockURLProtocol.self]
+        let service = PriceService(session: URLSession(configuration: configuration), cacheTTL: 0)
+
+        let update = try await LivePriceUpdateBuilder.fetchPrices(
+            coinIds: [identity.historicalPriceID],
+            priceService: service,
+            currency: .eur,
+            fetchOnchainFallbackUpdate: { identities in
+                #expect(identities == [identity])
+                return PriceUpdate(
+                    prices: [identity.historicalPriceID: 10],
+                    changes24h: [identity.historicalPriceID: 0.05])
+            })
+
+        #expect(update.currency == .eur)
+        #expect(update.prices[identity.historicalPriceID] == Decimal(string: "9.2"))
+        #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "0.05"))
     }
 }

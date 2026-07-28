@@ -79,6 +79,66 @@ struct SettingsTabTests {
         #expect(APIKeysSettingsLayout.inputMode(isVisible: true) == .visibleText)
     }
 
+    @Test func `older API key save completion cannot clear a newer pending edit`() throws {
+        var state = APIKeysPendingSaveState()
+        let firstSave = state.schedule()
+        let newerSave = state.schedule()
+
+        state.complete(firstSave)
+
+        #expect(state.hasPendingSave)
+        let flushGeneration = state.generationForFlush()
+        #expect(flushGeneration != nil)
+
+        state.complete(newerSave)
+        #expect(state.hasPendingSave)
+        try state.complete(#require(flushGeneration))
+        #expect(!state.hasPendingSave)
+    }
+
+    @Test func `failed API key save remains pending for retry and flush`() throws {
+        var state = APIKeysPendingSaveState()
+        let failedSave = state.schedule()
+
+        state.complete(failedSave, succeeded: false)
+
+        #expect(state.hasPendingSave)
+        let pendingFlushGeneration = state.generationForFlush()
+        let flushGeneration = try #require(pendingFlushGeneration)
+        state.complete(flushGeneration, succeeded: false)
+        #expect(state.hasPendingSave)
+    }
+
+    @Test @MainActor
+    func `API key save task waits for the previous save`() async {
+        let order = SendableArray<Int>()
+        let first = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(50))
+            order.append(1)
+        }
+        let second = APIKeysSaveTaskCoordinator.makeTask(after: first, delay: nil) {
+            order.append(2)
+        }
+
+        await second.value
+
+        #expect(order.values == [1, 2])
+    }
+
+    @Test func `API key settings offers retry after load or save failures`() {
+        #expect(APIKeysSettingsRetryPolicy.shouldShow(
+            errorMessage: "Keychain unavailable",
+            canSave: false))
+        #expect(!APIKeysSettingsRetryPolicy.shouldShow(
+            errorMessage: nil,
+            canSave: false))
+        #expect(APIKeysSettingsRetryPolicy.shouldShow(
+            errorMessage: "stale",
+            canSave: true))
+        #expect(APIKeysSettingsRetryPolicy.isEnabled(isLoading: false))
+        #expect(!APIKeysSettingsRetryPolicy.isEnabled(isLoading: true))
+    }
+
     @Test func `price polling settings use shared defaults key and allowed values`() {
         let defaults = cleanDefaults()
 
@@ -97,36 +157,66 @@ struct SettingsTabTests {
         let defaults = cleanDefaults()
 
         #expect(ProviderIntervalSettings.manualOnlySeconds == 0)
-        #expect(ProviderIntervalSettings.zapperLivePriceIntervalKey == "providerIntervals.zapperLivePrice")
-        #expect(ProviderIntervalSettings.zapperPortfolioSyncIntervalKey == "providerIntervals.zapperPortfolioSync")
+        #expect(ProviderIntervalSettings.onchainLivePriceIntervalKey == "providerIntervals.onchainLivePrice")
+        #expect(ProviderIntervalSettings.onchainPortfolioSyncIntervalKey == "providerIntervals.onchainPortfolioSync")
         #expect(ProviderIntervalSettings.exchangePortfolioSyncIntervalKey == "providerIntervals.exchangePortfolioSync")
 
-        #expect(ProviderIntervalSettings.allowedZapperLivePriceIntervalSeconds == [0, 600, 3600, 21600, 86400])
-        #expect(ProviderIntervalSettings.allowedZapperPortfolioSyncIntervalSeconds == [0, 3600, 21600, 86400])
+        #expect(ProviderIntervalSettings.allowedOnchainLivePriceIntervalSeconds == [0, 600, 3600, 21600, 86400])
+        #expect(ProviderIntervalSettings.allowedOnchainPortfolioSyncIntervalSeconds == [0, 3600, 21600, 86400])
         #expect(ProviderIntervalSettings.allowedExchangePortfolioSyncIntervalSeconds == [0, 600, 3600, 21600, 86400])
 
-        #expect(ProviderIntervalSettings.zapperLivePriceIntervalSeconds(defaults: defaults) == 3600)
-        #expect(ProviderIntervalSettings.zapperPortfolioSyncIntervalSeconds(defaults: defaults) == 21600)
+        #expect(ProviderIntervalSettings.onchainLivePriceIntervalSeconds(defaults: defaults) == 3600)
+        #expect(ProviderIntervalSettings.onchainPortfolioSyncIntervalSeconds(defaults: defaults) == 21600)
         #expect(ProviderIntervalSettings.exchangePortfolioSyncIntervalSeconds(defaults: defaults) == 3600)
+    }
+
+    @Test func `legacy Zapper portfolio interval migrates once without overwriting new value`() throws {
+        let suite = "ProviderIntervalMigration.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(86400.0, forKey: "providerIntervals.zapperPortfolioSync")
+
+        ProviderIntervalSettings.migrateLegacyPreferences(defaults: defaults)
+
+        #expect(defaults.double(forKey: ProviderIntervalSettings.onchainPortfolioSyncIntervalKey) == 86400)
+        defaults.set(3600.0, forKey: ProviderIntervalSettings.onchainPortfolioSyncIntervalKey)
+        ProviderIntervalSettings.migrateLegacyPreferences(defaults: defaults)
+        #expect(defaults.double(forKey: ProviderIntervalSettings.onchainPortfolioSyncIntervalKey) == 3600)
+        #expect(defaults.double(forKey: "providerIntervals.zapperPortfolioSync") == 86400)
+    }
+
+    @Test func `legacy Zapper live price interval migrates once without overwriting new value`() throws {
+        let suite = "ProviderLivePriceIntervalMigration.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(0.0, forKey: "providerIntervals.zapperLivePrice")
+
+        ProviderIntervalSettings.migrateLegacyPreferences(defaults: defaults)
+
+        #expect(defaults.object(forKey: ProviderIntervalSettings.onchainLivePriceIntervalKey) as? Double == 0)
+        defaults.set(600.0, forKey: ProviderIntervalSettings.onchainLivePriceIntervalKey)
+        ProviderIntervalSettings.migrateLegacyPreferences(defaults: defaults)
+        #expect(defaults.double(forKey: ProviderIntervalSettings.onchainLivePriceIntervalKey) == 600)
+        #expect(defaults.double(forKey: "providerIntervals.zapperLivePrice") == 0)
     }
 
     @Test func `provider interval settings convert manual only to no duration`() {
         let defaults = cleanDefaults()
 
-        defaults.set(0.0, forKey: ProviderIntervalSettings.zapperLivePriceIntervalKey)
-        defaults.set(0.0, forKey: ProviderIntervalSettings.zapperPortfolioSyncIntervalKey)
+        defaults.set(0.0, forKey: ProviderIntervalSettings.onchainLivePriceIntervalKey)
+        defaults.set(0.0, forKey: ProviderIntervalSettings.onchainPortfolioSyncIntervalKey)
         defaults.set(0.0, forKey: ProviderIntervalSettings.exchangePortfolioSyncIntervalKey)
 
-        #expect(ProviderIntervalSettings.zapperLivePriceInterval(defaults: defaults) == nil)
-        #expect(ProviderIntervalSettings.zapperPortfolioSyncInterval(defaults: defaults) == nil)
+        #expect(ProviderIntervalSettings.onchainLivePriceInterval(defaults: defaults) == nil)
+        #expect(ProviderIntervalSettings.onchainPortfolioSyncInterval(defaults: defaults) == nil)
         #expect(ProviderIntervalSettings.exchangePortfolioSyncInterval(defaults: defaults) == nil)
 
-        defaults.set(7.0, forKey: ProviderIntervalSettings.zapperLivePriceIntervalKey)
-        defaults.set(7.0, forKey: ProviderIntervalSettings.zapperPortfolioSyncIntervalKey)
+        defaults.set(7.0, forKey: ProviderIntervalSettings.onchainLivePriceIntervalKey)
+        defaults.set(7.0, forKey: ProviderIntervalSettings.onchainPortfolioSyncIntervalKey)
         defaults.set(7.0, forKey: ProviderIntervalSettings.exchangePortfolioSyncIntervalKey)
 
-        #expect(ProviderIntervalSettings.zapperLivePriceIntervalSeconds(defaults: defaults) == 3600)
-        #expect(ProviderIntervalSettings.zapperPortfolioSyncIntervalSeconds(defaults: defaults) == 21600)
+        #expect(ProviderIntervalSettings.onchainLivePriceIntervalSeconds(defaults: defaults) == 3600)
+        #expect(ProviderIntervalSettings.onchainPortfolioSyncIntervalSeconds(defaults: defaults) == 21600)
         #expect(ProviderIntervalSettings.exchangePortfolioSyncIntervalSeconds(defaults: defaults) == 3600)
     }
 
@@ -187,7 +277,7 @@ struct SettingsTabTests {
         let message = HistoricalBackfillStatusFormatter.message(for: .running)
 
         #expect(message.contains("CoinGecko"))
-        #expect(message.contains("Zapper"))
+        #expect(message.contains("Zerion"))
     }
 
     @Test func `historical backfill status surfaces cache clearing`() {

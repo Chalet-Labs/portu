@@ -13,9 +13,8 @@ extension PriceUpdate {
             currency: currency,
             prices: prices.mapValues { $0 * rate },
             // A percentage change is dimensionless, so it doesn't need scaling by
-            // `rate` and stays valid after conversion — unlike Zapper's changes24h,
-            // which this drops by default since there's no equivalent evidence its
-            // percentages remain meaningful post-conversion.
+            // `rate` and stays valid after conversion. Provider fallback updates
+            // opt in only when their change semantics have been normalized.
             changes24h: preserveChanges24h ? changes24h : [:])
     }
 }

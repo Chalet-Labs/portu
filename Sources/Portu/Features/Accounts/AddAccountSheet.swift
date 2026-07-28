@@ -1,4 +1,5 @@
 import PortuCore
+import PortuNetwork
 import PortuUI
 import SwiftData
 import SwiftUI
@@ -7,17 +8,19 @@ struct AddAccountSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    private let mode: AccountSheetMode
-    private let account: Account?
+    let mode: AccountSheetMode
+    let account: Account?
     private let isSyncing: Bool
     private let canSync: Bool
     private let isSyncBlocked: Bool
     private let onSync: ((UUID) -> Void)?
-    private let secretStore: any SecretStore
+    let secretStore: any SecretStore
 
-    @State private var draft: AccountSheetDraft
-    @State private var baselineDraft: AccountSheetDraft
-    @State private var didLoadCredentials = false
+    @State var draft: AccountSheetDraft
+    @State var baselineDraft: AccountSheetDraft
+    @State var didLoadCredentials = false
+    @State var isLoadingCredentials: Bool
+    @State private var isSaving = false
     @State private var saveError: String?
 
     init(
@@ -27,7 +30,7 @@ struct AddAccountSheet: View {
         canSync: Bool = false,
         isSyncBlocked: Bool = false,
         onSync: ((UUID) -> Void)? = nil,
-        secretStore: any SecretStore = LocalSecretStore()) {
+        secretStore: any SecretStore = PortuApp.makeSecretStore()) {
         self.mode = mode
         self.account = account
         self.isSyncing = isSyncing
@@ -44,6 +47,7 @@ struct AddAccountSheet: View {
         }
         _draft = State(initialValue: initialDraft)
         _baselineDraft = State(initialValue: initialDraft)
+        _isLoadingCredentials = State(initialValue: mode.isEditing && account?.kind == .exchange)
     }
 
     var body: some View {
@@ -96,7 +100,7 @@ struct AddAccountSheet: View {
         } message: {
             Text(saveError ?? "")
         }
-        .onAppear { loadCredentialsIfNeeded() }
+        .task { await loadCredentialsIfNeeded() }
     }
 
     private var header: some View {
@@ -155,17 +159,17 @@ struct AddAccountSheet: View {
     private var chainAccountTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             AddAccountSupportPanel(
-                title: "CHAINS WE SUPPORT:",
+                title: "VALIDATED ZERION COVERAGE:",
                 chips: [
-                    .init(title: "Ethereum & L2s", systemImage: "diamond.fill", tint: .purple),
-                    .init(title: "Solana", systemImage: "circle.hexagongrid.fill", tint: .green),
-                    .init(title: "Bitcoin", systemImage: "bitcoinsign.circle.fill", tint: .orange),
-                    .init(title: "Base", systemImage: "b.circle.fill", tint: .blue),
-                    .init(title: "Polygon", systemImage: "hexagon.fill", tint: .purple),
-                    .init(title: "+ 6 more...", systemImage: nil, tint: PortuTheme.dashboardSecondaryText)
+                    .init(
+                        title: "\(ZerionChainMapping.supportedEVMPositionChainCount) EVM chains",
+                        systemImage: "diamond.fill",
+                        tint: .purple),
+                    .init(title: "Solana tokens", systemImage: "circle.hexagongrid.fill", tint: .green),
+                    .init(title: "No Bitcoin", systemImage: "exclamationmark.triangle.fill", tint: .orange)
                 ],
                 searchPlaceholder: "Search chain to test support",
-                linkTitle: "See full list")
+                linkTitle: nil)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 10) {
@@ -197,7 +201,7 @@ struct AddAccountSheet: View {
                         text: $draft.chainGroup)
                 }
 
-                InlineSourceNote(text: "Data source: Zapper API")
+                InlineSourceNote(text: "Data source: Zerion API")
             }
         }
     }
@@ -213,7 +217,7 @@ struct AddAccountSheet: View {
 
                 Divider()
 
-                ForEach([Chain.solana, .bitcoin], id: \.self) { chain in
+                ForEach([Chain.solana], id: \.self) { chain in
                     Button(chain.addAccountTitle) {
                         draft.specificChain = chain
                         draft.isEVM = false
@@ -263,6 +267,13 @@ struct AddAccountSheet: View {
                 ],
                 searchPlaceholder: nil,
                 linkTitle: "See full list")
+
+            if
+                AddAccountCredentialLoadRecovery.shouldOfferRetry(
+                    exchangeCredentialsLoaded: draft.exchangeCredentialsLoaded,
+                    isLoadingCredentials: isLoadingCredentials) {
+                AddAccountCredentialLoadRecoveryView(onRetry: retryCredentialLoad)
+            }
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 10) {
@@ -417,14 +428,6 @@ struct AddAccountSheet: View {
 // MARK: - Sheet State
 
 private extension AddAccountSheet {
-    func loadCredentialsIfNeeded() {
-        guard !didLoadCredentials, mode.isEditing, let account, account.kind == .exchange else { return }
-        didLoadCredentials = true
-        draft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
-        // Re-baseline so loaded credentials don't read as unsaved user edits.
-        baselineDraft = draft
-    }
-
     var alertTitle: String {
         mode.isEditing ? "Unable to Save Account" : "Unable to Add Account"
     }
@@ -434,18 +437,24 @@ private extension AddAccountSheet {
     }
 
     var syncButtonEnabled: Bool {
-        canSync && !isSyncing && !isSyncBlocked && !hasUnsavedChanges
+        canSync && !isSyncing && !isSyncBlocked && !isLoadingCredentials && !hasUnsavedChanges
     }
 
     var saveEnabled: Bool {
-        AddAccountSheetSavePolicy.canSubmit(
+        !isSaving && AddAccountSheetSavePolicy.canSubmit(
             draftCanSave: draft.canSave,
             isSyncing: isSyncing,
-            isSyncBlocked: isSyncBlocked)
+            isSyncBlocked: isSyncBlocked,
+            isLoadingCredentials: isLoadingCredentials,
+            exchangeCredentialsLoaded: draft.exchangeCredentialsLoaded)
     }
 
     var fieldsEditable: Bool {
-        AddAccountSheetSavePolicy.canEditFields(isSyncing: isSyncing, isSyncBlocked: isSyncBlocked)
+        AddAccountSheetSavePolicy.canEditFields(
+            isSyncing: isSyncing,
+            isSyncBlocked: isSyncBlocked,
+            isLoadingCredentials: isLoadingCredentials,
+            isSaving: isSaving)
     }
 
     var syncHelpText: String {
@@ -466,16 +475,20 @@ private extension AddAccountSheet {
 
     func saveAccount() {
         guard saveEnabled else { return }
-        do {
-            try AccountSheetSaveCoordinator.save(
-                draft: draft,
-                mode: mode,
-                editing: account,
-                modelContext: modelContext,
-                secretStore: secretStore)
-            dismiss()
-        } catch {
-            saveError = error.localizedDescription
+        isSaving = true
+        Task { @MainActor in
+            defer { isSaving = false }
+            do {
+                try await AccountSheetSaveCoordinator.save(
+                    draft: draft,
+                    mode: mode,
+                    editing: account,
+                    modelContext: modelContext,
+                    secretStore: secretStore)
+                dismiss()
+            } catch {
+                saveError = error.localizedDescription
+            }
         }
     }
 }

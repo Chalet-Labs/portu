@@ -135,7 +135,7 @@ struct OverviewHistoricalPriceChangeTests {
     }
 
     @Test func `historical price changes backfill overview key changes when live changes are missing`() {
-        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xZapper")
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xProvider")
         let token = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: identity)
         let changes24h = OverviewHistoricalPriceChangeFeature.mergedChanges24h(
             live: [:],

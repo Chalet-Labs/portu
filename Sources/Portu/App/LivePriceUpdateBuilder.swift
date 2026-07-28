@@ -7,33 +7,36 @@ enum LivePriceUpdateBuilder {
         coinIds: [String],
         priceService: PriceService,
         currency: FiatCurrency = .default,
-        fetchZapperUpdate: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate) async throws -> PriceUpdate {
+        fetchOnchainFallbackUpdate: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate) async throws -> PriceUpdate {
         let request = PricePollingIDResolver.split(coinIds)
         let coinGeckoUpdate = try await fetchCoinGeckoIDUpdate(
             coinIDs: request.coinGeckoIDs,
             priceService: priceService,
             currency: currency,
-            allowEmptyOnFailure: !request.zapperIdentities.isEmpty)
+            allowEmptyOnFailure: !request.onchainIdentities.isEmpty)
         let tokenUpdate = await fetchCoinGeckoTokenUpdate(
-            identities: request.zapperIdentities,
+            identities: request.onchainIdentities,
             priceService: priceService,
             currency: currency)
-        let unresolvedZapperIdentities = request.zapperIdentities.filter {
+        let unresolvedOnchainIdentities = request.onchainIdentities.filter {
             tokenUpdate.prices[$0.historicalPriceID] == nil
         }
-        let zapperUpdate: PriceUpdate
+        let onchainFallbackUpdate: PriceUpdate
         do {
-            let rawZapperUpdate = try await fetchZapperUpdate(unresolvedZapperIdentities)
+            let rawOnchainFallbackUpdate = try await fetchOnchainFallbackUpdate(unresolvedOnchainIdentities)
             if currency == .usd {
-                zapperUpdate = rawZapperUpdate
+                onchainFallbackUpdate = rawOnchainFallbackUpdate
             } else {
                 let rate = try await priceService.fetchCurrentUSDConversionRate(to: currency)
-                zapperUpdate = rawZapperUpdate.convertedUSDValues(to: currency, rate: rate)
+                onchainFallbackUpdate = rawOnchainFallbackUpdate.convertedUSDValues(
+                    to: currency,
+                    rate: rate,
+                    preserveChanges24h: true)
             }
         } catch {
-            zapperUpdate = PricePollingIDResolver.emptyUpdate(currency: currency)
+            onchainFallbackUpdate = PricePollingIDResolver.emptyUpdate(currency: currency)
         }
-        return PricePollingIDResolver.merge([coinGeckoUpdate, tokenUpdate, zapperUpdate])
+        return PricePollingIDResolver.merge([coinGeckoUpdate, tokenUpdate, onchainFallbackUpdate])
     }
 
     static func fetchCoinGeckoPrices(
@@ -44,9 +47,9 @@ enum LivePriceUpdateBuilder {
             coinIDs: request.coinGeckoIDs,
             priceService: priceService,
             currency: currency,
-            allowEmptyOnFailure: !request.zapperIdentities.isEmpty)
+            allowEmptyOnFailure: !request.onchainIdentities.isEmpty)
         let tokenUpdate = await fetchCoinGeckoTokenUpdate(
-            identities: request.zapperIdentities,
+            identities: request.onchainIdentities,
             priceService: priceService,
             currency: currency)
         return PricePollingIDResolver.merge([coinGeckoUpdate, tokenUpdate])

@@ -33,7 +33,7 @@ struct ModelTests {
         let account = Account(
             name: "My Wallet",
             kind: .wallet,
-            dataSource: .zapper)
+            dataSource: .zerion)
         context.insert(account)
         try context.save()
 
@@ -41,7 +41,7 @@ struct ModelTests {
         #expect(fetched.count == 1)
         #expect(fetched[0].name == "My Wallet")
         #expect(fetched[0].kind == .wallet)
-        #expect(fetched[0].dataSource == .zapper)
+        #expect(fetched[0].dataSource == .zerion)
         #expect(fetched[0].isActive == true)
         #expect(fetched[0].lastSyncError == nil)
     }
@@ -50,7 +50,7 @@ struct ModelTests {
         let container = try makeTestContainer()
         let context = container.mainContext
 
-        let account = Account(name: "Test", kind: .wallet, dataSource: .zapper)
+        let account = Account(name: "Test", kind: .wallet, dataSource: .zerion)
         let addr = WalletAddress(address: "0xabc123")
         account.addresses.append(addr)
         context.insert(account)
@@ -68,7 +68,7 @@ struct ModelTests {
         let container = try makeTestContainer()
         let context = container.mainContext
 
-        let account = Account(name: "Test", kind: .wallet, dataSource: .zapper)
+        let account = Account(name: "Test", kind: .wallet, dataSource: .zerion)
         let position = Position(positionType: .idle, chain: .ethereum, netUSDValue: 1000)
         account.positions.append(position)
         context.insert(account)
@@ -132,7 +132,7 @@ struct ModelTests {
         let asset = Asset(symbol: "BTC", name: "Bitcoin", coinGeckoId: "bitcoin", category: .major)
         let token = PositionToken(role: .balance, amount: 1, usdValue: 67500, asset: asset)
         let position = Position(positionType: .idle, netUSDValue: 67500, tokens: [token])
-        let account = Account(name: "Hardware", kind: .wallet, dataSource: .zapper, positions: [position])
+        let account = Account(name: "Hardware", kind: .wallet, dataSource: .zerion, positions: [position])
         context.insert(account)
         context.insert(asset)
         try context.save()
@@ -324,6 +324,28 @@ struct ModelTests {
         #expect(dto.day == HistoricalPriceCalendar.utcStartOfDay(for: rawDate))
     }
 
+    @Test func `historical price persistence preserves Solana mint case`() throws {
+        let container = try makeTestContainer()
+        let context = container.mainContext
+        let rawDate = Date(timeIntervalSince1970: 1_704_110_456)
+        let identity = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+        let dto = HistoricalPriceDTO(
+            coinGeckoId: identity.historicalPriceID,
+            timestamp: rawDate,
+            usdPrice: 12.5)
+        let point = HistoricalPricePoint(dto: dto)
+
+        #expect(dto.coinGeckoId == "asset:solana:SoLanaMiNtCase")
+        #expect(point.coinGeckoId == "asset:solana:SoLanaMiNtCase")
+        #expect(HistoricalPriceDTO(coinGeckoId: " BITCOIN ", timestamp: rawDate, usdPrice: 1).coinGeckoId == "bitcoin")
+
+        context.insert(point)
+        try context.save()
+
+        let fetched = try #require(try context.fetch(FetchDescriptor<HistoricalPricePoint>()).first)
+        #expect(fetched.coinGeckoId == "asset:solana:SoLanaMiNtCase")
+    }
+
     @Test func `onchain identity uses canonical asset price id and parses legacy zapper id`() throws {
         let identity = try #require(OnchainTokenIdentity(historicalPriceID: " zapper:base:0xABCDEF "))
 
@@ -333,6 +355,26 @@ struct ModelTests {
         #expect(OnchainTokenIdentity(historicalPriceID: " asset:base:0xABCDEF ") == identity)
         #expect(OnchainTokenIdentity(historicalPriceID: "coingecko:ethereum") == nil)
         #expect(OnchainTokenIdentity(historicalPriceID: "zapper:unknown:0xabc") == nil)
+    }
+
+    @Test func `native identity preserves the existing zero address convention`() {
+        let identity = OnchainTokenIdentity.native(on: .ethereum)
+
+        #expect(identity.contractAddress == OnchainTokenIdentity.nativeAssetSentinel)
+        #expect(identity.contractAddress == "0x0000000000000000000000000000000000000000")
+        #expect(identity.historicalPriceID == "asset:ethereum:0x0000000000000000000000000000000000000000")
+        #expect(OnchainTokenIdentity(historicalPriceID: identity.historicalPriceID) == identity)
+        #expect(OnchainTokenIdentity(historicalPriceID: "asset:ethereum:native") == identity)
+    }
+
+    @Test func `onchain identity preserves Solana mint case and normalizes EVM addresses`() {
+        let solana = OnchainTokenIdentity(chain: .solana, contractAddress: " SoLanaMiNtCase ")
+        let evm = OnchainTokenIdentity(chain: .base, contractAddress: " 0xAbCd ")
+
+        #expect(solana.contractAddress == "SoLanaMiNtCase")
+        #expect(solana.canonicalPriceID == "asset:solana:SoLanaMiNtCase")
+        #expect(OnchainTokenIdentity(historicalPriceID: solana.historicalPriceID) == solana)
+        #expect(evm.contractAddress == "0xabcd")
     }
 
     @Test func `onchain identity parses camel case chain ids case insensitively`() throws {
@@ -394,8 +436,26 @@ struct ModelTests {
         #expect(fetched.updatedAt == updatedAt)
     }
 
+    @Test func `token identity mappings preserve distinct Solana mint case`() {
+        let first = TokenIdentityMapping(
+            chain: .solana,
+            contractAddress: "SoLanaMiNtCase")
+        let second = TokenIdentityMapping(
+            chain: .solana,
+            contractAddress: "solanamintcase")
+        let evm = TokenIdentityMapping(
+            chain: .base,
+            contractAddress: "0xAbCd")
+
+        #expect(first.contractAddress == "SoLanaMiNtCase")
+        #expect(first.canonicalKey == "solana:SoLanaMiNtCase")
+        #expect(second.canonicalKey == "solana:solanamintcase")
+        #expect(first.canonicalKey != second.canonicalKey)
+        #expect(evm.contractAddress == "0xabcd")
+    }
+
     @Test func `account is active by default`() {
-        let account = Account(name: "Test", kind: .wallet, dataSource: .zapper)
+        let account = Account(name: "Test", kind: .wallet, dataSource: .zerion)
         #expect(account.isActive == true)
     }
 

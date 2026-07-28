@@ -199,21 +199,21 @@ struct AppFeature {
 
             case .startScheduledSync:
                 return .run { send in
-                    var lastZapperSync = currentDate.now()
+                    var lastOnchainSync = currentDate.now()
                     var lastExchangeSync = currentDate.now()
 
                     while !Task.isCancelled {
                         let now = currentDate.now()
-                        let zapperInterval = providerSyncSettings.zapperPortfolioSyncInterval()
+                        let onchainInterval = providerSyncSettings.onchainPortfolioSyncInterval()
                         let exchangeInterval = providerSyncSettings.exchangePortfolioSyncInterval()
 
-                        if let zapperInterval {
-                            if now.timeIntervalSince(lastZapperSync) >= Self.timeInterval(for: zapperInterval) {
-                                lastZapperSync = now
-                                await send(.scheduledSyncDue(.zapper))
+                        if let onchainInterval {
+                            if now.timeIntervalSince(lastOnchainSync) >= Self.timeInterval(for: onchainInterval) {
+                                lastOnchainSync = now
+                                await send(.scheduledSyncDue(.onchain))
                             }
                         } else {
-                            lastZapperSync = now
+                            lastOnchainSync = now
                         }
 
                         if let exchangeInterval {
@@ -227,9 +227,9 @@ struct AppFeature {
 
                         let sleepDuration = Self.scheduledSyncSleepDuration(
                             now: now,
-                            lastZapperSync: lastZapperSync,
+                            lastOnchainSync: lastOnchainSync,
                             lastExchangeSync: lastExchangeSync,
-                            zapperInterval: zapperInterval,
+                            onchainInterval: onchainInterval,
                             exchangeInterval: exchangeInterval)
                         try await clock.sleep(for: sleepDuration)
                     }
@@ -542,16 +542,16 @@ private extension AppFeature {
             coinGeckoPricePollingEffect(request: request, currency: currency, rate: rate)
         ]
 
-        if request.zapperIdentities.isEmpty == false {
+        if request.onchainIdentities.isEmpty == false {
             effects.append(.run { send in
                 while !Task.isCancelled {
-                    guard let zapperFallbackInterval = pricePollingSettings.zapperFallbackInterval() else {
+                    guard pricePollingSettings.onchainFallbackInterval() != nil else {
                         try await clock.sleep(for: Self.settingsRecheckInterval)
                         continue
                     }
 
                     do {
-                        let update = try await priceService.fetchZapperPrices(request.zapperIdentities, currency, rate)
+                        let update = try await priceService.fetchOnchainFallbackPrices(request.onchainIdentities, currency, rate)
                         await send(.pricesReceived(update))
                     } catch {
                         guard !Task.isCancelled else { return }
@@ -560,7 +560,7 @@ private extension AppFeature {
 
                     var elapsed: Duration = .zero
                     while !Task.isCancelled {
-                        guard let currentInterval = pricePollingSettings.zapperFallbackInterval() else {
+                        guard let currentInterval = pricePollingSettings.onchainFallbackInterval() else {
                             break
                         }
                         guard elapsed < currentInterval else { break }
@@ -580,10 +580,10 @@ private extension AppFeature {
     func coinGeckoPricePollingEffect(request: PricePollingRequest, currency: FiatCurrency, rate: Decimal) -> Effect<Action> {
         let coinRequest = PricePollingRequest(
             coinGeckoIDs: request.coinGeckoIDs,
-            zapperIdentities: [])
+            onchainIdentities: [])
         let tokenRequest = PricePollingRequest(
             coinGeckoIDs: [],
-            zapperIdentities: request.zapperIdentities)
+            onchainIdentities: request.onchainIdentities)
 
         return .run { send in
             while !Task.isCancelled {
@@ -639,16 +639,16 @@ private extension AppFeature {
 
     static func scheduledSyncSleepDuration(
         now: Date,
-        lastZapperSync: Date,
+        lastOnchainSync: Date,
         lastExchangeSync: Date,
-        zapperInterval: Duration?,
+        onchainInterval: Duration?,
         exchangeInterval: Duration?) -> Duration {
         var sleepDuration = settingsRecheckInterval
 
-        if let zapperInterval {
+        if let onchainInterval {
             sleepDuration = shorterDuration(
                 sleepDuration,
-                remainingDuration(interval: zapperInterval, lastSync: lastZapperSync, now: now))
+                remainingDuration(interval: onchainInterval, lastSync: lastOnchainSync, now: now))
         }
 
         if let exchangeInterval {

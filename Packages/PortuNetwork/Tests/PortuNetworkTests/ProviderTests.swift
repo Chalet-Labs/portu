@@ -32,8 +32,25 @@ struct ProviderTests {
         #expect(!caps.supportsHealthFactors)
     }
 
-    @Test func `zapper capabilities`() {
-        let provider = ZapperProvider(apiKey: "test-key")
+    @Test func `default combined fetch preserves balance then DeFi behavior`() async throws {
+        let provider = MockProvider()
+        let balance = PositionDTO(
+            positionType: .idle, chain: .ethereum, protocolId: nil, protocolName: nil,
+            protocolLogoURL: nil, healthFactor: nil, tokens: [])
+        let defi = PositionDTO(
+            positionType: .lending, chain: .ethereum, protocolId: "aave", protocolName: "Aave",
+            protocolLogoURL: nil, healthFactor: nil, tokens: [])
+        await provider.configure(balances: [balance], defi: [defi])
+
+        let results = try await provider.fetchPositions(context: makeSyncContext())
+
+        #expect(results.map(\.positionType) == [.idle, .lending])
+        #expect(await provider.fetchBalancesCalled)
+        #expect(await provider.fetchDeFiCalled)
+    }
+
+    @Test func `zerion capabilities`() {
+        let provider = ZerionProvider(client: ZerionAPIClient(apiKey: { "test-key" }))
         let caps = provider.capabilities
         #expect(caps.supportsTokenBalances)
         #expect(caps.supportsDeFiPositions)

@@ -53,7 +53,7 @@ extension DependencyValues {
 }
 
 enum PortfolioSyncScope: Equatable {
-    case zapper
+    case onchain
     case exchange
 }
 
@@ -61,23 +61,23 @@ enum PortfolioSyncScope: Equatable {
 
 struct PriceServiceClient {
     enum ClientError: Error {
-        /// Returned by `fetchZapperHistoricalPrices` when no Zapper API key is configured.
+        /// Returned by `fetchOnchainHistoricalPrices` when no Zerion API key is configured.
         /// The backfill runner's upstream pre-filter normally prevents reaching this path,
         /// but a missing key here means the candidate cannot be fetched — surface it as a
         /// failure instead of silently returning an empty result set.
-        case zapperProviderUnavailable
+        case onchainProviderUnavailable
     }
 
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
     private var fetchCoinGeckoPricesOverride: (@Sendable (PricePollingRequest, FiatCurrency, Decimal) async throws -> PriceUpdate)?
-    private var fetchZapperPricesOverride: (@Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate)?
+    private var fetchOnchainFallbackPricesOverride: (@Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate)?
     var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
     var fetchHistoricalPricesForCurrency: @Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO]
     var fetchCurrentUSDConversionRate: @Sendable (FiatCurrency) async throws -> Decimal
     var fetchHistoricalUSDConversionRates: @Sendable (FiatCurrency, Int) async throws -> [CurrencyConversionRate]
     var resolveCoinGeckoIDs: @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String]
-    var fetchZapperHistoricalPrices: @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO]
-    var canFetchZapperHistoricalPrices: @Sendable () -> Bool
+    var fetchOnchainHistoricalPrices: @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO]
+    var canFetchOnchainHistoricalPrices: @Sendable () async throws -> Bool
     var invalidateCache: @Sendable () async -> Void
 
     var fetchCoinGeckoPrices: @Sendable (PricePollingRequest, FiatCurrency, Decimal) async throws -> PriceUpdate {
@@ -99,10 +99,10 @@ struct PriceServiceClient {
         set { fetchCoinGeckoPricesOverride = newValue }
     }
 
-    var fetchZapperPrices: @Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate {
+    var fetchOnchainFallbackPrices: @Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate {
         get {
-            if let fetchZapperPricesOverride {
-                return fetchZapperPricesOverride
+            if let fetchOnchainFallbackPricesOverride {
+                return fetchOnchainFallbackPricesOverride
             }
             let fetchPrices = fetchPrices
             return { identities, currency, _ in
@@ -115,24 +115,24 @@ struct PriceServiceClient {
                 return try await fetchPrices(identities.map(\.historicalPriceID))
             }
         }
-        set { fetchZapperPricesOverride = newValue }
+        set { fetchOnchainFallbackPricesOverride = newValue }
     }
 
     init(
         fetchPrices: @escaping @Sendable ([String]) async throws -> PriceUpdate,
         fetchCoinGeckoPrices: (@Sendable (PricePollingRequest, FiatCurrency, Decimal) async throws -> PriceUpdate)? = nil,
-        fetchZapperPrices: (@Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate)? = nil,
+        fetchOnchainFallbackPrices: (@Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate)? = nil,
         fetchHistoricalPrices: @escaping @Sendable (String, Int) async throws -> [HistoricalPriceDTO],
         fetchHistoricalPricesForCurrency: (@Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO])? = nil,
         fetchCurrentUSDConversionRate: @escaping @Sendable (FiatCurrency) async throws -> Decimal = { _ in 1 },
         fetchHistoricalUSDConversionRates: @escaping @Sendable (FiatCurrency, Int) async throws -> [CurrencyConversionRate] = { _, _ in [] },
         resolveCoinGeckoIDs: @escaping @Sendable ([OnchainTokenIdentity]) async throws -> [OnchainTokenIdentity: String] = { _ in [:] },
-        fetchZapperHistoricalPrices: @escaping @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO] = { _, _ in [] },
-        canFetchZapperHistoricalPrices: @escaping @Sendable () -> Bool = { true },
+        fetchOnchainHistoricalPrices: @escaping @Sendable (OnchainTokenIdentity, Int) async throws -> [HistoricalPriceDTO] = { _, _ in [] },
+        canFetchOnchainHistoricalPrices: @escaping @Sendable () async throws -> Bool = { true },
         invalidateCache: @escaping @Sendable () async -> Void) {
         self.fetchPrices = fetchPrices
         self.fetchCoinGeckoPricesOverride = fetchCoinGeckoPrices
-        self.fetchZapperPricesOverride = fetchZapperPrices
+        self.fetchOnchainFallbackPricesOverride = fetchOnchainFallbackPrices
         self.fetchHistoricalPrices = fetchHistoricalPrices
         self.fetchHistoricalPricesForCurrency = fetchHistoricalPricesForCurrency ?? { coinId, currency, days in
             guard currency == .default else { return [] }
@@ -141,8 +141,8 @@ struct PriceServiceClient {
         self.fetchCurrentUSDConversionRate = fetchCurrentUSDConversionRate
         self.fetchHistoricalUSDConversionRates = fetchHistoricalUSDConversionRates
         self.resolveCoinGeckoIDs = resolveCoinGeckoIDs
-        self.fetchZapperHistoricalPrices = fetchZapperHistoricalPrices
-        self.canFetchZapperHistoricalPrices = canFetchZapperHistoricalPrices
+        self.fetchOnchainHistoricalPrices = fetchOnchainHistoricalPrices
+        self.canFetchOnchainHistoricalPrices = canFetchOnchainHistoricalPrices
         self.invalidateCache = invalidateCache
     }
 }
@@ -151,33 +151,33 @@ extension PriceServiceClient: DependencyKey {
     static let liveValue = Self(
         fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchCoinGeckoPrices: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        fetchZapperPrices: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchOnchainFallbackPrices: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalPricesForCurrency: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchCurrentUSDConversionRate: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalUSDConversionRates: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         resolveCoinGeckoIDs: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        fetchZapperHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        canFetchZapperHistoricalPrices: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchOnchainHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        canFetchOnchainHistoricalPrices: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         invalidateCache: { fatalError("PriceServiceClient.liveValue must be overridden at Store creation") })
     static let testValue = Self(
         fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
         fetchHistoricalPrices: { _, _ in [] },
         resolveCoinGeckoIDs: { _ in [:] },
-        fetchZapperHistoricalPrices: { _, _ in [] },
-        canFetchZapperHistoricalPrices: { true },
+        fetchOnchainHistoricalPrices: { _, _ in [] },
+        canFetchOnchainHistoricalPrices: { true },
         invalidateCache: {})
 
-    static func live(service: PriceService, zapperProvider: ZapperProvider? = nil) -> Self {
+    static func live(service: PriceService, zerionProvider: ZerionProvider? = nil) -> Self {
         Self(
             fetchPrices: { coinIds in
                 try await LivePriceUpdateBuilder.fetchPrices(
                     coinIds: coinIds,
                     priceService: service) { identities in
-                        guard let zapperProvider, !identities.isEmpty else {
+                        guard let zerionProvider, !identities.isEmpty else {
                             return PricePollingIDResolver.emptyUpdate
                         }
-                        return try await zapperProvider.fetchPriceUpdate(for: identities)
+                        return try await zerionProvider.fetchPriceUpdate(for: identities)
                     }
             },
             fetchCoinGeckoPrices: { request, currency, usdToDisplayRate in
@@ -188,13 +188,16 @@ extension PriceServiceClient: DependencyKey {
                 guard currency != .usd else { return update }
                 return update.convertedUSDValues(to: currency, rate: usdToDisplayRate, preserveChanges24h: true)
             },
-            fetchZapperPrices: { identities, currency, usdToDisplayRate in
-                guard let zapperProvider, !identities.isEmpty else {
+            fetchOnchainFallbackPrices: { identities, currency, usdToDisplayRate in
+                guard let zerionProvider, !identities.isEmpty else {
                     return PricePollingIDResolver.emptyUpdate(currency: currency)
                 }
-                let update = try await zapperProvider.fetchPriceUpdate(for: identities)
+                let update = try await zerionProvider.fetchPriceUpdate(for: identities)
                 guard currency != .usd else { return update }
-                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate)
+                return update.convertedUSDValues(
+                    to: currency,
+                    rate: usdToDisplayRate,
+                    preserveChanges24h: true)
             },
             fetchHistoricalPrices: { coinId, days in
                 try await service.fetchHistoricalPrices(for: coinId, days: days)
@@ -211,13 +214,13 @@ extension PriceServiceClient: DependencyKey {
             resolveCoinGeckoIDs: { identities in
                 try await service.resolveCoinGeckoIDs(for: identities)
             },
-            fetchZapperHistoricalPrices: { identity, days in
-                guard let zapperProvider else {
-                    throw ClientError.zapperProviderUnavailable
+            fetchOnchainHistoricalPrices: { identity, days in
+                guard let zerionProvider else {
+                    throw ClientError.onchainProviderUnavailable
                 }
-                return try await zapperProvider.fetchHistoricalPrices(identity: identity, days: days)
+                return try await zerionProvider.fetchHistoricalPrices(identity: identity, days: days)
             },
-            canFetchZapperHistoricalPrices: { zapperProvider != nil },
+            canFetchOnchainHistoricalPrices: { zerionProvider != nil },
             invalidateCache: { await service.invalidateCache() })
     }
 }
@@ -233,16 +236,16 @@ extension DependencyValues {
 
 struct PricePollingSettingsClient {
     var refreshInterval: @Sendable () -> Duration
-    var zapperFallbackInterval: @Sendable () -> Duration?
+    var onchainFallbackInterval: @Sendable () -> Duration?
 }
 
 extension PricePollingSettingsClient: DependencyKey {
     static let liveValue = Self(
         refreshInterval: { PricePollingSettings.refreshInterval() },
-        zapperFallbackInterval: { ProviderIntervalSettings.zapperLivePriceInterval() })
+        onchainFallbackInterval: { ProviderIntervalSettings.onchainLivePriceInterval() })
     static let testValue = Self(
         refreshInterval: { .seconds(PricePollingSettings.defaultRefreshIntervalSeconds) },
-        zapperFallbackInterval: { .seconds(ProviderIntervalSettings.defaultZapperLivePriceIntervalSeconds) })
+        onchainFallbackInterval: { .seconds(ProviderIntervalSettings.defaultOnchainLivePriceIntervalSeconds) })
 }
 
 extension DependencyValues {
@@ -255,16 +258,16 @@ extension DependencyValues {
 // MARK: - ProviderSyncSettingsClient
 
 struct ProviderSyncSettingsClient {
-    var zapperPortfolioSyncInterval: @Sendable () -> Duration?
+    var onchainPortfolioSyncInterval: @Sendable () -> Duration?
     var exchangePortfolioSyncInterval: @Sendable () -> Duration?
 }
 
 extension ProviderSyncSettingsClient: DependencyKey {
     static let liveValue = Self(
-        zapperPortfolioSyncInterval: { ProviderIntervalSettings.zapperPortfolioSyncInterval() },
+        onchainPortfolioSyncInterval: { ProviderIntervalSettings.onchainPortfolioSyncInterval() },
         exchangePortfolioSyncInterval: { ProviderIntervalSettings.exchangePortfolioSyncInterval() })
     static let testValue = Self(
-        zapperPortfolioSyncInterval: { .seconds(ProviderIntervalSettings.defaultZapperPortfolioSyncIntervalSeconds) },
+        onchainPortfolioSyncInterval: { .seconds(ProviderIntervalSettings.defaultOnchainPortfolioSyncIntervalSeconds) },
         exchangePortfolioSyncInterval: { .seconds(ProviderIntervalSettings.defaultExchangePortfolioSyncIntervalSeconds) })
 }
 

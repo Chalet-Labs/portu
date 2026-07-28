@@ -25,6 +25,9 @@ DMG_PATH="$DIST_DIR/$APP_NAME-$VERSION.dmg"
 CHECKSUM_PATH="$DMG_PATH.sha256"
 BUILD_NUMBER="${GITHUB_RUN_NUMBER:-0}"
 BUNDLE_MARKETING_VERSION="${VERSION%%[-+]*}"
+: "${PORTU_CODE_SIGN_IDENTITY:?Set PORTU_CODE_SIGN_IDENTITY to an authorized Apple signing identity}"
+: "${PORTU_DEVELOPMENT_TEAM:?Set PORTU_DEVELOPMENT_TEAM to the signing team identifier}"
+: "${PORTU_PROVISIONING_PROFILE_SPECIFIER:?Set PORTU_PROVISIONING_PROFILE_SPECIFIER to the installed profile name or UUID}"
 
 cd "$ROOT_DIR"
 
@@ -41,12 +44,22 @@ xcodebuild \
   -skipMacroValidation \
   MARKETING_VERSION="$BUNDLE_MARKETING_VERSION" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
-  CODE_SIGN_IDENTITY="-" \
+  CODE_SIGN_IDENTITY="$PORTU_CODE_SIGN_IDENTITY" \
+  CODE_SIGN_STYLE=Manual \
+  DEVELOPMENT_TEAM="$PORTU_DEVELOPMENT_TEAM" \
+  PROVISIONING_PROFILE_SPECIFIER="$PORTU_PROVISIONING_PROFILE_SPECIFIER" \
   CODE_SIGNING_REQUIRED=YES \
   build
 
 if [[ ! -d "$APP_BUNDLE" ]]; then
   echo "error: expected app bundle at $APP_BUNDLE" >&2
+  exit 1
+fi
+
+SIGNED_ENTITLEMENTS="$STAGING_DIR/signed-entitlements.plist"
+codesign -d --entitlements :- "$APP_BUNDLE" > "$SIGNED_ENTITLEMENTS" 2>/dev/null
+if ! /usr/libexec/PlistBuddy -c "Print :com.apple.application-identifier" "$SIGNED_ENTITLEMENTS" >/dev/null 2>&1; then
+  echo "error: release signature lacks an authorized application identifier required by the data-protection keychain" >&2
   exit 1
 fi
 

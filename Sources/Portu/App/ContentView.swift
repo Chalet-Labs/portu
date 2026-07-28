@@ -6,7 +6,15 @@ import SwiftUI
 
 struct ContentView: View {
     let store: StoreOf<AppFeature>
+    let secretStore: any SecretStore
     @State private var assetNavigationPath = NavigationPath()
+
+    init(
+        store: StoreOf<AppFeature>,
+        secretStore: any SecretStore = PortuApp.makeSecretStore()) {
+        self.store = store
+        self.secretStore = secretStore
+    }
 
     var body: some View {
         HistoricalPriceChanges24hProvider {
@@ -58,7 +66,7 @@ struct ContentView: View {
             sectionView(section)
                 .dashboardPage()
         case .settings:
-            SettingsView(store: store)
+            SettingsView(store: store, secretStore: secretStore)
         }
     }
 
@@ -76,7 +84,7 @@ struct ContentView: View {
         case .allPositions:
             AllPositionsView()
         case .accounts:
-            AccountsView(store: store)
+            AccountsView(store: store, secretStore: secretStore)
         }
     }
 }

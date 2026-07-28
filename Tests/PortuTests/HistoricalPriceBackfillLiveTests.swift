@@ -250,7 +250,7 @@ struct HistoricalPriceBackfillLiveTests {
         #expect(result.skippedAssets == 0)
     }
 
-    @Test func `live backfill resolves missing coingecko ids and uses zapper fallback for unmapped onchain assets`() async throws {
+    @Test func `live backfill resolves missing coingecko ids and uses Zerion fallback for unmapped onchain assets`() async throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
         let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
@@ -280,7 +280,7 @@ struct HistoricalPriceBackfillLiveTests {
         let mappedIdentity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
         let fallbackIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xFallback")
         let coinGeckoRequests = SendableArray<String>()
-        let zapperRequests = SendableArray<OnchainTokenIdentity>()
+        let onchainRequests = SendableArray<OnchainTokenIdentity>()
         let client = HistoricalPriceBackfillClient.live(
             modelContext: context,
             priceService: PriceServiceClient(
@@ -298,8 +298,8 @@ struct HistoricalPriceBackfillLiveTests {
                     #expect(Set(identities) == Set([mappedIdentity, fallbackIdentity]))
                     return [mappedIdentity: "mapped-token"]
                 },
-                fetchZapperHistoricalPrices: { identity, _ in
-                    zapperRequests.append(identity)
+                fetchOnchainHistoricalPrices: { identity, _ in
+                    onchainRequests.append(identity)
                     return [
                         HistoricalPriceDTO(
                             coinGeckoId: identity.historicalPriceID,
@@ -321,7 +321,7 @@ struct HistoricalPriceBackfillLiveTests {
         #expect(result.fetchedAssets == 2)
         #expect(result.skippedAssets == 0)
         #expect(coinGeckoRequests.values == ["mapped-token"])
-        #expect(zapperRequests.values == [fallbackIdentity])
+        #expect(onchainRequests.values == [fallbackIdentity])
         #expect(rows.map(\.coinGeckoId) == [fallbackIdentity.historicalPriceID, mappedIdentity.historicalPriceID])
         #expect(overrides.isEmpty)
         #expect(mappings.count == 1)
@@ -368,8 +368,8 @@ struct HistoricalPriceBackfillLiveTests {
                     #expect(identities == [identity])
                     return [identity: "usd-coin"]
                 },
-                fetchZapperHistoricalPrices: { _, _ in
-                    Issue.record("Known contract mappings should not use Zapper fallback")
+                fetchOnchainHistoricalPrices: { _, _ in
+                    Issue.record("Known contract mappings should not use Zerion fallback")
                     return []
                 },
                 invalidateCache: {}),
@@ -434,7 +434,7 @@ struct HistoricalPriceBackfillLiveTests {
         #expect(coinGeckoRequests.values == ["cached-token"])
     }
 
-    @Test func `live backfill throws preflightUnavailable when only zapper candidates exist and provider is unavailable`() async throws {
+    @Test func `live backfill throws preflightUnavailable when only Zerion candidates exist and provider is unavailable`() async throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
         let account = Account(name: "Wallet", kind: .wallet, dataSource: .manual)
@@ -454,18 +454,18 @@ struct HistoricalPriceBackfillLiveTests {
         try context.save()
 
         var slept: [Duration] = []
-        let zapperRequests = SendableArray<OnchainTokenIdentity>()
+        let onchainRequests = SendableArray<OnchainTokenIdentity>()
         let client = HistoricalPriceBackfillClient.live(
             modelContext: context,
             priceService: PriceServiceClient(
                 fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
                 fetchHistoricalPrices: { _, _ in [] },
                 resolveCoinGeckoIDs: { _ in [:] },
-                fetchZapperHistoricalPrices: { identity, _ in
-                    zapperRequests.append(identity)
+                fetchOnchainHistoricalPrices: { identity, _ in
+                    onchainRequests.append(identity)
                     return []
                 },
-                canFetchZapperHistoricalPrices: { false },
+                canFetchOnchainHistoricalPrices: { false },
                 invalidateCache: {}),
             requestSpacing: .seconds(8),
             sleep: { duration in slept.append(duration) })
@@ -477,7 +477,7 @@ struct HistoricalPriceBackfillLiveTests {
             thrown = error
         }
         #expect(thrown?.kind == .preflightUnavailable)
-        #expect(zapperRequests.values.isEmpty)
+        #expect(onchainRequests.values.isEmpty)
         #expect(slept.isEmpty)
     }
 

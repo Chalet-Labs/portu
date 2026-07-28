@@ -36,7 +36,7 @@ public struct HistoricalPriceDTO: Sendable, Equatable {
         currency: FiatCurrency,
         price: Decimal,
         source: HistoricalPriceSource = .coingecko) {
-        self.coinGeckoId = coinGeckoId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.coinGeckoId = OnchainTokenIdentity.normalizedHistoricalPriceID(coinGeckoId)
         self.timestamp = timestamp
         self.day = HistoricalPriceCalendar.utcStartOfDay(for: timestamp)
         self.currency = currency

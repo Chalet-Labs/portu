@@ -4,9 +4,32 @@ import Security
 /// Wraps Security.framework keychain APIs. Items are scoped to the kSecAttrService value
 /// (defaults to the host bundle identifier; falls back to "com.portu.app" when none is set).
 ///
-/// Items are written with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` so they
-/// cannot sync to iCloud Keychain and stay tied to this device.
+/// Provisioned builds use the data protection keychain with
+/// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. Builds without an authorized
+/// application identifier fall back to the encrypted file-based macOS keychain because
+/// the data protection keychain rejects them with `errSecMissingEntitlement`.
 public struct KeychainService: SecretStore {
+    private enum CachedValue {
+        case missing
+        case value(String)
+    }
+
+    private final class ValueCache: @unchecked Sendable {
+        private var values: [String: CachedValue] = [:]
+
+        func value(service: String, key: KeychainKey) -> CachedValue? {
+            values[cacheKey(service: service, key: key)]
+        }
+
+        func store(_ value: String?, service: String, key: KeychainKey) {
+            values[cacheKey(service: service, key: key)] = value.map(CachedValue.value) ?? .missing
+        }
+
+        private func cacheKey(service: String, key: KeychainKey) -> String {
+            "\(service)\u{0}\(key.rawKey)"
+        }
+    }
+
     typealias CopyMatching = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
     typealias Add = @Sendable (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus
     typealias Update = @Sendable (CFDictionary, CFDictionary) -> OSStatus
@@ -17,6 +40,10 @@ public struct KeychainService: SecretStore {
     private let add: Add
     private let update: Update
     private let delete: Delete
+    private let valueCache: ValueCache
+    private let useDataProtectionKeychain: Bool
+    private static let operationLock = NSLock()
+    private static let liveValueCache = ValueCache()
 
     public init(service: String = Bundle.main.bundleIdentifier ?? "com.portu.app") {
         self.init(
@@ -24,7 +51,9 @@ public struct KeychainService: SecretStore {
             copyMatching: SecItemCopyMatching,
             add: SecItemAdd,
             update: SecItemUpdate,
-            delete: SecItemDelete)
+            delete: SecItemDelete,
+            valueCache: Self.liveValueCache,
+            useDataProtectionKeychain: Self.hasDataProtectionKeychainEntitlement)
     }
 
     init(
@@ -32,24 +61,60 @@ public struct KeychainService: SecretStore {
         copyMatching: @escaping CopyMatching = SecItemCopyMatching,
         add: @escaping Add = SecItemAdd,
         update: @escaping Update = SecItemUpdate,
-        delete: @escaping Delete = SecItemDelete) {
+        delete: @escaping Delete = SecItemDelete,
+        useDataProtectionKeychain: Bool = true) {
+        self.init(
+            service: service,
+            copyMatching: copyMatching,
+            add: add,
+            update: update,
+            delete: delete,
+            valueCache: ValueCache(),
+            useDataProtectionKeychain: useDataProtectionKeychain)
+    }
+
+    private init(
+        service: String,
+        copyMatching: @escaping CopyMatching,
+        add: @escaping Add,
+        update: @escaping Update,
+        delete: @escaping Delete,
+        valueCache: ValueCache,
+        useDataProtectionKeychain: Bool) {
         self.service = service
         self.copyMatching = copyMatching
         self.add = add
         self.update = update
         self.delete = delete
+        self.valueCache = valueCache
+        self.useDataProtectionKeychain = useDataProtectionKeychain
     }
 
     public func get(key: KeychainKey) throws(KeychainError) -> String? {
+        Self.operationLock.lock()
+        defer { Self.operationLock.unlock() }
+
+        if let cached = valueCache.value(service: service, key: key) {
+            return switch cached {
+            case .missing: nil
+            case let .value(value): value
+            }
+        }
+
         let query = baseQuery(for: key).merging([
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]) { _, new in new }
 
-        return try string(matching: query)
+        let value = try string(matching: query)
+        valueCache.store(value, service: service, key: key)
+        return value
     }
 
     public func set(key: KeychainKey, value: String) throws(KeychainError) {
+        Self.operationLock.lock()
+        defer { Self.operationLock.unlock() }
+
         guard let data = value.data(using: .utf8) else {
             throw .encodingFailed
         }
@@ -84,18 +149,27 @@ public struct KeychainService: SecretStore {
         default:
             throw .unexpectedStatus(addStatus)
         }
+        valueCache.store(value, service: service, key: key)
     }
 
     public func delete(key: KeychainKey) throws(KeychainError) {
+        Self.operationLock.lock()
+        defer { Self.operationLock.unlock() }
+
         try delete(matching: baseQuery(for: key))
+        valueCache.store(nil, service: service, key: key)
     }
 
     private func baseQuery(for key: KeychainKey) -> [String: Any] {
-        [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key.rawKey
         ]
+        if useDataProtectionKeychain {
+            query[kSecUseDataProtectionKeychain as String] = true
+        }
+        return query
     }
 
     private func string(matching query: [String: Any]) throws(KeychainError) -> String? {
@@ -127,5 +201,26 @@ public struct KeychainService: SecretStore {
         case errSecInteractionNotAllowed: throw .interactionNotAllowed
         default: throw .unexpectedStatus(status)
         }
+    }
+
+    private static var hasDataProtectionKeychainEntitlement: Bool {
+        guard let task = SecTaskCreateFromSelf(nil) else { return false }
+        let applicationIdentifier = SecTaskCopyValueForEntitlement(
+            task,
+            "com.apple.application-identifier" as CFString,
+            nil) as? String
+        let accessGroups = SecTaskCopyValueForEntitlement(
+            task,
+            "keychain-access-groups" as CFString,
+            nil) as? [String]
+        return shouldUseDataProtectionKeychain(
+            applicationIdentifier: applicationIdentifier,
+            accessGroups: accessGroups)
+    }
+
+    static func shouldUseDataProtectionKeychain(
+        applicationIdentifier: String?,
+        accessGroups: [String]?) -> Bool {
+        applicationIdentifier?.isEmpty == false || accessGroups?.isEmpty == false
     }
 }
