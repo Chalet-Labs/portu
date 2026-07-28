@@ -14,11 +14,13 @@ enum HistoricalPriceIDMigrator {
     @MainActor
     static func migrate(
         in modelContext: ModelContext,
+        storeIsEphemeral: Bool = false,
         defaults: UserDefaults = .standard,
         fetch: (ModelContext) throws -> [HistoricalPricePoint] = {
             try $0.fetch(FetchDescriptor<HistoricalPricePoint>())
         },
         save: (ModelContext) throws -> Void = { try $0.save() }) throws {
+        guard storeIsEphemeral == false else { return }
         guard defaults.bool(forKey: completionDefaultsKey) == false else { return }
 
         let rows = try fetch(modelContext)

@@ -147,7 +147,9 @@ struct PortuApp: App {
         }
 
         do {
-            try HistoricalPriceIDMigrator.migrate(in: container.mainContext)
+            try HistoricalPriceIDMigrator.migrate(
+                in: container.mainContext,
+                storeIsEphemeral: isEphemeral)
         } catch {
             Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app", category: "HistoricalPriceIDMigrator")
                 .error("Historical price ID migration failed: \(String(describing: error), privacy: .public)")

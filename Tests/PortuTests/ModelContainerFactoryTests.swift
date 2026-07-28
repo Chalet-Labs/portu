@@ -246,6 +246,25 @@ struct ModelContainerFactoryTests {
         #expect(fetchCount == 1)
     }
 
+    @Test func `ephemeral store does not complete historical price id migration`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let defaults = try migrationDefaults()
+        var fetchCount = 0
+
+        try HistoricalPriceIDMigrator.migrate(
+            in: context,
+            storeIsEphemeral: true,
+            defaults: defaults,
+            fetch: { _ in
+                fetchCount += 1
+                return []
+            })
+
+        #expect(fetchCount == 0)
+        #expect(defaults.bool(forKey: HistoricalPriceIDMigrator.completionDefaultsKey) == false)
+    }
+
     @Test func `historical price id migration rolls back when saving fails`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
