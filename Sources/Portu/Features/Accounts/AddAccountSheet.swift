@@ -8,18 +8,18 @@ struct AddAccountSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    private let mode: AccountSheetMode
-    private let account: Account?
+    let mode: AccountSheetMode
+    let account: Account?
     private let isSyncing: Bool
     private let canSync: Bool
     private let isSyncBlocked: Bool
     private let onSync: ((UUID) -> Void)?
-    private let secretStore: any SecretStore
+    let secretStore: any SecretStore
 
-    @State private var draft: AccountSheetDraft
-    @State private var baselineDraft: AccountSheetDraft
-    @State private var didLoadCredentials = false
-    @State private var isLoadingCredentials: Bool
+    @State var draft: AccountSheetDraft
+    @State var baselineDraft: AccountSheetDraft
+    @State var didLoadCredentials = false
+    @State var isLoadingCredentials: Bool
     @State private var isSaving = false
     @State private var saveError: String?
 
@@ -268,6 +268,13 @@ struct AddAccountSheet: View {
                 searchPlaceholder: nil,
                 linkTitle: "See full list")
 
+            if
+                AddAccountCredentialLoadRecovery.shouldOfferRetry(
+                    exchangeCredentialsLoaded: draft.exchangeCredentialsLoaded,
+                    isLoadingCredentials: isLoadingCredentials) {
+                AddAccountCredentialLoadRecoveryView(onRetry: retryCredentialLoad)
+            }
+
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 10) {
                     exchangePicker
@@ -421,17 +428,6 @@ struct AddAccountSheet: View {
 // MARK: - Sheet State
 
 private extension AddAccountSheet {
-    func loadCredentialsIfNeeded() async {
-        guard !didLoadCredentials, mode.isEditing, let account, account.kind == .exchange else { return }
-        didLoadCredentials = true
-        defer { isLoadingCredentials = false }
-        var loadedDraft = draft
-        await loadedDraft.loadExchangeCredentials(accountID: account.id, secretStore: secretStore)
-        draft = loadedDraft
-        // Re-baseline so loaded credentials don't read as unsaved user edits.
-        baselineDraft = draft
-    }
-
     var alertTitle: String {
         mode.isEditing ? "Unable to Save Account" : "Unable to Add Account"
     }

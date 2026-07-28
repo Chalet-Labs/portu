@@ -1,3 +1,4 @@
+import Foundation
 @testable import Portu
 import PortuCore
 import Testing
@@ -70,6 +71,18 @@ struct AddAccountSheetSavePolicyTests {
             exchangeCredentialsLoaded: false))
     }
 
+    @Test func `credential load recovery offers retry only after a completed failure`() {
+        #expect(AddAccountCredentialLoadRecovery.shouldOfferRetry(
+            exchangeCredentialsLoaded: false,
+            isLoadingCredentials: false))
+        #expect(!AddAccountCredentialLoadRecovery.shouldOfferRetry(
+            exchangeCredentialsLoaded: false,
+            isLoadingCredentials: true))
+        #expect(!AddAccountCredentialLoadRecovery.shouldOfferRetry(
+            exchangeCredentialsLoaded: true,
+            isLoadingCredentials: false))
+    }
+
     @Test func `save policy blocks field editing while syncing`() {
         #expect(AddAccountSheetSavePolicy.canEditFields(
             isSyncing: false,
@@ -96,5 +109,27 @@ struct AddAccountSheetSavePolicyTests {
             isSyncBlocked: false,
             isLoadingCredentials: false,
             isSaving: true))
+    }
+}
+
+@MainActor
+struct AccountCredentialLoadRecoveryTests {
+    @Test func `credential load reports failure and can recover on retry`() async {
+        let accountID = UUID()
+        let store = InMemorySecretStore()
+        store.storage[.exchangeAPIKey(accountID)] = "stored-key"
+        store.storage[.exchangeAPISecret(accountID)] = "stored-secret"
+        store.throwOnGet = true
+        var draft = AccountSheetDraft()
+
+        let loadError = await draft.loadExchangeCredentials(accountID: accountID, secretStore: store)
+        store.throwOnGet = false
+        let retryError = await draft.loadExchangeCredentials(accountID: accountID, secretStore: store)
+
+        #expect(loadError != nil)
+        #expect(retryError == nil)
+        #expect(draft.exchangeCredentialsLoaded)
+        #expect(draft.exchangeAPIKey == "stored-key")
+        #expect(draft.exchangeAPISecret == "stored-secret")
     }
 }

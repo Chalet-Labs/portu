@@ -86,17 +86,22 @@ struct AccountSheetDraft: Equatable {
     }
 
     /// Reads exchange credentials from the keychain into the draft. A read failure is
-    /// recorded in `exchangeCredentialsLoaded` (rather than being silently coalesced to
-    /// an empty string) so the save path can avoid clobbering secrets it never loaded.
-    mutating func loadExchangeCredentials(accountID: UUID, secretStore: any SecretStore) async {
+    /// recorded in `exchangeCredentialsLoaded` and returned to the caller so the UI can
+    /// surface a recovery action without clobbering secrets it never loaded.
+    @discardableResult
+    mutating func loadExchangeCredentials(
+        accountID: UUID,
+        secretStore: any SecretStore) async -> KeychainError? {
         do {
             let credentials = try await AccountCredentialStore(secretStore: secretStore).load(for: accountID)
             exchangeAPIKey = credentials.apiKey ?? ""
             exchangeAPISecret = credentials.apiSecret ?? ""
             exchangePassphrase = credentials.passphrase ?? ""
             exchangeCredentialsLoaded = true
+            return nil
         } catch {
             exchangeCredentialsLoaded = false
+            return error
         }
     }
 

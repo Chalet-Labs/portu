@@ -114,6 +114,7 @@
 		9101CA3661EBA99C68B3E318 /* OverviewPriceDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16CCD222A9A7CFBEFD51B77C /* OverviewPriceDisplay.swift */; };
 		911345DDA176D415CF7662CE /* ModelContainerFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3539209B8431690D9850A7F /* ModelContainerFactory.swift */; };
 		913B93FE3DE708F14BF56BE0 /* APIKeysSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2757D87DCE83DD991B68E43 /* APIKeysSettingsTab.swift */; };
+		9479CEAFEBAE3634962D08E2 /* AddAccountSheetCredentialLoading.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA314118C60FC003FA3C6117 /* AddAccountSheetCredentialLoading.swift */; };
 		986DEEF0E48F23FB2637CC46 /* CurrencyConversionContextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79475C02C1D67BEDC8745854 /* CurrencyConversionContextTests.swift */; };
 		989FF781B777ECC77152A454 /* TokenIdentityMappingFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4CF024449593948154682D9 /* TokenIdentityMappingFeature.swift */; };
 		99D245FB485CF745B2AD184A /* CurrencyConversionRateCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDC5E862B844B2988DA6FB79 /* CurrencyConversionRateCacheTests.swift */; };
@@ -365,6 +366,7 @@
 		F709EE1D55A2C734A3B4FE8A /* AssetLookupCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetLookupCache.swift; sourceTree = "<group>"; };
 		F7BAFB203A38FB670CBECFED /* PortuTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PortuTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F9B3B9925066BD3C245A16EA /* HistoricalPriceBackfillClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillClient.swift; sourceTree = "<group>"; };
+		FA314118C60FC003FA3C6117 /* AddAccountSheetCredentialLoading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountSheetCredentialLoading.swift; sourceTree = "<group>"; };
 		FA599260DC6621A1136C4E3A /* ExchangeCredentialRollbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExchangeCredentialRollbackTests.swift; sourceTree = "<group>"; };
 		FB29EB7B31D9B8FE27EDCC5A /* SyncEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineTests.swift; sourceTree = "<group>"; };
 		FB47E7990208DC0893BDB696 /* NetworksTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworksTab.swift; sourceTree = "<group>"; };
@@ -431,6 +433,7 @@
 				52E52E92A4ADD1CA36A62709 /* AccountsView.swift */,
 				F0CF78486A93514E2377BA00 /* AddAccountSheet.swift */,
 				2C03252A4CF793DE2EE4F390 /* AddAccountSheetComponents.swift */,
+				FA314118C60FC003FA3C6117 /* AddAccountSheetCredentialLoading.swift */,
 				8A6FF70061475C4B92F546CE /* AddAccountSheetFields.swift */,
 				5C92AA921F540823BA2AC34B /* ExchangeCredentialSnapshot.swift */,
 			);
@@ -842,6 +845,7 @@
 				C5983C7BEF4CC57836BD456E /* AccountsView.swift in Sources */,
 				7FE55C3B27ABF3CC4228467F /* AddAccountSheet.swift in Sources */,
 				596189607690C7A8064BEE28 /* AddAccountSheetComponents.swift in Sources */,
+				9479CEAFEBAE3634962D08E2 /* AddAccountSheetCredentialLoading.swift in Sources */,
 				F7DD66EC5921DD3CEB2F08E4 /* AddAccountSheetFields.swift in Sources */,
 				7FC9EA4EB046CFDA835911D3 /* AddPositionSheet.swift in Sources */,
 				FE1471C345B27517D92D3487 /* AllAssetsFeature.swift in Sources */,

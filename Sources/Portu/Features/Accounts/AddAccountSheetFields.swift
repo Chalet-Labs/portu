@@ -30,6 +30,41 @@ enum AddAccountSheetSavePolicy {
     }
 }
 
+enum AddAccountCredentialLoadRecovery {
+    static let message = "Unable to load credentials from Keychain. Unlock your Mac, then retry."
+    static let retryTitle = "Retry"
+
+    static func shouldOfferRetry(
+        exchangeCredentialsLoaded: Bool,
+        isLoadingCredentials: Bool) -> Bool {
+        !exchangeCredentialsLoaded && !isLoadingCredentials
+    }
+}
+
+struct AddAccountCredentialLoadRecoveryView: View {
+    let onRetry: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(PortuTheme.dashboardGold)
+
+            Text(AddAccountCredentialLoadRecovery.message)
+                .font(.system(size: 12))
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+
+            Spacer()
+
+            Button(AddAccountCredentialLoadRecovery.retryTitle, action: onRetry)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+        }
+        .padding(10)
+        .background(PortuTheme.dashboardMutedPanelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+}
+
 enum AddAccountExchangeSecrets {
     static func persistedPassphrase(_ passphrase: String, for exchangeType: ExchangeType) -> String? {
         guard exchangeType == .coinbase, !passphrase.isEmpty else {
