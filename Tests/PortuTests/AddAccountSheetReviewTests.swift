@@ -33,27 +33,41 @@ struct AddAccountSheetSavePolicyTests {
             draftCanSave: true,
             isSyncing: false,
             isSyncBlocked: false,
-            isLoadingCredentials: false))
+            isLoadingCredentials: false,
+            exchangeCredentialsLoaded: true))
         #expect(!AddAccountSheetSavePolicy.canSubmit(
             draftCanSave: false,
             isSyncing: false,
             isSyncBlocked: false,
-            isLoadingCredentials: false))
+            isLoadingCredentials: false,
+            exchangeCredentialsLoaded: true))
         #expect(!AddAccountSheetSavePolicy.canSubmit(
             draftCanSave: true,
             isSyncing: true,
             isSyncBlocked: false,
-            isLoadingCredentials: false))
+            isLoadingCredentials: false,
+            exchangeCredentialsLoaded: true))
         #expect(!AddAccountSheetSavePolicy.canSubmit(
             draftCanSave: true,
             isSyncing: false,
             isSyncBlocked: true,
-            isLoadingCredentials: false))
+            isLoadingCredentials: false,
+            exchangeCredentialsLoaded: true))
         #expect(!AddAccountSheetSavePolicy.canSubmit(
             draftCanSave: true,
             isSyncing: false,
             isSyncBlocked: false,
-            isLoadingCredentials: true))
+            isLoadingCredentials: true,
+            exchangeCredentialsLoaded: true))
+    }
+
+    @Test func `save policy blocks submit when exchange credentials failed to load`() {
+        #expect(!AddAccountSheetSavePolicy.canSubmit(
+            draftCanSave: true,
+            isSyncing: false,
+            isSyncBlocked: false,
+            isLoadingCredentials: false,
+            exchangeCredentialsLoaded: false))
     }
 
     @Test func `save policy blocks field editing while syncing`() {

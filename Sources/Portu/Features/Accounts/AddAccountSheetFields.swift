@@ -12,8 +12,13 @@ enum AddAccountSheetSavePolicy {
         draftCanSave: Bool,
         isSyncing: Bool,
         isSyncBlocked: Bool,
-        isLoadingCredentials: Bool) -> Bool {
-        draftCanSave && !isSyncing && !isSyncBlocked && !isLoadingCredentials
+        isLoadingCredentials: Bool,
+        exchangeCredentialsLoaded: Bool) -> Bool {
+        draftCanSave
+            && !isSyncing
+            && !isSyncBlocked
+            && !isLoadingCredentials
+            && exchangeCredentialsLoaded
     }
 
     static func canEditFields(

@@ -19,7 +19,17 @@ final class MigratingSecretStore: SecretStore, @unchecked Sendable {
 
     func get(key: KeychainKey) throws(KeychainError) -> String? {
         try withLock {
-            try destination.get(key: key) ?? source.get(key: key)
+            do {
+                if let value = try destination.get(key: key) {
+                    return value
+                }
+            } catch let destinationError as KeychainError {
+                if let sourceValue = try? source.get(key: key) {
+                    return sourceValue
+                }
+                throw destinationError
+            }
+            return try source.get(key: key)
         }
     }
 

@@ -449,7 +449,8 @@ private extension AddAccountSheet {
             draftCanSave: draft.canSave,
             isSyncing: isSyncing,
             isSyncBlocked: isSyncBlocked,
-            isLoadingCredentials: isLoadingCredentials)
+            isLoadingCredentials: isLoadingCredentials,
+            exchangeCredentialsLoaded: draft.exchangeCredentialsLoaded)
     }
 
     var fieldsEditable: Bool {
