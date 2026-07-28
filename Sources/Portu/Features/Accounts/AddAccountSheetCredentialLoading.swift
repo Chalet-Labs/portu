@@ -1,4 +1,5 @@
 extension AddAccountSheet {
+    @MainActor
     func loadCredentialsIfNeeded() async {
         guard !didLoadCredentials, mode.isEditing, let account, account.kind == .exchange else { return }
         didLoadCredentials = true
@@ -14,10 +15,13 @@ extension AddAccountSheet {
         }
     }
 
+    @MainActor
     func retryCredentialLoad() {
         guard !isLoadingCredentials else { return }
         didLoadCredentials = false
         isLoadingCredentials = true
-        Task { await loadCredentialsIfNeeded() }
+        Task { @MainActor in
+            await loadCredentialsIfNeeded()
+        }
     }
 }

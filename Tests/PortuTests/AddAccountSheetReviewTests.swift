@@ -114,6 +114,21 @@ struct AddAccountSheetSavePolicyTests {
 
 @MainActor
 struct AccountCredentialLoadRecoveryTests {
+    @Test func `credential loading and retry task are explicitly main actor isolated`() throws {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: repoRoot.appending(
+                path: "Sources/Portu/Features/Accounts/AddAccountSheetCredentialLoading.swift"),
+            encoding: .utf8)
+
+        #expect(source.contains("@MainActor\n    func loadCredentialsIfNeeded() async"))
+        #expect(source.contains("@MainActor\n    func retryCredentialLoad()"))
+        #expect(source.contains("Task { @MainActor in"))
+    }
+
     @Test func `credential load reports failure and can recover on retry`() async {
         let accountID = UUID()
         let store = InMemorySecretStore()
