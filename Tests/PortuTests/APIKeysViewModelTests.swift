@@ -53,6 +53,38 @@ private final class ReadFailingSecretStore: SecretStore, @unchecked Sendable {
     }
 }
 
+private final class PartiallyFailingSecretStore: SecretStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [String: String]
+    private var hasFailed = false
+
+    init(storage: [String: String]) {
+        self.storage = storage
+    }
+
+    func get(key: KeychainKey) throws(KeychainError) -> String? {
+        lock.withLock { storage[key.rawKey] }
+    }
+
+    func set(key: KeychainKey, value: String) throws(KeychainError) {
+        let shouldFail = lock.withLock {
+            if key == .serviceAPIKey("debank"), !hasFailed {
+                hasFailed = true
+                return true
+            }
+            storage[key.rawKey] = value
+            return false
+        }
+        if shouldFail {
+            throw .interactionNotAllowed
+        }
+    }
+
+    func delete(key: KeychainKey) throws(KeychainError) {
+        _ = lock.withLock { storage.removeValue(forKey: key.rawKey) }
+    }
+}
+
 private final class ThreadRecordingSecretStore: SecretStore, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [String: String]
@@ -413,6 +445,29 @@ struct APIKeysViewModelTests {
         await vm.save()
 
         #expect(vm.secretStoreError == "Unable to save API keys in Keychain: Keychain error: -25308")
+    }
+
+    @Test func `save rolls back earlier keychain mutations when a later write fails`() async throws {
+        let zerionKey = KeychainKey.providerAPIKey(.zerion)
+        let debankKey = KeychainKey.serviceAPIKey("debank")
+        let coingeckoKey = KeychainKey.serviceAPIKey("coingecko")
+        let store = PartiallyFailingSecretStore(storage: [
+            zerionKey.rawKey: "old-zerion",
+            debankKey.rawKey: "old-debank",
+            coingeckoKey.rawKey: "old-coingecko"
+        ])
+        let vm = APIKeysViewModel(secretStore: store)
+        await vm.load()
+        vm.zerionAPIKey = "new-zerion"
+        vm.debankAPIKey = "new-debank"
+        vm.coingeckoAPIKey = "new-coingecko"
+
+        await vm.save()
+
+        #expect(try store.get(key: zerionKey) == "old-zerion")
+        #expect(try store.get(key: debankKey) == "old-debank")
+        #expect(try store.get(key: coingeckoKey) == "old-coingecko")
+        #expect(vm.secretStoreError == "Unable to save API keys in Keychain. Unlock your Mac and try again.")
     }
 
     @Test func `successful operations clear error`() async {

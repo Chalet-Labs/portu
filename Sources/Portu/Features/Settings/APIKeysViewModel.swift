@@ -9,6 +9,11 @@ private struct APIKeysSecrets {
 }
 
 private actor APIKeysSecretStore {
+    private struct Mutation {
+        let key: KeychainKey
+        let value: String?
+    }
+
     private let secretStore: any SecretStore
 
     init(secretStore: any SecretStore) {
@@ -35,24 +40,54 @@ private actor APIKeysSecretStore {
     func save(
         _ secrets: APIKeysSecrets,
         deletingRPCEndpoints removedChains: Set<Chain>) throws(KeychainError) {
-        try saveKey(.providerAPIKey(.zerion), value: secrets.zerionAPIKey)
-        try saveKey(.serviceAPIKey("debank"), value: secrets.debankAPIKey)
-        try saveKey(.serviceAPIKey("coingecko"), value: secrets.coingeckoAPIKey)
+        var mutations = [
+            Mutation(key: .providerAPIKey(.zerion), value: nonEmpty(secrets.zerionAPIKey)),
+            Mutation(key: .serviceAPIKey("debank"), value: nonEmpty(secrets.debankAPIKey)),
+            Mutation(key: .serviceAPIKey("coingecko"), value: nonEmpty(secrets.coingeckoAPIKey))
+        ]
+        mutations.append(contentsOf: secrets.rpcEndpoints
+            .sorted { $0.key.rawValue < $1.key.rawValue }
+            .map { Mutation(key: .rpcEndpoint($0.key), value: $0.value) })
+        mutations.append(contentsOf: removedChains
+            .sorted { $0.rawValue < $1.rawValue }
+            .map { Mutation(key: .rpcEndpoint($0), value: nil) })
 
-        for (chain, url) in secrets.rpcEndpoints {
-            try saveKey(.rpcEndpoint(chain), value: url)
+        var changes: [(Mutation, String?)] = []
+        for mutation in mutations {
+            let previousValue = try secretStore.get(key: mutation.key)
+            if previousValue != mutation.value {
+                changes.append((mutation, previousValue))
+            }
         }
-        for chain in removedChains {
-            try secretStore.delete(key: .rpcEndpoint(chain))
+        var appliedPreviousValues: [(KeychainKey, String?)] = []
+        do {
+            for (mutation, previousValue) in changes {
+                try write(mutation.value, to: mutation.key)
+                appliedPreviousValues.append((mutation.key, previousValue))
+            }
+        } catch let saveError {
+            var firstRollbackError: KeychainError?
+            for (key, previousValue) in appliedPreviousValues.reversed() {
+                do {
+                    try write(previousValue, to: key)
+                } catch let rollbackError {
+                    firstRollbackError = firstRollbackError ?? rollbackError
+                }
+            }
+            throw firstRollbackError ?? saveError
         }
     }
 
-    private func saveKey(_ key: KeychainKey, value: String) throws(KeychainError) {
-        if value.isEmpty {
-            try secretStore.delete(key: key)
-        } else {
+    private func write(_ value: String?, to key: KeychainKey) throws(KeychainError) {
+        if let value {
             try secretStore.set(key: key, value: value)
+        } else {
+            try secretStore.delete(key: key)
         }
+    }
+
+    private func nonEmpty(_ value: String) -> String? {
+        value.isEmpty ? nil : value
     }
 }
 

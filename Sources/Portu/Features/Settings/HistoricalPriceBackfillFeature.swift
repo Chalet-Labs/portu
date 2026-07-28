@@ -548,7 +548,7 @@ private struct HistoricalPriceCacheKey: Hashable {
     let currency: FiatCurrency
 
     init(coinGeckoId: String, day: Date, currency: FiatCurrency) {
-        self.coinGeckoId = coinGeckoId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.coinGeckoId = OnchainTokenIdentity.normalizedHistoricalPriceID(coinGeckoId)
         self.day = HistoricalPriceCalendar.utcStartOfDay(for: day)
         self.currency = currency
     }

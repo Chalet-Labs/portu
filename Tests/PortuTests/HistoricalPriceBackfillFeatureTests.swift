@@ -225,6 +225,34 @@ struct HistoricalPriceBackfillFeatureTests {
         #expect(rows.map(\.price) == [37000, 40000])
     }
 
+    @Test func `cache writer preserves distinct Solana mint case without duplicate updates`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        let uppercaseID = "asset:solana:AbCDefGhijkLMNopQRstuVwxyz123456789"
+        let lowercaseID = "asset:solana:abcdefghijklmnopqrstuvwxyz123456789"
+
+        let firstWrite = try HistoricalPriceCacheWriter.upsert(
+            [
+                HistoricalPriceDTO(coinGeckoId: uppercaseID, timestamp: day, usdPrice: 10),
+                HistoricalPriceDTO(coinGeckoId: lowercaseID, timestamp: day, usdPrice: 20)
+            ],
+            in: context)
+        let secondWrite = try HistoricalPriceCacheWriter.upsert(
+            [HistoricalPriceDTO(coinGeckoId: uppercaseID, timestamp: day, usdPrice: 15)],
+            in: context)
+
+        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+            .sorted { $0.coinGeckoId < $1.coinGeckoId }
+        #expect(firstWrite.inserted == 2)
+        #expect(firstWrite.updated == 0)
+        #expect(secondWrite.inserted == 0)
+        #expect(secondWrite.updated == 1)
+        #expect(rows.count == 2)
+        #expect(rows.first { $0.coinGeckoId == uppercaseID }?.usdPrice == 15)
+        #expect(rows.first { $0.coinGeckoId == lowercaseID }?.usdPrice == 20)
+    }
+
     @Test func `cache writer converges duplicate existing rows for same coin gecko id and day`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext
