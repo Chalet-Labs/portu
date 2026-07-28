@@ -167,6 +167,7 @@
 		EF4DA0876F26CDD150371955 /* HistoricalPriceBackfillLiveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 633176F0FC26C90721D6E759 /* HistoricalPriceBackfillLiveTests.swift */; };
 		EF54F37BC0EC8CA1A2C7E81A /* PositionGroupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD8F6195289F8EA5688FF64 /* PositionGroupView.swift */; };
 		EFA1E6D5CA1AE75621F8C9A4 /* TokenSettingsFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC1F6B301E1E56B6C1071A7 /* TokenSettingsFeatureTests.swift */; };
+		F01908ACBF7765D7D23F65E6 /* HistoricalPriceIDMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D385DFEFD235459D11B0E4 /* HistoricalPriceIDMigrator.swift */; };
 		F06E951CED72BB742AE2D8B3 /* AllPositionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AADF0E39477940311384C3 /* AllPositionsView.swift */; };
 		F265F29CAD907EE12E1AFA6B /* HistoricalPriceBackfillClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9B3B9925066BD3C245A16EA /* HistoricalPriceBackfillClient.swift */; };
 		F293A6B74EE8B7AC2D04F822 /* CurrencyConversionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37E2A3E671D1FD2E10EB6F2F /* CurrencyConversionContext.swift */; };
@@ -240,6 +241,7 @@
 		3BA60071A304587735578219 /* DebugServerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugServerTests.swift; sourceTree = "<group>"; };
 		3E0F258A4C5B03A912AF1819 /* DebugEndpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugEndpoints.swift; sourceTree = "<group>"; };
 		40F9B7162AA8C1D822C51BBB /* DisplayCurrencyPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayCurrencyPreference.swift; sourceTree = "<group>"; };
+		47D385DFEFD235459D11B0E4 /* HistoricalPriceIDMigrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceIDMigrator.swift; sourceTree = "<group>"; };
 		482A88E8EF0B1290937A8602 /* DebugMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugMode.swift; sourceTree = "<group>"; };
 		48A880B6FB599E98456B9375 /* PortuCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PortuCore; path = Packages/PortuCore; sourceTree = SOURCE_ROOT; };
 		4A4E3AD17570EE2020F98B9D /* PositionFilterSidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PositionFilterSidebar.swift; sourceTree = "<group>"; };
@@ -476,6 +478,7 @@
 				219795B37821B012821DECB6 /* ContentView.swift */,
 				4AC518B3873316129E9EE329 /* CurrencyConversionClient.swift */,
 				40F9B7162AA8C1D822C51BBB /* DisplayCurrencyPreference.swift */,
+				47D385DFEFD235459D11B0E4 /* HistoricalPriceIDMigrator.swift */,
 				59B4F100EB837B2FE370A607 /* LivePriceUpdateBuilder.swift */,
 				1D2F33C046095EBD74E27BAF /* MainWindowPlacement.swift */,
 				D3539209B8431690D9850A7F /* ModelContainerFactory.swift */,
@@ -888,6 +891,7 @@
 				DBC48C3423CDC2298E35A2BB /* HistoricalPriceBackfillFeature.swift in Sources */,
 				81210B84C4D9C2AAE588C929 /* HistoricalPriceBackfillSettings.swift in Sources */,
 				41D3D4320D5DBB104D837166 /* HistoricalPriceChanges24hProvider.swift in Sources */,
+				F01908ACBF7765D7D23F65E6 /* HistoricalPriceIDMigrator.swift in Sources */,
 				2E1ECF2FEFF79728EE7CA698 /* InspectorPanel.swift in Sources */,
 				81582A3A6DCC6E837276A93D /* LivePriceUpdateBuilder.swift in Sources */,
 				52A6CFFFCF82E2F1F98C0C35 /* MainWindowPlacement.swift in Sources */,

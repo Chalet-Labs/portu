@@ -147,6 +147,13 @@ struct PortuApp: App {
         }
 
         do {
+            try HistoricalPriceIDMigrator.migrate(in: container.mainContext)
+        } catch {
+            Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app", category: "HistoricalPriceIDMigrator")
+                .error("Historical price ID migration failed: \(String(describing: error), privacy: .public)")
+        }
+
+        do {
             try ZapperToZerionMigrator.migrate(in: container.mainContext)
         } catch {
             Logger(subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app", category: "ZapperToZerionMigrator")

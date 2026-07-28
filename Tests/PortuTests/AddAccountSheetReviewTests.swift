@@ -141,15 +141,22 @@ struct AccountCredentialLoadRecoveryTests {
         store.storage[.exchangeAPISecret(accountID)] = "stored-secret"
         store.throwOnGet = true
         var draft = AccountSheetDraft()
+        let baseline = draft
 
-        let loadError = await draft.loadExchangeCredentials(accountID: accountID, secretStore: store)
+        let loadResult = await draft.loadExchangeCredentials(accountID: accountID, secretStore: store)
+        draft.exchangeAPIKey = "replacement-key"
+        draft.exchangeAPISecret = "replacement-secret"
         store.throwOnGet = false
-        let retryError = await draft.loadExchangeCredentials(accountID: accountID, secretStore: store)
+        let retryResult = await draft.loadExchangeCredentials(
+            accountID: accountID,
+            secretStore: store,
+            preservingEditsSince: baseline)
 
-        #expect(loadError != nil)
-        #expect(retryError == nil)
+        #expect(loadResult.error != nil)
+        #expect(retryResult.error == nil)
+        #expect(retryResult.storedCredentials?.apiKey == "stored-key")
         #expect(draft.exchangeCredentialsLoaded)
-        #expect(draft.exchangeAPIKey == "stored-key")
-        #expect(draft.exchangeAPISecret == "stored-secret")
+        #expect(draft.exchangeAPIKey == "replacement-key")
+        #expect(draft.exchangeAPISecret == "replacement-secret")
     }
 }

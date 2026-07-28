@@ -161,6 +161,58 @@ struct ModelContainerFactoryTests {
         #expect(wallet.dataSource == .zapper)
     }
 
+    @Test func `historical price id migration canonicalizes legacy rows and deduplicates`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+        let canonicalID = "asset:base:0xabc"
+        let olderCanonical = HistoricalPricePoint(
+            coinGeckoId: canonicalID,
+            day: day,
+            price: 1,
+            fetchedAt: day)
+        let newerLegacy = HistoricalPricePoint(
+            coinGeckoId: canonicalID,
+            day: day,
+            price: 2,
+            fetchedAt: day.addingTimeInterval(60))
+        newerLegacy.coinGeckoId = "zapper:base:0xabc"
+        context.insert(olderCanonical)
+        context.insert(newerLegacy)
+        try context.save()
+
+        try HistoricalPriceIDMigrator.migrate(in: context)
+        try HistoricalPriceIDMigrator.migrate(in: context)
+
+        let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>())
+        let survivor = try #require(rows.first)
+        #expect(rows.count == 1)
+        #expect(survivor.id == newerLegacy.id)
+        #expect(survivor.coinGeckoId == canonicalID)
+        #expect(survivor.price == 2)
+    }
+
+    @Test func `historical price id migration rolls back when saving fails`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let row = HistoricalPricePoint(
+            coinGeckoId: "asset:base:0xabc",
+            day: .now,
+            price: 1)
+        row.coinGeckoId = "zapper:base:0xabc"
+        context.insert(row)
+        try context.save()
+
+        #expect(throws: MigrationSaveError.forced) {
+            try HistoricalPriceIDMigrator.migrate(in: context) { _ in
+                throw MigrationSaveError.forced
+            }
+        }
+
+        let persisted = try #require(context.fetch(FetchDescriptor<HistoricalPricePoint>()).first)
+        #expect(persisted.coinGeckoId == "zapper:base:0xabc")
+    }
+
     @Test func `zapper wallet with unsupported cached holdings remains read only`() throws {
         let container = try ModelContainerFactory().makeInMemory()
         let context = container.mainContext

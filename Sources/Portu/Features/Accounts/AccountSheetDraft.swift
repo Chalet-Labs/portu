@@ -2,6 +2,11 @@ import Foundation
 import PortuCore
 import SwiftData
 
+struct AccountCredentialLoadResult {
+    let storedCredentials: ExchangeCredentialSnapshot?
+    let error: KeychainError?
+}
+
 struct AccountSheetDraft: Equatable {
     var selectedTab: AddAccountTab = .chain
 
@@ -91,17 +96,31 @@ struct AccountSheetDraft: Equatable {
     @discardableResult
     mutating func loadExchangeCredentials(
         accountID: UUID,
-        secretStore: any SecretStore) async -> KeychainError? {
+        secretStore: any SecretStore,
+        preservingEditsSince baseline: AccountSheetDraft? = nil) async -> AccountCredentialLoadResult {
+        let replaceAPIKey = baseline.map { exchangeAPIKey == $0.exchangeAPIKey } ?? true
+        let replaceAPISecret = baseline.map { exchangeAPISecret == $0.exchangeAPISecret } ?? true
+        let replacePassphrase = baseline.map { exchangePassphrase == $0.exchangePassphrase } ?? true
         do {
             let credentials = try await AccountCredentialStore(secretStore: secretStore).load(for: accountID)
-            exchangeAPIKey = credentials.apiKey ?? ""
-            exchangeAPISecret = credentials.apiSecret ?? ""
-            exchangePassphrase = credentials.passphrase ?? ""
+            if replaceAPIKey {
+                exchangeAPIKey = credentials.apiKey ?? ""
+            }
+            if replaceAPISecret {
+                exchangeAPISecret = credentials.apiSecret ?? ""
+            }
+            if replacePassphrase {
+                exchangePassphrase = credentials.passphrase ?? ""
+            }
             exchangeCredentialsLoaded = true
-            return nil
+            return AccountCredentialLoadResult(
+                storedCredentials: credentials,
+                error: nil)
         } catch {
             exchangeCredentialsLoaded = false
-            return error
+            return AccountCredentialLoadResult(
+                storedCredentials: nil,
+                error: error)
         }
     }
 

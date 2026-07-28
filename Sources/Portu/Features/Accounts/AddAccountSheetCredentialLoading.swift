@@ -6,13 +6,16 @@ extension AddAccountSheet {
         isLoadingCredentials = true
         defer { isLoadingCredentials = false }
         var loadedDraft = draft
-        let loadError = await loadedDraft.loadExchangeCredentials(
+        let loadResult = await loadedDraft.loadExchangeCredentials(
             accountID: account.id,
-            secretStore: secretStore)
+            secretStore: secretStore,
+            preservingEditsSince: baselineDraft)
         draft = loadedDraft
-        if loadError == nil {
-            // Re-baseline so loaded credentials don't read as unsaved user edits.
-            baselineDraft = draft
+        if let storedCredentials = loadResult.storedCredentials {
+            baselineDraft.exchangeAPIKey = storedCredentials.apiKey ?? ""
+            baselineDraft.exchangeAPISecret = storedCredentials.apiSecret ?? ""
+            baselineDraft.exchangePassphrase = storedCredentials.passphrase ?? ""
+            baselineDraft.exchangeCredentialsLoaded = true
         }
     }
 

@@ -1,0 +1,51 @@
+import Foundation
+import PortuCore
+import SwiftData
+
+enum HistoricalPriceIDMigrator {
+    private struct CacheKey: Hashable {
+        let coinGeckoID: String
+        let day: Date
+        let currency: FiatCurrency
+    }
+
+    @MainActor
+    static func migrate(
+        in modelContext: ModelContext,
+        save: (ModelContext) throws -> Void = { try $0.save() }) throws {
+        let rows = try modelContext.fetch(FetchDescriptor<HistoricalPricePoint>())
+        let groupedRows = Dictionary(grouping: rows) { row in
+            CacheKey(
+                coinGeckoID: OnchainTokenIdentity.normalizedHistoricalPriceID(row.coinGeckoId),
+                day: row.day,
+                currency: row.fiatCurrency)
+        }
+        var hasChanges = false
+
+        for (key, candidates) in groupedRows {
+            guard candidates.contains(where: { $0.coinGeckoId != key.coinGeckoID }) else {
+                continue
+            }
+            let sortedCandidates = candidates.sorted { lhs, rhs in
+                if lhs.fetchedAt == rhs.fetchedAt {
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+                return lhs.fetchedAt > rhs.fetchedAt
+            }
+            guard let survivor = sortedCandidates.first else { continue }
+            survivor.coinGeckoId = key.coinGeckoID
+            for duplicate in sortedCandidates.dropFirst() {
+                modelContext.delete(duplicate)
+            }
+            hasChanges = true
+        }
+
+        guard hasChanges else { return }
+        do {
+            try save(modelContext)
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+}
