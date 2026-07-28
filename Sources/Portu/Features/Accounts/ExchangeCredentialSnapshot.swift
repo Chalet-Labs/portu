@@ -32,9 +32,13 @@ actor AccountCredentialStore {
         rollbackTo previousCredentials: ExchangeCredentialSnapshot) throws(KeychainError) {
         do {
             try write(credentials, for: accountID)
-        } catch {
-            restore(previousCredentials, for: accountID)
-            throw error
+        } catch let saveError {
+            do {
+                try restore(previousCredentials, for: accountID)
+            } catch {
+                throw error
+            }
+            throw saveError
         }
     }
 
@@ -43,22 +47,35 @@ actor AccountCredentialStore {
         rollbackTo previousCredentials: ExchangeCredentialSnapshot) throws(KeychainError) {
         do {
             try write(.empty, for: accountID)
-        } catch {
-            restore(previousCredentials, for: accountID)
-            throw error
+        } catch let deleteError {
+            do {
+                try restore(previousCredentials, for: accountID)
+            } catch {
+                throw error
+            }
+            throw deleteError
         }
     }
 
-    func restore(_ credentials: ExchangeCredentialSnapshot, for accountID: UUID) {
-        restore(credentials.apiKey, key: .exchangeAPIKey(accountID))
-        restore(credentials.apiSecret, key: .exchangeAPISecret(accountID))
-        restore(credentials.passphrase, key: .exchangePassphrase(accountID))
-    }
-
-    func deleteBestEffort(for accountID: UUID) {
-        restore(.none, key: .exchangeAPIKey(accountID))
-        restore(.none, key: .exchangeAPISecret(accountID))
-        restore(.none, key: .exchangePassphrase(accountID))
+    func restore(
+        _ credentials: ExchangeCredentialSnapshot,
+        for accountID: UUID) throws(KeychainError) {
+        let values: [(String?, KeychainKey)] = [
+            (credentials.apiKey, .exchangeAPIKey(accountID)),
+            (credentials.apiSecret, .exchangeAPISecret(accountID)),
+            (credentials.passphrase, .exchangePassphrase(accountID))
+        ]
+        var firstError: KeychainError?
+        for (value, key) in values {
+            do {
+                try write(value, key: key)
+            } catch {
+                firstError = firstError ?? error
+            }
+        }
+        if let firstError {
+            throw firstError
+        }
     }
 
     private func write(
@@ -75,9 +92,5 @@ actor AccountCredentialStore {
         } else {
             try secretStore.delete(key: key)
         }
-    }
-
-    private func restore(_ value: String?, key: KeychainKey) {
-        try? write(value, key: key)
     }
 }

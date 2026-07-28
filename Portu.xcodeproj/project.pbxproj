@@ -119,6 +119,7 @@
 		9BFE9894A7FE31653D725FFC /* LegacyEnumHistoricalPrice.store in Resources */ = {isa = PBXBuildFile; fileRef = 0EAC58974A38F9BBB88E00AE /* LegacyEnumHistoricalPrice.store */; };
 		A35C63CA04BB8C5120387630 /* CurrencyConversionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC518B3873316129E9EE329 /* CurrencyConversionClient.swift */; };
 		A50DC572E3368D154DFB79B2 /* PortfolioHealthPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95F1EDADED217BABCD15C10 /* PortfolioHealthPanel.swift */; };
+		A51FC33657CECBF2A58A548C /* ExchangeCredentialRollbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA599260DC6621A1136C4E3A /* ExchangeCredentialRollbackTests.swift */; };
 		A53307EFF266FA209E6AEBDD /* SyncEngineScopedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1159F8509C86C08B1C489415 /* SyncEngineScopedTests.swift */; };
 		A9DD558859FDAB7461BA502E /* TokenSettingsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E54D85696E2BF460995DFC2 /* TokenSettingsTab.swift */; };
 		AAAB1F935EF02D565C748435 /* AccountSheetDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFB16B288A8FDA49E18239C2 /* AccountSheetDraft.swift */; };
@@ -140,6 +141,7 @@
 		C5983C7BEF4CC57836BD456E /* AccountsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52E52E92A4ADD1CA36A62709 /* AccountsView.swift */; };
 		C611822B0FDAB77F03272477 /* PositionFilterSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A4E3AD17570EE2020F98B9D /* PositionFilterSidebar.swift */; };
 		C7F69E2CED8EA46E3C1E4136 /* PortuNetwork in Frameworks */ = {isa = PBXBuildFile; productRef = 054FEF9C1195A150D56A76CA /* PortuNetwork */; };
+		C9A863A99DB886388D21017B /* APIKeyNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C89E200AA14746D4F976DBB1 /* APIKeyNormalizationTests.swift */; };
 		CBB2399EDE69E054EDEFED12 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C652E9A00074B7A22943B6A7 /* SyncEngine.swift */; };
 		CFC30415788A774E28D05A82 /* SyncEngineLegacyAccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C098AACD3A503135E31467D1 /* SyncEngineLegacyAccountTests.swift */; };
 		CFE9060530486693BFF3461C /* AssetPositionsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F756C31F93737292F0F09AB /* AssetPositionsTable.swift */; };
@@ -328,6 +330,7 @@
 		C30F8524EBB19474FFA3871C /* AssetPriceChartTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetPriceChartTests.swift; sourceTree = "<group>"; };
 		C375F4CE08E3AAE9016A076E /* OverviewPositionHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPositionHelpers.swift; sourceTree = "<group>"; };
 		C652E9A00074B7A22943B6A7 /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
+		C89E200AA14746D4F976DBB1 /* APIKeyNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyNormalizationTests.swift; sourceTree = "<group>"; };
 		C9435D98F3F4AC7D4A8F7310 /* HistoricalPriceBackfillFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillFeatureTests.swift; sourceTree = "<group>"; };
 		C95F1EDADED217BABCD15C10 /* PortfolioHealthPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHealthPanel.swift; sourceTree = "<group>"; };
 		D3539209B8431690D9850A7F /* ModelContainerFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerFactory.swift; sourceTree = "<group>"; };
@@ -360,6 +363,7 @@
 		F709EE1D55A2C734A3B4FE8A /* AssetLookupCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetLookupCache.swift; sourceTree = "<group>"; };
 		F7BAFB203A38FB670CBECFED /* PortuTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PortuTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F9B3B9925066BD3C245A16EA /* HistoricalPriceBackfillClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillClient.swift; sourceTree = "<group>"; };
+		FA599260DC6621A1136C4E3A /* ExchangeCredentialRollbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExchangeCredentialRollbackTests.swift; sourceTree = "<group>"; };
 		FB29EB7B31D9B8FE27EDCC5A /* SyncEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineTests.swift; sourceTree = "<group>"; };
 		FB47E7990208DC0893BDB696 /* NetworksTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworksTab.swift; sourceTree = "<group>"; };
 		FE40A8EC06DB30B0B54BE934 /* PriceUpdateCurrencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriceUpdateCurrencyTests.swift; sourceTree = "<group>"; };
@@ -614,6 +618,7 @@
 				2C5E29636BD6B99B6A038320 /* AddAccountSupportChipTests.swift */,
 				59F1B452183C058E480F9BCC /* AddPositionCategoryRuleTests.swift */,
 				2C3E823F7D4F67B3ECD15695 /* AllAssetsFeatureTests.swift */,
+				C89E200AA14746D4F976DBB1 /* APIKeyNormalizationTests.swift */,
 				8F2E020479C2D59A564DAD6A /* APIKeysViewModelTests.swift */,
 				3A01CB6E84AA5F46CB9019A4 /* AppFeatureAccountSyncTests.swift */,
 				5671DBA75C15FCC72727EA8E /* AppFeatureIntervalTests.swift */,
@@ -631,6 +636,7 @@
 				DA21DD6AE3692FD31222B94D /* DebugServerTCATests.swift */,
 				3BA60071A304587735578219 /* DebugServerTests.swift */,
 				B2ED9DEF3DC327EB98AD8CBC /* DisplayCurrencyPreferenceTests.swift */,
+				FA599260DC6621A1136C4E3A /* ExchangeCredentialRollbackTests.swift */,
 				2900A801C5F8F01CEBC99503 /* ExposureFeatureTests.swift */,
 				6BDCD2E7AB5E238E29197697 /* ExposureSummaryTests.swift */,
 				7674696086937331A79F61C2 /* HistoricalPortfolioEstimatorTests.swift */,
@@ -935,6 +941,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C9A863A99DB886388D21017B /* APIKeyNormalizationTests.swift in Sources */,
 				F9B5ED895D5E63A10F140714 /* APIKeysViewModelTests.swift in Sources */,
 				889082CDB81C331C5684C15F /* AccountSheetDraftTests.swift in Sources */,
 				FE9FC93C2B94C62746C3E49A /* AccountSheetInvalidationTests.swift in Sources */,
@@ -959,6 +966,7 @@
 				F3113DE9EBAB60809E13BCE8 /* DebugServerTCATests.swift in Sources */,
 				81C6E52FD35E2CB7C82CFC36 /* DebugServerTests.swift in Sources */,
 				F6442824A5D51C861186C713 /* DisplayCurrencyPreferenceTests.swift in Sources */,
+				A51FC33657CECBF2A58A548C /* ExchangeCredentialRollbackTests.swift in Sources */,
 				0EFD203BDC0E8ED8778488C4 /* ExposureFeatureTests.swift in Sources */,
 				B20C5F008144723070453C36 /* ExposureSummaryTests.swift in Sources */,
 				358C300CA60FEC426E09EAED /* HTTPParserTests.swift in Sources */,

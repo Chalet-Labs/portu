@@ -210,9 +210,13 @@ enum AccountSheetSaveCoordinator {
 
             do {
                 try insertAndSave(account, modelContext: modelContext)
-            } catch {
-                await credentialStore.deleteBestEffort(for: accountID)
-                throw error
+            } catch let saveError {
+                do {
+                    try await credentialStore.restore(.empty, for: accountID)
+                } catch {
+                    throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
+                }
+                throw saveError
             }
         }
     }
@@ -283,10 +287,14 @@ enum AccountSheetSaveCoordinator {
 
             do {
                 try modelContext.save()
-            } catch {
+            } catch let saveError {
                 modelContext.rollback()
-                await credentialStore.restore(previousCredentials, for: account.id)
-                throw AccountSheetSaveError.accountSaveFailed(error.localizedDescription)
+                do {
+                    try await credentialStore.restore(previousCredentials, for: account.id)
+                } catch {
+                    throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
+                }
+                throw AccountSheetSaveError.accountSaveFailed(saveError.localizedDescription)
             }
             return
         }
@@ -392,12 +400,16 @@ enum AccountSheetSaveCoordinator {
         modelContext.delete(account)
         do {
             try save(modelContext)
-        } catch {
+        } catch let saveError {
             modelContext.rollback()
             if isExchange {
-                await credentialStore.restore(previousCredentials, for: accountID)
+                do {
+                    try await credentialStore.restore(previousCredentials, for: accountID)
+                } catch {
+                    throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
+                }
             }
-            throw AccountSheetSaveError.accountSaveFailed(error.localizedDescription)
+            throw AccountSheetSaveError.accountSaveFailed(saveError.localizedDescription)
         }
     }
 

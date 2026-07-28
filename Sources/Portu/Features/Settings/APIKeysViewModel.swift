@@ -136,6 +136,9 @@ final class APIKeysViewModel {
     func save() async -> Bool {
         guard canSave else { return false }
         secretStoreError = nil
+        zerionAPIKey = zerionAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        debankAPIKey = debankAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        coingeckoAPIKey = coingeckoAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedRPCEndpoints = rpcEndpoints.reduce(into: [Chain: String]()) { endpoints, entry in
             let trimmed = entry.value.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {

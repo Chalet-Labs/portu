@@ -653,6 +653,19 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(ids == [identity.historicalPriceID])
     }
 
+    @Test func `price polling ids preserve mixed case Solana mint`() {
+        let identity = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+        let local = token(symbol: "SOLTOKEN", amount: 2, usdValue: 8, onchainIdentity: identity)
+
+        let ids = OverviewFeature.pricePollingIDs(
+            tokens: [local],
+            prices: [:],
+            watchlistIDs: [],
+            overrides: [])
+
+        #expect(ids == [identity.historicalPriceID])
+    }
+
     @Test func `price polling ids use canonical asset keys for known contract mappings`() {
         let usdcIdentity = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xAf88d065e77c8cC2239327C5EDb3A432268e5831")
         let usdc = token(symbol: "USDC", amount: 390, usdValue: 390, onchainIdentity: usdcIdentity)
