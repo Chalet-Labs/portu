@@ -123,6 +123,30 @@ struct ZerionAPIClientTests {
         #expect(ZerionAPIClientMockURLProtocol.requests.count == 4)
     }
 
+    @Test func `retry after uses the injected sleep`() async throws {
+        defer { ZerionAPIClientMockURLProtocol.reset() }
+        ZerionAPIClientMockURLProtocol.respond { _ in
+            let isRetry = ZerionAPIClientMockURLProtocol.requests.count > 1
+            return .init(
+                data: Data(isRetry ? #"{"data":[]}"#.utf8 : #"{"errors":[]}"#.utf8),
+                statusCode: isRetry ? 200 : 503,
+                headers: isRetry ? [:] : ["Retry-After": "1"])
+        }
+        let sleepRecorder = PacingSleepRecorder()
+        let client = ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionAPIClientMockSession(),
+            minimumRequestInterval: .zero,
+            maximumRetryAttempts: 1,
+            pacingNow: { .zero },
+            pacingSleep: { try await sleepRecorder.sleep(for: $0) })
+
+        let response: ZerionCollectionEnvelope<ZerionEmptyResource> = try await client.get(path: "chains/")
+
+        #expect(response.data.isEmpty)
+        #expect(sleepRecorder.durations == [.seconds(1)])
+    }
+
     @Test func `request pacing reserves later slots before sleeping`() async throws {
         defer { ZerionAPIClientMockURLProtocol.reset() }
         let sleepRecorder = PacingSleepRecorder()

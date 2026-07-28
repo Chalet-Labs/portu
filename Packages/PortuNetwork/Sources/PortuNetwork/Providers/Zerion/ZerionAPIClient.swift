@@ -13,7 +13,6 @@ public actor ZerionAPIClient {
     private let minimumRequestInterval: Duration
     private let maximumRetryAttempts: Int
     private let maximumRetryDelaySeconds: Int
-    private let clock: ContinuousClock
     private let pacingNow: PacingNow
     private let pacingSleep: PacingSleep
     private var nextRequestTime: Duration?
@@ -32,7 +31,6 @@ public actor ZerionAPIClient {
         self.decoder = JSONDecoder()
         let clock = ContinuousClock()
         let origin = clock.now
-        self.clock = clock
         self.pacingNow = { origin.duration(to: clock.now) }
         self.pacingSleep = { try await clock.sleep(for: $0) }
     }
@@ -51,7 +49,6 @@ public actor ZerionAPIClient {
         self.maximumRetryAttempts = max(0, maximumRetryAttempts)
         self.maximumRetryDelaySeconds = max(0, maximumRetryDelaySeconds)
         self.decoder = JSONDecoder()
-        self.clock = ContinuousClock()
         self.pacingNow = pacingNow
         self.pacingSleep = pacingSleep
     }
@@ -123,7 +120,7 @@ public actor ZerionAPIClient {
                 guard seconds <= maximumRetryDelaySeconds else {
                     throw error
                 }
-                try await clock.sleep(for: .seconds(seconds))
+                try await pacingSleep(.seconds(seconds))
             }
         }
     }

@@ -114,6 +114,7 @@ struct PortuApp: App {
     let store: StoreOf<AppFeature>
     @State private var appState = AppState()
     let container: ModelContainer
+    let secretStore: any SecretStore
 
     // swiftlint:disable:next function_body_length
     init() {
@@ -154,6 +155,7 @@ struct PortuApp: App {
         let secretStore = MigratingSecretStore(
             source: LocalSecretStore(),
             destination: Self.makeSecretStore())
+        self.secretStore = secretStore
         let secretMigrationKeys = Self.secretMigrationKeys(modelContext: modelContext)
         Task {
             do {
@@ -237,7 +239,7 @@ struct PortuApp: App {
 
     var body: some Scene {
         Window("Portu", id: "main") {
-            ContentView(store: store)
+            ContentView(store: store, secretStore: secretStore)
                 .environment(appState)
         }
         .defaultWindowPlacement { _, context in

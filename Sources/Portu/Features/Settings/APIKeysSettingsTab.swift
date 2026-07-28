@@ -109,12 +109,16 @@ enum APIKeysSaveTaskCoordinator {
 }
 
 struct APIKeysSettingsTab: View {
-    @State private var viewModel = APIKeysViewModel()
+    @State private var viewModel: APIKeysViewModel
     @State private var newRPCChain: Chain = .ethereum
     @State private var newRPCURL = ""
     @State private var visibleAPIKeyFields: Set<APIKeyFieldID> = []
     @State private var pendingSaveState = APIKeysPendingSaveState()
     @State private var saveTask: Task<Void, Never>?
+
+    init(secretStore: any SecretStore = PortuApp.makeSecretStore()) {
+        _viewModel = State(initialValue: APIKeysViewModel(secretStore: secretStore))
+    }
 
     var body: some View {
         SettingsPage(tab: .apiKeys, badge: .autoSave) {

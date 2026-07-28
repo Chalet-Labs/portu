@@ -66,8 +66,16 @@ enum SettingsMetrics {
 
 struct SettingsView: View {
     let store: StoreOf<AppFeature>
+    let secretStore: any SecretStore
     @State private var selectedTab: SettingsTab = .general
     @State private var searchText = ""
+
+    init(
+        store: StoreOf<AppFeature>,
+        secretStore: any SecretStore = PortuApp.makeSecretStore()) {
+        self.store = store
+        self.secretStore = secretStore
+    }
 
     private var tabs: [SettingsTab] {
         SettingsTab.visibleTabs(debugEnabled: Self.debugEnabled)
@@ -113,7 +121,7 @@ struct SettingsView: View {
         case .categories:
             CategorySettingsTab()
         case .apiKeys:
-            APIKeysSettingsTab()
+            APIKeysSettingsTab(secretStore: secretStore)
         case .debug:
             #if DEBUG
                 DebugSettingsTab()

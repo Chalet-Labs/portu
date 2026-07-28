@@ -6,6 +6,7 @@ import SwiftUI
 
 struct AccountsView: View {
     let store: StoreOf<AppFeature>
+    let secretStore: any SecretStore
 
     @Query(sort: \Account.name) private var accounts: [Account]
     @Environment(\.modelContext) private var modelContext
@@ -15,6 +16,13 @@ struct AccountsView: View {
         KeyPathComparator(\.name)
     ]
     @State private var accountActionError: String?
+
+    init(
+        store: StoreOf<AppFeature>,
+        secretStore: any SecretStore = PortuApp.makeSecretStore()) {
+        self.store = store
+        self.secretStore = secretStore
+    }
 
     private var accountInputs: [AccountInput] {
         accounts.map { account in
@@ -127,7 +135,8 @@ struct AccountsView: View {
         case .add:
             AddAccountSheet(
                 isSyncing: syncState.isSyncing,
-                isSyncBlocked: syncState.isSyncBlocked)
+                isSyncBlocked: syncState.isSyncBlocked,
+                secretStore: secretStore)
 
         case let .edit(accountID):
             if let account = accounts.first(where: { $0.id == accountID }) {
@@ -137,7 +146,8 @@ struct AccountsView: View {
                     isSyncing: syncState.isSyncing,
                     canSync: account.isSyncable,
                     isSyncBlocked: syncState.isSyncBlocked,
-                    onSync: { id in store.send(.accountSyncTapped(id)) })
+                    onSync: { id in store.send(.accountSyncTapped(id)) },
+                    secretStore: secretStore)
             } else {
                 VStack(spacing: 12) {
                     Text("Account not found")
@@ -263,7 +273,7 @@ struct AccountsView: View {
                             try await AccountSheetSaveCoordinator.deleteAccount(
                                 account,
                                 modelContext: modelContext,
-                                secretStore: PortuApp.makeSecretStore())
+                                secretStore: secretStore)
                         } catch {
                             accountActionError = error.localizedDescription
                         }

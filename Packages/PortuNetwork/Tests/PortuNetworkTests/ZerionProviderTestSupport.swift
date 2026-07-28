@@ -125,3 +125,10 @@ func makeZerionAPIClientMockSession() -> URLSession {
     configuration.protocolClasses = [ZerionAPIClientMockURLProtocol.self]
     return URLSession(configuration: configuration)
 }
+
+extension String {
+    func replacingFirstOccurrence(of target: String, with replacement: String) -> String {
+        guard let range = range(of: target) else { return self }
+        return replacingCharacters(in: range, with: replacement)
+    }
+}

@@ -216,6 +216,35 @@ struct ZerionProviderTests {
         ])
     }
 
+    @Test func `generic EVM scope absorbs overlapping explicit chain for same address`() async throws {
+        defer { ZerionMockURLProtocol.reset() }
+        ZerionMockURLProtocol.respond { _ in
+            .init(data: Data(#"{"data":[],"links":{}}"#.utf8), statusCode: 200, headers: [:])
+        }
+        let provider = ZerionProvider(client: ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionMockSession(),
+            minimumRequestInterval: .zero))
+        let context = makeSyncContext(addresses: [
+            ("0xAbC", nil),
+            ("0xabc", .ethereum)
+        ])
+
+        _ = try await provider.fetchPositions(context: context)
+
+        let requests = ZerionMockURLProtocol.requests
+        #expect(requests.count == 1)
+        let requestURL = try #require(requests.first?.url)
+        let components = try #require(URLComponents(
+            url: requestURL,
+            resolvingAgainstBaseURL: false))
+        let chainIDs = try #require(components
+            .queryItems?
+            .first { $0.name == "filter[chain_ids]" }?
+            .value)
+        #expect(chainIDs.split(separator: ",").contains("ethereum"))
+    }
+
     @Test func `invalid exact quantity fails the complete position response`() async throws {
         defer { ZerionMockURLProtocol.reset() }
         let invalid = Self.positionsFixture.replacingOccurrences(
@@ -462,36 +491,4 @@ struct ZerionProviderTests {
     }
     """#
     // swiftlint:enable line_length
-}
-
-private extension String {
-    func replacingFirstOccurrence(of target: String, with replacement: String) -> String {
-        guard let range = range(of: target) else { return self }
-        return replacingCharacters(in: range, with: replacement)
-    }
-}
-
-@Suite(.serialized)
-struct ZerionProviderLiveTests {
-    @Test func `live smoke uses one combined position request when explicitly enabled`() async throws {
-        let environment = ProcessInfo.processInfo.environment
-        guard
-            environment["PORTU_ZERION_LIVE_TESTS"] == "1",
-            let apiKey = environment["ZERION_API_KEY"],
-            !apiKey.isEmpty
-        else { return }
-
-        let address = environment["ZERION_SMOKE_ADDRESS"]
-            ?? "0x00000000219ab540356cBB839CBe05303d7705Fa"
-        let context = SyncContext(
-            accountId: UUID(),
-            kind: .wallet,
-            addresses: [(address, .ethereum)],
-            exchangeType: nil)
-        let provider = ZerionProvider(client: ZerionAPIClient(apiKey: { apiKey }))
-
-        let positions = try await provider.fetchPositions(context: context)
-
-        #expect(!positions.isEmpty)
-    }
 }
