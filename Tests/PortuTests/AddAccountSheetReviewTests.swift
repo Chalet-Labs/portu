@@ -123,10 +123,13 @@ struct AccountCredentialLoadRecoveryTests {
             contentsOf: repoRoot.appending(
                 path: "Sources/Portu/Features/Accounts/AddAccountSheetCredentialLoading.swift"),
             encoding: .utf8)
+        let normalizedSource = source
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
 
-        #expect(source.contains("@MainActor\n    func loadCredentialsIfNeeded() async"))
-        #expect(source.contains("@MainActor\n    func retryCredentialLoad()"))
-        #expect(source.contains("Task { @MainActor in"))
+        #expect(normalizedSource.contains("@MainActor func loadCredentialsIfNeeded() async"))
+        #expect(normalizedSource.contains("@MainActor func retryCredentialLoad()"))
+        #expect(normalizedSource.contains("Task { @MainActor in"))
     }
 
     @Test func `credential load reports failure and can recover on retry`() async {
