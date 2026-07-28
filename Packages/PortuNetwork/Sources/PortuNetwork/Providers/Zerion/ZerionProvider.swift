@@ -69,6 +69,12 @@ public actor ZerionProvider: PortfolioDataProvider {
     }
 
     private func requestKeys(for context: SyncContext) throws -> [RequestKey] {
+        let genericEVMAddresses = Set(context.addresses.compactMap { addressEntry -> String? in
+            guard addressEntry.chain == nil else { return nil }
+            let address = addressEntry.address.trimmingCharacters(in: .whitespacesAndNewlines)
+            return address.isEmpty ? nil : address.lowercased()
+        })
+        let genericEVMChainIDs = Set(ZerionChainMapping.genericEVMChainIDChunks.flatMap(\.self))
         var keys = Set<RequestKey>()
         for addressEntry in context.addresses {
             let address = addressEntry.address.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -77,7 +83,14 @@ public actor ZerionProvider: PortfolioDataProvider {
                 ? address
                 : address.lowercased()
             let chunks: [[String]] = if let chain = addressEntry.chain {
-                try [[ZerionChainMapping.positionID(for: chain)]]
+                if
+                    chain != .solana,
+                    genericEVMAddresses.contains(normalizedAddress),
+                    try genericEVMChainIDs.contains(ZerionChainMapping.positionID(for: chain)) {
+                    []
+                } else {
+                    try [[ZerionChainMapping.positionID(for: chain)]]
+                }
             } else {
                 ZerionChainMapping.genericEVMChainIDChunks
             }

@@ -196,7 +196,7 @@ struct APIKeysViewModelTests {
         #expect(PortuApp.retiredPlaintextSecretKeys == [.providerAPIKey(.zapper)])
     }
 
-    @Test func `startup migration deletes retired Zapper plaintext without copying it`() throws {
+    @Test func `startup migration deletes retired Zapper plaintext without copying it`() async throws {
         let zapperKey = KeychainKey.providerAPIKey(.zapper)
         let zerionKey = KeychainKey.providerAPIKey(.zerion)
         let source = ThreadRecordingSecretStore(storage: [
@@ -204,28 +204,34 @@ struct APIKeysViewModelTests {
             zerionKey.rawKey: "zerion-key"
         ])
         let destination = ThreadRecordingSecretStore()
+        let store = MigratingSecretStore(source: source, destination: destination)
 
-        try PortuApp.migrateSecretsBeforeDependencyConstruction(
+        try await PortuApp.migrateSecrets(
             keys: [zerionKey],
-            from: source,
-            to: destination)
+            using: store)
 
         #expect(try source.get(key: zapperKey) == nil)
         #expect(try destination.get(key: zapperKey) == nil)
         #expect(try destination.get(key: zerionKey) == "zerion-key")
     }
 
-    @Test func `startup secret migration completes off main before dependencies read keys`() throws {
+    @Test func `startup secret migration runs off main through destination first fallback store`() async throws {
         let key = KeychainKey.providerAPIKey(.zerion)
         let source = ThreadRecordingSecretStore(storage: [key.rawKey: "legacy-zerion-key"])
         let destination = ThreadRecordingSecretStore()
+        let store = MigratingSecretStore(source: source, destination: destination)
 
-        try PortuApp.migrateSecretsBeforeDependencyConstruction(
+        #expect(try store.get(key: key) == "legacy-zerion-key")
+        let preMigrationSourceReadCount = source.mainThreadFlags.count
+        let preMigrationDestinationReadCount = destination.mainThreadFlags.count
+
+        try await PortuApp.migrateSecrets(
             keys: [key],
-            from: source,
-            to: destination)
+            using: store)
 
-        let migrationThreadFlags = source.mainThreadFlags + destination.mainThreadFlags
+        let migrationThreadFlags =
+            Array(source.mainThreadFlags.dropFirst(preMigrationSourceReadCount))
+                + Array(destination.mainThreadFlags.dropFirst(preMigrationDestinationReadCount))
         #expect(!migrationThreadFlags.isEmpty)
         #expect(migrationThreadFlags.allSatisfy { !$0 })
         #expect(try destination.get(key: key) == "legacy-zerion-key")

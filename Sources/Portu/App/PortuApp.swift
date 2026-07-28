@@ -6,7 +6,94 @@ import PortuNetwork
 import PortuUI
 import SwiftData
 import SwiftUI
-import Synchronization
+
+final class MigratingSecretStore: SecretStore, @unchecked Sendable {
+    private let source: any SecretStore
+    private let destination: any SecretStore
+    private let lock = NSRecursiveLock()
+
+    init(source: any SecretStore, destination: any SecretStore) {
+        self.source = source
+        self.destination = destination
+    }
+
+    func get(key: KeychainKey) throws(KeychainError) -> String? {
+        try withLock {
+            try destination.get(key: key) ?? source.get(key: key)
+        }
+    }
+
+    func set(key: KeychainKey, value: String) throws(KeychainError) {
+        try withLock {
+            try destination.set(key: key, value: value)
+            try source.delete(key: key)
+        }
+    }
+
+    func delete(key: KeychainKey) throws(KeychainError) {
+        try withLock {
+            try destination.delete(key: key)
+            try source.delete(key: key)
+        }
+    }
+
+    func migrate(
+        keys: [KeychainKey],
+        retiredKeys: Set<KeychainKey>) throws(KeychainError) {
+        try withLock {
+            var firstError: KeychainError?
+            for key in retiredKeys.sorted(by: { $0.rawKey < $1.rawKey }) {
+                do {
+                    try source.delete(key: key)
+                } catch let error as KeychainError {
+                    firstError = firstError ?? error
+                } catch {
+                    firstError = firstError ?? .encodingFailed
+                }
+            }
+            do {
+                try SecretStoreMigration.migrate(
+                    keys: keys,
+                    from: source,
+                    to: destination)
+            } catch let error as KeychainError {
+                firstError = firstError ?? error
+            } catch {
+                firstError = firstError ?? .encodingFailed
+            }
+            if let firstError {
+                throw firstError
+            }
+        }
+    }
+
+    private func withLock<T>(
+        _ operation: () throws -> T) throws(KeychainError) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        do {
+            return try operation()
+        } catch let error as KeychainError {
+            throw error
+        } catch {
+            throw .encodingFailed
+        }
+    }
+}
+
+private actor SecretMigrationCoordinator {
+    let store: MigratingSecretStore
+
+    init(store: MigratingSecretStore) {
+        self.store = store
+    }
+
+    func migrate(
+        keys: [KeychainKey],
+        retiredKeys: Set<KeychainKey>) throws(KeychainError) {
+        try store.migrate(keys: keys, retiredKeys: retiredKeys)
+    }
+}
 
 actor APIKeyAvailabilityReader {
     private let secretStore: any SecretStore
@@ -64,16 +151,19 @@ struct PortuApp: App {
 
         let modelContext = container.mainContext
         ProviderIntervalSettings.migrateLegacyPreferences()
-        let secretStore = Self.makeSecretStore()
+        let secretStore = MigratingSecretStore(
+            source: LocalSecretStore(),
+            destination: Self.makeSecretStore())
         let secretMigrationKeys = Self.secretMigrationKeys(modelContext: modelContext)
-        do {
-            try Self.migrateSecretsBeforeDependencyConstruction(
-                keys: secretMigrationKeys,
-                from: LocalSecretStore(),
-                to: secretStore)
-        } catch {
-            Self.keychainAccessLogger.error(
-                "Plaintext secret migration stopped safely: \(String(describing: error), privacy: .public)")
+        Task {
+            do {
+                try await Self.migrateSecrets(
+                    keys: secretMigrationKeys,
+                    using: secretStore)
+            } catch {
+                Self.keychainAccessLogger.error(
+                    "Plaintext secret migration stopped safely: \(String(describing: error), privacy: .public)")
+            }
         }
         let zerionClient = ZerionAPIClient(
             apiKey: { try secretStore.get(key: .providerAPIKey(.zerion)) ?? "" },
@@ -260,54 +350,13 @@ struct PortuApp: App {
             bundleIdentifier: bundleIdentifier))
     }
 
-    nonisolated static func migrateSecretsBeforeDependencyConstruction(
+    nonisolated static func migrateSecrets(
         keys: [KeychainKey],
         retiredKeys: Set<KeychainKey> = retiredPlaintextSecretKeys,
-        from source: any SecretStore,
-        to destination: any SecretStore) throws(KeychainError) {
-        let outcome = Mutex<Result<Void, KeychainError>?>(nil)
-        let completion = DispatchSemaphore(value: 0)
-
-        Thread.detachNewThread {
-            let result: Result<Void, KeychainError>
-            var firstError: KeychainError?
-            for key in retiredKeys.sorted(by: { $0.rawKey < $1.rawKey }) {
-                do {
-                    try source.delete(key: key)
-                } catch let error as KeychainError {
-                    if firstError == nil {
-                        firstError = error
-                    }
-                } catch {
-                    if firstError == nil {
-                        firstError = .encodingFailed
-                    }
-                }
-            }
-            do {
-                try SecretStoreMigration.migrate(
-                    keys: keys,
-                    from: source,
-                    to: destination)
-            } catch let error as KeychainError {
-                if firstError == nil {
-                    firstError = error
-                }
-            } catch {
-                if firstError == nil {
-                    firstError = .encodingFailed
-                }
-            }
-            result = firstError.map(Result.failure) ?? .success(())
-            outcome.withLock { $0 = result }
-            completion.signal()
-        }
-
-        completion.wait()
-        guard let result = outcome.withLock({ $0 }) else {
-            throw .encodingFailed
-        }
-        try result.get()
+        using store: MigratingSecretStore) async throws(KeychainError) {
+        try await SecretMigrationCoordinator(store: store).migrate(
+            keys: keys,
+            retiredKeys: retiredKeys)
     }
 
     nonisolated static func coinGeckoAPIKey(from secretStore: any SecretStore) -> String? {

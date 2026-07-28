@@ -17,10 +17,13 @@ actor AccountCredentialStore {
     }
 
     func load(for accountID: UUID) throws(KeychainError) -> ExchangeCredentialSnapshot {
-        try ExchangeCredentialSnapshot(
-            apiKey: secretStore.get(key: .exchangeAPIKey(accountID)),
-            apiSecret: secretStore.get(key: .exchangeAPISecret(accountID)),
-            passphrase: secretStore.get(key: .exchangePassphrase(accountID)))
+        let apiKey = try secretStore.get(key: .exchangeAPIKey(accountID))
+        let apiSecret = try secretStore.get(key: .exchangeAPISecret(accountID))
+        let passphrase = try secretStore.get(key: .exchangePassphrase(accountID))
+        return ExchangeCredentialSnapshot(
+            apiKey: apiKey,
+            apiSecret: apiSecret,
+            passphrase: passphrase)
     }
 
     func save(
