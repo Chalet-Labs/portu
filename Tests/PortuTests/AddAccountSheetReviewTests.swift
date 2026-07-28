@@ -130,6 +130,8 @@ struct AccountCredentialLoadRecoveryTests {
         #expect(normalizedSource.contains("@MainActor func loadCredentialsIfNeeded() async"))
         #expect(normalizedSource.contains("@MainActor func retryCredentialLoad()"))
         #expect(normalizedSource.contains("Task { @MainActor in"))
+        #expect(normalizedSource.contains(
+            "didLoadCredentials = true isLoadingCredentials = true defer { isLoadingCredentials = false }"))
     }
 
     @Test func `credential load reports failure and can recover on retry`() async {

@@ -3,6 +3,7 @@ extension AddAccountSheet {
     func loadCredentialsIfNeeded() async {
         guard !didLoadCredentials, mode.isEditing, let account, account.kind == .exchange else { return }
         didLoadCredentials = true
+        isLoadingCredentials = true
         defer { isLoadingCredentials = false }
         var loadedDraft = draft
         let loadError = await loadedDraft.loadExchangeCredentials(
