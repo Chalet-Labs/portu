@@ -18,6 +18,12 @@ struct PortfolioAnalyticsScopeFactoryTests {
         #expect(option.scope.addresses.count == 2)
         #expect(option.scope.chainIDs == ["base", "solana"])
         #expect(options.dropFirst().allSatisfy { $0.scope.addresses.count == 1 })
+        #expect(PortfolioAnalyticsScopeFactory.scopeCoversEntireAccount(
+            option.scope,
+            account: input))
+        #expect(PortfolioAnalyticsScopeFactory.scopeCoversEntireAccount(
+            options[1].scope,
+            account: input) == false)
 
         let context = try #require(PortfolioAnalyticsScopeFactory.requestContext(
             account: input,
@@ -47,6 +53,11 @@ struct PortfolioAnalyticsScopeFactoryTests {
 
         #expect(options.count == 2)
         #expect(options.allSatisfy { $0.scope.addresses.count == 1 })
+        #expect(options.allSatisfy {
+            PortfolioAnalyticsScopeFactory.scopeCoversEntireAccount(
+                $0.scope,
+                account: input) == false
+        })
         #expect(options.map(\.scope.addresses.first?.value) == [
             "0x1111111111111111111111111111111111111111",
             "0x2222222222222222222222222222222222222222"

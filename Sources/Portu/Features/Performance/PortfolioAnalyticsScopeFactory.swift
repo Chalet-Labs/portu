@@ -25,6 +25,14 @@ struct PortfolioAnalyticsScopeOption: Equatable, Identifiable {
 }
 
 enum PortfolioAnalyticsScopeFactory {
+    static func scopeCoversEntireAccount(
+        _ scope: PortfolioAnalyticsScope,
+        account: PortfolioAnalyticsAccountInput) -> Bool {
+        let validatedAddresses = account.addresses.compactMap(validatedAddress)
+        guard validatedAddresses.count == account.addresses.count else { return false }
+        return Set(validatedAddresses) == Set(scope.addresses)
+    }
+
     static func scopeOptions(
         account: PortfolioAnalyticsAccountInput) -> [PortfolioAnalyticsScopeOption] {
         let addresses = Array(Set(account.addresses.compactMap(validatedAddress))).sorted()

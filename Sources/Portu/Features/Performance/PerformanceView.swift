@@ -22,10 +22,7 @@ struct PerformanceView: View {
                         ValueChartMode(
                             accountId: store.performance.selectedAccountId,
                             startDate: store.performance.selectedRange.startDate,
-                            analyticsScopeFingerprint: store.performance.analytics.isAvailable
-                                && store.performance.selectedRange != .custom
-                                ? analyticsContext?.scope.fingerprint
-                                : nil,
+                            analyticsScopeFingerprint: analyticsHistoryScopeFingerprint,
                             historyStatus: store.performance.analytics.historyStatus)
                     case .assets:
                         AssetsChartMode(
@@ -139,6 +136,18 @@ struct PerformanceView: View {
 
     private var analyticsScopeOptions: [PortfolioAnalyticsScopeOption] {
         analyticsAccountInput.map(PortfolioAnalyticsScopeFactory.scopeOptions) ?? []
+    }
+
+    private var analyticsHistoryScopeFingerprint: String? {
+        guard
+            store.performance.analytics.isAvailable,
+            store.performance.selectedRange != .custom,
+            let input = analyticsAccountInput,
+            let context = analyticsContext,
+            PortfolioAnalyticsScopeFactory.scopeCoversEntireAccount(
+                context.scope,
+                account: input) else { return nil }
+        return context.scope.fingerprint
     }
 
     private var analyticsTaskID: String {

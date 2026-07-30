@@ -162,6 +162,34 @@ struct AccountSheetInvalidationTests {
         #expect(try context.fetch(FetchDescriptor<ProviderPnLSnapshot>()).isEmpty)
     }
 
+    @Test func `equivalent EVM address edit preserves positions and analytics`() async throws {
+        let context = try makeModelContext()
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
+        let address = WalletAddress(
+            chain: nil,
+            address: "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            account: account)
+        account.addresses = [address]
+        context.insert(account)
+        context.insert(address)
+        insertSyncedPosition(for: account, in: context)
+        insertAnalytics(for: account.id, in: context)
+        try context.save()
+
+        var draft = AccountSheetDraft.editing(account: account)
+        draft.chainAddress = " 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "
+        try await AccountSheetSaveCoordinator.save(
+            draft: draft,
+            mode: .edit(account.id),
+            editing: account,
+            modelContext: context,
+            secretStore: InMemorySecretStore())
+
+        #expect(try context.fetch(FetchDescriptor<Position>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<ProviderPnLSnapshot>()).count == 1)
+    }
+
     @Test func `wallet chain edit removes obsolete provider analytics`() async throws {
         let context = try makeModelContext()
         let account = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)

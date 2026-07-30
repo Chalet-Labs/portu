@@ -6,6 +6,7 @@ import PortuNetwork
 import Testing
 
 @MainActor
+// swiftlint:disable:next type_body_length
 struct PortfolioAnalyticsFeatureTests {
     private let now = Date(timeIntervalSince1970: 1_704_153_600)
 
@@ -342,7 +343,8 @@ struct PortfolioAnalyticsFeatureTests {
         }
 
         await store.send(.refresh(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.refreshRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading
             $0.pnlStatus = .refreshing
@@ -373,7 +375,8 @@ struct PortfolioAnalyticsFeatureTests {
             }
 
         await store.send(.refresh(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.refreshRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading
             $0.pnlStatus = .loading

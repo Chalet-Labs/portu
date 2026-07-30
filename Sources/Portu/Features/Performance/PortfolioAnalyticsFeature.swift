@@ -74,6 +74,7 @@ struct PortfolioAnalyticsFeature {
         var selectedWalletScopeFingerprint: String?
         var activeRequestID: String?
         var clearRequestGeneration: UInt = 0
+        var refreshRequestGeneration: UInt = 0
         var fallbackScopeFingerprint: String?
         var pnlRefreshAttemptID: String?
         var history: [ProviderPortfolioValueDTO] = []
@@ -208,7 +209,9 @@ struct PortfolioAnalyticsFeature {
                         .cancel(id: CancelID.history),
                         .cancel(id: CancelID.pnl))
                 }
-                let requestID = context.requestID(pnlRange: state.pnlRange)
+                state.refreshRequestGeneration &+= 1
+                let requestID =
+                    "\(context.requestID(pnlRange: state.pnlRange))|refresh|\(state.refreshRequestGeneration)"
                 state.fallbackScopeFingerprint = context.fallbackScopeFingerprint
                 state.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID
@@ -236,7 +239,9 @@ struct PortfolioAnalyticsFeature {
                         .cancel(id: CancelID.history),
                         .cancel(id: CancelID.pnl))
                 }
-                let requestID = context.requestID(pnlRange: state.pnlRange)
+                state.refreshRequestGeneration &+= 1
+                let requestID =
+                    "\(context.requestID(pnlRange: state.pnlRange))|pnl|\(state.refreshRequestGeneration)"
                 state.fallbackScopeFingerprint = context.fallbackScopeFingerprint
                 state.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID

@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import Foundation
 import PortuCore
 import SwiftData
@@ -359,7 +361,10 @@ enum AccountSheetSaveCoordinator {
         guard addresses.count == 1, let existing = addresses.first else {
             return true
         }
-        return existing.chain != chain || existing.address != address
+        guard existing.chain == chain else { return true }
+        let family: PortfolioAnalyticsAddressFamily = chain == .solana ? .solana : .evm
+        return PortfolioAnalyticsAddress(family: family, value: existing.address)
+            != PortfolioAnalyticsAddress(family: family, value: address)
     }
 
     @MainActor

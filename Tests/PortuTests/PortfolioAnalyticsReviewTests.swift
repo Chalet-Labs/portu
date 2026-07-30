@@ -336,7 +336,8 @@ struct PortfolioAnalyticsReviewTests {
             }
 
         await store.send(.refresh(context)) {
-            $0.activeRequestID = requestID
+            $0.refreshRequestGeneration = 1
+            $0.activeRequestID = "\(requestID)|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
@@ -416,7 +417,8 @@ struct PortfolioAnalyticsReviewTests {
             }
 
         await store.send(.refresh(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.refreshRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.pnlStatus = .loading
         }
@@ -458,10 +460,12 @@ struct PortfolioAnalyticsReviewTests {
             }
 
         await store.send(.refreshPnL(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.refreshRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|pnl|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.pnlStatus = .loading
         }
+        #expect(store.state.activeRequestID != context.requestID(pnlRange: .oneMonth))
         await store.receive(\.pnlResponse) {
             $0.pnlRefreshAttemptID = nil
             $0.pnl = pnl
@@ -497,10 +501,12 @@ struct PortfolioAnalyticsReviewTests {
             }
 
         await store.send(.refreshPnL(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.refreshRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|pnl|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.pnlStatus = .loading
         }
+        #expect(store.state.activeRequestID != context.requestID(pnlRange: .oneMonth))
         await store.receive(\.pnlResponse) {
             $0.pnlRefreshAttemptID = nil
             $0.pnl = pnl
