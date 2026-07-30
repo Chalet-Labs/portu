@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import ComposableArchitecture
 import Foundation
 import PortuCore
@@ -9,6 +11,7 @@ struct PortfolioAnalyticsRequestContext: Equatable {
     let implementations: [OnchainTokenIdentity]
     let asOf: Date
     let isAccountActive: Bool
+    let isFullAccountScope: Bool
     let fallbackScopeFingerprint: String?
 
     init(
@@ -18,6 +21,7 @@ struct PortfolioAnalyticsRequestContext: Equatable {
         implementations: [OnchainTokenIdentity],
         asOf: Date,
         isAccountActive: Bool = true,
+        isFullAccountScope: Bool = true,
         fallbackScopeFingerprint: String? = nil) {
         self.scope = scope
         self.chartRange = chartRange
@@ -25,7 +29,16 @@ struct PortfolioAnalyticsRequestContext: Equatable {
         self.implementations = implementations
         self.asOf = asOf
         self.isAccountActive = isAccountActive
+        self.isFullAccountScope = isFullAccountScope
         self.fallbackScopeFingerprint = fallbackScopeFingerprint
+    }
+
+    var historyRequestID: String {
+        [
+            scope.fingerprint,
+            chartRange.rawValue,
+            currency.rawValue
+        ].joined(separator: "|")
     }
 
     func requestID(pnlRange: ProviderPnLRange) -> String {
@@ -53,6 +66,7 @@ struct PortfolioAnalyticsRequestContext: Equatable {
             implementations: implementations,
             asOf: date,
             isAccountActive: isAccountActive,
+            isFullAccountScope: isFullAccountScope,
             fallbackScopeFingerprint: fallbackScopeFingerprint)
     }
 }
@@ -66,6 +80,7 @@ enum PortfolioAnalyticsLoadStatus: Equatable {
 }
 
 @Reducer
+// swiftlint:disable:next type_body_length
 struct PortfolioAnalyticsFeature {
     @ObservableState
     struct State: Equatable {
@@ -73,6 +88,8 @@ struct PortfolioAnalyticsFeature {
         var pnlRange: ProviderPnLRange = .oneMonth
         var selectedWalletScopeFingerprint: String?
         var activeRequestID: String?
+        var activeHistoryRequestID: String?
+        var activePnLRequestID: String?
         var clearRequestGeneration: UInt = 0
         var loadRequestGeneration: UInt = 0
         var refreshRequestGeneration: UInt = 0
@@ -98,6 +115,10 @@ struct PortfolioAnalyticsFeature {
             PortfolioAnalyticsRequestContext,
             String,
             Result<PortfolioAnalyticsCache, PortfolioAnalyticsClientError>)
+        case pnlCacheLoaded(
+            PortfolioAnalyticsRequestContext,
+            String,
+            Result<PortfolioAnalyticsCache, PortfolioAnalyticsClientError>)
         case historyResponse(
             String,
             Result<[ProviderPortfolioValueDTO], PortfolioAnalyticsClientError>)
@@ -110,6 +131,7 @@ struct PortfolioAnalyticsFeature {
         case cache
         case history
         case pnl
+        case pnlCache
     }
 
     @Dependency(\.date.now) var now
@@ -126,6 +148,8 @@ struct PortfolioAnalyticsFeature {
             case .selectionUnavailable:
                 state.selectedWalletScopeFingerprint = nil
                 state.activeRequestID = nil
+                state.activeHistoryRequestID = nil
+                state.activePnLRequestID = nil
                 state.fallbackScopeFingerprint = nil
                 state.pnlRefreshAttemptID = nil
                 state.history = []
@@ -135,11 +159,14 @@ struct PortfolioAnalyticsFeature {
                 return .merge(
                     .cancel(id: CancelID.cache),
                     .cancel(id: CancelID.history),
-                    .cancel(id: CancelID.pnl))
+                    .cancel(id: CancelID.pnl),
+                    .cancel(id: CancelID.pnlCache))
 
             case let .load(context):
                 if context.isAccountActive == false {
                     state.activeRequestID = nil
+                    state.activeHistoryRequestID = nil
+                    state.activePnLRequestID = nil
                     state.fallbackScopeFingerprint = nil
                     if state.historyStatus == .loading || state.historyStatus == .refreshing {
                         state.historyStatus = .idle
@@ -150,10 +177,13 @@ struct PortfolioAnalyticsFeature {
                     return .merge(
                         .cancel(id: CancelID.cache),
                         .cancel(id: CancelID.history),
-                        .cancel(id: CancelID.pnl))
+                        .cancel(id: CancelID.pnl),
+                        .cancel(id: CancelID.pnlCache))
                 }
                 guard Self.isEligible(context, isAvailable: state.isAvailable) else {
                     state.activeRequestID = nil
+                    state.activeHistoryRequestID = nil
+                    state.activePnLRequestID = nil
                     state.fallbackScopeFingerprint = nil
                     state.history = []
                     state.pnl = nil
@@ -162,12 +192,15 @@ struct PortfolioAnalyticsFeature {
                     return .merge(
                         .cancel(id: CancelID.cache),
                         .cancel(id: CancelID.history),
-                        .cancel(id: CancelID.pnl))
+                        .cancel(id: CancelID.pnl),
+                        .cancel(id: CancelID.pnlCache))
                 }
                 state.loadRequestGeneration &+= 1
                 let requestID =
                     "\(context.requestID(pnlRange: state.pnlRange))|load|\(state.loadRequestGeneration)"
                 state.fallbackScopeFingerprint = context.fallbackScopeFingerprint
+                state.activeHistoryRequestID = nil
+                state.activePnLRequestID = nil
                 if state.activeRequestID != requestID {
                     state.pnl = nil
                 }
@@ -196,11 +229,14 @@ struct PortfolioAnalyticsFeature {
                 return .merge(
                     .cancel(id: CancelID.history),
                     .cancel(id: CancelID.pnl),
+                    .cancel(id: CancelID.pnlCache),
                     cacheEffect)
 
             case let .refresh(context):
                 guard Self.isEligible(context, isAvailable: state.isAvailable) else {
                     state.activeRequestID = nil
+                    state.activeHistoryRequestID = nil
+                    state.activePnLRequestID = nil
                     if state.historyStatus == .loading || state.historyStatus == .refreshing {
                         state.historyStatus = .idle
                     }
@@ -210,7 +246,8 @@ struct PortfolioAnalyticsFeature {
                     return .merge(
                         .cancel(id: CancelID.cache),
                         .cancel(id: CancelID.history),
-                        .cancel(id: CancelID.pnl))
+                        .cancel(id: CancelID.pnl),
+                        .cancel(id: CancelID.pnlCache))
                 }
                 state.refreshRequestGeneration &+= 1
                 let requestID =
@@ -218,9 +255,12 @@ struct PortfolioAnalyticsFeature {
                 state.fallbackScopeFingerprint = context.fallbackScopeFingerprint
                 state.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID
+                state.activePnLRequestID = nil
                 if Self.supportsProviderHistory(context) {
+                    state.activeHistoryRequestID = requestID
                     state.historyStatus = state.history.isEmpty ? .loading : .refreshing
                 } else {
+                    state.activeHistoryRequestID = nil
                     state.history = []
                     state.historyStatus = .idle
                 }
@@ -231,6 +271,8 @@ struct PortfolioAnalyticsFeature {
                 let context = context.stamped(at: now)
                 guard Self.isEligible(context, isAvailable: state.isAvailable) else {
                     state.activeRequestID = nil
+                    state.activeHistoryRequestID = nil
+                    state.activePnLRequestID = nil
                     if state.historyStatus == .loading || state.historyStatus == .refreshing {
                         state.historyStatus = .idle
                     }
@@ -240,14 +282,15 @@ struct PortfolioAnalyticsFeature {
                     return .merge(
                         .cancel(id: CancelID.cache),
                         .cancel(id: CancelID.history),
-                        .cancel(id: CancelID.pnl))
+                        .cancel(id: CancelID.pnl),
+                        .cancel(id: CancelID.pnlCache))
                 }
                 state.refreshRequestGeneration &+= 1
                 let requestID =
                     "\(context.requestID(pnlRange: state.pnlRange))|pnl|\(state.refreshRequestGeneration)"
                 state.fallbackScopeFingerprint = context.fallbackScopeFingerprint
                 state.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
-                state.activeRequestID = requestID
+                state.activePnLRequestID = requestID
                 state.pnlStatus = state.pnl == nil ? .loading : .refreshing
                 return pnlEffect(context: context, requestID: requestID, pnlRange: state.pnlRange)
 
@@ -256,6 +299,8 @@ struct PortfolioAnalyticsFeature {
                 let requestID =
                     "\(context.requestID(pnlRange: state.pnlRange))|clear|\(state.clearRequestGeneration)"
                 state.activeRequestID = requestID
+                state.activeHistoryRequestID = nil
+                state.activePnLRequestID = nil
                 state.pnlRefreshAttemptID = nil
                 let clearEffect = Effect<Action>.run { send in
                     do {
@@ -273,6 +318,7 @@ struct PortfolioAnalyticsFeature {
                 return .merge(
                     .cancel(id: CancelID.history),
                     .cancel(id: CancelID.pnl),
+                    .cancel(id: CancelID.pnlCache),
                     clearEffect)
 
             case let .clearCacheResponse(requestID, .success):
@@ -292,6 +338,8 @@ struct PortfolioAnalyticsFeature {
             case let .walletScopeSelected(fingerprint):
                 state.selectedWalletScopeFingerprint = fingerprint
                 state.activeRequestID = nil
+                state.activeHistoryRequestID = nil
+                state.activePnLRequestID = nil
                 state.fallbackScopeFingerprint = nil
                 state.pnlRefreshAttemptID = nil
                 state.history = []
@@ -301,30 +349,55 @@ struct PortfolioAnalyticsFeature {
                 return .merge(
                     .cancel(id: CancelID.cache),
                     .cancel(id: CancelID.history),
-                    .cancel(id: CancelID.pnl))
+                    .cancel(id: CancelID.pnl),
+                    .cancel(id: CancelID.pnlCache))
 
             case let .pnlRangeChanged(range, context):
                 guard context.isAccountActive else { return .none }
                 let context = context.stamped(at: now)
                 state.pnlRange = range
-                state.activeRequestID = nil
                 state.pnl = nil
-                state.pnlStatus = .idle
                 guard Self.isEligible(context, isAvailable: state.isAvailable) else {
-                    state.historyStatus = .idle
+                    state.pnlStatus = .idle
                     return .merge(
-                        .cancel(id: CancelID.cache),
-                        .cancel(id: CancelID.history),
+                        .cancel(id: CancelID.pnlCache),
                         .cancel(id: CancelID.pnl))
                 }
-                return .send(.load(context))
+                state.loadRequestGeneration &+= 1
+                let requestID =
+                    "\(context.requestID(pnlRange: range))|pnl-load|\(state.loadRequestGeneration)"
+                state.activePnLRequestID = requestID
+                state.pnlRefreshAttemptID = nil
+                state.pnlStatus = .loading
+                let cacheEffect = Effect<Action>.run { send in
+                    do {
+                        let cache = try await client.loadCache(
+                            context.scope,
+                            range,
+                            context.currency,
+                            context.chartRange.startDate(at: context.asOf))
+                        await send(.pnlCacheLoaded(context, requestID, .success(cache)))
+                    } catch is CancellationError {
+                        return
+                    } catch {
+                        await send(.pnlCacheLoaded(
+                            context,
+                            requestID,
+                            .failure(PortfolioAnalyticsClientError(error))))
+                    }
+                }
+                .cancellable(id: CancelID.pnlCache, cancelInFlight: true)
+                return .merge(.cancel(id: CancelID.pnl), cacheEffect)
 
             case let .cacheLoaded(context, requestID, .success(cache)):
                 guard requestID == state.activeRequestID else { return .none }
                 let supportsProviderHistory = Self.supportsProviderHistory(context)
                 state.history = supportsProviderHistory ? cache.history : []
                 state.historyStatus = supportsProviderHistory ? .loaded : .idle
-                state.pnl = cache.pnl
+                let shouldApplyPnL = state.activePnLRequestID == nil
+                if shouldApplyPnL {
+                    state.pnl = cache.pnl
+                }
 
                 let historyNeedsRefresh = supportsProviderHistory
                     && (cache.historyCoverageStartDate.map {
@@ -335,20 +408,27 @@ struct PortfolioAnalyticsFeature {
                             context.asOf.timeIntervalSince($0) >= ProviderPnLFreshness.freshTTL
                         } ?? true)
                 let pnlNeedsRefresh: Bool
-                if let pnl = cache.pnl {
-                    pnlNeedsRefresh = ProviderPnLFreshness.evaluate(
-                        fetchedAt: pnl.fetchedAt,
-                        now: context.asOf) != .fresh
-                    state.pnlStatus = pnlNeedsRefresh ? .refreshing : .loaded
+                if shouldApplyPnL {
+                    if let pnl = cache.pnl {
+                        pnlNeedsRefresh = ProviderPnLFreshness.evaluate(
+                            fetchedAt: pnl.fetchedAt,
+                            now: context.asOf) != .fresh
+                        state.pnlStatus = pnlNeedsRefresh ? .refreshing : .loaded
+                    } else {
+                        pnlNeedsRefresh = true
+                        state.pnlStatus = .loading
+                    }
                 } else {
-                    pnlNeedsRefresh = true
-                    state.pnlStatus = .loading
+                    pnlNeedsRefresh = false
                 }
 
                 var effects: [Effect<Action>] = []
                 if historyNeedsRefresh {
                     state.historyStatus = cache.history.isEmpty ? .loading : .refreshing
+                    state.activeHistoryRequestID = requestID
                     effects.append(historyEffect(context: context, requestID: requestID))
+                } else {
+                    state.activeHistoryRequestID = nil
                 }
                 let pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
                 if pnlNeedsRefresh, state.pnlRefreshAttemptID != pnlRefreshAttemptID {
@@ -362,20 +442,49 @@ struct PortfolioAnalyticsFeature {
                 }
                 return .merge(effects)
 
-            case let .cacheLoaded(_, requestID, .failure(error)):
-                guard requestID == state.activeRequestID else { return .none }
-                state.historyStatus = .failed(error.failure)
+            case let .pnlCacheLoaded(context, requestID, .success(cache)):
+                guard requestID == state.activePnLRequestID else { return .none }
+                state.pnl = cache.pnl
+                if
+                    let pnl = cache.pnl,
+                    ProviderPnLFreshness.evaluate(
+                        fetchedAt: pnl.fetchedAt,
+                        now: context.asOf) == .fresh {
+                    state.activePnLRequestID = nil
+                    state.pnlStatus = .loaded
+                    return .none
+                }
+                state.pnlStatus = cache.pnl == nil ? .loading : .refreshing
+                state.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
+                return pnlEffect(
+                    context: context,
+                    requestID: requestID,
+                    pnlRange: state.pnlRange)
+
+            case let .pnlCacheLoaded(_, requestID, .failure(error)):
+                guard requestID == state.activePnLRequestID else { return .none }
+                state.activePnLRequestID = nil
                 state.pnlStatus = .failed(error.failure)
                 return .none
 
-            case let .historyResponse(requestID, .success(history)):
+            case let .cacheLoaded(_, requestID, .failure(error)):
                 guard requestID == state.activeRequestID else { return .none }
+                state.historyStatus = .failed(error.failure)
+                if state.activePnLRequestID == nil {
+                    state.pnlStatus = .failed(error.failure)
+                }
+                return .none
+
+            case let .historyResponse(requestID, .success(history)):
+                guard requestID == state.activeHistoryRequestID else { return .none }
+                state.activeHistoryRequestID = nil
                 state.history = history
                 state.historyStatus = .loaded
                 return .none
 
             case let .historyResponse(requestID, .failure(error)):
-                guard requestID == state.activeRequestID else { return .none }
+                guard requestID == state.activeHistoryRequestID else { return .none }
+                state.activeHistoryRequestID = nil
                 if Self.selectFallbackIfAvailable(state: &state, failure: error.failure) {
                     return cancelAnalyticsEffects()
                 }
@@ -383,14 +492,16 @@ struct PortfolioAnalyticsFeature {
                 return .none
 
             case let .pnlResponse(requestID, .success(pnl)):
-                guard requestID == state.activeRequestID else { return .none }
+                guard requestID == state.activePnLRequestID ?? state.activeRequestID else { return .none }
+                state.activePnLRequestID = nil
                 state.pnlRefreshAttemptID = nil
                 state.pnl = pnl
                 state.pnlStatus = .loaded
                 return .none
 
             case let .pnlResponse(requestID, .failure(error)):
-                guard requestID == state.activeRequestID else { return .none }
+                guard requestID == state.activePnLRequestID ?? state.activeRequestID else { return .none }
+                state.activePnLRequestID = nil
                 if Self.selectFallbackIfAvailable(state: &state, failure: error.failure) {
                     return cancelAnalyticsEffects()
                 }
@@ -411,7 +522,7 @@ struct PortfolioAnalyticsFeature {
 
     private static func supportsProviderHistory(
         _ context: PortfolioAnalyticsRequestContext) -> Bool {
-        context.chartRange != .custom
+        context.chartRange != .custom && context.isFullAccountScope
     }
 
     private static func selectFallbackIfAvailable(
@@ -422,6 +533,8 @@ struct PortfolioAnalyticsFeature {
             let fallback = state.fallbackScopeFingerprint else { return false }
         state.selectedWalletScopeFingerprint = fallback
         state.activeRequestID = nil
+        state.activeHistoryRequestID = nil
+        state.activePnLRequestID = nil
         state.fallbackScopeFingerprint = nil
         state.pnlRefreshAttemptID = nil
         state.history = []
@@ -435,7 +548,8 @@ struct PortfolioAnalyticsFeature {
         .merge(
             .cancel(id: CancelID.cache),
             .cancel(id: CancelID.history),
-            .cancel(id: CancelID.pnl))
+            .cancel(id: CancelID.pnl),
+            .cancel(id: CancelID.pnlCache))
     }
 
     private func refreshEffects(

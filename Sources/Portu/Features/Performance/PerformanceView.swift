@@ -161,7 +161,7 @@ struct PerformanceView: View {
             ].joined(separator: "|")
         }
         return [
-            context.requestID(pnlRange: store.performance.analytics.pnlRange),
+            context.historyRequestID,
             "active:\(context.isAccountActive)",
             "available:\(availability)"
         ].joined(separator: "|")

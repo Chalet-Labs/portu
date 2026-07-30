@@ -57,6 +57,21 @@ struct PortfolioAnalyticsReviewTests {
         await store.finish()
     }
 
+    @Test func `history task identity excludes the selected pnl range`() {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+
+        #expect(context.historyRequestID == [
+            context.scope.fingerprint,
+            context.chartRange.rawValue,
+            context.currency.rawValue
+        ].joined(separator: "|"))
+    }
+
     @Test func `fresh short history refreshes when a longer chart range is requested`() async {
         let scope = makeScope()
         let context = PortfolioAnalyticsRequestContext(
@@ -99,6 +114,8 @@ struct PortfolioAnalyticsReviewTests {
             $0.pnlStatus = .loading
         }
         await store.receive(\.cacheLoaded) {
+            $0.activeHistoryRequestID =
+                "\(context.requestID(pnlRange: .oneMonth))|load|1"
             $0.history = [.init(
                 timestamp: now.addingTimeInterval(-7 * 86400),
                 usdValue: 100,
@@ -109,10 +126,62 @@ struct PortfolioAnalyticsReviewTests {
             $0.pnlStatus = .loaded
         }
         await store.receive(\.historyResponse) {
+            $0.activeHistoryRequestID = nil
             $0.history = []
             $0.historyStatus = .loaded
         }
         #expect(await calls.historyCount == 1)
+    }
+
+    @Test func `partial account scope skips provider history`() async {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneYear,
+            currency: .usd,
+            implementations: [],
+            asOf: now,
+            isFullAccountScope: false)
+        let cachedPnL = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: now)
+        let calls = ReviewAnalyticsCallRecorder()
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.loadCache = { _, _, _, _ in
+                    PortfolioAnalyticsCache(
+                        history: [.init(
+                            timestamp: now,
+                            usdValue: 100,
+                            provider: .zerion,
+                            coverage: .providerReported)],
+                        historyFetchedAt: nil,
+                        historyCoverageStartDate: nil,
+                        pnl: cachedPnL)
+                }
+                $0.portfolioAnalytics.refreshHistory = { _, _ in
+                    await calls.recordHistory()
+                    return []
+                }
+            }
+
+        await store.send(.load(context)) {
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|load|1"
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.cacheLoaded) {
+            $0.historyStatus = .idle
+            $0.pnl = cachedPnL
+            $0.pnlStatus = .loaded
+        }
+
+        #expect(store.state.history.isEmpty)
+        #expect(await calls.historyCount == 0)
     }
 
     @Test func `pnl range change loads matching cache before refreshing`() async {
@@ -132,12 +201,18 @@ struct PortfolioAnalyticsReviewTests {
         let store = TestStore(
             initialState: PortfolioAnalyticsFeature.State(
                 isAvailable: true,
+                activeHistoryRequestID: "in-flight-history",
+                history: [.init(
+                    timestamp: now,
+                    usdValue: 100,
+                    provider: .zerion,
+                    coverage: .providerReported)],
                 pnl: .init(
                     range: .oneMonth,
                     currency: .usd,
                     totalGain: 10,
                     fetchedAt: now),
-                historyStatus: .loaded,
+                historyStatus: .refreshing,
                 pnlStatus: .loaded)) {
             PortfolioAnalyticsFeature()
         } withDependencies: {
@@ -159,21 +234,19 @@ struct PortfolioAnalyticsReviewTests {
 
         await store.send(.pnlRangeChanged(.oneYear, context)) {
             $0.pnlRange = .oneYear
-            $0.activeRequestID = nil
-            $0.pnl = nil
-            $0.pnlStatus = .idle
-        }
-        await store.receive(\.load) {
             $0.loadRequestGeneration = 1
-            $0.activeRequestID = "\(context.requestID(pnlRange: .oneYear))|load|1"
-            $0.historyStatus = .loading
+            $0.activePnLRequestID = "\(context.requestID(pnlRange: .oneYear))|pnl-load|1"
+            $0.pnl = nil
             $0.pnlStatus = .loading
         }
-        await store.receive(\.cacheLoaded) {
-            $0.historyStatus = .loaded
+        await store.receive(\.pnlCacheLoaded) {
+            $0.activePnLRequestID = nil
             $0.pnl = cached
             $0.pnlStatus = .loaded
         }
+        #expect(store.state.activeHistoryRequestID == "in-flight-history")
+        #expect(store.state.historyStatus == .refreshing)
+        #expect(store.state.history.count == 1)
         #expect(await calls.cacheCount == 1)
         #expect(await calls.pnlCount == 0)
     }
@@ -388,6 +461,7 @@ struct PortfolioAnalyticsReviewTests {
         await store.send(.refresh(context)) {
             $0.refreshRequestGeneration = 1
             $0.activeRequestID = "\(requestID)|refresh|1"
+            $0.activeHistoryRequestID = "\(requestID)|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
@@ -395,6 +469,7 @@ struct PortfolioAnalyticsReviewTests {
         await store.send(.clearCache(context)) {
             $0.clearRequestGeneration = 1
             $0.activeRequestID = "\(requestID)|clear|1"
+            $0.activeHistoryRequestID = nil
             $0.pnlRefreshAttemptID = nil
         }
         #expect(store.state.activeRequestID != requestID)
@@ -511,12 +586,13 @@ struct PortfolioAnalyticsReviewTests {
 
         await store.send(.refreshPnL(context)) {
             $0.refreshRequestGeneration = 1
-            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|pnl|1"
+            $0.activePnLRequestID = "\(context.requestID(pnlRange: .oneMonth))|pnl|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.pnlStatus = .loading
         }
         #expect(store.state.activeRequestID != context.requestID(pnlRange: .oneMonth))
         await store.receive(\.pnlResponse) {
+            $0.activePnLRequestID = nil
             $0.pnlRefreshAttemptID = nil
             $0.pnl = pnl
             $0.pnlStatus = .loaded
@@ -552,12 +628,13 @@ struct PortfolioAnalyticsReviewTests {
 
         await store.send(.refreshPnL(context)) {
             $0.refreshRequestGeneration = 1
-            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|pnl|1"
+            $0.activePnLRequestID = "\(context.requestID(pnlRange: .oneMonth))|pnl|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.pnlStatus = .loading
         }
         #expect(store.state.activeRequestID != context.requestID(pnlRange: .oneMonth))
         await store.receive(\.pnlResponse) {
+            $0.activePnLRequestID = nil
             $0.pnlRefreshAttemptID = nil
             $0.pnl = pnl
             $0.pnlStatus = .loaded
@@ -620,18 +697,15 @@ struct PortfolioAnalyticsReviewTests {
 
         await store.send(.pnlRangeChanged(.oneYear, context)) {
             $0.pnlRange = .oneYear
-        }
-        await store.receive(\.load) {
             $0.loadRequestGeneration = 1
-            $0.activeRequestID = "\(context.requestID(pnlRange: .oneYear))|load|1"
-            $0.historyStatus = .loading
+            $0.activePnLRequestID = "\(context.requestID(pnlRange: .oneYear))|pnl-load|1"
             $0.pnlStatus = .loading
         }
-        await store.receive(\.cacheLoaded) {
+        await store.receive(\.pnlCacheLoaded) {
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneYear)
-            $0.historyStatus = .idle
         }
         await store.receive(\.pnlResponse) {
+            $0.activePnLRequestID = nil
             $0.pnlRefreshAttemptID = nil
             $0.pnl = pnl
             $0.pnlStatus = .loaded

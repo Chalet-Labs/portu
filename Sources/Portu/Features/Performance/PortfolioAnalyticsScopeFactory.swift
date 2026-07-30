@@ -83,15 +83,21 @@ enum PortfolioAnalyticsScopeFactory {
         let fallbackScopeFingerprint = selectedOption.scope.addresses.count > 1
             ? options.first(where: { $0.scope.addresses.count == 1 })?.id
             : nil
+        let isFullAccountScope = scopeCoversEntireAccount(
+            selectedOption.scope,
+            account: account)
         return PortfolioAnalyticsRequestContext(
             scope: selectedOption.scope,
             chartRange: chartRange,
             currency: currency,
-            implementations: Array(Set(account.implementations)).sorted {
-                $0.canonicalPriceID < $1.canonicalPriceID
-            },
+            implementations: isFullAccountScope
+                ? Array(Set(account.implementations)).sorted {
+                    $0.canonicalPriceID < $1.canonicalPriceID
+                }
+                : [],
             asOf: asOf,
             isAccountActive: account.isActive,
+            isFullAccountScope: isFullAccountScope,
             fallbackScopeFingerprint: fallbackScopeFingerprint)
     }
 

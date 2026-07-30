@@ -156,12 +156,15 @@ struct PortfolioAnalyticsFeatureTests {
             $0.pnlStatus = .loading
         }
         await store.receive(\.cacheLoaded) {
+            $0.activeHistoryRequestID =
+                "\(context.requestID(pnlRange: .oneMonth))|load|1"
             $0.historyStatus = .loading
             $0.pnlStatus = .refreshing
             $0.pnl = stale
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
         }
         await store.receive(\.historyResponse) {
+            $0.activeHistoryRequestID = nil
             $0.historyStatus = .loaded
         }
         await store.receive(\.pnlResponse) {
@@ -348,11 +351,14 @@ struct PortfolioAnalyticsFeatureTests {
         await store.send(.refresh(context)) {
             $0.refreshRequestGeneration = 1
             $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
+            $0.activeHistoryRequestID =
+                "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading
             $0.pnlStatus = .refreshing
         }
         await store.receive(\.historyResponse) {
+            $0.activeHistoryRequestID = nil
             $0.history = []
             $0.historyStatus = .loaded
         }
@@ -380,6 +386,8 @@ struct PortfolioAnalyticsFeatureTests {
         await store.send(.refresh(context)) {
             $0.refreshRequestGeneration = 1
             $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
+            $0.activeHistoryRequestID =
+                "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
