@@ -208,17 +208,19 @@ struct PerformanceValueChangeTests {
         let d3 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 3, hour: 12)))
         let d4 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 4, hour: 12)))
 
-        let bars = PerformanceFeature.computeValueChangeBars(from: [
+        let series = PerformanceFeature.computeValueChangeSeries(from: [
             ValueChangeObservation(date: d1, value: 1000, isReliable: true),
             ValueChangeObservation(date: d2, value: 700, isReliable: false),
             ValueChangeObservation(date: d3, value: 1100, isReliable: true),
             ValueChangeObservation(date: d4, value: 1150, isReliable: true)
         ])
+        let bars = series.bars
 
         #expect(bars.count == 1)
         #expect(bars.first?.date == d4)
         #expect(bars.first?.change == 50)
         #expect(bars.first?.cumulative == 50)
+        #expect(series.hasSkippedTransitions)
     }
 
     @Test func `daily dedup keeps reliability from the latest observation`() throws {

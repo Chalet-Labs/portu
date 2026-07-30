@@ -26,7 +26,7 @@ struct ValueChangeChartMode: View {
             sort: \.day)
     }
 
-    private var bars: [ValueChangeBar] {
+    private var series: ValueChangeSeries {
         let observations: [ValueChangeObservation]
         if let accountId {
             let filtered = accountSnaps.filter { $0.accountId == accountId && $0.timestamp >= startDate }
@@ -46,7 +46,7 @@ struct ValueChangeChartMode: View {
             }
         }
         let daily = PerformanceFeature.lastValueChangeObservationPerDay(observations)
-        return PerformanceFeature.computeValueChangeBars(
+        return PerformanceFeature.computeValueChangeSeries(
             from: daily,
             conversionContext: currencyConversionContext)
     }
@@ -63,6 +63,8 @@ struct ValueChangeChartMode: View {
     }
 
     var body: some View {
+        let series = series
+        let bars = series.bars
         VStack(spacing: 8) {
             if bars.isEmpty {
                 ContentUnavailableView(
@@ -92,6 +94,14 @@ struct ValueChangeChartMode: View {
                     AxisMarks(format: .currency(code: currencyCode).precision(.fractionLength(0)))
                 }
                 .frame(height: 320)
+            }
+
+            if series.hasSkippedTransitions {
+                Label(
+                    "Some value-change intervals were omitted because snapshots were incomplete",
+                    systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
             }
 
             Toggle("Show Cumulative", isOn: Binding(

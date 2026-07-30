@@ -14,6 +14,11 @@ struct ValueChangeBar: Identifiable, Equatable {
     let cumulative: Decimal
 }
 
+struct ValueChangeSeries: Equatable {
+    let bars: [ValueChangeBar]
+    let hasSkippedTransitions: Bool
+}
+
 extension PerformanceFeature {
     static func lastValueChangeObservationPerDay(
         _ observations: [ValueChangeObservation]) -> [ValueChangeObservation] {
@@ -29,15 +34,21 @@ extension PerformanceFeature {
     }
 
     /// Compute consecutive observed value changes with cumulative totals.
-    static func computeValueChangeBars(
-        from observations: [ValueChangeObservation]) -> [ValueChangeBar] {
-        guard observations.count >= 2 else { return [] }
+    static func computeValueChangeSeries(
+        from observations: [ValueChangeObservation]) -> ValueChangeSeries {
+        guard observations.count >= 2 else {
+            return ValueChangeSeries(bars: [], hasSkippedTransitions: false)
+        }
         var result: [ValueChangeBar] = []
         var cumulative: Decimal = 0
+        var hasSkippedTransitions = false
         for index in 1 ..< observations.count {
             let previous = observations[index - 1]
             let current = observations[index]
-            guard previous.isReliable, current.isReliable else { continue }
+            guard previous.isReliable, current.isReliable else {
+                hasSkippedTransitions = true
+                continue
+            }
             let change = current.value - previous.value
             cumulative += change
             result.append(ValueChangeBar(
@@ -46,7 +57,14 @@ extension PerformanceFeature {
                 change: change,
                 cumulative: cumulative))
         }
-        return result
+        return ValueChangeSeries(
+            bars: result,
+            hasSkippedTransitions: hasSkippedTransitions)
+    }
+
+    static func computeValueChangeBars(
+        from observations: [ValueChangeObservation]) -> [ValueChangeBar] {
+        computeValueChangeSeries(from: observations).bars
     }
 
     static func computeValueChangeBars(
@@ -59,13 +77,21 @@ extension PerformanceFeature {
     static func computeValueChangeBars(
         from observations: [ValueChangeObservation],
         conversionContext: CurrencyConversionContext) -> [ValueChangeBar] {
+        computeValueChangeSeries(
+            from: observations,
+            conversionContext: conversionContext).bars
+    }
+
+    static func computeValueChangeSeries(
+        from observations: [ValueChangeObservation],
+        conversionContext: CurrencyConversionContext) -> ValueChangeSeries {
         let converted = observations.map { observation in
             ValueChangeObservation(
                 date: observation.date,
                 value: conversionContext.convertUSDValue(observation.value, on: observation.date),
                 isReliable: observation.isReliable)
         }
-        return computeValueChangeBars(from: converted)
+        return computeValueChangeSeries(from: converted)
     }
 
     static func computeValueChangeBars(

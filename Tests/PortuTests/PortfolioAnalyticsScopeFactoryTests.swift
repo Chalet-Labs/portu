@@ -60,6 +60,10 @@ struct PortfolioAnalyticsScopeFactoryTests {
             "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "8BH9pjtgyZDC4iAQH5ZiYDZ1MDWC98xki2V8NzqqKW3K"
         ])
+        #expect(options.first?.scope.chainIDs == [])
+        #expect(options.first {
+            $0.scope.addresses.first?.family == .evm
+        }?.scope.chainIDs == [])
     }
 
     private func makeInput(

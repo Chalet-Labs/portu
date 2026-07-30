@@ -4,6 +4,22 @@ import PortuCore
 import Testing
 
 struct ProviderPortfolioHistoryTests {
+    @Test func `provider history disclosure distinguishes provider reported coverage`() {
+        let noFilter = ProviderPortfolioHistory.disclosure(for: [.init(
+            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+            usdValue: 100,
+            provider: .zerion,
+            coverage: .noFilter)])
+        let providerReported = ProviderPortfolioHistory.disclosure(for: [.init(
+            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+            usdValue: 100,
+            provider: .zerion,
+            coverage: .providerReported)])
+
+        #expect(noFilter != providerReported)
+        #expect(providerReported?.contains("provider-reported") == true)
+    }
+
     private let accountID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
 
     @Test func `provider history stops strictly before earliest fresh local day`() {

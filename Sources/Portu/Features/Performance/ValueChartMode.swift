@@ -262,9 +262,9 @@ struct ValueChartMode: View {
                 }
                 .frame(height: 300)
 
-                if providerDTOs.isEmpty == false {
+                if let disclosure = ProviderPortfolioHistory.disclosure(for: providerDTOs) {
                     Label(
-                        "Zerion history · historical complex DeFi coverage may be incomplete",
+                        disclosure,
                         systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
                         .font(.caption)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)

@@ -34,13 +34,11 @@ enum PortfolioAnalyticsScopeFactory {
         if
             addresses.count == 2,
             Set(addresses.map(\.family)) == Set(PortfolioAnalyticsAddressFamily.allCases) {
-            let configuredChains = addresses.map { address in
-                account.addresses.first {
-                    validatedAddress($0) == address
-                }?.chain?.rawValue
+            let chainIDsByAddress = addresses.map { address in
+                Self.chainIDs(for: address, in: account.addresses)
             }
-            let chainIDs = configuredChains.allSatisfy { $0 != nil }
-                ? configuredChains.compactMap(\.self)
+            let chainIDs = chainIDsByAddress.allSatisfy { $0.isEmpty == false }
+                ? chainIDsByAddress.flatMap(\.self)
                 : []
             options.append(PortfolioAnalyticsScopeOption(
                 label: "EVM + Solana",
@@ -52,19 +50,13 @@ enum PortfolioAnalyticsScopeFactory {
         }
 
         options.append(contentsOf: addresses.map { address in
-            let matchingInput = account.addresses.first {
-                PortfolioAnalyticsAddress(
-                    family: $0.chain == .solana ? .solana : .evm,
-                    value: $0.address) == address
-            }
-            let chainIDs = matchingInput?.chain.map { [$0.rawValue] } ?? []
-            return PortfolioAnalyticsScopeOption(
+            PortfolioAnalyticsScopeOption(
                 label: abbreviated(address.value),
                 scope: PortfolioAnalyticsScope(
                     accountID: account.id,
                     dataSource: account.dataSource,
                     addresses: [address],
-                    chainIDs: chainIDs))
+                    chainIDs: Self.chainIDs(for: address, in: account.addresses)))
         })
         return options
     }
@@ -94,6 +86,14 @@ enum PortfolioAnalyticsScopeFactory {
     private static func abbreviated(_ address: String) -> String {
         guard address.count > 14 else { return address }
         return "\(address.prefix(7))…\(address.suffix(5))"
+    }
+
+    private static func chainIDs(
+        for address: PortfolioAnalyticsAddress,
+        in inputs: [PortfolioAnalyticsAddressInput]) -> [String] {
+        let matchingInputs = inputs.filter { validatedAddress($0) == address }
+        guard matchingInputs.allSatisfy({ $0.chain != nil }) else { return [] }
+        return Array(Set(matchingInputs.compactMap(\.chain?.rawValue))).sorted()
     }
 
     private static func validatedAddress(

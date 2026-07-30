@@ -30,6 +30,15 @@ struct ProviderHistoryConversionResult: Equatable {
 }
 
 enum ProviderPortfolioHistory {
+    static func disclosure(
+        for points: [ProviderPortfolioValueDTO]) -> String? {
+        guard points.isEmpty == false else { return nil }
+        if points.contains(where: { $0.coverage == .providerReported }) {
+            return "Zerion history · provider-reported position coverage may be incomplete"
+        }
+        return "Zerion history · historical complex DeFi coverage may be incomplete"
+    }
+
     static func merge(
         provider: [ProviderPortfolioValueDTO],
         local: [LocalPortfolioValueObservation],
