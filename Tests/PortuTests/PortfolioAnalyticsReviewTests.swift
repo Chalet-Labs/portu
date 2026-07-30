@@ -5,6 +5,7 @@ import PortuCore
 import Testing
 
 @MainActor
+// swiftlint:disable:next type_body_length
 struct PortfolioAnalyticsReviewTests {
     private let now = Date(timeIntervalSince1970: 1_704_153_600)
 
@@ -168,6 +169,81 @@ struct PortfolioAnalyticsReviewTests {
         await store.finish()
     }
 
+    @Test func `chart range changes do not repeat a stale pnl refresh`() async {
+        let shortContext = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneWeek,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let longContext = PortfolioAnalyticsRequestContext(
+            scope: shortContext.scope,
+            chartRange: .oneYear,
+            currency: shortContext.currency,
+            implementations: shortContext.implementations,
+            asOf: shortContext.asOf)
+        let stalePnL = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: now.addingTimeInterval(-86400))
+        let calls = ReviewAnalyticsCallRecorder()
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.loadCache = { _, _, _ in
+                    PortfolioAnalyticsCache(
+                        history: [.init(
+                            timestamp: now,
+                            usdValue: 100,
+                            provider: .zerion,
+                            coverage: .providerReported)],
+                        historyFetchedAt: now,
+                        historyCoverageStartDate: ChartTimeRange.oneYear.startDate(at: now),
+                        pnl: stalePnL)
+                }
+                $0.portfolioAnalytics.refreshPnL = { _, _, _, _, _ in
+                    await calls.recordPnL()
+                    return stalePnL
+                }
+            }
+
+        await store.send(.load(shortContext)) {
+            $0.activeRequestID = shortContext.requestID(pnlRange: .oneMonth)
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.cacheLoaded) {
+            $0.history = [.init(
+                timestamp: now,
+                usdValue: 100,
+                provider: .zerion,
+                coverage: .providerReported)]
+            $0.historyStatus = .loaded
+            $0.pnl = stalePnL
+            $0.pnlStatus = .refreshing
+            $0.pnlRefreshAttemptID = shortContext.pnlRequestID(pnlRange: .oneMonth)
+        }
+        await store.receive(\.pnlResponse) {
+            $0.pnlStatus = .loaded
+        }
+
+        await store.send(.load(longContext)) {
+            $0.activeRequestID = longContext.requestID(pnlRange: .oneMonth)
+            $0.pnl = nil
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.cacheLoaded) {
+            $0.historyStatus = .loaded
+            $0.pnl = stalePnL
+            $0.pnlStatus = .loaded
+        }
+
+        #expect(await calls.pnlCount == 1)
+    }
+
     @Test func `inactive transition clears loading indicators`() async {
         let context = PortfolioAnalyticsRequestContext(
             scope: makeScope(),
@@ -245,10 +321,13 @@ struct PortfolioAnalyticsReviewTests {
 
         await store.send(.refresh(context)) {
             $0.activeRequestID = requestID
+            $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
         }
-        await store.send(.clearCache(context))
+        await store.send(.clearCache(context)) {
+            $0.pnlRefreshAttemptID = nil
+        }
         await store.receive(\.clearCacheResponse) {
             $0.historyStatus = .idle
             $0.pnlStatus = .idle
@@ -290,6 +369,7 @@ struct PortfolioAnalyticsReviewTests {
 
         await store.send(.refresh(context)) {
             $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
         }
@@ -331,6 +411,7 @@ struct PortfolioAnalyticsReviewTests {
 
         await store.send(.refresh(context)) {
             $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.pnlStatus = .loading
         }
         await store.receive(\.pnlResponse) {

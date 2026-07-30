@@ -202,7 +202,12 @@ struct ValueChartMode: View {
 
     var body: some View {
         let dataPoints = convertedDataPoints
-        let estimatedPoints = providerDTOs.isEmpty ? convertedEstimatedPoints : []
+        let retainedProviderDates = dataPoints.compactMap { date, _, _, source in
+            source == .zerion ? date : nil
+        }
+        let estimatedPoints = ProviderPortfolioHistory.estimatesOutsideProviderCoverage(
+            convertedEstimatedPoints,
+            providerDates: retainedProviderDates)
         if dataPoints.isEmpty, estimatedPoints.isEmpty {
             Group {
                 if

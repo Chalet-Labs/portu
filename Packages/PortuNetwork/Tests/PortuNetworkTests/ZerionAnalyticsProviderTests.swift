@@ -144,6 +144,10 @@ struct ZerionAnalyticsProviderTests {
             accountID: UUID(),
             dataSource: .zerion,
             addresses: [.init(family: .evm, value: "not-an-address")])
+        let invalidSolana = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .solana, value: String(repeating: "z", count: 44))])
         let wrongSource = PortfolioAnalyticsScope(
             accountID: UUID(),
             dataSource: .zapper,
@@ -154,6 +158,9 @@ struct ZerionAnalyticsProviderTests {
         }
         await #expect(throws: ZerionError.invalidAddress("not-an-address")) {
             _ = try await provider.fetchPortfolioValueHistory(scope: invalid, period: .week)
+        }
+        await #expect(throws: ZerionError.invalidAddress(String(repeating: "z", count: 44))) {
+            _ = try await provider.fetchPortfolioValueHistory(scope: invalidSolana, period: .week)
         }
         await #expect(throws: ZerionError.unsupportedAnalyticsScope) {
             _ = try await provider.fetchPortfolioValueHistory(scope: wrongSource, period: .week)
@@ -278,6 +285,55 @@ struct ZerionAnalyticsProviderTests {
 
         #expect(ZerionAnalyticsMockURLProtocol.requests.count == 4)
         #expect(clock.sleeps == Array(repeating: .seconds(30), count: 4))
+    }
+
+    @Test func `wallet PnL shares one preparation deadline across filtered batches`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let overall = try fixtureData("pnl-overall")
+        let filtered = try fixtureData("pnl-filtered")
+        ZerionAnalyticsMockURLProtocol.respond { request in
+            let hasFilter = try queryItems(in: request)["filter[fungible_implementations]"] != nil
+            let requestCount = ZerionAnalyticsMockURLProtocol.requests.count
+            if hasFilter, requestCount == 2 || requestCount == 4 {
+                return .init(
+                    data: Data(#"{"errors":[]}"#.utf8),
+                    statusCode: 503,
+                    headers: ["Retry-After": "60"])
+            }
+            return .init(
+                data: hasFilter ? filtered : overall,
+                statusCode: 200,
+                headers: [:])
+        }
+        let clock = AnalyticsRetryClock()
+        let provider = ZerionProvider(client: ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionAnalyticsMockSession(),
+            minimumRequestInterval: .zero,
+            maximumRetryAttempts: 0,
+            pacingNow: { clock.now },
+            pacingSleep: { try await clock.sleep(for: $0) }))
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+        let identities = (0 ..< 101).map {
+            OnchainTokenIdentity(
+                chain: .ethereum,
+                contractAddress: String(format: "0x%040x", $0 + 1))
+        }
+
+        await #expect(throws: ZerionError.temporarilyUnavailable(retryAfter: 60)) {
+            _ = try await provider.fetchPnL(
+                scope: scope,
+                range: .oneMonth,
+                currency: .usd,
+                implementations: identities,
+                asOf: Date(timeIntervalSince1970: 1_704_153_600))
+        }
+
+        #expect(ZerionAnalyticsMockURLProtocol.requests.count == 4)
+        #expect(clock.sleeps == [.seconds(60), .seconds(60)])
     }
 
     @Test func `wallet set PnL uses addresses and keeps direct EUR denomination`() async throws {

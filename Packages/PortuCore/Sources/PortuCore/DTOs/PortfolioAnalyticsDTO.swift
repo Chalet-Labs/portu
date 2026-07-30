@@ -43,11 +43,27 @@ public struct PortfolioAnalyticsAddress: Codable, Sendable, Equatable, Hashable,
                 && value.hasPrefix("0x")
                 && value.dropFirst(2).allSatisfy(\.isHexDigit)
         case .solana:
-            (32 ... 44).contains(value.count)
-                && value.allSatisfy {
-                    "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".contains($0)
-                }
+            base58DecodedByteCount == 32
         }
+    }
+
+    private var base58DecodedByteCount: Int? {
+        let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+        var bytes: [UInt8] = []
+        for character in value {
+            guard let digit = alphabet.firstIndex(of: character) else { return nil }
+            var carry = alphabet.distance(from: alphabet.startIndex, to: digit)
+            for index in bytes.indices {
+                let decoded = Int(bytes[index]) * 58 + carry
+                bytes[index] = UInt8(decoded & 0xFF)
+                carry = decoded >> 8
+            }
+            while carry > 0 {
+                bytes.append(UInt8(carry & 0xFF))
+                carry >>= 8
+            }
+        }
+        return value.prefix(while: { $0 == "1" }).count + bytes.count
     }
 }
 

@@ -121,6 +121,23 @@ enum ProviderPortfolioHistory {
             historicalFXUnavailableBefore: suffixStart > 0 ? converted.first?.timestamp : nil)
     }
 
+    static func estimatesOutsideProviderCoverage(
+        _ estimates: [HistoricalPortfolioValuePoint],
+        providerDates: [Date]) -> [HistoricalPortfolioValuePoint] {
+        guard
+            let firstProviderDate = providerDates.min(),
+            let lastProviderDate = providerDates.max()
+        else {
+            return estimates
+        }
+        let firstProviderDay = HistoricalPriceCalendar.utcStartOfDay(for: firstProviderDate)
+        let lastProviderDay = HistoricalPriceCalendar.utcStartOfDay(for: lastProviderDate)
+        return estimates.filter {
+            let day = HistoricalPriceCalendar.utcStartOfDay(for: $0.date)
+            return day < firstProviderDay || day > lastProviderDay
+        }
+    }
+
     private static func latestProviderByDay(
         _ points: [ProviderPortfolioValueDTO]) -> [ProviderPortfolioValueDTO] {
         var latest: [Date: ProviderPortfolioValueDTO] = [:]

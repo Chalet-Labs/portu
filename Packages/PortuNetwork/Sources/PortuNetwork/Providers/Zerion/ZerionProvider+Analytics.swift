@@ -51,9 +51,11 @@ extension ZerionProvider: ZerionAnalyticsService {
             range: range,
             currency: currency,
             asOf: asOf)
+        let preparationDeadline = await client.analyticsPreparationDeadline()
         let overall: ZerionPnLEnvelope = try await client.getAnalytics(
             path: baseRequest.path,
-            queryItems: baseRequest.queryItems)
+            queryItems: baseRequest.queryItems,
+            preparationDeadline: preparationDeadline)
 
         let normalizedImplementations = try Array(Set(implementations.map {
             try pnlImplementation(for: $0)
@@ -71,7 +73,8 @@ extension ZerionProvider: ZerionAnalyticsService {
                     URLQueryItem(
                         name: "filter[fungible_implementations]",
                         value: batch.joined(separator: ","))
-                ])
+                ],
+                preparationDeadline: preparationDeadline)
             for (implementationID, metrics) in filtered.data.attributes.breakdown?.byImplementation ?? [:] {
                 assetsByImplementation[implementationID] = assetDTO(
                     implementationID: implementationID,

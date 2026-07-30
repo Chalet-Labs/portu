@@ -46,6 +46,18 @@ struct PortfolioAnalyticsDTOTests {
         #expect(upper.fingerprint != lower.fingerprint)
     }
 
+    @Test func `solana addresses must decode to exactly 32 bytes`() {
+        let valid = PortfolioAnalyticsAddress(
+            family: .solana,
+            value: "8BH9pjtgyZDC4iAQH5ZiYDZ1MDWC98xki2V8NzqqKW3K")
+        let invalidDecodedLength = PortfolioAnalyticsAddress(
+            family: .solana,
+            value: String(repeating: "z", count: 44))
+
+        #expect(valid.isValid)
+        #expect(invalidDecodedLength.isValid == false)
+    }
+
     @Test func `analytics values are sendable`() {
         let point = ProviderPortfolioValueDTO(
             timestamp: Date(timeIntervalSince1970: 1_700_000_000),

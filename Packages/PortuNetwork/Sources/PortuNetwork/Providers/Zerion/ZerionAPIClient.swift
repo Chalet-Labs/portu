@@ -20,7 +20,7 @@ public actor ZerionAPIClient {
 
     private enum RetryMode {
         case standard
-        case analyticsPreparation(maximumWait: Duration)
+        case analyticsPreparation(deadline: Duration)
     }
 
     public init(
@@ -69,10 +69,26 @@ public actor ZerionAPIClient {
         path: String,
         queryItems: [URLQueryItem] = [],
         maximumPreparationWait: Duration = .seconds(120)) async throws -> Response {
+        let deadline = analyticsPreparationDeadline(maximumWait: maximumPreparationWait)
+        return try await getAnalytics(
+            path: path,
+            queryItems: queryItems,
+            preparationDeadline: deadline)
+    }
+
+    func analyticsPreparationDeadline(
+        maximumWait: Duration = .seconds(120)) -> Duration {
+        pacingNow() + max(.zero, maximumWait)
+    }
+
+    func getAnalytics<Response: Decodable & Sendable>(
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        preparationDeadline: Duration) async throws -> Response {
         try await get(
             path: path,
             queryItems: queryItems,
-            retryMode: .analyticsPreparation(maximumWait: maximumPreparationWait))
+            retryMode: .analyticsPreparation(deadline: preparationDeadline))
     }
 
     private func get<Response: Decodable & Sendable>(
@@ -119,8 +135,8 @@ public actor ZerionAPIClient {
         let preparationDeadline: Duration? = switch retryMode {
         case .standard:
             nil
-        case let .analyticsPreparation(maximumWait):
-            pacingNow() + max(.zero, maximumWait)
+        case let .analyticsPreparation(deadline):
+            deadline
         }
         while true {
             try await paceRequest()

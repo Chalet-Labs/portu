@@ -91,6 +91,25 @@ struct ProviderPortfolioHistoryTests {
         #expect(merged.map(\.source) == [.local])
     }
 
+    @Test func `estimates remain outside retained provider coverage`() {
+        let day1 = Date(timeIntervalSince1970: 1_704_067_200)
+        let day2 = day1.addingTimeInterval(86400)
+        let day3 = day2.addingTimeInterval(86400)
+        let day4 = day3.addingTimeInterval(86400)
+        let estimates = [day1, day2, day3, day4].map {
+            HistoricalPortfolioValuePoint(date: $0, value: 100, kind: .estimated)
+        }
+
+        let retained = ProviderPortfolioHistory.estimatesOutsideProviderCoverage(
+            estimates,
+            providerDates: [
+                day2.addingTimeInterval(3600),
+                day3.addingTimeInterval(3600)
+            ])
+
+        #expect(retained.map(\.date) == [day1, day4])
+    }
+
     @Test func `missing FX yields longest contiguous converted suffix without spot fallback`() {
         let day1 = Date(timeIntervalSince1970: 1_704_067_200)
         let day2 = day1.addingTimeInterval(86400)

@@ -33,6 +33,14 @@ struct PortfolioAnalyticsRequestContext: Equatable {
             currency.rawValue
         ].joined(separator: "|")
     }
+
+    func pnlRequestID(pnlRange: ProviderPnLRange) -> String {
+        [
+            scope.fingerprint,
+            pnlRange.rawValue,
+            currency.rawValue
+        ].joined(separator: "|")
+    }
 }
 
 enum PortfolioAnalyticsLoadStatus: Equatable {
@@ -51,6 +59,7 @@ struct PortfolioAnalyticsFeature {
         var pnlRange: ProviderPnLRange = .oneMonth
         var selectedWalletScopeFingerprint: String?
         var activeRequestID: String?
+        var pnlRefreshAttemptID: String?
         var history: [ProviderPortfolioValueDTO] = []
         var pnl: ProviderPnLDTO?
         var historyStatus: PortfolioAnalyticsLoadStatus = .idle
@@ -91,6 +100,7 @@ struct PortfolioAnalyticsFeature {
             case .selectionUnavailable:
                 state.selectedWalletScopeFingerprint = nil
                 state.activeRequestID = nil
+                state.pnlRefreshAttemptID = nil
                 state.history = []
                 state.pnl = nil
                 state.historyStatus = .idle
@@ -170,6 +180,7 @@ struct PortfolioAnalyticsFeature {
                         .cancel(id: CancelID.pnl))
                 }
                 let requestID = context.requestID(pnlRange: state.pnlRange)
+                state.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID
                 if Self.supportsProviderHistory(context) {
                     state.historyStatus = state.history.isEmpty ? .loading : .refreshing
@@ -183,6 +194,7 @@ struct PortfolioAnalyticsFeature {
             case let .clearCache(context):
                 let requestID = context.requestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID
+                state.pnlRefreshAttemptID = nil
                 let clearEffect = Effect<Action>.run { send in
                     do {
                         let count = try await client.clearAccountCache(context.scope.accountID)
@@ -218,6 +230,7 @@ struct PortfolioAnalyticsFeature {
             case let .walletScopeSelected(fingerprint):
                 state.selectedWalletScopeFingerprint = fingerprint
                 state.activeRequestID = nil
+                state.pnlRefreshAttemptID = nil
                 state.history = []
                 state.pnl = nil
                 state.historyStatus = .idle
@@ -273,11 +286,15 @@ struct PortfolioAnalyticsFeature {
                     state.historyStatus = cache.history.isEmpty ? .loading : .refreshing
                     effects.append(historyEffect(context: context, requestID: requestID))
                 }
-                if pnlNeedsRefresh {
+                let pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
+                if pnlNeedsRefresh, state.pnlRefreshAttemptID != pnlRefreshAttemptID {
+                    state.pnlRefreshAttemptID = pnlRefreshAttemptID
                     effects.append(pnlEffect(
                         context: context,
                         requestID: requestID,
                         pnlRange: state.pnlRange))
+                } else if pnlNeedsRefresh {
+                    state.pnlStatus = cache.pnl == nil ? .idle : .loaded
                 }
                 return .merge(effects)
 
