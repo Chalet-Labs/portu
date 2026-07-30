@@ -154,7 +154,8 @@ struct PortfolioAnalyticsFeature {
                         let cache = try await client.loadCache(
                             context.scope,
                             pnlRange,
-                            context.currency)
+                            context.currency,
+                            context.chartRange.startDate(at: context.asOf))
                         await send(.cacheLoaded(context, requestID, .success(cache)))
                     } catch is CancellationError {
                         return

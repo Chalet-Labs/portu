@@ -34,12 +34,21 @@ enum PortfolioAnalyticsScopeFactory {
         if
             addresses.count == 2,
             Set(addresses.map(\.family)) == Set(PortfolioAnalyticsAddressFamily.allCases) {
+            let configuredChains = addresses.map { address in
+                account.addresses.first {
+                    validatedAddress($0) == address
+                }?.chain?.rawValue
+            }
+            let chainIDs = configuredChains.allSatisfy { $0 != nil }
+                ? configuredChains.compactMap(\.self)
+                : []
             options.append(PortfolioAnalyticsScopeOption(
                 label: "EVM + Solana",
                 scope: PortfolioAnalyticsScope(
                     accountID: account.id,
                     dataSource: account.dataSource,
-                    addresses: addresses)))
+                    addresses: addresses,
+                    chainIDs: chainIDs)))
         }
 
         options.append(contentsOf: addresses.map { address in

@@ -7,7 +7,7 @@ struct PortfolioAnalyticsScopeFactoryTests {
     @Test func `one EVM plus one Solana address offers wallet set and individual fallbacks`() throws {
         let input = makeInput(addresses: [
             .init(chain: .solana, address: "8BH9pjtgyZDC4iAQH5ZiYDZ1MDWC98xki2V8NzqqKW3K"),
-            .init(chain: nil, address: "0x1111111111111111111111111111111111111111")
+            .init(chain: .base, address: "0x1111111111111111111111111111111111111111")
         ])
 
         let options = PortfolioAnalyticsScopeFactory.scopeOptions(account: input)
@@ -16,6 +16,7 @@ struct PortfolioAnalyticsScopeFactoryTests {
         #expect(options.count == 3)
         #expect(option.label == "EVM + Solana")
         #expect(option.scope.addresses.count == 2)
+        #expect(option.scope.chainIDs == ["base", "solana"])
         #expect(options.dropFirst().allSatisfy { $0.scope.addresses.count == 1 })
     }
 

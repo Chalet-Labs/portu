@@ -124,6 +124,55 @@ struct PortfolioAnalyticsCacheTests {
         #expect(rows.first?.usdValue == 110)
     }
 
+    @Test func `history freshness is scoped to the requested chart coverage`() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let scope = makeScope(accountID: UUID(), addressSuffix: "66")
+        let now = Date(timeIntervalSince1970: 1_735_689_600)
+        let staleFetchedAt = now.addingTimeInterval(-2 * ProviderPnLFreshness.freshTTL)
+        let longStart = ChartTimeRange.oneYear.startDate(at: now)
+        let shortStart = ChartTimeRange.oneWeek.startDate(at: now)
+        _ = try PortfolioAnalyticsCacheWriter.upsertHistory(
+            [
+                .init(
+                    timestamp: longStart,
+                    usdValue: 80,
+                    provider: .zerion,
+                    coverage: .providerReported),
+                .init(
+                    timestamp: now,
+                    usdValue: 100,
+                    provider: .zerion,
+                    coverage: .providerReported)
+            ],
+            scope: scope,
+            in: context,
+            fetchedAt: staleFetchedAt,
+            coverageStartDate: longStart)
+        _ = try PortfolioAnalyticsCacheWriter.upsertHistory(
+            [.init(
+                timestamp: now,
+                usdValue: 110,
+                provider: .zerion,
+                coverage: .providerReported)],
+            scope: scope,
+            in: context,
+            fetchedAt: now,
+            coverageStartDate: shortStart)
+        let client = PortfolioAnalyticsClient.live(
+            modelContext: context,
+            service: CancellationRaceAnalyticsService(
+                historyGate: AnalyticsCancellationGate(),
+                pnlGate: AnalyticsCancellationGate()),
+            now: { now })
+
+        let shortCache = try await client.loadCache(scope, .oneMonth, .usd, shortStart)
+        let longCache = try await client.loadCache(scope, .oneMonth, .usd, longStart)
+
+        #expect(shortCache.historyFetchedAt == now)
+        #expect(longCache.historyFetchedAt == staleFetchedAt)
+    }
+
     @Test func `scope invalidation does not touch another account`() throws {
         let container = try makeContainer()
         let context = container.mainContext

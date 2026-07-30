@@ -128,7 +128,8 @@ struct PortfolioAnalyticsClient {
     var loadCache: @MainActor @Sendable (
         PortfolioAnalyticsScope,
         ProviderPnLRange,
-        FiatCurrency) async throws -> PortfolioAnalyticsCache
+        FiatCurrency,
+        Date) async throws -> PortfolioAnalyticsCache
     var refreshHistory: @MainActor @Sendable (
         PortfolioAnalyticsScope,
         ChartTimeRange) async throws -> [ProviderPortfolioValueDTO]
@@ -154,7 +155,7 @@ enum PortfolioAnalyticsFeatureFlag {
 
 extension PortfolioAnalyticsClient: DependencyKey {
     static let liveValue = Self(
-        loadCache: { _, _, _ in
+        loadCache: { _, _, _, _ in
             fatalError("PortfolioAnalyticsClient.liveValue must be overridden at Store creation")
         },
         refreshHistory: { _, _ in
@@ -168,7 +169,7 @@ extension PortfolioAnalyticsClient: DependencyKey {
         })
 
     static let testValue = Self(
-        loadCache: { _, _, _ in .empty },
+        loadCache: { _, _, _, _ in .empty },
         refreshHistory: { _, _ in [] },
         refreshPnL: { _, range, currency, _, date in
             ProviderPnLDTO(
@@ -194,11 +195,12 @@ extension PortfolioAnalyticsClient {
         service: any ZerionAnalyticsService,
         now: @escaping @Sendable () -> Date = { .now }) -> Self {
         Self(
-            loadCache: { scope, range, currency in
+            loadCache: { scope, range, currency, historyStartDate in
                 try loadCachedAnalytics(
                     scope: scope,
                     range: range,
                     currency: currency,
+                    historyStartDate: historyStartDate,
                     modelContext: modelContext)
             },
             refreshHistory: { scope, chartRange in
@@ -272,6 +274,7 @@ extension PortfolioAnalyticsClient {
         scope: PortfolioAnalyticsScope,
         range: ProviderPnLRange,
         currency: FiatCurrency,
+        historyStartDate: Date,
         modelContext: ModelContext) throws -> PortfolioAnalyticsCache {
         let accountID = scope.accountID
         let historyRows = try modelContext.fetch(
@@ -295,6 +298,11 @@ extension PortfolioAnalyticsClient {
             currency: currency)
         let pnl = try modelContext.fetch(FetchDescriptor<ProviderPnLSnapshot>(
             predicate: #Predicate { $0.cacheKey == cacheKey })).first
+        let requestedStartDay = HistoricalPriceCalendar.utcStartOfDay(
+            for: historyStartDate)
+        let requestedHistoryRows = historyRows.filter {
+            $0.day >= requestedStartDay
+        }
         return PortfolioAnalyticsCache(
             history: historyRows.map {
                 ProviderPortfolioValueDTO(
@@ -303,7 +311,7 @@ extension PortfolioAnalyticsClient {
                     provider: $0.provider,
                     coverage: $0.coverage)
             },
-            historyFetchedAt: historyRows.map(\.fetchedAt).max(),
+            historyFetchedAt: requestedHistoryRows.map(\.fetchedAt).min(),
             historyCoverageStartDate: historyRows.map(\.coverageStartDate).min(),
             pnl: pnl.map(providerPnLDTO))
     }

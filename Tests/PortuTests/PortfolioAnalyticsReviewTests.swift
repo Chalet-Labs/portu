@@ -30,7 +30,7 @@ struct PortfolioAnalyticsReviewTests {
             initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
                 PortfolioAnalyticsFeature()
             } withDependencies: {
-                $0.portfolioAnalytics.loadCache = { _, _, _ in
+                $0.portfolioAnalytics.loadCache = { _, _, _, _ in
                     PortfolioAnalyticsCache(
                         history: [.init(
                             timestamp: now.addingTimeInterval(-7 * 86400),
@@ -95,7 +95,7 @@ struct PortfolioAnalyticsReviewTests {
                 pnlStatus: .loaded)) {
             PortfolioAnalyticsFeature()
         } withDependencies: {
-            $0.portfolioAnalytics.loadCache = { _, range, _ in
+            $0.portfolioAnalytics.loadCache = { _, range, _, _ in
                 await calls.recordCache()
                 #expect(range == .oneYear)
                 return PortfolioAnalyticsCache(
@@ -152,7 +152,7 @@ struct PortfolioAnalyticsReviewTests {
                 pnlStatus: .loaded)) {
             PortfolioAnalyticsFeature()
         } withDependencies: {
-            $0.portfolioAnalytics.loadCache = { _, _, _ in
+            $0.portfolioAnalytics.loadCache = { _, _, _, _ in
                 try await Task.sleep(for: .seconds(3600))
                 return .empty
             }
@@ -195,7 +195,7 @@ struct PortfolioAnalyticsReviewTests {
             initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
                 PortfolioAnalyticsFeature()
             } withDependencies: {
-                $0.portfolioAnalytics.loadCache = { _, _, _ in
+                $0.portfolioAnalytics.loadCache = { _, _, _, _ in
                     PortfolioAnalyticsCache(
                         history: [.init(
                             timestamp: now,
