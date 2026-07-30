@@ -217,6 +217,52 @@ struct PortfolioAnalyticsReviewTests {
         await store.finish()
     }
 
+    @Test func `ineligible pnl range change cancels analytics refreshes`() async {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let inactiveContext = PortfolioAnalyticsRequestContext(
+            scope: context.scope,
+            chartRange: context.chartRange,
+            currency: context.currency,
+            implementations: context.implementations,
+            asOf: context.asOf,
+            isAccountActive: false)
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.refreshHistory = { _, _ in
+                    try await Task.sleep(for: .seconds(3600))
+                    return []
+                }
+                $0.portfolioAnalytics.refreshPnL = { _, _, _, _, _ in
+                    try await Task.sleep(for: .seconds(3600))
+                    return ProviderPnLDTO(
+                        range: .oneMonth,
+                        currency: .usd,
+                        totalGain: 0,
+                        fetchedAt: now)
+                }
+            }
+
+        await store.send(.refresh(context)) {
+            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.send(.pnlRangeChanged(.oneYear, inactiveContext)) {
+            $0.pnlRange = .oneYear
+            $0.activeRequestID = nil
+            $0.historyStatus = .idle
+            $0.pnlStatus = .idle
+        }
+        await store.finish()
+    }
+
     @Test func `custom chart range does not request provider history`() async {
         let context = PortfolioAnalyticsRequestContext(
             scope: makeScope(),

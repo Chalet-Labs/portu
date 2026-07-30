@@ -230,7 +230,11 @@ struct PortfolioAnalyticsFeature {
                 state.pnl = nil
                 state.pnlStatus = .idle
                 guard Self.isEligible(context, isAvailable: state.isAvailable) else {
-                    return .none
+                    state.historyStatus = .idle
+                    return .merge(
+                        .cancel(id: CancelID.cache),
+                        .cancel(id: CancelID.history),
+                        .cancel(id: CancelID.pnl))
                 }
                 return .send(.load(context))
 
