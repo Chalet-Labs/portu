@@ -7,15 +7,8 @@ import PortuCore
 enum PerformanceChartMode: String, CaseIterable, Equatable, Hashable {
     case value = "Value"
     case assets = "Assets"
+    case valueChange = "Value Change"
     case pnl = "PnL"
-}
-
-/// PnL bar data for chart display.
-struct PnLBar: Identifiable, Equatable {
-    let id: Date
-    let date: Date
-    let pnl: Decimal
-    let cumulative: Decimal
 }
 
 /// Category change data for the bottom panel.
@@ -155,6 +148,7 @@ struct PerformanceFeature {
         var chartMode: PerformanceChartMode = .value
         var disabledPortfolioCategoryIDs: Set<String> = []
         var showCumulative: Bool = false
+        var analytics = PortfolioAnalyticsFeature.State()
     }
 
     enum Action: Equatable {
@@ -163,9 +157,13 @@ struct PerformanceFeature {
         case chartModeChanged(PerformanceChartMode)
         case portfolioCategoryToggled(String)
         case showCumulativeToggled
+        case analytics(PortfolioAnalyticsFeature.Action)
     }
 
     var body: some ReducerOf<Self> {
+        Scope(state: \.analytics, action: \.analytics) {
+            PortfolioAnalyticsFeature()
+        }
         Reduce { state, action in
             switch action {
             case let .accountSelected(id):
@@ -190,6 +188,9 @@ struct PerformanceFeature {
 
             case .showCumulativeToggled:
                 state.showCumulative.toggle()
+                return .none
+
+            case .analytics:
                 return .none
             }
         }
@@ -234,32 +235,6 @@ struct PerformanceFeature {
             }
         }
         return byDay.values.sorted { $0.0 < $1.0 }
-    }
-
-    /// Compute daily PnL bars with cumulative totals.
-    static func computePnLBars(from dailyValues: [(Date, Decimal)]) -> [PnLBar] {
-        guard dailyValues.count >= 2 else { return [] }
-        var result: [PnLBar] = []
-        var cumulative: Decimal = 0
-        for i in 1 ..< dailyValues.count {
-            let pnl = dailyValues[i].1 - dailyValues[i - 1].1
-            cumulative += pnl
-            result.append(PnLBar(
-                id: dailyValues[i].0,
-                date: dailyValues[i].0,
-                pnl: pnl,
-                cumulative: cumulative))
-        }
-        return result
-    }
-
-    static func computePnLBars(
-        from dailyValues: [(Date, Decimal)],
-        conversionContext: CurrencyConversionContext) -> [PnLBar] {
-        let converted = dailyValues.map { date, value in
-            (date, conversionContext.convertUSDValue(value, on: date))
-        }
-        return computePnLBars(from: converted)
     }
 
     /// Aggregate category snapshots by day — one chart point per (day, category).
@@ -481,7 +456,7 @@ struct PerformanceFeature {
         TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
     }
 
-    private static func utcStartOfDay(for date: Date) -> Date {
+    static func utcStartOfDay(for date: Date) -> Date {
         HistoricalPriceCalendar.utcStartOfDay(for: date)
     }
 }

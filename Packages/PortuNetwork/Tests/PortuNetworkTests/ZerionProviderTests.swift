@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import PortuCore
 @testable import PortuNetwork
@@ -102,6 +103,24 @@ struct ZerionProviderTests {
         #expect(lp.tokens.map(\.symbol) == ["USDT", "WETH"])
         #expect(lp.tokens.reduce(Decimal.zero) { $0 + $1.usdValue } == 410)
         #expect(!lp.tokens.contains { $0.symbol == "UNI-V2" })
+    }
+
+    @Test func `non displayable wallet receipt rows are not counted as holdings`() async throws {
+        defer { ZerionMockURLProtocol.reset() }
+        let fixture = Self.positionsFixture.replacingFirstOccurrence(
+            of: #""flags": {"displayable":true,"is_trash":false}"#,
+            with: #""flags": {"displayable":false,"is_trash":false}"#)
+        ZerionMockURLProtocol.respond { _ in
+            .init(data: Data(fixture.utf8), statusCode: 200, headers: [:])
+        }
+        let provider = ZerionProvider(client: ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionMockSession(),
+            minimumRequestInterval: .zero))
+
+        let positions = try await provider.fetchPositions(context: makeSyncContext(chain: .ethereum))
+
+        #expect(!positions.flatMap(\.tokens).contains { $0.symbol == "ETH" })
     }
 
     @Test func `unknown response chain fails the complete position response`() async throws {

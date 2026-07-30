@@ -5,6 +5,7 @@ public actor ZerionAPIClient {
     typealias PacingNow = @Sendable () -> Duration
     typealias PacingSleep = @Sendable (Duration) async throws -> Void
 
+    public static let defaultMinimumRequestInterval: Duration = .seconds(1)
     private static let baseURL = URL(string: "https://api.zerion.io/v1/")!
 
     private let apiKey: APIKeyProvider
@@ -20,7 +21,7 @@ public actor ZerionAPIClient {
     public init(
         apiKey: @escaping APIKeyProvider,
         session: URLSession = .shared,
-        minimumRequestInterval: Duration = .milliseconds(350),
+        minimumRequestInterval: Duration = defaultMinimumRequestInterval,
         maximumRetryAttempts: Int = 2,
         maximumRetryDelaySeconds: Int = 10) {
         self.apiKey = apiKey

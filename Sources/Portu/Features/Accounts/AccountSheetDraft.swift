@@ -271,6 +271,9 @@ enum AccountSheetSaveCoordinator {
                 modelContext: modelContext)
             if identityChanged {
                 invalidateSyncedPositions(for: account, modelContext: modelContext)
+                _ = try PortfolioAnalyticsCacheWriter.deleteRows(
+                    accountID: account.id,
+                    in: modelContext)
             }
 
         case .manual:
@@ -421,8 +424,11 @@ enum AccountSheetSaveCoordinator {
                 throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
             }
         }
-        modelContext.delete(account)
         do {
+            _ = try PortfolioAnalyticsCacheWriter.deleteRows(
+                accountID: accountID,
+                in: modelContext)
+            modelContext.delete(account)
             try save(modelContext)
         } catch let saveError {
             modelContext.rollback()
@@ -473,9 +479,8 @@ enum AccountSheetSaveCoordinator {
             passphrase: passphrase)
     }
 
-    /// Removes all keychain entries for an account. Safe to call for non-exchange
-    /// accounts (deletes of missing keys are no-ops); used both by the failure-cleanup
-    /// paths here and by account deletion.
+    /// Removes all keychain entries for an account. Missing keys are no-ops; used by
+    /// both failure cleanup and account deletion.
     static func deleteExchangeCredentials(_ accountID: UUID, secretStore: any SecretStore) async throws {
         let credentialStore = AccountCredentialStore(secretStore: secretStore)
         do {

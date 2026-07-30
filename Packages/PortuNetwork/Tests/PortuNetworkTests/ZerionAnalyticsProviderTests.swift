@@ -1,0 +1,397 @@
+import Foundation
+import PortuCore
+@testable import PortuNetwork
+import Testing
+
+@Suite(.serialized)
+struct ZerionAnalyticsProviderTests {
+    private let evmAddress = "0x1111111111111111111111111111111111111111"
+    private let solanaAddress = "8BH9pjtgyZDC4iAQH5ZiYDZ1MDWC98xki2V8NzqqKW3K"
+
+    init() {
+        ZerionAnalyticsMockURLProtocol.reset()
+    }
+
+    @Test func `wallet chart request uses normalized address USD full positions and chain filters`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let fixture = try fixtureData("wallet-chart")
+        ZerionAnalyticsMockURLProtocol.respond { request in
+            #expect(request.url?.path == "/v1/wallets/\(evmAddress)/charts/month")
+            let url = try #require(request.url)
+            let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+            let items = Dictionary(uniqueKeysWithValues: (query.queryItems ?? []).compactMap { item in
+                item.value.map { (item.name, $0) }
+            })
+            #expect(items["currency"] == "usd")
+            #expect(items["filter[positions]"] == "no_filter")
+            #expect(items["filter[chain_ids]"] == "base,ethereum")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Basic dGVzdC1rZXk6")
+            return .init(data: fixture, statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: " \(evmAddress.uppercased()) ")],
+            chainIDs: ["ethereum", "base"])
+
+        let points = try await provider.fetchPortfolioValueHistory(scope: scope, period: .month)
+
+        #expect(points.map(\.usdValue) == [110, 120])
+        #expect(points.map(\.timestamp) == [
+            Date(timeIntervalSince1970: 1_704_100_000),
+            Date(timeIntervalSince1970: 1_704_153_600)
+        ])
+        #expect(points.allSatisfy { $0.provider == .zerion && $0.coverage == .noFilter })
+    }
+
+    @Test func `one EVM and one Solana address use wallet set chart`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let fixture = try fixtureData("wallet-set-chart")
+        ZerionAnalyticsMockURLProtocol.respond { request in
+            #expect(request.url?.path == "/v1/wallet-sets/charts/week")
+            let url = try #require(request.url)
+            let query = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+            let items = Dictionary(uniqueKeysWithValues: (query.queryItems ?? []).compactMap { item in
+                item.value.map { (item.name, $0) }
+            })
+            #expect(items["addresses"] == "\(evmAddress),\(solanaAddress)")
+            #expect(items["currency"] == "usd")
+            #expect(items["filter[positions]"] == nil)
+            #expect(items["filter[chain_ids]"]?.split(separator: ",").count ?? 0 <= 25)
+            return .init(data: fixture, statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [
+                .init(family: .solana, value: solanaAddress),
+                .init(family: .evm, value: evmAddress)
+            ])
+
+        let points = try await provider.fetchPortfolioValueHistory(scope: scope, period: .week)
+
+        #expect(points.map(\.usdValue) == [250, 275])
+        #expect(points.allSatisfy { $0.coverage == .providerReported })
+    }
+
+    @Test(arguments: [
+        (ZerionChartPeriod.week, "week"),
+        (.month, "month"),
+        (.threeMonths, "3months"),
+        (.year, "year")
+    ])
+    func `chart period maps to documented path`(period: ZerionChartPeriod, expected: String) {
+        #expect(period.rawValue == expected)
+    }
+
+    @Test(arguments: [
+        (Date(timeIntervalSince1970: 1_767_312_000), ZerionChartPeriod.month),
+        (Date(timeIntervalSince1970: 1_771_027_200), ZerionChartPeriod.threeMonths),
+        (Date(timeIntervalSince1970: 1_775_952_000), ZerionChartPeriod.year)
+    ])
+    func `YTD period selects enough chart resolution`(now: Date, expected: ZerionChartPeriod) {
+        #expect(ZerionChartPeriod.yearToDate(at: now) == expected)
+    }
+
+    @Test func `unsupported and invalid scopes fail before a request`() async {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let provider = makeProvider()
+        let duplicateFamily = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [
+                .init(family: .evm, value: evmAddress),
+                .init(family: .evm, value: "0x2222222222222222222222222222222222222222")
+            ])
+        let invalid = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: "not-an-address")])
+        let wrongSource = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zapper,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        await #expect(throws: ZerionError.unsupportedAnalyticsScope) {
+            _ = try await provider.fetchPortfolioValueHistory(scope: duplicateFamily, period: .week)
+        }
+        await #expect(throws: ZerionError.invalidAddress("not-an-address")) {
+            _ = try await provider.fetchPortfolioValueHistory(scope: invalid, period: .week)
+        }
+        await #expect(throws: ZerionError.unsupportedAnalyticsScope) {
+            _ = try await provider.fetchPortfolioValueHistory(scope: wrongSource, period: .week)
+        }
+        #expect(ZerionAnalyticsMockURLProtocol.requests.isEmpty)
+    }
+
+    @Test func `generic wallet chart chain filter stays within endpoint limit`() {
+        #expect(ZerionChainMapping.analyticsChainIDs.count <= 25)
+        #expect(ZerionChainMapping.analyticsChainIDs.contains("solana"))
+    }
+
+    @Test func `wallet PnL requests selected currency and normalizes every summary field`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let fixture = try fixtureData("pnl-overall")
+        ZerionAnalyticsMockURLProtocol.respond { request in
+            #expect(request.url?.path == "/v1/wallets/\(evmAddress)/pnl")
+            let items = try queryItems(in: request)
+            #expect(items["currency"] == "chf")
+            #expect(items["since"] == "1701475200000")
+            #expect(items["filter[chain_ids]"] == "ethereum")
+            return .init(data: fixture, statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)],
+            chainIDs: ["ethereum"])
+        let asOf = Date(timeIntervalSince1970: 1_704_153_600)
+
+        let result = try await provider.fetchPnL(
+            scope: scope,
+            range: .oneMonth,
+            currency: .chf,
+            implementations: [],
+            asOf: asOf)
+
+        #expect(result.range == .oneMonth)
+        #expect(result.currency == .chf)
+        #expect(result.totalGain == Decimal(string: "-637.8173517"))
+        #expect(result.realizedGain == Decimal(string: "-655.3618983"))
+        #expect(result.unrealizedGain == Decimal(string: "17.5445466"))
+        #expect(result.relativeTotalGain == Decimal(string: "-0.1138"))
+        #expect(result.relativeRealizedGain == Decimal(string: "-0.1515"))
+        #expect(result.relativeUnrealizedGain == Decimal(string: "-0.0019"))
+        #expect(result.totalFee == Decimal(string: "281.9088917"))
+        #expect(result.totalInvested == Decimal(string: "701.2"))
+        #expect(result.realizedCostBasis == Decimal(string: "655.36"))
+        #expect(result.netInvested == Decimal(string: "45.84218703"))
+        #expect(result.receivedExternal == Decimal(string: "133971.2931"))
+        #expect(result.sentExternal == Decimal(string: "133270.089"))
+        #expect(result.sentForNFTs == 120)
+        #expect(result.receivedForNFTs == 80)
+        #expect(result.fetchedAt == asOf)
+    }
+
+    @Test func `wallet set PnL uses addresses and keeps direct EUR denomination`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let fixture = try fixtureData("pnl-overall")
+        ZerionAnalyticsMockURLProtocol.respond { request in
+            #expect(request.url?.path == "/v1/wallet-sets/pnl")
+            let items = try queryItems(in: request)
+            #expect(items["addresses"] == "\(evmAddress),\(solanaAddress)")
+            #expect(items["currency"] == "eur")
+            return .init(data: fixture, statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [
+                .init(family: .solana, value: solanaAddress),
+                .init(family: .evm, value: evmAddress)
+            ])
+
+        let result = try await provider.fetchPnL(
+            scope: scope,
+            range: .allTime,
+            currency: .eur,
+            implementations: [],
+            asOf: Date(timeIntervalSince1970: 1_704_153_600))
+
+        #expect(result.currency == .eur)
+    }
+
+    @Test(arguments: [
+        (ProviderPnLRange.allTime, nil),
+        (.oneDay, "1704067200000"),
+        (.oneWeek, "1703548800000"),
+        (.oneMonth, "1701475200000"),
+        (.oneYear, "1672617600000"),
+        (.yearToDate, "1704067200000")
+    ])
+    func `pnl ranges use only Zerion standard marks`(range: ProviderPnLRange, expected: String?) {
+        let asOf = Date(timeIntervalSince1970: 1_704_153_600)
+        #expect(range.zerionSinceMilliseconds(asOf: asOf) == expected)
+    }
+
+    @Test func `filtered PnL batches never replace or sum the overall result`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let overall = try fixtureData("pnl-overall")
+        let filtered = try fixtureData("pnl-filtered")
+        ZerionAnalyticsMockURLProtocol.respond { request in
+            let items = try queryItems(in: request)
+            return .init(
+                data: items["filter[fungible_implementations]"] == nil ? overall : filtered,
+                statusCode: 200,
+                headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+        let identities = (0 ..< 101).map {
+            OnchainTokenIdentity(
+                chain: .ethereum,
+                contractAddress: String(format: "0x%040x", $0 + 1))
+        }
+
+        let result = try await provider.fetchPnL(
+            scope: scope,
+            range: .allTime,
+            currency: .usd,
+            implementations: identities,
+            asOf: Date(timeIntervalSince1970: 1_704_153_600))
+
+        #expect(ZerionAnalyticsMockURLProtocol.requests.count == 5)
+        for request in ZerionAnalyticsMockURLProtocol.requests.dropFirst() {
+            let filter = try #require(queryItems(in: request)["filter[fungible_implementations]"])
+            #expect(filter.split(separator: ",").count <= 100)
+            #expect(request.url?.absoluteString.count ?? .max <= 2000)
+        }
+        #expect(result.totalGain == Decimal(string: "-637.8173517"))
+        #expect(result.assets.count == 1)
+        #expect(result.assets.first?.totalGain == 10)
+        #expect(result.assets.first?.relativeTotalGain == Decimal(string: "0.025"))
+        #expect(result.excludedIdentifiers == [
+            "ethereum:",
+            "ethereum:0x000000000000000000000000000000000000dead",
+            "ethereum:0x6b175474e89094c44da98b954eedeac495271d0f"
+        ])
+    }
+
+    @Test func `portfolio reconciliation parses normalized no filter summary`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let fixture = try fixtureData("portfolio")
+        ZerionAnalyticsMockURLProtocol.respond { request in
+            #expect(request.url?.path == "/v1/wallets/\(evmAddress)/portfolio")
+            let items = try queryItems(in: request)
+            #expect(items["currency"] == "usd")
+            #expect(items["filter[positions]"] == "no_filter")
+            #expect(items["sync"] == "false")
+            return .init(data: fixture, statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        let summary = try await provider.fetchPortfolioSummary(scope: scope)
+
+        #expect(summary.totalPositions == 1000)
+        #expect(summary.positionsByChain == ["base": 400, "ethereum": 600])
+        #expect(summary.positionsByType["borrowed"] == 50)
+        #expect(summary.absoluteChange1D == 25)
+        #expect(summary.relativeChange1D == Decimal(string: "0.025"))
+    }
+
+    @Test func `portfolio reconciliation uses absolute or relative tolerance`() {
+        let withinAbsolute = ZerionPortfolioReconciliation.compare(
+            providerTotal: 1000,
+            localTotal: 999.6,
+            absoluteTolerance: 0.5,
+            relativeTolerance: 0.0001)
+        let withinRelative = ZerionPortfolioReconciliation.compare(
+            providerTotal: 1000,
+            localTotal: 995,
+            absoluteTolerance: 1,
+            relativeTolerance: 0.01)
+        let outside = ZerionPortfolioReconciliation.compare(
+            providerTotal: 1000,
+            localTotal: 980,
+            absoluteTolerance: 1,
+            relativeTolerance: 0.01)
+
+        #expect(withinAbsolute.isWithinTolerance)
+        #expect(withinRelative.isWithinTolerance)
+        #expect(outside.isWithinTolerance == false)
+        #expect(outside.absoluteDifference == 20)
+        #expect(outside.relativeDifference == Decimal(string: "0.02"))
+    }
+
+    @Test func `malformed chart and PnL payloads fail without fabricated values`() async {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        ZerionAnalyticsMockURLProtocol.respond { _ in
+            .init(data: Data(#"{"data":{"attributes":{}}}"#.utf8), statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        await #expect(throws: ZerionError.decodingFailed) {
+            _ = try await provider.fetchPortfolioValueHistory(scope: scope, period: .week)
+        }
+        await #expect(throws: ZerionError.decodingFailed) {
+            _ = try await provider.fetchPnL(
+                scope: scope,
+                range: .oneMonth,
+                currency: .usd,
+                implementations: [],
+                asOf: Date(timeIntervalSince1970: 1_704_153_600))
+        }
+    }
+
+    @Test(
+        arguments: [
+            (400, ZerionError.badRequest),
+            (401, ZerionError.unauthorized),
+            (402, ZerionError.paymentRequired),
+            (403, ZerionError.unauthorized),
+            (404, ZerionError.notFound),
+            (429, ZerionError.rateLimited(
+                remainingSecond: nil,
+                remainingDay: 0,
+                remainingMonth: nil,
+                reset: nil)),
+            (503, ZerionError.temporarilyUnavailable(retryAfter: 7))
+        ])
+    func `typed chart failures propagate`(status: Int, expected: ZerionError) async {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        ZerionAnalyticsMockURLProtocol.respond { _ in
+            .init(
+                data: Data(#"{"errors":[]}"#.utf8),
+                statusCode: status,
+                headers: [
+                    "RateLimit-Org-Day-Remaining": "0",
+                    "Retry-After": "7"
+                ])
+        }
+        let provider = makeProvider(maximumRetryAttempts: 0)
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        await #expect(throws: expected) {
+            _ = try await provider.fetchPortfolioValueHistory(scope: scope, period: .week)
+        }
+    }
+
+    private func makeProvider(maximumRetryAttempts: Int = 2) -> ZerionProvider {
+        ZerionProvider(client: ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionAnalyticsMockSession(),
+            minimumRequestInterval: .zero,
+            maximumRetryAttempts: maximumRetryAttempts))
+    }
+
+    private func fixtureData(_ name: String) throws -> Data {
+        let url = try #require(Bundle.module.url(forResource: name, withExtension: "json"))
+        return try Data(contentsOf: url)
+    }
+
+    private func queryItems(in request: URLRequest) throws -> [String: String] {
+        let url = try #require(request.url)
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        return Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
+            item.value.map { (item.name, $0) }
+        })
+    }
+}

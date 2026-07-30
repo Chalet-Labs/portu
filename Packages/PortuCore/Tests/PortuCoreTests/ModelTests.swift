@@ -16,6 +16,9 @@ func makeTestContainer() throws -> ModelContainer {
         TokenIdentityMapping.self,
         HistoricalPricePoint.self,
         CurrencyConversionRatePoint.self,
+        ProviderPortfolioValuePoint.self,
+        ProviderPnLSnapshot.self,
+        ProviderPnLAssetBreakdown.self,
         PortfolioSnapshot.self,
         AccountSnapshot.self,
         AssetSnapshot.self

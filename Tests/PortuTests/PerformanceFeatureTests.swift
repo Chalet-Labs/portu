@@ -51,8 +51,8 @@ struct PerformanceFeatureTests {
         await store.send(.chartModeChanged(.assets)) {
             $0.chartMode = .assets
         }
-        await store.send(.chartModeChanged(.pnl)) {
-            $0.chartMode = .pnl
+        await store.send(.chartModeChanged(.valueChange)) {
+            $0.chartMode = .valueChange
         }
         await store.send(.chartModeChanged(.value)) {
             $0.chartMode = .value
@@ -134,10 +134,19 @@ struct PerformanceLastPerDayTests {
     }
 }
 
-// MARK: - PnL Bar Computation
+// MARK: - Value Change Bar Computation
 
-struct PerformancePnLTests {
-    @Test func `computes daily and cumulative pnl`() throws {
+struct PerformanceValueChangeTests {
+    @Test func `snapshot delta mode is labeled value change`() {
+        #expect(PerformanceChartMode.allCases.map(\.rawValue) == [
+            "Value",
+            "Assets",
+            "Value Change",
+            "PnL"
+        ])
+    }
+
+    @Test func `computes daily and cumulative value change`() throws {
         let cal = Calendar.current
         let d1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
         let d2 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 12)))
@@ -145,12 +154,12 @@ struct PerformancePnLTests {
 
         let daily: [(Date, Decimal)] = [(d1, 1000), (d2, 1100), (d3, 1050)]
 
-        let bars = PerformanceFeature.computePnLBars(from: daily)
+        let bars = PerformanceFeature.computeValueChangeBars(from: daily)
 
         #expect(bars.count == 2) // first day is baseline
-        #expect(bars[0].pnl == 100) // 1100 - 1000
+        #expect(bars[0].change == 100) // 1100 - 1000
         #expect(bars[0].cumulative == 100)
-        #expect(bars[1].pnl == -50) // 1050 - 1100
+        #expect(bars[1].change == -50) // 1050 - 1100
         #expect(bars[1].cumulative == 50) // 100 + (-50)
     }
 
@@ -158,17 +167,18 @@ struct PerformancePnLTests {
         let cal = Calendar.current
         let d1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
 
-        let bars = PerformanceFeature.computePnLBars(from: [(d1, 1000)])
+        let bars = PerformanceFeature.computeValueChangeBars(from: [(d1, 1000)])
 
         #expect(bars.isEmpty)
     }
 
     @Test func `empty returns empty`() {
-        let bars = PerformanceFeature.computePnLBars(from: [])
+        let values: [(Date, Decimal)] = []
+        let bars = PerformanceFeature.computeValueChangeBars(from: values)
         #expect(bars.isEmpty)
     }
 
-    @Test func `converts daily values before computing pnl`() throws {
+    @Test func `converts daily values before computing value change`() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = try #require(TimeZone(secondsFromGMT: 0))
         let d1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
@@ -183,12 +193,49 @@ struct PerformancePnLTests {
                 HistoricalPriceCalendar.utcStartOfDay(for: d3): #require(Decimal(string: "0.7"))
             ])
 
-        let bars = PerformanceFeature.computePnLBars(
+        let bars = PerformanceFeature.computeValueChangeBars(
             from: [(d1, 1000), (d2, 1100), (d3, 1200)],
             conversionContext: context)
 
-        #expect(bars.map(\.pnl) == [-20, -40])
+        #expect(bars.map(\.change) == [-20, -40])
         #expect(bars.map(\.cumulative) == [-20, -60])
+    }
+
+    @Test func `omits transitions adjacent to unreliable observations`() throws {
+        let cal = Calendar.current
+        let d1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
+        let d2 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 2, hour: 12)))
+        let d3 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 3, hour: 12)))
+        let d4 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 4, hour: 12)))
+
+        let bars = PerformanceFeature.computeValueChangeBars(from: [
+            ValueChangeObservation(date: d1, value: 1000, isReliable: true),
+            ValueChangeObservation(date: d2, value: 700, isReliable: false),
+            ValueChangeObservation(date: d3, value: 1100, isReliable: true),
+            ValueChangeObservation(date: d4, value: 1150, isReliable: true)
+        ])
+
+        #expect(bars.count == 1)
+        #expect(bars.first?.date == d4)
+        #expect(bars.first?.change == 50)
+        #expect(bars.first?.cumulative == 50)
+    }
+
+    @Test func `daily dedup keeps reliability from the latest observation`() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let morning = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 8)))
+        let evening = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 20)))
+
+        let daily = PerformanceFeature.lastValueChangeObservationPerDay([
+            ValueChangeObservation(date: evening, value: 900, isReliable: false),
+            ValueChangeObservation(date: morning, value: 1000, isReliable: true)
+        ])
+
+        #expect(daily.count == 1)
+        #expect(daily.first?.date == evening)
+        #expect(daily.first?.value == 900)
+        #expect(daily.first?.isReliable == false)
     }
 }
 

@@ -136,6 +136,92 @@ struct AccountSheetInvalidationTests {
         #expect(account.positions.count == 1)
     }
 
+    @Test func `wallet identity edit removes obsolete provider analytics`() async throws {
+        let context = try makeModelContext()
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
+        let address = WalletAddress(
+            chain: nil,
+            address: "0x1111111111111111111111111111111111111111",
+            account: account)
+        account.addresses = [address]
+        context.insert(account)
+        context.insert(address)
+        insertAnalytics(for: account.id, in: context)
+        try context.save()
+
+        var draft = AccountSheetDraft.editing(account: account)
+        draft.chainAddress = "0x2222222222222222222222222222222222222222"
+        try await AccountSheetSaveCoordinator.save(
+            draft: draft,
+            mode: .edit(account.id),
+            editing: account,
+            modelContext: context,
+            secretStore: InMemorySecretStore())
+
+        #expect(try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<ProviderPnLSnapshot>()).isEmpty)
+    }
+
+    @Test func `wallet chain edit removes obsolete provider analytics`() async throws {
+        let context = try makeModelContext()
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
+        let address = WalletAddress(
+            chain: .polygon,
+            address: "0x1111111111111111111111111111111111111111",
+            account: account)
+        account.addresses = [address]
+        context.insert(account)
+        context.insert(address)
+        insertAnalytics(for: account.id, in: context)
+        try context.save()
+
+        var draft = AccountSheetDraft.editing(account: account)
+        draft.isEVM = false
+        draft.specificChain = .ethereum
+        try await AccountSheetSaveCoordinator.save(
+            draft: draft,
+            mode: .edit(account.id),
+            editing: account,
+            modelContext: context,
+            secretStore: InMemorySecretStore())
+
+        #expect(account.addresses.map(\.chain) == [.ethereum])
+        #expect(try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<ProviderPnLSnapshot>()).isEmpty)
+    }
+
+    @Test func `account deletion removes provider analytics`() async throws {
+        let context = try makeModelContext()
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
+        context.insert(account)
+        insertAnalytics(for: account.id, in: context)
+        try context.save()
+
+        try await AccountSheetSaveCoordinator.deleteAccount(
+            account,
+            modelContext: context,
+            secretStore: InMemorySecretStore())
+
+        #expect(try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<ProviderPnLSnapshot>()).isEmpty)
+    }
+
+    @Test func `deactivation preserves cached analytics`() throws {
+        let context = try makeModelContext()
+        let account = Account(name: "Wallet", kind: .wallet, dataSource: .zerion)
+        context.insert(account)
+        insertAnalytics(for: account.id, in: context)
+        try context.save()
+
+        try AccountSheetSaveCoordinator.setAccount(
+            account,
+            isActive: false,
+            modelContext: context)
+
+        #expect(try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>()).count == 1)
+        #expect(try context.fetch(FetchDescriptor<ProviderPnLSnapshot>()).count == 1)
+    }
+
     private func makeModelContext() throws -> ModelContext {
         let schema = Schema([
             Account.self,
@@ -150,7 +236,10 @@ struct AccountSheetInvalidationTests {
             CategorySymbolRule.self,
             PortfolioSnapshot.self,
             AccountSnapshot.self,
-            AssetSnapshot.self
+            AssetSnapshot.self,
+            ProviderPortfolioValuePoint.self,
+            ProviderPnLSnapshot.self,
+            ProviderPnLAssetBreakdown.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])
@@ -167,5 +256,23 @@ struct AccountSheetInvalidationTests {
         let token = PositionToken(role: .balance, amount: 1, usdValue: 100)
         context.insert(token)
         token.position = position
+    }
+
+    private func insertAnalytics(for accountID: UUID, in context: ModelContext) {
+        context.insert(ProviderPortfolioValuePoint(
+            accountID: accountID,
+            scopeFingerprint: "old-scope",
+            provider: .zerion,
+            coverage: .providerReported,
+            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+            usdValue: 100))
+        context.insert(ProviderPnLSnapshot(
+            accountID: accountID,
+            scopeFingerprint: "old-scope",
+            provider: .zerion,
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: Date(timeIntervalSince1970: 1_704_067_200)))
     }
 }

@@ -208,24 +208,31 @@ struct PortuApp: App {
         // Restore a saved non-USD currency as pending and start on USD; the launch FX
         // request commits it once a real rate is known, and a failure stays on USD.
         let savedCurrency = displayCurrencyPreference.load()
+        let analyticsEnabled = PortfolioAnalyticsFeatureFlag.isEnabled()
         self.store = Store(initialState: AppFeature.State(
             selectedCurrency: .usd,
             pendingCurrency: savedCurrency == .usd ? nil : savedCurrency,
-            storeIsEphemeral: isEphemeral)) {
-                AppFeature()
-            } withDependencies: {
-                $0.continuousClock = ContinuousClock()
-                $0.syncEngine = .live(engine: syncEngine)
-                $0.priceService = priceServiceClient
-                $0.displayCurrencyPreference = displayCurrencyPreference
-                $0.currencyConversion = .live(
-                    modelContext: modelContext,
-                    priceService: priceServiceClient)
-                $0.historicalPriceBackfill = .live(
-                    modelContext: modelContext,
-                    priceService: priceServiceClient,
-                    dashboardSettings: { TokenDashboardSettings.fromDefaults() })
-            }
+            storeIsEphemeral: isEphemeral,
+            performance: PerformanceFeature.State(
+                analytics: PortfolioAnalyticsFeature.State(
+                    isAvailable: analyticsEnabled)))) {
+            AppFeature()
+        } withDependencies: {
+            $0.continuousClock = ContinuousClock()
+            $0.syncEngine = .live(engine: syncEngine)
+            $0.priceService = priceServiceClient
+            $0.displayCurrencyPreference = displayCurrencyPreference
+            $0.currencyConversion = .live(
+                modelContext: modelContext,
+                priceService: priceServiceClient)
+            $0.portfolioAnalytics = .live(
+                modelContext: modelContext,
+                service: zerionProvider)
+            $0.historicalPriceBackfill = .live(
+                modelContext: modelContext,
+                priceService: priceServiceClient,
+                dashboardSettings: { TokenDashboardSettings.fromDefaults() })
+        }
 
         // Bridge: features can trigger sync via AppState until migrated to TCA
         appState.onSyncRequested = { [store] in

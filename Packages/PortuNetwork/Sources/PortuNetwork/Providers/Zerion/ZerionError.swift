@@ -14,6 +14,8 @@ public enum ZerionError: Error, Equatable, Sendable, LocalizedError {
     case httpError(statusCode: Int)
     case decodingFailed
     case unsupportedChain(String)
+    case unsupportedAnalyticsScope
+    case invalidAddress(String)
     case invalidData(String)
 
     public var errorDescription: String? {
@@ -46,6 +48,10 @@ public enum ZerionError: Error, Equatable, Sendable, LocalizedError {
             "Zerion response format was not recognized"
         case let .unsupportedChain(chain):
             "Zerion does not support \(chain)"
+        case .unsupportedAnalyticsScope:
+            "Zerion analytics requires one wallet or one EVM plus one Solana wallet"
+        case let .invalidAddress(address):
+            "Invalid wallet address: \(address)"
         case let .invalidData(context):
             "Invalid Zerion data: \(context)"
         }

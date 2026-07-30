@@ -13,7 +13,9 @@
                 PositionToken.self, Asset.self, TokenPricingOverride.self,
                 TokenIdentityMapping.self,
                 HistoricalPricePoint.self,
-                PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
+                PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
+                ProviderPortfolioValuePoint.self, ProviderPnLSnapshot.self,
+                ProviderPnLAssetBreakdown.self
             ])
             let config = ModelConfiguration(isStoredInMemoryOnly: true)
             return try ModelContainer(for: schema, configurations: [config])

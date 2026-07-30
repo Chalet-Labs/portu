@@ -5,7 +5,7 @@ import PortuUI
 import SwiftData
 import SwiftUI
 
-struct PnLChartMode: View {
+struct ValueChangeChartMode: View {
     let accountId: UUID?
     let startDate: Date
     let store: StoreOf<AppFeature>
@@ -26,17 +26,27 @@ struct PnLChartMode: View {
             sort: \.day)
     }
 
-    private var bars: [PnLBar] {
-        let rawValues: [(Date, Decimal)]
+    private var bars: [ValueChangeBar] {
+        let observations: [ValueChangeObservation]
         if let accountId {
             let filtered = accountSnaps.filter { $0.accountId == accountId && $0.timestamp >= startDate }
-            rawValues = filtered.map { ($0.timestamp, $0.totalValue) }
+            observations = filtered.map {
+                ValueChangeObservation(
+                    date: $0.timestamp,
+                    value: $0.totalValue,
+                    isReliable: $0.isFresh)
+            }
         } else {
             let filtered = portfolioSnaps.filter { $0.timestamp >= startDate }
-            rawValues = filtered.map { ($0.timestamp, $0.totalValue) }
+            observations = filtered.map {
+                ValueChangeObservation(
+                    date: $0.timestamp,
+                    value: $0.totalValue,
+                    isReliable: $0.isPartial == false)
+            }
         }
-        let daily = PerformanceFeature.lastPerDay(rawValues)
-        return PerformanceFeature.computePnLBars(
+        let daily = PerformanceFeature.lastValueChangeObservationPerDay(observations)
+        return PerformanceFeature.computeValueChangeBars(
             from: daily,
             conversionContext: currencyConversionContext)
     }
@@ -57,15 +67,18 @@ struct PnLChartMode: View {
             if bars.isEmpty {
                 ContentUnavailableView(
                     "Insufficient Data", systemImage: "chart.bar",
-                    description: Text("Need at least 2 days of data for PnL"))
+                    description: Text("Need at least 2 reliable days for Value Change"))
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 320)
             } else {
                 Chart(bars) { bar in
                     BarMark(
                         x: .value("Date", bar.date, unit: .day),
-                        y: .value("PnL", bar.pnl))
-                        .foregroundStyle(bar.pnl >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
+                        y: .value("Value Change", bar.change))
+                        .foregroundStyle(
+                            bar.change >= 0
+                                ? PortuTheme.dashboardSuccess
+                                : PortuTheme.dashboardWarning)
 
                     if store.performance.showCumulative {
                         LineMark(
@@ -87,6 +100,10 @@ struct PnLChartMode: View {
                 .font(.caption)
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 .dashboardControl()
+
+            Text("Value Change includes deposits, withdrawals, and transfers; it is not cost-basis P&L.")
+                .font(.caption2)
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
         }
     }
 }

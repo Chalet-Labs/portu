@@ -23,6 +23,10 @@ struct ZerionAPIClientTests {
         ZerionAPIClientMockURLProtocol.reset()
     }
 
+    @Test func `default pacing respects the authenticated demo tier`() {
+        #expect(ZerionAPIClient.defaultMinimumRequestInterval == .seconds(1))
+    }
+
     @Test func `GET uses fixed Zerion v1 host basic authentication and encoded filters`() async throws {
         defer { ZerionAPIClientMockURLProtocol.reset() }
         ZerionAPIClientMockURLProtocol.respond { request in
@@ -58,6 +62,7 @@ struct ZerionAPIClientTests {
     @Test(
         arguments: [
             (401, ZerionError.unauthorized),
+            (403, ZerionError.unauthorized),
             (402, ZerionError.paymentRequired),
             (404, ZerionError.notFound),
             (429, ZerionError.rateLimited(remainingSecond: 0, remainingDay: 12, remainingMonth: 250, reset: "42")),

@@ -70,7 +70,9 @@ struct ExchangeCredentialRollbackTests {
             PositionToken.self, Asset.self, TokenPricingOverride.self,
             TokenIdentityMapping.self, HistoricalPricePoint.self,
             PortfolioCategory.self, CategorySymbolRule.self,
-            PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
+            PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
+            ProviderPortfolioValuePoint.self, ProviderPnLSnapshot.self,
+            ProviderPnLAssetBreakdown.self
         ])
         let container = try ModelContainer(
             for: schema,
