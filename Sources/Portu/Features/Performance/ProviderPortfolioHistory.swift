@@ -33,25 +33,50 @@ enum ProviderPortfolioHistory {
     static func merge(
         provider: [ProviderPortfolioValueDTO],
         local: [LocalPortfolioValueObservation],
-        selectedAccountID: UUID?) -> [PortfolioHistoryPoint] {
+        selectedAccountID: UUID?,
+        startDate: Date? = nil) -> [PortfolioHistoryPoint] {
         let localByDay = latestLocalByDay(local)
+        let merged: [PortfolioHistoryPoint]
         guard selectedAccountID != nil else {
-            return localByDay.map {
+            merged = localByDay.map {
                 PortfolioHistoryPoint(
                     timestamp: $0.timestamp,
                     usdValue: $0.usdValue,
                     source: .local,
                     isReliable: $0.isFresh)
             }
+            return filtered(merged, startingAt: startDate)
         }
 
-        guard
+        if
             let authorityDay = localByDay
                 .filter(\.isFresh)
                 .map({ HistoricalPriceCalendar.utcStartOfDay(for: $0.timestamp) })
-                .min()
-        else {
-            return latestProviderByDay(provider).map {
+                .min() {
+            let providerPrefix = latestProviderByDay(provider)
+                .filter { $0.day < authorityDay }
+                .map {
+                    PortfolioHistoryPoint(
+                        timestamp: $0.timestamp,
+                        usdValue: $0.usdValue,
+                        source: .zerion,
+                        isReliable: true)
+                }
+            let localSuffix = localByDay
+                .filter { HistoricalPriceCalendar.utcStartOfDay(for: $0.timestamp) >= authorityDay }
+                .map {
+                    PortfolioHistoryPoint(
+                        timestamp: $0.timestamp,
+                        usdValue: $0.usdValue,
+                        source: .local,
+                        isReliable: $0.isFresh)
+                }
+            merged = (providerPrefix + localSuffix).sorted {
+                if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
+                return $0.source.rawValue < $1.source.rawValue
+            }
+        } else {
+            merged = latestProviderByDay(provider).map {
                 PortfolioHistoryPoint(
                     timestamp: $0.timestamp,
                     usdValue: $0.usdValue,
@@ -59,29 +84,7 @@ enum ProviderPortfolioHistory {
                     isReliable: true)
             }
         }
-
-        let providerPrefix = latestProviderByDay(provider)
-            .filter { $0.day < authorityDay }
-            .map {
-                PortfolioHistoryPoint(
-                    timestamp: $0.timestamp,
-                    usdValue: $0.usdValue,
-                    source: .zerion,
-                    isReliable: true)
-            }
-        let localSuffix = localByDay
-            .filter { HistoricalPriceCalendar.utcStartOfDay(for: $0.timestamp) >= authorityDay }
-            .map {
-                PortfolioHistoryPoint(
-                    timestamp: $0.timestamp,
-                    usdValue: $0.usdValue,
-                    source: .local,
-                    isReliable: $0.isFresh)
-            }
-        return (providerPrefix + localSuffix).sorted {
-            if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
-            return $0.source.rawValue < $1.source.rawValue
-        }
+        return filtered(merged, startingAt: startDate)
     }
 
     static func convertProviderHistory(
@@ -131,6 +134,13 @@ enum ProviderPortfolioHistory {
             if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
             return $0.usdValue < $1.usdValue
         }
+    }
+
+    private static func filtered(
+        _ points: [PortfolioHistoryPoint],
+        startingAt startDate: Date?) -> [PortfolioHistoryPoint] {
+        guard let startDate else { return points }
+        return points.filter { $0.timestamp >= startDate }
     }
 
     private static func latestLocalByDay(

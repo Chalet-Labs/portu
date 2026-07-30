@@ -129,6 +129,45 @@ struct PortfolioAnalyticsReviewTests {
         #expect(await calls.pnlCount == 0)
     }
 
+    @Test func `loading a different request clears stale pnl`() async {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneMonth,
+            currency: .chf,
+            implementations: [],
+            asOf: now)
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(
+                isAvailable: true,
+                activeRequestID: "previous-account-or-currency",
+                pnl: .init(
+                    range: .oneMonth,
+                    currency: .usd,
+                    totalGain: 10,
+                    fetchedAt: now),
+                pnlStatus: .loaded)) {
+            PortfolioAnalyticsFeature()
+        } withDependencies: {
+            $0.portfolioAnalytics.loadCache = { _, _, _ in
+                try await Task.sleep(for: .seconds(3600))
+                return .empty
+            }
+        }
+
+        await store.send(.load(context)) {
+            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.pnl = nil
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.send(.selectionUnavailable) {
+            $0.activeRequestID = nil
+            $0.historyStatus = .idle
+            $0.pnlStatus = .idle
+        }
+        await store.finish()
+    }
+
     @Test func `inactive transition clears loading indicators`() async {
         let context = PortfolioAnalyticsRequestContext(
             scope: makeScope(),

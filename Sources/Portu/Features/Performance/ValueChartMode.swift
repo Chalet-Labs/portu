@@ -64,7 +64,7 @@ struct ValueChartMode: View {
     private var localObservations: [LocalPortfolioValueObservation] {
         if let accountId {
             accountSnapshots
-                .filter { $0.accountId == accountId && $0.timestamp >= startDate }
+                .filter { $0.accountId == accountId }
                 .map {
                     LocalPortfolioValueObservation(
                         timestamp: $0.timestamp,
@@ -73,7 +73,6 @@ struct ValueChartMode: View {
                 }
         } else {
             portfolioSnapshots
-                .filter { $0.timestamp >= startDate }
                 .map {
                     LocalPortfolioValueObservation(
                         timestamp: $0.timestamp,
@@ -103,7 +102,8 @@ struct ValueChartMode: View {
         ProviderPortfolioHistory.merge(
             provider: providerDTOs,
             local: localObservations,
-            selectedAccountID: accountId)
+            selectedAccountID: accountId,
+            startDate: startDate)
     }
 
     private var convertedDataPoints: [(Date, Decimal, Bool, PortfolioHistorySource)] {

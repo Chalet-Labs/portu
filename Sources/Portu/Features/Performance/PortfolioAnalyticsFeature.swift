@@ -126,6 +126,9 @@ struct PortfolioAnalyticsFeature {
                         .cancel(id: CancelID.pnl))
                 }
                 let requestID = context.requestID(pnlRange: state.pnlRange)
+                if state.activeRequestID != requestID {
+                    state.pnl = nil
+                }
                 state.activeRequestID = requestID
                 state.historyStatus = .loading
                 state.pnlStatus = .loading
