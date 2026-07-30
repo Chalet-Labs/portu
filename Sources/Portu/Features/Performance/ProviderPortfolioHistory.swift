@@ -64,7 +64,7 @@ enum ProviderPortfolioHistory {
             .filter(\.isFresh)
             .map { HistoricalPriceCalendar.utcStartOfDay(for: $0.timestamp) }
             .min()
-        let providerPrefix = providerPointsEligibleForMerge(
+        let providerPrefix = retainedProviderPoints(
             provider,
             local: local,
             selectedAccountID: selectedAccountID,
@@ -120,7 +120,7 @@ enum ProviderPortfolioHistory {
         currency: FiatCurrency,
         historicalRatesByDay: [Date: Decimal]) -> ProviderHistoryConversionResult {
         convertProviderHistory(
-            providerPointsEligibleForMerge(
+            retainedProviderPoints(
                 points,
                 local: mergeContext.local,
                 selectedAccountID: mergeContext.selectedAccountID,
@@ -180,11 +180,11 @@ enum ProviderPortfolioHistory {
         }
     }
 
-    private static func providerPointsEligibleForMerge(
+    static func retainedProviderPoints(
         _ provider: [ProviderPortfolioValueDTO],
         local: [LocalPortfolioValueObservation],
         selectedAccountID: UUID?,
-        startDate: Date?) -> [ProviderPortfolioValueDTO] {
+        startDate: Date? = nil) -> [ProviderPortfolioValueDTO] {
         guard selectedAccountID != nil else { return [] }
         let authorityDay = local
             .filter(\.isFresh)

@@ -89,6 +89,19 @@ struct ProviderPortfolioHistoryTests {
         #expect(merged.allSatisfy { $0.source == .local })
     }
 
+    @Test func `provider notices omit points discarded by local authority`() {
+        let localDay = Date(timeIntervalSince1970: 1_704_067_200)
+        let provider = [providerPoint(localDay.addingTimeInterval(86400), 100)]
+
+        let retained = ProviderPortfolioHistory.retainedProviderPoints(
+            provider,
+            local: [.init(timestamp: localDay, usdValue: 90, isFresh: true)],
+            selectedAccountID: accountID)
+
+        #expect(retained.isEmpty)
+        #expect(ProviderPortfolioHistory.disclosure(for: retained) == nil)
+    }
+
     @Test func `later failed sync on the same day preserves local authority`() {
         let authorityDay = Date(timeIntervalSince1970: 1_704_067_200)
         let providerDay = authorityDay.addingTimeInterval(86400)

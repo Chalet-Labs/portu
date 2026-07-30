@@ -109,6 +109,14 @@ struct ValueChartMode: View {
             startDate: startDate)
     }
 
+    private var retainedProviderDTOs: [ProviderPortfolioValueDTO] {
+        ProviderPortfolioHistory.retainedProviderPoints(
+            providerDTOs,
+            local: localObservations,
+            selectedAccountID: accountId,
+            startDate: startDate)
+    }
+
     private var convertedDataPoints: [(Date, Decimal, Bool, PortfolioHistorySource)] {
         let context = currencyConversionContext
         let convertedProviderByTimestamp = Dictionary(
@@ -131,7 +139,7 @@ struct ValueChartMode: View {
 
     private var convertedProviderHistory: ProviderHistoryConversionResult {
         ProviderPortfolioHistory.convertProviderHistory(
-            providerDTOs,
+            retainedProviderDTOs,
             mergeContext: ProviderHistoryMergeContext(
                 local: localObservations,
                 selectedAccountID: accountId,
@@ -219,7 +227,7 @@ struct ValueChartMode: View {
             Group {
                 if
                     appState.selectedCurrency != .usd,
-                    providerDTOs.isEmpty == false,
+                    retainedProviderDTOs.isEmpty == false,
                     convertedProviderHistory.points.isEmpty {
                     ContentUnavailableView(
                         "Historical FX unavailable",
@@ -269,7 +277,7 @@ struct ValueChartMode: View {
                 }
                 .frame(height: 300)
 
-                if let disclosure = ProviderPortfolioHistory.disclosure(for: providerDTOs) {
+                if let disclosure = ProviderPortfolioHistory.disclosure(for: retainedProviderDTOs) {
                     Label(
                         disclosure,
                         systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
@@ -278,7 +286,7 @@ struct ValueChartMode: View {
                 }
                 if
                     let failure = ProviderPortfolioHistory.refreshFailure(
-                        for: providerDTOs,
+                        for: retainedProviderDTOs,
                         status: historyStatus) {
                     Label(failure.message, systemImage: "exclamationmark.triangle")
                         .font(.caption)
@@ -292,7 +300,7 @@ struct ValueChartMode: View {
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 } else if
                     appState.selectedCurrency != .usd,
-                    providerDTOs.isEmpty == false,
+                    retainedProviderDTOs.isEmpty == false,
                     convertedProviderHistory.points.isEmpty {
                     Label(
                         "Historical FX unavailable for Zerion history",
