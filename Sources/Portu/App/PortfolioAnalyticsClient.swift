@@ -217,6 +217,7 @@ extension PortfolioAnalyticsClient {
                 let history = try await service.fetchPortfolioValueHistory(
                     scope: scope,
                     period: period)
+                try Task.checkCancellation()
                 let write = try PortfolioAnalyticsCacheWriter.upsertHistory(
                     history,
                     scope: scope,
@@ -241,6 +242,7 @@ extension PortfolioAnalyticsClient {
                     currency: currency,
                     implementations: implementations,
                     asOf: asOf)
+                try Task.checkCancellation()
                 try PortfolioAnalyticsCacheWriter.upsertPnL(
                     pnl,
                     scope: scope,

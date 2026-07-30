@@ -36,6 +36,10 @@ enum ProviderPortfolioHistory {
         selectedAccountID: UUID?,
         startDate: Date? = nil) -> [PortfolioHistoryPoint] {
         let localByDay = latestLocalByDay(local)
+        let authorityDay = local
+            .filter(\.isFresh)
+            .map { HistoricalPriceCalendar.utcStartOfDay(for: $0.timestamp) }
+            .min()
         let merged: [PortfolioHistoryPoint]
         guard selectedAccountID != nil else {
             merged = localByDay.map {
@@ -48,11 +52,7 @@ enum ProviderPortfolioHistory {
             return filtered(merged, startingAt: startDate)
         }
 
-        if
-            let authorityDay = localByDay
-                .filter(\.isFresh)
-                .map({ HistoricalPriceCalendar.utcStartOfDay(for: $0.timestamp) })
-                .min() {
+        if let authorityDay {
             let providerPrefix = latestProviderByDay(provider)
                 .filter { $0.day < authorityDay }
                 .map {

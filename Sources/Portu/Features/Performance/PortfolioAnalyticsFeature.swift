@@ -67,6 +67,7 @@ struct PortfolioAnalyticsFeature {
     }
 
     enum Action: Equatable {
+        case featureExited
         case load(PortfolioAnalyticsRequestContext)
         case selectionUnavailable
         case refresh(PortfolioAnalyticsRequestContext)
@@ -97,6 +98,10 @@ struct PortfolioAnalyticsFeature {
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
+            case .featureExited:
+                state.pnlRefreshAttemptID = nil
+                return .none
+
             case .selectionUnavailable:
                 state.selectedWalletScopeFingerprint = nil
                 state.activeRequestID = nil
@@ -317,6 +322,7 @@ struct PortfolioAnalyticsFeature {
 
             case let .pnlResponse(requestID, .success(pnl)):
                 guard requestID == state.activeRequestID else { return .none }
+                state.pnlRefreshAttemptID = nil
                 state.pnl = pnl
                 state.pnlStatus = .loaded
                 return .none

@@ -2,6 +2,7 @@ import ComposableArchitecture
 import Foundation
 @testable import Portu
 import PortuCore
+import PortuNetwork
 import Testing
 
 @MainActor
@@ -205,7 +206,7 @@ struct PortfolioAnalyticsReviewTests {
                 }
                 $0.portfolioAnalytics.refreshPnL = { _, _, _, _, _ in
                     await calls.recordPnL()
-                    return stalePnL
+                    throw ZerionError.paymentRequired
                 }
             }
 
@@ -226,7 +227,7 @@ struct PortfolioAnalyticsReviewTests {
             $0.pnlRefreshAttemptID = shortContext.pnlRequestID(pnlRange: .oneMonth)
         }
         await store.receive(\.pnlResponse) {
-            $0.pnlStatus = .loaded
+            $0.pnlStatus = .failed(.planUnavailable)
         }
 
         await store.send(.load(longContext)) {
@@ -242,6 +243,21 @@ struct PortfolioAnalyticsReviewTests {
         }
 
         #expect(await calls.pnlCount == 1)
+    }
+
+    @Test func `feature exit resets the pnl refresh attempt scope`() async {
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(
+                isAvailable: true,
+                pnlRefreshAttemptID: "attempt",
+                historyStatus: .loaded,
+                pnlStatus: .failed(.planUnavailable))) {
+            PortfolioAnalyticsFeature()
+        }
+
+        await store.send(.featureExited) {
+            $0.pnlRefreshAttemptID = nil
+        }
     }
 
     @Test func `inactive transition clears loading indicators`() async {
@@ -415,6 +431,7 @@ struct PortfolioAnalyticsReviewTests {
             $0.pnlStatus = .loading
         }
         await store.receive(\.pnlResponse) {
+            $0.pnlRefreshAttemptID = nil
             $0.pnl = pnl
             $0.pnlStatus = .loaded
         }

@@ -62,6 +62,28 @@ struct ProviderPortfolioHistoryTests {
         #expect(merged.allSatisfy { $0.source == .local })
     }
 
+    @Test func `later failed sync on the same day preserves local authority`() {
+        let authorityDay = Date(timeIntervalSince1970: 1_704_067_200)
+        let providerDay = authorityDay.addingTimeInterval(86400)
+        let merged = ProviderPortfolioHistory.merge(
+            provider: [providerPoint(providerDay, 100)],
+            local: [
+                .init(
+                    timestamp: authorityDay.addingTimeInterval(3600),
+                    usdValue: 90,
+                    isFresh: true),
+                .init(
+                    timestamp: authorityDay.addingTimeInterval(7200),
+                    usdValue: 80,
+                    isFresh: false)
+            ],
+            selectedAccountID: accountID)
+
+        #expect(merged.map(\.source) == [.local])
+        #expect(merged.map(\.usdValue) == [80])
+        #expect(merged.map(\.isReliable) == [false])
+    }
+
     @Test func `range filtering preserves an earlier local authority boundary`() {
         let authorityDay = Date(timeIntervalSince1970: 1_704_067_200)
         let rangeStart = authorityDay.addingTimeInterval(86400)

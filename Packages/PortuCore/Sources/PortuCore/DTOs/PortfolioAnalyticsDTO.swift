@@ -39,9 +39,12 @@ public struct PortfolioAnalyticsAddress: Codable, Sendable, Equatable, Hashable,
     public var isValid: Bool {
         switch family {
         case .evm:
-            value.count == 42
+            value.utf8.count == 42
                 && value.hasPrefix("0x")
-                && value.dropFirst(2).allSatisfy(\.isHexDigit)
+                && value.utf8.dropFirst(2).allSatisfy {
+                    (48 ... 57).contains($0)
+                        || (97 ... 102).contains($0)
+                }
         case .solana:
             base58DecodedByteCount == 32
         }

@@ -58,6 +58,18 @@ struct PortfolioAnalyticsDTOTests {
         #expect(invalidDecodedLength.isValid == false)
     }
 
+    @Test func `evm addresses accept only ASCII hexadecimal digits`() {
+        let valid = PortfolioAnalyticsAddress(
+            family: .evm,
+            value: "0x1111111111111111111111111111111111111111")
+        let fullWidthDigits = PortfolioAnalyticsAddress(
+            family: .evm,
+            value: "0x\(String(repeating: "１", count: 40))")
+
+        #expect(valid.isValid)
+        #expect(fullWidthDigits.isValid == false)
+    }
+
     @Test func `analytics values are sendable`() {
         let point = ProviderPortfolioValueDTO(
             timestamp: Date(timeIntervalSince1970: 1_700_000_000),

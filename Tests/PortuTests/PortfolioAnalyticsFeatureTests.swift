@@ -116,6 +116,7 @@ struct PortfolioAnalyticsFeatureTests {
             $0.historyStatus = .loaded
         }
         await store.receive(\.pnlResponse) {
+            $0.pnlRefreshAttemptID = nil
             $0.pnlStatus = .loaded
             $0.pnl = refreshed
         }

@@ -59,6 +59,9 @@ struct PerformanceView: View {
                 store.send(.performance(.analytics(.selectionUnavailable)))
             }
         }
+        .onDisappear {
+            store.send(.performance(.analytics(.featureExited)))
+        }
     }
 
     private var controlStrip: some View {

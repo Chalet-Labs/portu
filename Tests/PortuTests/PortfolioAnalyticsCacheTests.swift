@@ -1,11 +1,54 @@
 import Foundation
 @testable import Portu
 import PortuCore
+import PortuNetwork
 import SwiftData
 import Testing
 
 @MainActor
 struct PortfolioAnalyticsCacheTests {
+    @Test func `canceled live refreshes do not persist completed provider results`() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let scope = makeScope(accountID: UUID(), addressSuffix: "55")
+        let historyGate = AnalyticsCancellationGate()
+        let pnlGate = AnalyticsCancellationGate()
+        let service = CancellationRaceAnalyticsService(
+            historyGate: historyGate,
+            pnlGate: pnlGate)
+        let client = PortfolioAnalyticsClient.live(
+            modelContext: context,
+            service: service,
+            now: { Date(timeIntervalSince1970: 1_704_153_600) })
+
+        let historyTask = Task {
+            try await client.refreshHistory(scope, .oneMonth)
+        }
+        await historyGate.waitUntilStarted()
+        historyTask.cancel()
+        await historyGate.release()
+        await #expect(throws: CancellationError.self) {
+            _ = try await historyTask.value
+        }
+        #expect(try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>()).isEmpty)
+
+        let pnlTask = Task {
+            try await client.refreshPnL(
+                scope,
+                .oneMonth,
+                .usd,
+                [],
+                Date(timeIntervalSince1970: 1_704_153_600))
+        }
+        await pnlGate.waitUntilStarted()
+        pnlTask.cancel()
+        await pnlGate.release()
+        await #expect(throws: CancellationError.self) {
+            _ = try await pnlTask.value
+        }
+        #expect(try context.fetch(FetchDescriptor<ProviderPnLSnapshot>()).isEmpty)
+    }
+
     @Test func `history upsert keeps latest logical day and prunes to 400 day horizon`() throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -262,5 +305,71 @@ struct PortfolioAnalyticsCacheTests {
             addresses: [.init(
                 family: .evm,
                 value: "0x\(String(repeating: "0", count: 38))\(addressSuffix)")])
+    }
+}
+
+private actor AnalyticsCancellationGate {
+    private var didStart = false
+    private var didRelease = false
+    private var startContinuation: CheckedContinuation<Void, Never>?
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+
+    func waitUntilStarted() async {
+        if didStart { return }
+        await withCheckedContinuation { continuation in
+            startContinuation = continuation
+        }
+    }
+
+    func release() {
+        didRelease = true
+        releaseContinuation?.resume()
+        releaseContinuation = nil
+    }
+
+    func waitIgnoringCancellation() async {
+        didStart = true
+        startContinuation?.resume()
+        startContinuation = nil
+        if didRelease == false {
+            await withCheckedContinuation { continuation in
+                releaseContinuation = continuation
+            }
+        }
+    }
+}
+
+private struct CancellationRaceAnalyticsService: ZerionAnalyticsService {
+    let historyGate: AnalyticsCancellationGate
+    let pnlGate: AnalyticsCancellationGate
+
+    func fetchPortfolioValueHistory(
+        scope _: PortfolioAnalyticsScope,
+        period _: ZerionChartPeriod) async throws -> [ProviderPortfolioValueDTO] {
+        await historyGate.waitIgnoringCancellation()
+        return [.init(
+            timestamp: Date(timeIntervalSince1970: 1_704_153_600),
+            usdValue: 100,
+            provider: .zerion,
+            coverage: .noFilter)]
+    }
+
+    func fetchPnL(
+        scope _: PortfolioAnalyticsScope,
+        range: ProviderPnLRange,
+        currency: FiatCurrency,
+        implementations _: [OnchainTokenIdentity],
+        asOf: Date) async throws -> ProviderPnLDTO {
+        await pnlGate.waitIgnoringCancellation()
+        return ProviderPnLDTO(
+            range: range,
+            currency: currency,
+            totalGain: 10,
+            fetchedAt: asOf)
+    }
+
+    func fetchPortfolioSummary(
+        scope _: PortfolioAnalyticsScope) async throws -> ZerionPortfolioSummary {
+        fatalError("Unused in cancellation race tests")
     }
 }
