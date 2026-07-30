@@ -229,7 +229,7 @@ struct SettingsTabTests {
         defaults.set(true, forKey: HistoricalPriceBackfillSettings.isEnabledKey)
         #expect(HistoricalPriceBackfillSettings.isEnabled(defaults: defaults) == true)
         #expect(HistoricalPriceBackfillSettings.sectionTitle == "Historical Prices")
-        #expect(HistoricalPriceBackfillSettings.chartHorizonDays == 400)
+        #expect(HistoricalPriceBackfillSettings.chartHorizonDays == 365)
     }
 
     @Test func `historical backfill status surfaces partial failures`() {

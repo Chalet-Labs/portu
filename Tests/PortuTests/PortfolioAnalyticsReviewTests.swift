@@ -508,6 +508,28 @@ struct PortfolioAnalyticsReviewTests {
         #expect(await calls.lastPnLAsOf == clickTime)
     }
 
+    @Test func `combined scope not found automatically selects its individual fallback`() async {
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(
+                isAvailable: true,
+                activeRequestID: "combined",
+                fallbackScopeFingerprint: "individual",
+                historyStatus: .loading,
+                pnlStatus: .loading)) {
+            PortfolioAnalyticsFeature()
+        }
+
+        await store.send(.pnlResponse(
+            "combined",
+            .failure(PortfolioAnalyticsClientError(ZerionError.notFound)))) {
+                $0.selectedWalletScopeFingerprint = "individual"
+                $0.activeRequestID = nil
+                $0.fallbackScopeFingerprint = nil
+                $0.historyStatus = .idle
+                $0.pnlStatus = .idle
+            }
+    }
+
     private func makeScope() -> PortfolioAnalyticsScope {
         PortfolioAnalyticsScope(
             accountID: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,

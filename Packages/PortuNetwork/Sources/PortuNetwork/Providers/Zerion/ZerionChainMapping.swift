@@ -64,7 +64,7 @@ public enum ZerionChainMapping {
         return id
     }
 
-    static func positionID(for chain: Chain) throws -> String {
+    public static func positionID(for chain: Chain) throws -> String {
         guard !unsupportedPositionChains.contains(chain) else {
             throw ZerionError.unsupportedChain(chain.rawValue)
         }

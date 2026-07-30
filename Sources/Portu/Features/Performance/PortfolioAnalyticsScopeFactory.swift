@@ -69,18 +69,22 @@ enum PortfolioAnalyticsScopeFactory {
         asOf: Date) -> PortfolioAnalyticsRequestContext? {
         let options = scopeOptions(account: account)
         guard
-            let scope = options.first(where: {
+            let selectedOption = options.first(where: {
                 $0.scope.fingerprint == selectedScopeFingerprint
-            })?.scope ?? options.first?.scope else { return nil }
+            }) ?? options.first else { return nil }
+        let fallbackScopeFingerprint = selectedOption.scope.addresses.count > 1
+            ? options.first(where: { $0.scope.addresses.count == 1 })?.id
+            : nil
         return PortfolioAnalyticsRequestContext(
-            scope: scope,
+            scope: selectedOption.scope,
             chartRange: chartRange,
             currency: currency,
             implementations: Array(Set(account.implementations)).sorted {
                 $0.canonicalPriceID < $1.canonicalPriceID
             },
             asOf: asOf,
-            isAccountActive: account.isActive)
+            isAccountActive: account.isActive,
+            fallbackScopeFingerprint: fallbackScopeFingerprint)
     }
 
     private static func abbreviated(_ address: String) -> String {
@@ -93,7 +97,10 @@ enum PortfolioAnalyticsScopeFactory {
         in inputs: [PortfolioAnalyticsAddressInput]) -> [String] {
         let matchingInputs = inputs.filter { validatedAddress($0) == address }
         guard matchingInputs.allSatisfy({ $0.chain != nil }) else { return [] }
-        return Array(Set(matchingInputs.compactMap(\.chain?.rawValue))).sorted()
+        return Array(Set(matchingInputs.compactMap {
+            guard let chain = $0.chain else { return nil }
+            return try? ZerionChainMapping.positionID(for: chain)
+        })).sorted()
     }
 
     private static func validatedAddress(

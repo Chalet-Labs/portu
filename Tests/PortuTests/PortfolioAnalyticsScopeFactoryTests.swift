@@ -18,6 +18,23 @@ struct PortfolioAnalyticsScopeFactoryTests {
         #expect(option.scope.addresses.count == 2)
         #expect(option.scope.chainIDs == ["base", "solana"])
         #expect(options.dropFirst().allSatisfy { $0.scope.addresses.count == 1 })
+
+        let context = try #require(PortfolioAnalyticsScopeFactory.requestContext(
+            account: input,
+            chartRange: .oneMonth,
+            currency: .usd,
+            asOf: Date(timeIntervalSince1970: 1_704_153_600)))
+        #expect(context.fallbackScopeFingerprint == options[1].id)
+    }
+
+    @Test func `explicit chains use Zerion analytics identifiers`() throws {
+        let input = makeInput(addresses: [
+            .init(chain: .bsc, address: "0x1111111111111111111111111111111111111111")
+        ])
+
+        let option = try #require(PortfolioAnalyticsScopeFactory.scopeOptions(account: input).first)
+
+        #expect(option.scope.chainIDs == ["binance-smart-chain"])
     }
 
     @Test func `multiple EVM addresses produce separate scopes without combined total`() {

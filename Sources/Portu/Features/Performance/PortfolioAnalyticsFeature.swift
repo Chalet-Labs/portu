@@ -9,6 +9,7 @@ struct PortfolioAnalyticsRequestContext: Equatable {
     let implementations: [OnchainTokenIdentity]
     let asOf: Date
     let isAccountActive: Bool
+    let fallbackScopeFingerprint: String?
 
     init(
         scope: PortfolioAnalyticsScope,
@@ -16,13 +17,15 @@ struct PortfolioAnalyticsRequestContext: Equatable {
         currency: FiatCurrency,
         implementations: [OnchainTokenIdentity],
         asOf: Date,
-        isAccountActive: Bool = true) {
+        isAccountActive: Bool = true,
+        fallbackScopeFingerprint: String? = nil) {
         self.scope = scope
         self.chartRange = chartRange
         self.currency = currency
         self.implementations = implementations
         self.asOf = asOf
         self.isAccountActive = isAccountActive
+        self.fallbackScopeFingerprint = fallbackScopeFingerprint
     }
 
     func requestID(pnlRange: ProviderPnLRange) -> String {
@@ -49,7 +52,8 @@ struct PortfolioAnalyticsRequestContext: Equatable {
             currency: currency,
             implementations: implementations,
             asOf: date,
-            isAccountActive: isAccountActive)
+            isAccountActive: isAccountActive,
+            fallbackScopeFingerprint: fallbackScopeFingerprint)
     }
 }
 
@@ -69,6 +73,7 @@ struct PortfolioAnalyticsFeature {
         var pnlRange: ProviderPnLRange = .oneMonth
         var selectedWalletScopeFingerprint: String?
         var activeRequestID: String?
+        var fallbackScopeFingerprint: String?
         var pnlRefreshAttemptID: String?
         var history: [ProviderPortfolioValueDTO] = []
         var pnl: ProviderPnLDTO?
@@ -111,12 +116,14 @@ struct PortfolioAnalyticsFeature {
         Reduce { state, action in
             switch action {
             case .featureExited:
+                state.fallbackScopeFingerprint = nil
                 state.pnlRefreshAttemptID = nil
                 return .none
 
             case .selectionUnavailable:
                 state.selectedWalletScopeFingerprint = nil
                 state.activeRequestID = nil
+                state.fallbackScopeFingerprint = nil
                 state.pnlRefreshAttemptID = nil
                 state.history = []
                 state.pnl = nil
@@ -130,6 +137,7 @@ struct PortfolioAnalyticsFeature {
             case let .load(context):
                 if context.isAccountActive == false {
                     state.activeRequestID = nil
+                    state.fallbackScopeFingerprint = nil
                     if state.historyStatus == .loading || state.historyStatus == .refreshing {
                         state.historyStatus = .idle
                     }
@@ -143,6 +151,7 @@ struct PortfolioAnalyticsFeature {
                 }
                 guard Self.isEligible(context, isAvailable: state.isAvailable) else {
                     state.activeRequestID = nil
+                    state.fallbackScopeFingerprint = nil
                     state.history = []
                     state.pnl = nil
                     state.historyStatus = .idle
@@ -153,6 +162,7 @@ struct PortfolioAnalyticsFeature {
                         .cancel(id: CancelID.pnl))
                 }
                 let requestID = context.requestID(pnlRange: state.pnlRange)
+                state.fallbackScopeFingerprint = context.fallbackScopeFingerprint
                 if state.activeRequestID != requestID {
                     state.pnl = nil
                 }
@@ -198,6 +208,7 @@ struct PortfolioAnalyticsFeature {
                         .cancel(id: CancelID.pnl))
                 }
                 let requestID = context.requestID(pnlRange: state.pnlRange)
+                state.fallbackScopeFingerprint = context.fallbackScopeFingerprint
                 state.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID
                 if Self.supportsProviderHistory(context) {
@@ -225,6 +236,7 @@ struct PortfolioAnalyticsFeature {
                         .cancel(id: CancelID.pnl))
                 }
                 let requestID = context.requestID(pnlRange: state.pnlRange)
+                state.fallbackScopeFingerprint = context.fallbackScopeFingerprint
                 state.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID
                 state.pnlStatus = state.pnl == nil ? .loading : .refreshing
@@ -269,6 +281,7 @@ struct PortfolioAnalyticsFeature {
             case let .walletScopeSelected(fingerprint):
                 state.selectedWalletScopeFingerprint = fingerprint
                 state.activeRequestID = nil
+                state.fallbackScopeFingerprint = nil
                 state.pnlRefreshAttemptID = nil
                 state.history = []
                 state.pnl = nil
@@ -352,6 +365,9 @@ struct PortfolioAnalyticsFeature {
 
             case let .historyResponse(requestID, .failure(error)):
                 guard requestID == state.activeRequestID else { return .none }
+                if Self.selectFallbackIfAvailable(state: &state, failure: error.failure) {
+                    return cancelAnalyticsEffects()
+                }
                 state.historyStatus = .failed(error.failure)
                 return .none
 
@@ -364,6 +380,9 @@ struct PortfolioAnalyticsFeature {
 
             case let .pnlResponse(requestID, .failure(error)):
                 guard requestID == state.activeRequestID else { return .none }
+                if Self.selectFallbackIfAvailable(state: &state, failure: error.failure) {
+                    return cancelAnalyticsEffects()
+                }
                 state.pnlStatus = .failed(error.failure)
                 return .none
             }
@@ -382,6 +401,30 @@ struct PortfolioAnalyticsFeature {
     private static func supportsProviderHistory(
         _ context: PortfolioAnalyticsRequestContext) -> Bool {
         context.chartRange != .custom
+    }
+
+    private static func selectFallbackIfAvailable(
+        state: inout State,
+        failure: PortfolioAnalyticsFailure) -> Bool {
+        guard
+            failure == .unavailableForScope,
+            let fallback = state.fallbackScopeFingerprint else { return false }
+        state.selectedWalletScopeFingerprint = fallback
+        state.activeRequestID = nil
+        state.fallbackScopeFingerprint = nil
+        state.pnlRefreshAttemptID = nil
+        state.history = []
+        state.pnl = nil
+        state.historyStatus = .idle
+        state.pnlStatus = .idle
+        return true
+    }
+
+    private func cancelAnalyticsEffects() -> Effect<Action> {
+        .merge(
+            .cancel(id: CancelID.cache),
+            .cancel(id: CancelID.history),
+            .cancel(id: CancelID.pnl))
     }
 
     private func refreshEffects(
