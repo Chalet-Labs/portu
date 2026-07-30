@@ -14,6 +14,7 @@ public final class ProviderPortfolioValuePoint {
     public var day: Date
     public var usdValue: Decimal
     public var fetchedAt: Date
+    public var coverageStartDate: Date
 
     public init(
         accountID: UUID,
@@ -22,7 +23,8 @@ public final class ProviderPortfolioValuePoint {
         coverage: PortfolioAnalyticsCoverage,
         timestamp: Date,
         usdValue: Decimal,
-        fetchedAt: Date = .now) {
+        fetchedAt: Date = .now,
+        coverageStartDate: Date? = nil) {
         self.cacheKey = Self.cacheKey(
             accountID: accountID,
             scopeFingerprint: scopeFingerprint,
@@ -37,6 +39,8 @@ public final class ProviderPortfolioValuePoint {
         self.day = HistoricalPriceCalendar.utcStartOfDay(for: timestamp)
         self.usdValue = usdValue
         self.fetchedAt = fetchedAt
+        self.coverageStartDate = HistoricalPriceCalendar.utcStartOfDay(
+            for: coverageStartDate ?? timestamp)
     }
 
     public static func cacheKey(

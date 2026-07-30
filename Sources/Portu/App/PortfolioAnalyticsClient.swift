@@ -12,9 +12,25 @@ private let portfolioAnalyticsLogger = Logger(
 struct PortfolioAnalyticsCache: Equatable {
     let history: [ProviderPortfolioValueDTO]
     let historyFetchedAt: Date?
+    let historyCoverageStartDate: Date?
     let pnl: ProviderPnLDTO?
 
-    static let empty = Self(history: [], historyFetchedAt: nil, pnl: nil)
+    init(
+        history: [ProviderPortfolioValueDTO],
+        historyFetchedAt: Date?,
+        historyCoverageStartDate: Date? = nil,
+        pnl: ProviderPnLDTO?) {
+        self.history = history
+        self.historyFetchedAt = historyFetchedAt
+        self.historyCoverageStartDate = historyCoverageStartDate
+        self.pnl = pnl
+    }
+
+    static let empty = Self(
+        history: [],
+        historyFetchedAt: nil,
+        historyCoverageStartDate: nil,
+        pnl: nil)
 }
 
 enum PortfolioAnalyticsFailure: Error, Equatable {
@@ -186,6 +202,7 @@ extension PortfolioAnalyticsClient {
                     modelContext: modelContext)
             },
             refreshHistory: { scope, chartRange in
+                let fetchedAt = now()
                 let period: ZerionChartPeriod = switch chartRange {
                 case .oneWeek: .week
                 case .oneMonth: .month
@@ -201,7 +218,8 @@ extension PortfolioAnalyticsClient {
                     history,
                     scope: scope,
                     in: modelContext,
-                    fetchedAt: now())
+                    fetchedAt: fetchedAt,
+                    coverageStartDate: chartRange.startDate(at: fetchedAt))
                 let accountID = scope.accountID.uuidString
                 let scopeID = String(scope.fingerprint.prefix(12))
                 let pointCount = history.count
@@ -281,6 +299,7 @@ extension PortfolioAnalyticsClient {
                     coverage: $0.coverage)
             },
             historyFetchedAt: historyRows.map(\.fetchedAt).max(),
+            historyCoverageStartDate: historyRows.map(\.coverageStartDate).min(),
             pnl: pnl.map(providerPnLDTO))
     }
 

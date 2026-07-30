@@ -41,8 +41,14 @@ struct ZerionWalletChartResource: Decodable {
 
         init(from decoder: Decoder) throws {
             var container = try decoder.unkeyedContainer()
-            self.timestamp = try? container.decode(Double.self)
-            self.value = try? container.decode(Decimal.self)
+            let timestampDecoder = try? container.superDecoder()
+            let valueDecoder = try? container.superDecoder()
+            self.timestamp = timestampDecoder.flatMap {
+                try? $0.singleValueContainer().decode(Double.self)
+            }
+            self.value = valueDecoder.flatMap {
+                try? $0.singleValueContainer().decode(Decimal.self)
+            }
         }
     }
 }

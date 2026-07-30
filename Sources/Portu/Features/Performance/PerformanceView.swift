@@ -22,7 +22,9 @@ struct PerformanceView: View {
                         ValueChartMode(
                             accountId: store.performance.selectedAccountId,
                             startDate: store.performance.selectedRange.startDate,
-                            analyticsScopeFingerprint: analyticsContext?.scope.fingerprint)
+                            analyticsScopeFingerprint: store.performance.analytics.isAvailable
+                                ? analyticsContext?.scope.fingerprint
+                                : nil)
                     case .assets:
                         AssetsChartMode(
                             accountId: store.performance.selectedAccountId,
@@ -135,10 +137,20 @@ struct PerformanceView: View {
     }
 
     private var analyticsTaskID: String {
+        let availability = store.performance.analytics.isAvailable
         guard let context = makeAnalyticsContext(asOf: .distantPast) else {
-            return "none|\(store.performance.selectedRange.rawValue)|\(store.selectedCurrency.rawValue)"
+            return [
+                "none",
+                store.performance.selectedRange.rawValue,
+                store.selectedCurrency.rawValue,
+                "available:\(availability)"
+            ].joined(separator: "|")
         }
-        return context.requestID(pnlRange: store.performance.analytics.pnlRange)
+        return [
+            context.requestID(pnlRange: store.performance.analytics.pnlRange),
+            "active:\(context.isAccountActive)",
+            "available:\(availability)"
+        ].joined(separator: "|")
     }
 
     private func makeAnalyticsContext(asOf: Date) -> PortfolioAnalyticsRequestContext? {

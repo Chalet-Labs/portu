@@ -110,6 +110,7 @@ struct ZerionProviderTests {
         let fixture = Self.positionsFixture.replacingFirstOccurrence(
             of: #""flags": {"displayable":true,"is_trash":false}"#,
             with: #""flags": {"displayable":false,"is_trash":false}"#)
+        #expect(fixture != Self.positionsFixture)
         ZerionMockURLProtocol.respond { _ in
             .init(data: Data(fixture.utf8), statusCode: 200, headers: [:])
         }

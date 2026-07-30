@@ -23,37 +23,54 @@ enum PortfolioAnalyticsCacheWriter {
         _ points: [ProviderPortfolioValueDTO],
         scope: PortfolioAnalyticsScope,
         in context: ModelContext,
-        fetchedAt: Date = .now) throws -> PortfolioAnalyticsHistoryWriteResult {
+        fetchedAt: Date = .now,
+        coverageStartDate: Date? = nil) throws -> PortfolioAnalyticsHistoryWriteResult {
         let accountID = scope.accountID
         let descriptor = FetchDescriptor<ProviderPortfolioValuePoint>(
             predicate: #Predicate { $0.accountID == accountID })
         let accountRows = try context.fetch(descriptor)
-        var existingByKey = Dictionary(
-            uniqueKeysWithValues: accountRows
-                .filter {
-                    $0.scopeFingerprint == scope.fingerprint
-                        && $0.provider == .zerion
-                }
-                .map { ($0.cacheKey, $0) })
+        let scopedRows = accountRows.filter {
+            $0.scopeFingerprint == scope.fingerprint
+                && $0.provider == .zerion
+        }
+        var existingByDay: [HistoryDayIdentity: ProviderPortfolioValuePoint] = [:]
+        var duplicateRows: [ProviderPortfolioValuePoint] = []
+        for row in scopedRows.sorted(by: { $0.cacheKey < $1.cacheKey }) {
+            let identity = HistoryDayIdentity(provider: row.provider, day: row.day)
+            if existingByDay[identity] == nil {
+                existingByDay[identity] = row
+            } else {
+                duplicateRows.append(row)
+            }
+        }
         let latestIncoming = Dictionary(
             points.sorted { $0.timestamp < $1.timestamp }.map { ($0.day, $0) },
             uniquingKeysWith: { _, latest in latest })
+        let requestedCoverageStartDate = HistoricalPriceCalendar.utcStartOfDay(
+            for: coverageStartDate ?? points.map(\.timestamp).min() ?? fetchedAt)
 
         do {
+            duplicateRows.forEach(context.delete)
             var inserted = 0
             var updated = 0
             for point in latestIncoming.values.sorted(by: { $0.timestamp < $1.timestamp }) {
+                let identity = HistoryDayIdentity(provider: point.provider, day: point.day)
                 let key = ProviderPortfolioValuePoint.cacheKey(
                     accountID: accountID,
                     scopeFingerprint: scope.fingerprint,
                     provider: point.provider,
                     coverage: point.coverage,
                     day: point.day)
-                if let row = existingByKey[key] {
+                if let row = existingByDay[identity] {
+                    row.cacheKey = key
+                    row.coverage = point.coverage
                     row.timestamp = point.timestamp
                     row.day = point.day
                     row.usdValue = point.usdValue
                     row.fetchedAt = fetchedAt
+                    row.coverageStartDate = min(
+                        row.coverageStartDate,
+                        requestedCoverageStartDate)
                     updated += 1
                 } else {
                     let row = ProviderPortfolioValuePoint(
@@ -63,16 +80,17 @@ enum PortfolioAnalyticsCacheWriter {
                         coverage: point.coverage,
                         timestamp: point.timestamp,
                         usdValue: point.usdValue,
-                        fetchedAt: fetchedAt)
+                        fetchedAt: fetchedAt,
+                        coverageStartDate: requestedCoverageStartDate)
                     context.insert(row)
-                    existingByKey[key] = row
+                    existingByDay[identity] = row
                     inserted += 1
                 }
             }
 
             let cutoff = retentionCutoff(asOf: fetchedAt)
-            var pruned = 0
-            for row in existingByKey.values where row.day < cutoff {
+            var pruned = duplicateRows.count
+            for row in existingByDay.values where row.day < cutoff {
                 context.delete(row)
                 pruned += 1
             }
@@ -85,6 +103,11 @@ enum PortfolioAnalyticsCacheWriter {
             context.rollback()
             throw error
         }
+    }
+
+    private struct HistoryDayIdentity: Hashable {
+        let provider: PortfolioAnalyticsProvider
+        let day: Date
     }
 
     @MainActor

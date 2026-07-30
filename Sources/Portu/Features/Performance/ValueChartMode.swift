@@ -44,12 +44,21 @@ struct ValueChartMode: View {
         self.startDate = startDate
         self.analyticsScopeFingerprint = analyticsScopeFingerprint
         let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        let queryAccountID = accountId ?? UUID()
+        let queryScopeFingerprint = analyticsScopeFingerprint ?? ""
         _historicalPrices = Query(
             filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
             sort: \.day)
         _currencyRates = Query(
             filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
             sort: \.day)
+        _providerValuePoints = Query(
+            filter: #Predicate<ProviderPortfolioValuePoint> {
+                $0.accountID == queryAccountID
+                    && $0.scopeFingerprint == queryScopeFingerprint
+                    && $0.timestamp >= historicalStartDate
+            },
+            sort: \.timestamp)
     }
 
     private var localObservations: [LocalPortfolioValueObservation] {

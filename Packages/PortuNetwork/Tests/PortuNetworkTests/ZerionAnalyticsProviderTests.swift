@@ -37,12 +37,24 @@ struct ZerionAnalyticsProviderTests {
 
         let points = try await provider.fetchPortfolioValueHistory(scope: scope, period: .month)
 
-        #expect(points.map(\.usdValue) == [110, 120])
+        #expect(points.map(\.usdValue) == [110, 120, 0])
         #expect(points.map(\.timestamp) == [
             Date(timeIntervalSince1970: 1_704_100_000),
-            Date(timeIntervalSince1970: 1_704_153_600)
+            Date(timeIntervalSince1970: 1_704_153_600),
+            Date(timeIntervalSince1970: 1_704_240_000)
         ])
         #expect(points.allSatisfy { $0.provider == .zerion && $0.coverage == .noFilter })
+    }
+
+    @Test func `wallet chart tuple decodes value independently from malformed timestamp`() throws {
+        let data = Data(#"""
+        {"attributes":{"points":[["malformed",130]],"begin_at":null,"end_at":null}}
+        """#.utf8)
+
+        let resource = try JSONDecoder().decode(ZerionWalletChartResource.self, from: data)
+
+        #expect(resource.attributes.points.first?.timestamp == nil)
+        #expect(resource.attributes.points.first?.value == 130)
     }
 
     @Test func `one EVM and one Solana address use wallet set chart`() async throws {

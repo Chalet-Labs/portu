@@ -64,6 +64,24 @@ struct PortfolioAnalyticsDTOTests {
         #expect(sendablePnL is ProviderPnLDTO)
     }
 
+    @Test func `pnl normalizes duplicate exclusions and assets deterministically`() {
+        let first = ProviderPnLAssetDTO(implementationID: "ethereum:0xabc", totalGain: 1)
+        let replacement = ProviderPnLAssetDTO(implementationID: "ethereum:0xabc", totalGain: 2)
+        let other = ProviderPnLAssetDTO(implementationID: "base:0xdef", totalGain: 3)
+
+        let pnl = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 6,
+            excludedIdentifiers: ["zeta", "alpha", "zeta"],
+            assets: [first, other, replacement],
+            fetchedAt: Date(timeIntervalSince1970: 1_700_000_000))
+
+        #expect(pnl.excludedIdentifiers == ["alpha", "zeta"])
+        #expect(pnl.assets.map(\.implementationID) == ["base:0xdef", "ethereum:0xabc"])
+        #expect(pnl.assets.last?.totalGain == 2)
+    }
+
     @Test(arguments: [
         (TimeInterval(86399), ProviderPnLFreshness.fresh),
         (TimeInterval(86400), ProviderPnLFreshness.stale),

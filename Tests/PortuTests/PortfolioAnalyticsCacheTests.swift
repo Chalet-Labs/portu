@@ -50,6 +50,37 @@ struct PortfolioAnalyticsCacheTests {
         #expect(rows.last?.usdValue == 999)
     }
 
+    @Test func `history upsert replaces same day when provider coverage changes`() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let scope = makeScope(accountID: UUID(), addressSuffix: "44")
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+
+        _ = try PortfolioAnalyticsCacheWriter.upsertHistory(
+            [.init(
+                timestamp: day,
+                usdValue: 100,
+                provider: .zerion,
+                coverage: .noFilter)],
+            scope: scope,
+            in: context,
+            fetchedAt: day)
+        _ = try PortfolioAnalyticsCacheWriter.upsertHistory(
+            [.init(
+                timestamp: day.addingTimeInterval(3600),
+                usdValue: 110,
+                provider: .zerion,
+                coverage: .providerReported)],
+            scope: scope,
+            in: context,
+            fetchedAt: day.addingTimeInterval(3600))
+
+        let rows = try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>())
+        #expect(rows.count == 1)
+        #expect(rows.first?.coverage == .providerReported)
+        #expect(rows.first?.usdValue == 110)
+    }
+
     @Test func `scope invalidation does not touch another account`() throws {
         let container = try makeContainer()
         let context = container.mainContext

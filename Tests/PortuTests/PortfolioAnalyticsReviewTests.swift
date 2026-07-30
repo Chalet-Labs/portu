@@ -1,0 +1,246 @@
+import ComposableArchitecture
+import Foundation
+@testable import Portu
+import PortuCore
+import Testing
+
+@MainActor
+struct PortfolioAnalyticsReviewTests {
+    private let now = Date(timeIntervalSince1970: 1_704_153_600)
+
+    @Test func `fresh short history refreshes when a longer chart range is requested`() async {
+        let scope = makeScope()
+        let context = PortfolioAnalyticsRequestContext(
+            scope: scope,
+            chartRange: .oneYear,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let cachedPnL = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: now)
+        let calls = ReviewAnalyticsCallRecorder()
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.loadCache = { _, _, _ in
+                    PortfolioAnalyticsCache(
+                        history: [.init(
+                            timestamp: now.addingTimeInterval(-7 * 86400),
+                            usdValue: 100,
+                            provider: .zerion,
+                            coverage: .providerReported)],
+                        historyFetchedAt: now,
+                        historyCoverageStartDate: now.addingTimeInterval(-7 * 86400),
+                        pnl: cachedPnL)
+                }
+                $0.portfolioAnalytics.refreshHistory = { _, _ in
+                    await calls.recordHistory()
+                    return []
+                }
+            }
+
+        await store.send(.load(context)) {
+            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.cacheLoaded) {
+            $0.history = [.init(
+                timestamp: now.addingTimeInterval(-7 * 86400),
+                usdValue: 100,
+                provider: .zerion,
+                coverage: .providerReported)]
+            $0.historyStatus = .refreshing
+            $0.pnl = cachedPnL
+            $0.pnlStatus = .loaded
+        }
+        await store.receive(\.historyResponse) {
+            $0.history = []
+            $0.historyStatus = .loaded
+        }
+        #expect(await calls.historyCount == 1)
+    }
+
+    @Test func `pnl range change loads matching cache before refreshing`() async {
+        let scope = makeScope()
+        let context = PortfolioAnalyticsRequestContext(
+            scope: scope,
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let cached = ProviderPnLDTO(
+            range: .oneYear,
+            currency: .usd,
+            totalGain: 20,
+            fetchedAt: now)
+        let calls = ReviewAnalyticsCallRecorder()
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(
+                isAvailable: true,
+                pnl: .init(
+                    range: .oneMonth,
+                    currency: .usd,
+                    totalGain: 10,
+                    fetchedAt: now),
+                historyStatus: .loaded,
+                pnlStatus: .loaded)) {
+            PortfolioAnalyticsFeature()
+        } withDependencies: {
+            $0.portfolioAnalytics.loadCache = { _, range, _ in
+                await calls.recordCache()
+                #expect(range == .oneYear)
+                return PortfolioAnalyticsCache(
+                    history: [],
+                    historyFetchedAt: now,
+                    historyCoverageStartDate: ChartTimeRange.oneMonth.startDate(at: now),
+                    pnl: cached)
+            }
+            $0.portfolioAnalytics.refreshPnL = { _, _, _, _, _ in
+                await calls.recordPnL()
+                return cached
+            }
+        }
+
+        await store.send(.pnlRangeChanged(.oneYear, context)) {
+            $0.pnlRange = .oneYear
+            $0.activeRequestID = nil
+            $0.pnl = nil
+            $0.pnlStatus = .idle
+        }
+        await store.receive(\.load) {
+            $0.activeRequestID = context.requestID(pnlRange: .oneYear)
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.cacheLoaded) {
+            $0.historyStatus = .loading
+            $0.pnl = cached
+            $0.pnlStatus = .loaded
+        }
+        await store.receive(\.historyResponse) {
+            $0.historyStatus = .loaded
+        }
+        #expect(await calls.cacheCount == 1)
+        #expect(await calls.pnlCount == 0)
+    }
+
+    @Test func `inactive transition clears loading indicators`() async {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now,
+            isAccountActive: false)
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(
+                isAvailable: true,
+                activeRequestID: "old",
+                historyStatus: .refreshing,
+                pnlStatus: .loading)) {
+            PortfolioAnalyticsFeature()
+        }
+
+        await store.send(.load(context)) {
+            $0.activeRequestID = nil
+            $0.historyStatus = .idle
+            $0.pnlStatus = .idle
+        }
+    }
+
+    @Test func `inactive refresh clears loading indicators`() async {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now,
+            isAccountActive: false)
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(
+                isAvailable: true,
+                activeRequestID: "old",
+                historyStatus: .loading,
+                pnlStatus: .refreshing)) {
+            PortfolioAnalyticsFeature()
+        }
+
+        await store.send(.refresh(context)) {
+            $0.activeRequestID = nil
+            $0.historyStatus = .idle
+            $0.pnlStatus = .idle
+        }
+    }
+
+    @Test func `clear cache cancels analytics refreshes before deleting rows`() async {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let requestID = context.requestID(pnlRange: .oneMonth)
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.refreshHistory = { _, _ in
+                    try await Task.sleep(for: .seconds(3600))
+                    return []
+                }
+                $0.portfolioAnalytics.refreshPnL = { _, _, _, _, _ in
+                    try await Task.sleep(for: .seconds(3600))
+                    return ProviderPnLDTO(
+                        range: .oneMonth,
+                        currency: .usd,
+                        totalGain: 0,
+                        fetchedAt: now)
+                }
+                $0.portfolioAnalytics.clearAccountCache = { _ in 2 }
+            }
+
+        await store.send(.refresh(context)) {
+            $0.activeRequestID = requestID
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.send(.clearCache(context))
+        await store.receive(\.clearCacheResponse) {
+            $0.historyStatus = .idle
+            $0.pnlStatus = .idle
+        }
+        await store.finish()
+    }
+
+    private func makeScope() -> PortfolioAnalyticsScope {
+        PortfolioAnalyticsScope(
+            accountID: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            dataSource: .zerion,
+            addresses: [.init(
+                family: .evm,
+                value: "0x1111111111111111111111111111111111111111")])
+    }
+}
+
+private actor ReviewAnalyticsCallRecorder {
+    private(set) var cacheCount = 0
+    private(set) var historyCount = 0
+    private(set) var pnlCount = 0
+
+    func recordCache() {
+        cacheCount += 1
+    }
+
+    func recordHistory() {
+        historyCount += 1
+    }
+
+    func recordPnL() {
+        pnlCount += 1
+    }
+}

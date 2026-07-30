@@ -261,8 +261,12 @@ public struct ProviderPnLDTO: Sendable, Equatable, Hashable {
         self.sentExternal = sentExternal
         self.sentForNFTs = sentForNFTs
         self.receivedForNFTs = receivedForNFTs
-        self.excludedIdentifiers = excludedIdentifiers.sorted()
-        self.assets = assets.sorted { $0.implementationID < $1.implementationID }
+        self.excludedIdentifiers = Array(Set(excludedIdentifiers)).sorted()
+        self.assets = Dictionary(
+            assets.map { ($0.implementationID, $0) },
+            uniquingKeysWith: { _, latest in latest })
+            .values
+            .sorted { $0.implementationID < $1.implementationID }
         self.fetchedAt = fetchedAt
     }
 }

@@ -38,6 +38,7 @@ struct PortfolioAnalyticsFeatureTests {
                     PortfolioAnalyticsCache(
                         history: cachedHistory,
                         historyFetchedAt: now,
+                        historyCoverageStartDate: ChartTimeRange.oneMonth.startDate(at: now),
                         pnl: cachedPnL)
                 }
                 $0.portfolioAnalytics.refreshHistory = { _, _ in

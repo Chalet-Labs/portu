@@ -103,6 +103,12 @@ struct PortfolioAnalyticsFeature {
             case let .load(context):
                 if context.isAccountActive == false {
                     state.activeRequestID = nil
+                    if state.historyStatus == .loading || state.historyStatus == .refreshing {
+                        state.historyStatus = .idle
+                    }
+                    if state.pnlStatus == .loading || state.pnlStatus == .refreshing {
+                        state.pnlStatus = .idle
+                    }
                     return .merge(
                         .cancel(id: CancelID.cache),
                         .cancel(id: CancelID.history),
@@ -148,7 +154,17 @@ struct PortfolioAnalyticsFeature {
 
             case let .refresh(context):
                 guard Self.isEligible(context, isAvailable: state.isAvailable) else {
-                    return .none
+                    state.activeRequestID = nil
+                    if state.historyStatus == .loading || state.historyStatus == .refreshing {
+                        state.historyStatus = .idle
+                    }
+                    if state.pnlStatus == .loading || state.pnlStatus == .refreshing {
+                        state.pnlStatus = .idle
+                    }
+                    return .merge(
+                        .cancel(id: CancelID.cache),
+                        .cancel(id: CancelID.history),
+                        .cancel(id: CancelID.pnl))
                 }
                 let requestID = context.requestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID
@@ -159,7 +175,7 @@ struct PortfolioAnalyticsFeature {
             case let .clearCache(context):
                 let requestID = context.requestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID
-                return .run { send in
+                let clearEffect = Effect<Action>.run { send in
                     do {
                         let count = try await client.clearAccountCache(context.scope.accountID)
                         await send(.clearCacheResponse(requestID, .success(count)))
@@ -172,6 +188,10 @@ struct PortfolioAnalyticsFeature {
                     }
                 }
                 .cancellable(id: CancelID.cache, cancelInFlight: true)
+                return .merge(
+                    .cancel(id: CancelID.history),
+                    .cancel(id: CancelID.pnl),
+                    clearEffect)
 
             case let .clearCacheResponse(requestID, .success):
                 guard requestID == state.activeRequestID else { return .none }
@@ -201,15 +221,13 @@ struct PortfolioAnalyticsFeature {
 
             case let .pnlRangeChanged(range, context):
                 state.pnlRange = range
+                state.activeRequestID = nil
                 state.pnl = nil
+                state.pnlStatus = .idle
                 guard Self.isEligible(context, isAvailable: state.isAvailable) else {
-                    state.pnlStatus = .idle
                     return .none
                 }
-                let requestID = context.requestID(pnlRange: range)
-                state.activeRequestID = requestID
-                state.pnlStatus = .loading
-                return pnlEffect(context: context, requestID: requestID, pnlRange: range)
+                return .send(.load(context))
 
             case let .cacheLoaded(context, requestID, .success(cache)):
                 guard requestID == state.activeRequestID else { return .none }
@@ -218,6 +236,10 @@ struct PortfolioAnalyticsFeature {
                 state.pnl = cache.pnl
 
                 let historyNeedsRefresh = cache.history.isEmpty
+                    || cache.historyCoverageStartDate.map {
+                        $0 > HistoricalPriceCalendar.utcStartOfDay(
+                            for: context.chartRange.startDate(at: context.asOf))
+                    } ?? true
                     || cache.historyFetchedAt.map {
                         context.asOf.timeIntervalSince($0) >= ProviderPnLFreshness.freshTTL
                     } ?? true

@@ -19,7 +19,7 @@ extension ZerionProvider: ZerionAnalyticsService {
                 let timestamp = point.timestamp,
                 timestamp.isFinite,
                 let value = point.value,
-                value > 0
+                value >= 0
             else {
                 continue
             }
@@ -99,8 +99,10 @@ extension ZerionProvider: ZerionAnalyticsService {
             sentExternal: metrics.sentExternal,
             sentForNFTs: metrics.sentForNFTs,
             receivedForNFTs: metrics.receivedForNFTs,
-            excludedIdentifiers: Array(excluded),
-            assets: Array(assetsByImplementation.values),
+            excludedIdentifiers: excluded.sorted(),
+            assets: assetsByImplementation.values.sorted {
+                $0.implementationID < $1.implementationID
+            },
             fetchedAt: asOf)
     }
 
