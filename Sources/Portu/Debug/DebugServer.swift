@@ -21,6 +21,10 @@
         private let store: StoreOf<AppFeature>?
         private let priceService: PriceServiceClient?
 
+        var listeningPort: UInt16? {
+            listener?.port?.rawValue
+        }
+
         init(
             port: UInt16 = 9999,
             modelContainer: ModelContainer? = nil,
@@ -106,7 +110,7 @@
                 throw DebugServerError.cancelled
             }
             listener = newListener
-            let boundPort = port
+            let boundPort = newListener.port?.rawValue ?? port
             logger.info("Debug server listening on 127.0.0.1:\(boundPort)")
         }
 

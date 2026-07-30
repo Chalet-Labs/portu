@@ -451,11 +451,11 @@
             context.insert(Account(name: "Integrated", kind: .manual, dataSource: .manual))
             try context.save()
 
-            let port: UInt16 = 19012
-            let server = DebugServer(port: port, modelContainer: container)
+            let server = DebugServer(port: 0, modelContainer: container)
             try await server.start()
             defer { server.stop() }
 
+            let port = try #require(server.listeningPort)
             let (data, response) = try await URLSession.shared.data(
                 from: #require(URL(string: "http://127.0.0.1:\(port)/state/accounts")))
             let httpResponse = try #require(response as? HTTPURLResponse)
