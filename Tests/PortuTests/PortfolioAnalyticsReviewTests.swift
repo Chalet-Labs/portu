@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import ComposableArchitecture
 import Foundation
 @testable import Portu
@@ -426,6 +428,47 @@ struct PortfolioAnalyticsReviewTests {
             }
 
         await store.send(.refresh(context)) {
+            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.pnlResponse) {
+            $0.pnlRefreshAttemptID = nil
+            $0.pnl = pnl
+            $0.pnlStatus = .loaded
+        }
+        #expect(await calls.historyCount == 0)
+        #expect(await calls.pnlCount == 1)
+    }
+
+    @Test func `pnl control refresh does not request provider history`() async {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let calls = ReviewAnalyticsCallRecorder()
+        let pnl = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: now)
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.refreshHistory = { _, _ in
+                    await calls.recordHistory()
+                    return []
+                }
+                $0.portfolioAnalytics.refreshPnL = { _, _, _, _, _ in
+                    await calls.recordPnL()
+                    return pnl
+                }
+            }
+
+        await store.send(.refreshPnL(context)) {
             $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.pnlStatus = .loading

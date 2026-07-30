@@ -42,7 +42,7 @@ struct WalletPnLChartMode: View {
 
                 Button("Refresh", systemImage: "arrow.clockwise") {
                     guard let context else { return }
-                    store.send(.performance(.analytics(.refresh(context))))
+                    store.send(.performance(.analytics(.refreshPnL(context))))
                 }
                 .disabled(context?.isAccountActive != true)
 

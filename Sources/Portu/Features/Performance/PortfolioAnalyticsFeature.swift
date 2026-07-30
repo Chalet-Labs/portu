@@ -71,6 +71,7 @@ struct PortfolioAnalyticsFeature {
         case load(PortfolioAnalyticsRequestContext)
         case selectionUnavailable
         case refresh(PortfolioAnalyticsRequestContext)
+        case refreshPnL(PortfolioAnalyticsRequestContext)
         case clearCache(PortfolioAnalyticsRequestContext)
         case clearCacheResponse(String, Result<Int, PortfolioAnalyticsClientError>)
         case walletScopeSelected(String)
@@ -195,6 +196,26 @@ struct PortfolioAnalyticsFeature {
                 }
                 state.pnlStatus = state.pnl == nil ? .loading : .refreshing
                 return refreshEffects(context: context, requestID: requestID, pnlRange: state.pnlRange)
+
+            case let .refreshPnL(context):
+                guard Self.isEligible(context, isAvailable: state.isAvailable) else {
+                    state.activeRequestID = nil
+                    if state.historyStatus == .loading || state.historyStatus == .refreshing {
+                        state.historyStatus = .idle
+                    }
+                    if state.pnlStatus == .loading || state.pnlStatus == .refreshing {
+                        state.pnlStatus = .idle
+                    }
+                    return .merge(
+                        .cancel(id: CancelID.cache),
+                        .cancel(id: CancelID.history),
+                        .cancel(id: CancelID.pnl))
+                }
+                let requestID = context.requestID(pnlRange: state.pnlRange)
+                state.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
+                state.activeRequestID = requestID
+                state.pnlStatus = state.pnl == nil ? .loading : .refreshing
+                return pnlEffect(context: context, requestID: requestID, pnlRange: state.pnlRange)
 
             case let .clearCache(context):
                 let requestID = context.requestID(pnlRange: state.pnlRange)
