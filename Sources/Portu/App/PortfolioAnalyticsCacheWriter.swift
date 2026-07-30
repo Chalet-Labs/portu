@@ -54,53 +54,29 @@ enum PortfolioAnalyticsCacheWriter {
                 fetchedAt: fetchedAt,
                 in: context)
             duplicateRows.forEach(context.delete)
-            var inserted = 0
-            var updated = 0
-            for point in latestIncoming.values.sorted(by: { $0.timestamp < $1.timestamp }) {
-                let identity = HistoryDayIdentity(provider: point.provider, day: point.day)
-                let key = ProviderPortfolioValuePoint.cacheKey(
-                    accountID: accountID,
-                    scopeFingerprint: scope.fingerprint,
-                    provider: point.provider,
-                    coverage: point.coverage,
-                    day: point.day)
-                if let row = existingByDay[identity] {
-                    row.cacheKey = key
-                    row.coverage = point.coverage
-                    row.timestamp = point.timestamp
-                    row.day = point.day
-                    row.usdValue = point.usdValue
-                    row.fetchedAt = fetchedAt
-                    row.coverageStartDate = min(
-                        row.coverageStartDate,
-                        requestedCoverageStartDate)
-                    updated += 1
-                } else {
-                    let row = ProviderPortfolioValuePoint(
-                        accountID: accountID,
-                        scopeFingerprint: scope.fingerprint,
-                        provider: point.provider,
-                        coverage: point.coverage,
-                        timestamp: point.timestamp,
-                        usdValue: point.usdValue,
-                        fetchedAt: fetchedAt,
-                        coverageStartDate: requestedCoverageStartDate)
-                    context.insert(row)
-                    existingByDay[identity] = row
-                    inserted += 1
-                }
-            }
+            let reconciledCount = reconcileHistoryRows(
+                &existingByDay,
+                retaining: Set(latestIncoming.keys),
+                from: requestedCoverageStartDate,
+                through: fetchedAt,
+                in: context)
+            let writeCounts = upsertHistoryPoints(
+                latestIncoming.values,
+                scope: scope,
+                existingByDay: &existingByDay,
+                timing: (requestedCoverageStartDate, fetchedAt),
+                in: context)
 
             let cutoff = retentionCutoff(asOf: fetchedAt)
-            var pruned = duplicateRows.count
+            var pruned = duplicateRows.count + reconciledCount
             for row in existingByDay.values where row.day < cutoff {
                 context.delete(row)
                 pruned += 1
             }
             try context.save()
             return PortfolioAnalyticsHistoryWriteResult(
-                inserted: inserted,
-                updated: updated,
+                inserted: writeCounts.inserted,
+                updated: writeCounts.updated,
                 pruned: pruned)
         } catch {
             context.rollback()
@@ -118,6 +94,71 @@ enum PortfolioAnalyticsCacheWriter {
         Dictionary(
             points.sorted { $0.timestamp < $1.timestamp }.map { ($0.day, $0) },
             uniquingKeysWith: { _, latest in latest })
+    }
+
+    @MainActor
+    private static func upsertHistoryPoints(
+        _ points: Dictionary<Date, ProviderPortfolioValueDTO>.Values,
+        scope: PortfolioAnalyticsScope,
+        existingByDay: inout [HistoryDayIdentity: ProviderPortfolioValuePoint],
+        timing: (coverageStartDate: Date, fetchedAt: Date),
+        in context: ModelContext) -> (inserted: Int, updated: Int) {
+        var inserted = 0
+        var updated = 0
+        for point in points.sorted(by: { $0.timestamp < $1.timestamp }) {
+            let identity = HistoryDayIdentity(provider: point.provider, day: point.day)
+            let key = ProviderPortfolioValuePoint.cacheKey(
+                accountID: scope.accountID,
+                scopeFingerprint: scope.fingerprint,
+                provider: point.provider,
+                coverage: point.coverage,
+                day: point.day)
+            if let row = existingByDay[identity] {
+                row.cacheKey = key
+                row.coverage = point.coverage
+                row.timestamp = point.timestamp
+                row.day = point.day
+                row.usdValue = point.usdValue
+                row.fetchedAt = timing.fetchedAt
+                row.coverageStartDate = min(row.coverageStartDate, timing.coverageStartDate)
+                updated += 1
+            } else {
+                let row = ProviderPortfolioValuePoint(
+                    accountID: scope.accountID,
+                    scopeFingerprint: scope.fingerprint,
+                    provider: point.provider,
+                    coverage: point.coverage,
+                    timestamp: point.timestamp,
+                    usdValue: point.usdValue,
+                    fetchedAt: timing.fetchedAt,
+                    coverageStartDate: timing.coverageStartDate)
+                context.insert(row)
+                existingByDay[identity] = row
+                inserted += 1
+            }
+        }
+        return (inserted, updated)
+    }
+
+    @MainActor
+    private static func reconcileHistoryRows(
+        _ existingByDay: inout [HistoryDayIdentity: ProviderPortfolioValuePoint],
+        retaining incomingDays: Set<Date>,
+        from coverageStartDate: Date,
+        through fetchedAt: Date,
+        in context: ModelContext) -> Int {
+        let coverageEndDate = HistoricalPriceCalendar.utcStartOfDay(for: fetchedAt)
+        let staleIdentities = existingByDay.keys.filter { identity in
+            identity.day >= coverageStartDate
+                && identity.day <= coverageEndDate
+                && incomingDays.contains(identity.day) == false
+        }
+        for identity in staleIdentities {
+            if let row = existingByDay.removeValue(forKey: identity) {
+                context.delete(row)
+            }
+        }
+        return staleIdentities.count
     }
 
     @MainActor

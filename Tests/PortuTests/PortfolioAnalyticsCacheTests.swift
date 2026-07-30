@@ -125,6 +125,42 @@ struct PortfolioAnalyticsCacheTests {
         #expect(rows.first?.usdValue == 110)
     }
 
+    @Test func `successful history refresh removes stale rows inside requested coverage`() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let scope = makeScope(accountID: UUID(), addressSuffix: "55")
+        let coverageStart = Date(timeIntervalSince1970: 1_704_067_200)
+        let olderDay = coverageStart.addingTimeInterval(-86400)
+
+        _ = try PortfolioAnalyticsCacheWriter.upsertHistory(
+            [
+                .init(
+                    timestamp: olderDay,
+                    usdValue: 90,
+                    provider: .zerion,
+                    coverage: .providerReported),
+                .init(
+                    timestamp: coverageStart,
+                    usdValue: 100,
+                    provider: .zerion,
+                    coverage: .providerReported)
+            ],
+            scope: scope,
+            in: context,
+            fetchedAt: coverageStart)
+
+        let result = try PortfolioAnalyticsCacheWriter.upsertHistory(
+            [],
+            scope: scope,
+            in: context,
+            fetchedAt: coverageStart.addingTimeInterval(86400),
+            coverageStartDate: coverageStart)
+        let rows = try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>())
+
+        #expect(result.pruned == 1)
+        #expect(rows.map(\.day) == [olderDay])
+    }
+
     @Test func `history freshness is scoped to the requested chart coverage`() async throws {
         let container = try makeContainer()
         let context = container.mainContext
