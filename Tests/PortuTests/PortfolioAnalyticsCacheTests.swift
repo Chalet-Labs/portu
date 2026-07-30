@@ -1,11 +1,15 @@
+// swiftlint:disable file_length
+
 import Foundation
 @testable import Portu
 import PortuCore
 import PortuNetwork
 import SwiftData
+import Synchronization
 import Testing
 
 @MainActor
+// swiftlint:disable:next type_body_length
 struct PortfolioAnalyticsCacheTests {
     @Test func `canceled live refreshes do not persist completed provider results`() async throws {
         let container = try makeContainer()
@@ -48,6 +52,31 @@ struct PortfolioAnalyticsCacheTests {
             _ = try await pnlTask.value
         }
         #expect(try context.fetch(FetchDescriptor<ProviderPnLSnapshot>()).isEmpty)
+    }
+
+    @Test func `YTD refresh uses one timestamp for period and cache coverage`() async throws {
+        let container = try makeContainer()
+        let scope = makeScope(accountID: UUID(), addressSuffix: "56")
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let beforeNewYear = try #require(calendar.date(from: DateComponents(
+            year: 2025,
+            month: 12,
+            day: 30)))
+        let afterNewYear = try #require(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 1,
+            day: 2)))
+        let clock = Mutex([beforeNewYear, afterNewYear])
+        let service = PeriodRecordingAnalyticsService()
+        let client = PortfolioAnalyticsClient.live(
+            modelContext: container.mainContext,
+            service: service,
+            now: { clock.withLock { $0.removeFirst() } })
+
+        _ = try await client.refreshHistory(scope, .ytd)
+
+        #expect(await service.historyPeriod == .year)
     }
 
     @Test func `history upsert keeps latest logical day and prunes to 400 day horizon`() throws {
@@ -461,6 +490,31 @@ private actor AnalyticsCancellationGate {
                 releaseContinuation = continuation
             }
         }
+    }
+}
+
+private actor PeriodRecordingAnalyticsService: ZerionAnalyticsService {
+    private(set) var historyPeriod: ZerionChartPeriod?
+
+    func fetchPortfolioValueHistory(
+        scope _: PortfolioAnalyticsScope,
+        period: ZerionChartPeriod) async throws -> [ProviderPortfolioValueDTO] {
+        historyPeriod = period
+        return []
+    }
+
+    func fetchPnL(
+        scope _: PortfolioAnalyticsScope,
+        range _: ProviderPnLRange,
+        currency _: FiatCurrency,
+        implementations _: [OnchainTokenIdentity],
+        asOf _: Date) async throws -> ProviderPnLDTO {
+        fatalError("Unused in YTD clock test")
+    }
+
+    func fetchPortfolioSummary(
+        scope _: PortfolioAnalyticsScope) async throws -> ZerionPortfolioSummary {
+        fatalError("Unused in YTD clock test")
     }
 }
 

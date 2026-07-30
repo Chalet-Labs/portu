@@ -210,7 +210,7 @@ extension PortfolioAnalyticsClient {
                 case .oneMonth: .month
                 case .threeMonths: .threeMonths
                 case .oneYear: .year
-                case .ytd: .yearToDate(at: now())
+                case .ytd: .yearToDate(at: fetchedAt)
                 case .custom: nil
                 }
                 guard let period else {
