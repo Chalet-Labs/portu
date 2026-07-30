@@ -29,6 +29,12 @@ struct ProviderHistoryConversionResult: Equatable {
     let historicalFXUnavailableBefore: Date?
 }
 
+struct ProviderHistoryMergeContext {
+    let local: [LocalPortfolioValueObservation]
+    let selectedAccountID: UUID?
+    let startDate: Date?
+}
+
 enum ProviderPortfolioHistory {
     static func disclosure(
         for points: [ProviderPortfolioValueDTO]) -> String? {
@@ -49,6 +55,11 @@ enum ProviderPortfolioHistory {
             .filter(\.isFresh)
             .map { HistoricalPriceCalendar.utcStartOfDay(for: $0.timestamp) }
             .min()
+        let providerPrefix = providerPointsEligibleForMerge(
+            provider,
+            local: local,
+            selectedAccountID: selectedAccountID,
+            startDate: startDate)
         let merged: [PortfolioHistoryPoint]
         guard selectedAccountID != nil else {
             merged = localByDay.map {
@@ -62,15 +73,13 @@ enum ProviderPortfolioHistory {
         }
 
         if let authorityDay {
-            let providerPrefix = latestProviderByDay(provider)
-                .filter { $0.day < authorityDay }
-                .map {
-                    PortfolioHistoryPoint(
-                        timestamp: $0.timestamp,
-                        usdValue: $0.usdValue,
-                        source: .zerion,
-                        isReliable: true)
-                }
+            let providerPoints = providerPrefix.map {
+                PortfolioHistoryPoint(
+                    timestamp: $0.timestamp,
+                    usdValue: $0.usdValue,
+                    source: .zerion,
+                    isReliable: true)
+            }
             let localSuffix = localByDay
                 .filter { HistoricalPriceCalendar.utcStartOfDay(for: $0.timestamp) >= authorityDay }
                 .map {
@@ -80,12 +89,12 @@ enum ProviderPortfolioHistory {
                         source: .local,
                         isReliable: $0.isFresh)
                 }
-            merged = (providerPrefix + localSuffix).sorted {
+            merged = (providerPoints + localSuffix).sorted {
                 if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
                 return $0.source.rawValue < $1.source.rawValue
             }
         } else {
-            merged = latestProviderByDay(provider).map {
+            merged = providerPrefix.map {
                 PortfolioHistoryPoint(
                     timestamp: $0.timestamp,
                     usdValue: $0.usdValue,
@@ -94,6 +103,21 @@ enum ProviderPortfolioHistory {
             }
         }
         return filtered(merged, startingAt: startDate)
+    }
+
+    static func convertProviderHistory(
+        _ points: [ProviderPortfolioValueDTO],
+        mergeContext: ProviderHistoryMergeContext,
+        currency: FiatCurrency,
+        historicalRatesByDay: [Date: Decimal]) -> ProviderHistoryConversionResult {
+        convertProviderHistory(
+            providerPointsEligibleForMerge(
+                points,
+                local: mergeContext.local,
+                selectedAccountID: mergeContext.selectedAccountID,
+                startDate: mergeContext.startDate),
+            currency: currency,
+            historicalRatesByDay: historicalRatesByDay)
     }
 
     static func convertProviderHistory(
@@ -145,6 +169,23 @@ enum ProviderPortfolioHistory {
             let day = HistoricalPriceCalendar.utcStartOfDay(for: $0.date)
             return day < firstProviderDay || day > lastProviderDay
         }
+    }
+
+    private static func providerPointsEligibleForMerge(
+        _ provider: [ProviderPortfolioValueDTO],
+        local: [LocalPortfolioValueObservation],
+        selectedAccountID: UUID?,
+        startDate: Date?) -> [ProviderPortfolioValueDTO] {
+        guard selectedAccountID != nil else { return [] }
+        let authorityDay = local
+            .filter(\.isFresh)
+            .map { HistoricalPriceCalendar.utcStartOfDay(for: $0.timestamp) }
+            .min()
+        let points = latestProviderByDay(provider).filter { point in
+            authorityDay.map { point.day < $0 } ?? true
+        }
+        guard let startDate else { return points }
+        return points.filter { $0.timestamp >= startDate }
     }
 
     private static func latestProviderByDay(

@@ -95,6 +95,7 @@ struct PortfolioAnalyticsReviewTests {
                 pnlStatus: .loaded)) {
             PortfolioAnalyticsFeature()
         } withDependencies: {
+            $0.date.now = now
             $0.portfolioAnalytics.loadCache = { _, range, _, _ in
                 await calls.recordCache()
                 #expect(range == .oneYear)
@@ -528,6 +529,57 @@ struct PortfolioAnalyticsReviewTests {
                 $0.historyStatus = .idle
                 $0.pnlStatus = .idle
             }
+    }
+
+    @Test func `pnl range change stamps its load at action handling time`() async {
+        let clickTime = now.addingTimeInterval(3600)
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .custom,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let calls = ReviewAnalyticsCallRecorder()
+        let pnl = ProviderPnLDTO(
+            range: .oneYear,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: clickTime)
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.date.now = clickTime
+                $0.portfolioAnalytics.loadCache = { _, _, _, _ in
+                    PortfolioAnalyticsCache(
+                        history: [],
+                        historyFetchedAt: nil,
+                        pnl: nil)
+                }
+                $0.portfolioAnalytics.refreshPnL = { _, _, _, _, asOf in
+                    await calls.recordPnL(asOf: asOf)
+                    return pnl
+                }
+            }
+
+        await store.send(.pnlRangeChanged(.oneYear, context)) {
+            $0.pnlRange = .oneYear
+        }
+        await store.receive(\.load) {
+            $0.activeRequestID = context.requestID(pnlRange: .oneYear)
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.cacheLoaded) {
+            $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneYear)
+            $0.historyStatus = .idle
+        }
+        await store.receive(\.pnlResponse) {
+            $0.pnlRefreshAttemptID = nil
+            $0.pnl = pnl
+            $0.pnlStatus = .loaded
+        }
+        #expect(await calls.lastPnLAsOf == clickTime)
     }
 
     private func makeScope() -> PortfolioAnalyticsScope {

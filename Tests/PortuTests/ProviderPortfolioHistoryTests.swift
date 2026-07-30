@@ -161,6 +161,23 @@ struct ProviderPortfolioHistoryTests {
         #expect(result.historicalFXUnavailableBefore == day2)
     }
 
+    @Test func `provider splice discards later missing FX before selecting convertible suffix`() {
+        let day1 = Date(timeIntervalSince1970: 1_704_067_200)
+        let day2 = day1.addingTimeInterval(86400)
+        let authorityDay = day2.addingTimeInterval(86400)
+        let result = ProviderPortfolioHistory.convertProviderHistory(
+            [providerPoint(day1, 100), providerPoint(day2, 110), providerPoint(authorityDay, 120)],
+            mergeContext: ProviderHistoryMergeContext(
+                local: [.init(timestamp: authorityDay, usdValue: 130, isFresh: true)],
+                selectedAccountID: UUID(),
+                startDate: day1),
+            currency: .chf,
+            historicalRatesByDay: [day1: 0.9, day2: 0.8])
+
+        #expect(result.points.map(\.value) == [90, 88])
+        #expect(result.historicalFXUnavailableBefore == nil)
+    }
+
     private func providerPoint(_ date: Date, _ value: Decimal) -> ProviderPortfolioValueDTO {
         ProviderPortfolioValueDTO(
             timestamp: date,

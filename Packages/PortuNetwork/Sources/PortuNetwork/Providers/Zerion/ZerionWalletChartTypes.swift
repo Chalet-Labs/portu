@@ -6,9 +6,9 @@ public enum ZerionChartPeriod: String, Codable, CaseIterable, Sendable, Equatabl
     case threeMonths = "3months"
     case year
 
-    public static func yearToDate(at date: Date) -> Self {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    public static func yearToDate(
+        at date: Date,
+        calendar: Calendar = .current) -> Self {
         let elapsedDays = calendar.ordinality(of: .day, in: .year, for: date) ?? 365
         if elapsedDays <= 31 {
             return .month

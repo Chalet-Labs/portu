@@ -294,6 +294,7 @@ struct PortfolioAnalyticsFeature {
 
             case let .pnlRangeChanged(range, context):
                 guard context.isAccountActive else { return .none }
+                let context = context.stamped(at: now)
                 state.pnlRange = range
                 state.activeRequestID = nil
                 state.pnl = nil

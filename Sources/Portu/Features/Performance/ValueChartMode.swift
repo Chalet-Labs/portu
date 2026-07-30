@@ -129,6 +129,10 @@ struct ValueChartMode: View {
     private var convertedProviderHistory: ProviderHistoryConversionResult {
         ProviderPortfolioHistory.convertProviderHistory(
             providerDTOs,
+            mergeContext: ProviderHistoryMergeContext(
+                local: localObservations,
+                selectedAccountID: accountId,
+                startDate: startDate),
             currency: appState.selectedCurrency,
             historicalRatesByDay: currencyConversionContext.historicalUSDToDisplayRatesByDay)
     }

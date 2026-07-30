@@ -130,6 +130,14 @@ struct ZerionAnalyticsProviderTests {
         #expect(ZerionChartPeriod.yearToDate(at: now) == expected)
     }
 
+    @Test func `YTD period uses the user calendar across the UTC new year`() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let utcNewYear = Date(timeIntervalSince1970: 1_767_225_600)
+
+        #expect(ZerionChartPeriod.yearToDate(at: utcNewYear, calendar: calendar) == .year)
+    }
+
     @Test func `unsupported and invalid scopes fail before a request`() async {
         defer { ZerionAnalyticsMockURLProtocol.reset() }
         let provider = makeProvider()
