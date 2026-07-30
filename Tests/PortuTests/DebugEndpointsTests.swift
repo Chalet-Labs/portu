@@ -451,7 +451,7 @@
             context.insert(Account(name: "Integrated", kind: .manual, dataSource: .manual))
             try context.save()
 
-            let port = UInt16.random(in: 49152 ... 65535)
+            let port: UInt16 = 19012
             let server = DebugServer(port: port, modelContainer: container)
             try await server.start()
             defer { server.stop() }
