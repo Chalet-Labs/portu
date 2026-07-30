@@ -381,9 +381,22 @@ struct ZerionAnalyticsProviderTests {
         (.oneYear, "1672617600000"),
         (.yearToDate, "1704067200000")
     ])
-    func `pnl ranges use only Zerion standard marks`(range: ProviderPnLRange, expected: String?) {
+    func `pnl ranges use only Zerion standard marks`(range: ProviderPnLRange, expected: String?) throws {
         let asOf = Date(timeIntervalSince1970: 1_704_153_600)
-        #expect(range.zerionSinceMilliseconds(asOf: asOf) == expected)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        #expect(range.zerionSinceMilliseconds(asOf: asOf, calendar: calendar) == expected)
+    }
+
+    @Test func `YTD pnl since uses the user calendar across the UTC new year`() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+        let utcNewYear = Date(timeIntervalSince1970: 1_767_225_600)
+
+        #expect(
+            ProviderPnLRange.yearToDate.zerionSinceMilliseconds(
+                asOf: utcNewYear,
+                calendar: calendar) == "1735718400000")
     }
 
     @Test func `filtered PnL batches never replace or sum the overall result`() async throws {

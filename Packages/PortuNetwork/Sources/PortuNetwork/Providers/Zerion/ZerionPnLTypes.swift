@@ -69,21 +69,23 @@ struct ZerionPnLMetrics: Decodable {
 }
 
 extension ProviderPnLRange {
-    func zerionSinceMilliseconds(asOf date: Date) -> String? {
+    func zerionSinceMilliseconds(
+        asOf date: Date,
+        calendar: Calendar = .current) -> String? {
         guard self != .allTime else { return nil }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var utcCalendar = Calendar(identifier: .gregorian)
+        utcCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let since: Date? = switch self {
         case .allTime:
             nil
         case .oneDay:
-            calendar.date(byAdding: .day, value: -1, to: date)
+            utcCalendar.date(byAdding: .day, value: -1, to: date)
         case .oneWeek:
-            calendar.date(byAdding: .day, value: -7, to: date)
+            utcCalendar.date(byAdding: .day, value: -7, to: date)
         case .oneMonth:
-            calendar.date(byAdding: .month, value: -1, to: date)
+            utcCalendar.date(byAdding: .month, value: -1, to: date)
         case .oneYear:
-            calendar.date(byAdding: .year, value: -1, to: date)
+            utcCalendar.date(byAdding: .year, value: -1, to: date)
         case .yearToDate:
             calendar.date(from: calendar.dateComponents([.year], from: date))
         }
