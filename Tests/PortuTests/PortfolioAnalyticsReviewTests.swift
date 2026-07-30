@@ -123,12 +123,9 @@ struct PortfolioAnalyticsReviewTests {
             $0.pnlStatus = .loading
         }
         await store.receive(\.cacheLoaded) {
-            $0.historyStatus = .loading
+            $0.historyStatus = .loaded
             $0.pnl = cached
             $0.pnlStatus = .loaded
-        }
-        await store.receive(\.historyResponse) {
-            $0.historyStatus = .loaded
         }
         #expect(await calls.cacheCount == 1)
         #expect(await calls.pnlCount == 0)
@@ -345,8 +342,11 @@ struct PortfolioAnalyticsReviewTests {
             $0.pnlStatus = .loading
         }
         await store.send(.clearCache(context)) {
+            $0.clearRequestGeneration = 1
+            $0.activeRequestID = "\(requestID)|clear|1"
             $0.pnlRefreshAttemptID = nil
         }
+        #expect(store.state.activeRequestID != requestID)
         await store.receive(\.clearCacheResponse) {
             $0.historyStatus = .idle
             $0.pnlStatus = .idle

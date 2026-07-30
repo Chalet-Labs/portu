@@ -73,6 +73,7 @@ struct PortfolioAnalyticsFeature {
         var pnlRange: ProviderPnLRange = .oneMonth
         var selectedWalletScopeFingerprint: String?
         var activeRequestID: String?
+        var clearRequestGeneration: UInt = 0
         var fallbackScopeFingerprint: String?
         var pnlRefreshAttemptID: String?
         var history: [ProviderPortfolioValueDTO] = []
@@ -243,7 +244,9 @@ struct PortfolioAnalyticsFeature {
                 return pnlEffect(context: context, requestID: requestID, pnlRange: state.pnlRange)
 
             case let .clearCache(context):
-                let requestID = context.requestID(pnlRange: state.pnlRange)
+                state.clearRequestGeneration &+= 1
+                let requestID =
+                    "\(context.requestID(pnlRange: state.pnlRange))|clear|\(state.clearRequestGeneration)"
                 state.activeRequestID = requestID
                 state.pnlRefreshAttemptID = nil
                 let clearEffect = Effect<Action>.run { send in

@@ -179,7 +179,8 @@ struct PortfolioAnalyticsCacheTests {
         let context = container.mainContext
         let scope = makeScope(accountID: UUID(), addressSuffix: "77")
         let now = Date(timeIntervalSince1970: 1_735_689_600)
-        let coverageStart = ChartTimeRange.oneMonth.startDate(at: now)
+        let coverageStart = HistoricalPriceCalendar.utcStartOfDay(
+            for: ChartTimeRange.oneMonth.startDate(at: now))
         _ = try PortfolioAnalyticsCacheWriter.upsertHistory(
             [],
             scope: scope,
