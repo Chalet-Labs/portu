@@ -12,6 +12,51 @@ import Testing
 struct PortfolioAnalyticsReviewTests {
     private let now = Date(timeIntervalSince1970: 1_704_153_600)
 
+    @Test func `repeated automatic loads reject obsolete responses`() async throws {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let baseRequestID = context.requestID(pnlRange: .oneMonth)
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.loadCache = { _, _, _, _ in
+                    try await Task.sleep(for: .seconds(3600))
+                    return .empty
+                }
+            }
+
+        await store.send(.load(context)) {
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(baseRequestID)|load|1"
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        let obsoleteRequestID = try #require(store.state.activeRequestID)
+
+        await store.send(.load(context)) {
+            $0.loadRequestGeneration = 2
+            $0.activeRequestID = "\(baseRequestID)|load|2"
+        }
+        await store.send(.cacheLoaded(
+            context,
+            obsoleteRequestID,
+            .failure(PortfolioAnalyticsClientError(URLError(.cancelled)))))
+        #expect(store.state.historyStatus == .loading)
+        #expect(store.state.pnlStatus == .loading)
+
+        await store.send(.selectionUnavailable) {
+            $0.activeRequestID = nil
+            $0.historyStatus = .idle
+            $0.pnlStatus = .idle
+        }
+        await store.finish()
+    }
+
     @Test func `fresh short history refreshes when a longer chart range is requested`() async {
         let scope = makeScope()
         let context = PortfolioAnalyticsRequestContext(
@@ -48,7 +93,8 @@ struct PortfolioAnalyticsReviewTests {
             }
 
         await store.send(.load(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|load|1"
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
         }
@@ -118,7 +164,8 @@ struct PortfolioAnalyticsReviewTests {
             $0.pnlStatus = .idle
         }
         await store.receive(\.load) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneYear)
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneYear))|load|1"
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
         }
@@ -157,7 +204,8 @@ struct PortfolioAnalyticsReviewTests {
         }
 
         await store.send(.load(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|load|1"
             $0.pnl = nil
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
@@ -211,7 +259,8 @@ struct PortfolioAnalyticsReviewTests {
             }
 
         await store.send(.load(shortContext)) {
-            $0.activeRequestID = shortContext.requestID(pnlRange: .oneMonth)
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(shortContext.requestID(pnlRange: .oneMonth))|load|1"
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
         }
@@ -231,7 +280,8 @@ struct PortfolioAnalyticsReviewTests {
         }
 
         await store.send(.load(longContext)) {
-            $0.activeRequestID = longContext.requestID(pnlRange: .oneMonth)
+            $0.loadRequestGeneration = 2
+            $0.activeRequestID = "\(longContext.requestID(pnlRange: .oneMonth))|load|2"
             $0.pnl = nil
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
@@ -572,7 +622,8 @@ struct PortfolioAnalyticsReviewTests {
             $0.pnlRange = .oneYear
         }
         await store.receive(\.load) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneYear)
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneYear))|load|1"
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
         }

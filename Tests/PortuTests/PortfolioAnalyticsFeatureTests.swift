@@ -53,7 +53,8 @@ struct PortfolioAnalyticsFeatureTests {
             }
 
         await store.send(.load(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|load|1"
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
         }
@@ -100,7 +101,8 @@ struct PortfolioAnalyticsFeatureTests {
             }
 
         await store.send(.load(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|load|1"
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
         }
@@ -148,7 +150,8 @@ struct PortfolioAnalyticsFeatureTests {
         }
 
         await store.send(.load(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|load|1"
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
         }
