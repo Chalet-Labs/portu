@@ -67,6 +67,51 @@ struct PortfolioAnalyticsFeatureTests {
         #expect(await calls.historyCount == 0)
     }
 
+    @Test func `fresh empty history cache does not refresh again`() async {
+        let scope = makeScope()
+        let context = PortfolioAnalyticsRequestContext(
+            scope: scope,
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let cachedPnL = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: now)
+        let calls = AnalyticsCallRecorder()
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.loadCache = { _, _, _, _ in
+                    PortfolioAnalyticsCache(
+                        history: [],
+                        historyFetchedAt: now,
+                        historyCoverageStartDate: ChartTimeRange.oneMonth.startDate(at: now),
+                        pnl: cachedPnL)
+                }
+                $0.portfolioAnalytics.refreshHistory = { _, _ in
+                    await calls.recordHistory()
+                    return []
+                }
+            }
+
+        await store.send(.load(context)) {
+            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.cacheLoaded) {
+            $0.historyStatus = .loaded
+            $0.pnl = cachedPnL
+            $0.pnlStatus = .loaded
+        }
+
+        #expect(await calls.historyCount == 0)
+    }
+
     @Test func `stale cache remains visible while PnL refreshes`() async {
         let scope = makeScope()
         let stale = ProviderPnLDTO(

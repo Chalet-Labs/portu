@@ -43,13 +43,16 @@ enum PortfolioAnalyticsCacheWriter {
                 duplicateRows.append(row)
             }
         }
-        let latestIncoming = Dictionary(
-            points.sorted { $0.timestamp < $1.timestamp }.map { ($0.day, $0) },
-            uniquingKeysWith: { _, latest in latest })
+        let latestIncoming = latestHistoryPointsByDay(points)
         let requestedCoverageStartDate = HistoricalPriceCalendar.utcStartOfDay(
             for: coverageStartDate ?? points.map(\.timestamp).min() ?? fetchedAt)
 
         do {
+            try upsertHistoryRefresh(
+                scope: scope,
+                coverageStartDate: requestedCoverageStartDate,
+                fetchedAt: fetchedAt,
+                in: context)
             duplicateRows.forEach(context.delete)
             var inserted = 0
             var updated = 0
@@ -110,6 +113,38 @@ enum PortfolioAnalyticsCacheWriter {
         let day: Date
     }
 
+    private static func latestHistoryPointsByDay(
+        _ points: [ProviderPortfolioValueDTO]) -> [Date: ProviderPortfolioValueDTO] {
+        Dictionary(
+            points.sorted { $0.timestamp < $1.timestamp }.map { ($0.day, $0) },
+            uniquingKeysWith: { _, latest in latest })
+    }
+
+    @MainActor
+    private static func upsertHistoryRefresh(
+        scope: PortfolioAnalyticsScope,
+        coverageStartDate: Date,
+        fetchedAt: Date,
+        in context: ModelContext) throws {
+        let refreshKey = ProviderPortfolioHistoryRefresh.cacheKey(
+            accountID: scope.accountID,
+            scopeFingerprint: scope.fingerprint,
+            provider: .zerion,
+            coverageStartDate: coverageStartDate)
+        let descriptor = FetchDescriptor<ProviderPortfolioHistoryRefresh>(
+            predicate: #Predicate { $0.cacheKey == refreshKey })
+        if let refresh = try context.fetch(descriptor).first {
+            refresh.fetchedAt = fetchedAt
+        } else {
+            context.insert(ProviderPortfolioHistoryRefresh(
+                accountID: scope.accountID,
+                scopeFingerprint: scope.fingerprint,
+                provider: .zerion,
+                coverageStartDate: coverageStartDate,
+                fetchedAt: fetchedAt))
+        }
+    }
+
     @MainActor
     static func upsertPnL(
         _ value: ProviderPnLDTO,
@@ -151,16 +186,21 @@ enum PortfolioAnalyticsCacheWriter {
             predicate: #Predicate { $0.accountID == accountID })
         let pnlDescriptor = FetchDescriptor<ProviderPnLSnapshot>(
             predicate: #Predicate { $0.accountID == accountID })
+        let refreshDescriptor = FetchDescriptor<ProviderPortfolioHistoryRefresh>(
+            predicate: #Predicate { $0.accountID == accountID })
 
         do {
             let history = try context.fetch(historyDescriptor)
                 .filter { $0.scopeFingerprint != scopeFingerprint }
             let pnl = try context.fetch(pnlDescriptor)
                 .filter { $0.scopeFingerprint != scopeFingerprint }
+            let refreshes = try context.fetch(refreshDescriptor)
+                .filter { $0.scopeFingerprint != scopeFingerprint }
             history.forEach(context.delete)
             pnl.forEach(context.delete)
+            refreshes.forEach(context.delete)
             try context.save()
-            return history.count + pnl.count
+            return history.count + pnl.count + refreshes.count
         } catch {
             context.rollback()
             throw error
@@ -189,9 +229,12 @@ enum PortfolioAnalyticsCacheWriter {
             predicate: #Predicate { $0.accountID == accountID }))
         let pnl = try context.fetch(FetchDescriptor<ProviderPnLSnapshot>(
             predicate: #Predicate { $0.accountID == accountID }))
+        let refreshes = try context.fetch(FetchDescriptor<ProviderPortfolioHistoryRefresh>(
+            predicate: #Predicate { $0.accountID == accountID }))
         history.forEach { context.delete($0) }
         pnl.forEach { context.delete($0) }
-        return history.count + pnl.count
+        refreshes.forEach { context.delete($0) }
+        return history.count + pnl.count + refreshes.count
     }
 
     private static func makeSnapshot(

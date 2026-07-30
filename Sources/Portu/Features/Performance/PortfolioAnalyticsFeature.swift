@@ -316,11 +316,10 @@ struct PortfolioAnalyticsFeature {
                 state.pnl = cache.pnl
 
                 let historyNeedsRefresh = supportsProviderHistory
-                    && (cache.history.isEmpty
-                        || cache.historyCoverageStartDate.map {
-                            $0 > HistoricalPriceCalendar.utcStartOfDay(
-                                for: context.chartRange.startDate(at: context.asOf))
-                        } ?? true
+                    && (cache.historyCoverageStartDate.map {
+                        $0 > HistoricalPriceCalendar.utcStartOfDay(
+                            for: context.chartRange.startDate(at: context.asOf))
+                    } ?? true
                         || cache.historyFetchedAt.map {
                             context.asOf.timeIntervalSince($0) >= ProviderPnLFreshness.freshTTL
                         } ?? true)

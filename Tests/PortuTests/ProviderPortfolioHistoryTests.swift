@@ -20,6 +20,17 @@ struct ProviderPortfolioHistoryTests {
         #expect(providerReported?.contains("provider-reported") == true)
     }
 
+    @Test func `failed refresh remains disclosed while cached provider history is visible`() {
+        let failure = ProviderPortfolioHistory.refreshFailure(
+            for: [providerPoint(Date(timeIntervalSince1970: 1_704_067_200), 100)],
+            status: .failed(.rateLimited))
+
+        #expect(failure == .rateLimited)
+        #expect(ProviderPortfolioHistory.refreshFailure(
+            for: [],
+            status: .failed(.rateLimited)) == nil)
+    }
+
     private let accountID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
 
     @Test func `provider history stops strictly before earliest fresh local day`() {

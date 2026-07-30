@@ -69,6 +69,25 @@ struct ZerionAnalyticsProviderTests {
         #expect(points.allSatisfy { $0.provider == .zerion && $0.coverage == .noFilter })
     }
 
+    @Test func `unrestricted wallet chart omits chain filter`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let fixture = try fixtureData("wallet-chart")
+        ZerionAnalyticsMockURLProtocol.respond { request in
+            let items = try queryItems(in: request)
+            #expect(items["filter[chain_ids]"] == nil)
+            return .init(data: fixture, statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        let points = try await provider.fetchPortfolioValueHistory(scope: scope, period: .month)
+
+        #expect(points.isEmpty == false)
+    }
+
     @Test func `wallet chart tuple decodes value independently from malformed timestamp`() throws {
         let data = Data(#"""
         {"attributes":{"points":[["malformed",130]],"begin_at":null,"end_at":null}}
@@ -224,6 +243,30 @@ struct ZerionAnalyticsProviderTests {
         #expect(result.sentForNFTs == 120)
         #expect(result.receivedForNFTs == 80)
         #expect(result.fetchedAt == asOf)
+    }
+
+    @Test func `unrestricted wallet PnL omits chain filter`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let fixture = try fixtureData("pnl-overall")
+        ZerionAnalyticsMockURLProtocol.respond { request in
+            let items = try queryItems(in: request)
+            #expect(items["filter[chain_ids]"] == nil)
+            return .init(data: fixture, statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        let result = try await provider.fetchPnL(
+            scope: scope,
+            range: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: Date(timeIntervalSince1970: 1_704_153_600))
+
+        #expect(result.totalGain == Decimal(string: "-637.8173517"))
     }
 
     @Test func `wallet PnL polls preparing responses within the two minute deadline`() async throws {
@@ -428,7 +471,7 @@ struct ZerionAnalyticsProviderTests {
             implementations: identities,
             asOf: Date(timeIntervalSince1970: 1_704_153_600))
 
-        #expect(ZerionAnalyticsMockURLProtocol.requests.count == 5)
+        #expect(ZerionAnalyticsMockURLProtocol.requests.count == 4)
         for request in ZerionAnalyticsMockURLProtocol.requests.dropFirst() {
             let filter = try #require(queryItems(in: request)["filter[fungible_implementations]"])
             #expect(filter.split(separator: ",").count <= 100)

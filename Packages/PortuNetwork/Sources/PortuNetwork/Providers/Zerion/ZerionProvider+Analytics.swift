@@ -156,14 +156,16 @@ private extension ZerionProvider {
             throw ZerionError.unsupportedAnalyticsScope
         }
 
-        let chainIDs = try analyticsChainIDs(for: scope)
-        guard chainIDs.count <= 25 else {
-            throw ZerionError.invalidData("wallet PnL supports at most 25 chains")
+        if scope.chainIDs.isEmpty == false {
+            let chainIDs = try analyticsChainIDs(for: scope)
+            guard chainIDs.count <= 25 else {
+                throw ZerionError.invalidData("wallet PnL supports at most 25 chains")
+            }
+            queryItems.append(URLQueryItem(
+                name: "filter[chain_ids]",
+                value: chainIDs.joined(separator: ",")))
         }
         queryItems.append(URLQueryItem(name: "currency", value: currency.rawValue))
-        queryItems.append(URLQueryItem(
-            name: "filter[chain_ids]",
-            value: chainIDs.joined(separator: ",")))
         if let since = range.zerionSinceMilliseconds(asOf: asOf) {
             queryItems.append(URLQueryItem(name: "since", value: since))
         }
@@ -193,14 +195,16 @@ private extension ZerionProvider {
             throw ZerionError.unsupportedAnalyticsScope
         }
 
-        let chainIDs = try analyticsChainIDs(for: scope)
-        guard chainIDs.count <= 25 else {
-            throw ZerionError.invalidData("wallet chart supports at most 25 chains")
+        if scope.chainIDs.isEmpty == false {
+            let chainIDs = try analyticsChainIDs(for: scope)
+            guard chainIDs.count <= 25 else {
+                throw ZerionError.invalidData("wallet chart supports at most 25 chains")
+            }
+            queryItems.append(URLQueryItem(
+                name: "filter[chain_ids]",
+                value: chainIDs.joined(separator: ",")))
         }
-        queryItems.append(contentsOf: [
-            URLQueryItem(name: "currency", value: "usd"),
-            URLQueryItem(name: "filter[chain_ids]", value: chainIDs.joined(separator: ","))
-        ])
+        queryItems.append(URLQueryItem(name: "currency", value: "usd"))
         if scope.addresses.allSatisfy({ $0.family == .evm }) {
             queryItems.append(URLQueryItem(name: "filter[positions]", value: "no_filter"))
         }

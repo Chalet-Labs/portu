@@ -20,7 +20,8 @@ struct SyncEngineTests {
             HistoricalPricePoint.self,
             PortfolioCategory.self, CategorySymbolRule.self,
             PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
-            ProviderPortfolioValuePoint.self, ProviderPnLSnapshot.self,
+            ProviderPortfolioValuePoint.self, ProviderPortfolioHistoryRefresh.self,
+            ProviderPnLSnapshot.self,
             ProviderPnLAssetBreakdown.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)

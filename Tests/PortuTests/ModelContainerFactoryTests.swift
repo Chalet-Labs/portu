@@ -8,6 +8,7 @@ import Testing
 struct ModelContainerFactoryTests {
     @Test func `existing store opens after analytics models are added`() throws {
         #expect(ModelContainerFactory.schema.entity(for: ProviderPortfolioValuePoint.self) != nil)
+        #expect(ModelContainerFactory.schema.entity(for: ProviderPortfolioHistoryRefresh.self) != nil)
         #expect(ModelContainerFactory.schema.entity(for: ProviderPnLSnapshot.self) != nil)
         #expect(ModelContainerFactory.schema.entity(for: ProviderPnLAssetBreakdown.self) != nil)
 
@@ -57,6 +58,7 @@ struct ModelContainerFactoryTests {
         #expect(result.isEphemeral == false)
         #expect(try result.container.mainContext.fetch(FetchDescriptor<Account>()).map(\.id) == [accountID])
         #expect(try result.container.mainContext.fetch(FetchDescriptor<ProviderPortfolioValuePoint>()).isEmpty)
+        #expect(try result.container.mainContext.fetch(FetchDescriptor<ProviderPortfolioHistoryRefresh>()).isEmpty)
         #expect(try result.container.mainContext.fetch(FetchDescriptor<ProviderPnLSnapshot>()).isEmpty)
     }
 

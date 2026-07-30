@@ -25,7 +25,8 @@ struct PerformanceView: View {
                             analyticsScopeFingerprint: store.performance.analytics.isAvailable
                                 && store.performance.selectedRange != .custom
                                 ? analyticsContext?.scope.fingerprint
-                                : nil)
+                                : nil,
+                            historyStatus: store.performance.analytics.historyStatus)
                     case .assets:
                         AssetsChartMode(
                             accountId: store.performance.selectedAccountId,

@@ -271,6 +271,7 @@ struct ViewRenderSmokeTests {
             AccountSnapshot.self,
             AssetSnapshot.self,
             ProviderPortfolioValuePoint.self,
+            ProviderPortfolioHistoryRefresh.self,
             ProviderPnLSnapshot.self,
             ProviderPnLAssetBreakdown.self
         ])

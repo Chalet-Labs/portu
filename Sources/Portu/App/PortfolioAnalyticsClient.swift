@@ -300,8 +300,19 @@ extension PortfolioAnalyticsClient {
             predicate: #Predicate { $0.cacheKey == cacheKey })).first
         let requestedStartDay = HistoricalPriceCalendar.utcStartOfDay(
             for: historyStartDate)
-        let requestedHistoryRows = historyRows.filter {
-            $0.day >= requestedStartDay
+        let refreshRows = try modelContext.fetch(
+            FetchDescriptor<ProviderPortfolioHistoryRefresh>(
+                predicate: #Predicate { $0.accountID == accountID }))
+            .filter {
+                $0.scopeFingerprint == scope.fingerprint
+                    && $0.provider == .zerion
+                    && $0.coverageStartDate <= requestedStartDay
+            }
+        let latestRefresh = refreshRows.max {
+            if $0.fetchedAt != $1.fetchedAt {
+                return $0.fetchedAt < $1.fetchedAt
+            }
+            return $0.coverageStartDate > $1.coverageStartDate
         }
         return PortfolioAnalyticsCache(
             history: historyRows.map {
@@ -311,8 +322,8 @@ extension PortfolioAnalyticsClient {
                     provider: $0.provider,
                     coverage: $0.coverage)
             },
-            historyFetchedAt: requestedHistoryRows.map(\.fetchedAt).min(),
-            historyCoverageStartDate: historyRows.map(\.coverageStartDate).min(),
+            historyFetchedAt: latestRefresh?.fetchedAt,
+            historyCoverageStartDate: latestRefresh?.coverageStartDate,
             pnl: pnl.map(providerPnLDTO))
     }
 

@@ -31,6 +31,7 @@ struct PortfolioAnalyticsCacheTests {
             _ = try await historyTask.value
         }
         #expect(try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<ProviderPortfolioHistoryRefresh>()).isEmpty)
 
         let pnlTask = Task {
             try await client.refreshPnL(
@@ -173,6 +174,32 @@ struct PortfolioAnalyticsCacheTests {
         #expect(longCache.historyFetchedAt == staleFetchedAt)
     }
 
+    @Test func `successful empty history refresh remains fresh for requested coverage`() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let scope = makeScope(accountID: UUID(), addressSuffix: "77")
+        let now = Date(timeIntervalSince1970: 1_735_689_600)
+        let coverageStart = ChartTimeRange.oneMonth.startDate(at: now)
+        _ = try PortfolioAnalyticsCacheWriter.upsertHistory(
+            [],
+            scope: scope,
+            in: context,
+            fetchedAt: now,
+            coverageStartDate: coverageStart)
+        let client = PortfolioAnalyticsClient.live(
+            modelContext: context,
+            service: CancellationRaceAnalyticsService(
+                historyGate: AnalyticsCancellationGate(),
+                pnlGate: AnalyticsCancellationGate()),
+            now: { now })
+
+        let cache = try await client.loadCache(scope, .oneMonth, .usd, coverageStart)
+
+        #expect(cache.history.isEmpty)
+        #expect(cache.historyFetchedAt == now)
+        #expect(cache.historyCoverageStartDate == coverageStart)
+    }
+
     @Test func `scope invalidation does not touch another account`() throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -201,8 +228,10 @@ struct PortfolioAnalyticsCacheTests {
             in: context)
         let rows = try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>())
 
-        #expect(removed == 1)
+        #expect(removed == 2)
         #expect(rows.map(\.accountID) == [secondScope.accountID])
+        #expect(try context.fetch(FetchDescriptor<ProviderPortfolioHistoryRefresh>())
+            .map(\.accountID) == [secondScope.accountID])
     }
 
     @Test func `pnl upsert replaces last success and its breakdown`() throws {
@@ -277,10 +306,12 @@ struct PortfolioAnalyticsCacheTests {
             accountID: target.id,
             in: context)
 
-        #expect(removed == 2)
+        #expect(removed == 3)
         #expect(try context.fetch(FetchDescriptor<ProviderPortfolioValuePoint>())
             .map(\.accountID) == [other.id])
         #expect(try context.fetch(FetchDescriptor<ProviderPnLSnapshot>())
+            .map(\.accountID) == [other.id])
+        #expect(try context.fetch(FetchDescriptor<ProviderPortfolioHistoryRefresh>())
             .map(\.accountID) == [other.id])
         #expect(try context.fetch(FetchDescriptor<Account>()).count == 2)
         #expect(try context.fetch(FetchDescriptor<Position>()).count == 1)
@@ -293,6 +324,7 @@ struct PortfolioAnalyticsCacheTests {
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             ProviderPortfolioValuePoint.self,
+            ProviderPortfolioHistoryRefresh.self,
             ProviderPnLSnapshot.self,
             ProviderPnLAssetBreakdown.self
         ])
@@ -313,6 +345,7 @@ struct PortfolioAnalyticsCacheTests {
             HistoricalPricePoint.self,
             CurrencyConversionRatePoint.self,
             ProviderPortfolioValuePoint.self,
+            ProviderPortfolioHistoryRefresh.self,
             ProviderPnLSnapshot.self,
             ProviderPnLAssetBreakdown.self,
             PortfolioCategory.self,
@@ -337,6 +370,12 @@ struct PortfolioAnalyticsCacheTests {
             coverage: .providerReported,
             timestamp: Date(timeIntervalSince1970: 1_704_067_200),
             usdValue: 100))
+        context.insert(ProviderPortfolioHistoryRefresh(
+            accountID: accountID,
+            scopeFingerprint: scopeFingerprint,
+            provider: .zerion,
+            coverageStartDate: Date(timeIntervalSince1970: 1_704_067_200),
+            fetchedAt: Date(timeIntervalSince1970: 1_704_067_200)))
         context.insert(ProviderPnLSnapshot(
             accountID: accountID,
             scopeFingerprint: scopeFingerprint,

@@ -8,6 +8,7 @@ struct ValueChartMode: View {
     let accountId: UUID?
     let startDate: Date
     let analyticsScopeFingerprint: String?
+    let historyStatus: PortfolioAnalyticsLoadStatus
 
     @Environment(AppState.self) private var appState
 
@@ -39,10 +40,12 @@ struct ValueChartMode: View {
     init(
         accountId: UUID?,
         startDate: Date,
-        analyticsScopeFingerprint: String? = nil) {
+        analyticsScopeFingerprint: String? = nil,
+        historyStatus: PortfolioAnalyticsLoadStatus = .idle) {
         self.accountId = accountId
         self.startDate = startDate
         self.analyticsScopeFingerprint = analyticsScopeFingerprint
+        self.historyStatus = historyStatus
         let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
         let queryAccountID = accountId ?? UUID()
         let queryScopeFingerprint = analyticsScopeFingerprint ?? ""
@@ -270,6 +273,14 @@ struct ValueChartMode: View {
                     Label(
                         disclosure,
                         systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                        .font(.caption)
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                }
+                if
+                    let failure = ProviderPortfolioHistory.refreshFailure(
+                        for: providerDTOs,
+                        status: historyStatus) {
+                    Label(failure.message, systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 }

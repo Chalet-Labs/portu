@@ -123,6 +123,7 @@ struct PortfolioAnalyticsPersistenceTests {
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             ProviderPortfolioValuePoint.self,
+            ProviderPortfolioHistoryRefresh.self,
             ProviderPnLSnapshot.self,
             ProviderPnLAssetBreakdown.self
         ])
