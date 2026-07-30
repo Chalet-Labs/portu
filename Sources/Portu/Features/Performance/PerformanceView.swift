@@ -23,6 +23,7 @@ struct PerformanceView: View {
                             accountId: store.performance.selectedAccountId,
                             startDate: store.performance.selectedRange.startDate,
                             analyticsScopeFingerprint: store.performance.analytics.isAvailable
+                                && store.performance.selectedRange != .custom
                                 ? analyticsContext?.scope.fingerprint
                                 : nil)
                     case .assets:

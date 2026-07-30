@@ -217,6 +217,45 @@ struct PortfolioAnalyticsReviewTests {
         await store.finish()
     }
 
+    @Test func `custom chart range does not request provider history`() async {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .custom,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let calls = ReviewAnalyticsCallRecorder()
+        let pnl = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: now)
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.refreshHistory = { _, _ in
+                    await calls.recordHistory()
+                    return []
+                }
+                $0.portfolioAnalytics.refreshPnL = { _, _, _, _, _ in
+                    await calls.recordPnL()
+                    return pnl
+                }
+            }
+
+        await store.send(.refresh(context)) {
+            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.pnlResponse) {
+            $0.pnl = pnl
+            $0.pnlStatus = .loaded
+        }
+        #expect(await calls.historyCount == 0)
+        #expect(await calls.pnlCount == 1)
+    }
+
     private func makeScope() -> PortfolioAnalyticsScope {
         PortfolioAnalyticsScope(
             accountID: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,

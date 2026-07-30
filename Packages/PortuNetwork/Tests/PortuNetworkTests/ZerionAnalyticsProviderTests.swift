@@ -3,7 +3,30 @@ import PortuCore
 @testable import PortuNetwork
 import Testing
 
+private final class AnalyticsRetryClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: Duration = .zero
+    private var recordedSleeps: [Duration] = []
+
+    var now: Duration {
+        lock.withLock { current }
+    }
+
+    var sleeps: [Duration] {
+        lock.withLock { recordedSleeps }
+    }
+
+    func sleep(for duration: Duration) async throws {
+        lock.withLock {
+            recordedSleeps.append(duration)
+            current += duration
+        }
+    }
+}
+
 @Suite(.serialized)
+// swiftlint:disable file_length
+// swiftlint:disable:next type_body_length
 struct ZerionAnalyticsProviderTests {
     private let evmAddress = "0x1111111111111111111111111111111111111111"
     private let solanaAddress = "8BH9pjtgyZDC4iAQH5ZiYDZ1MDWC98xki2V8NzqqKW3K"
@@ -188,6 +211,75 @@ struct ZerionAnalyticsProviderTests {
         #expect(result.fetchedAt == asOf)
     }
 
+    @Test func `wallet PnL polls preparing responses within the two minute deadline`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let fixture = try fixtureData("pnl-overall")
+        ZerionAnalyticsMockURLProtocol.respond { _ in
+            let isReady = ZerionAnalyticsMockURLProtocol.requests.count == 3
+            return .init(
+                data: isReady ? fixture : Data(#"{"errors":[]}"#.utf8),
+                statusCode: isReady ? 200 : 503,
+                headers: isReady ? [:] : ["Retry-After": "30"])
+        }
+        let clock = AnalyticsRetryClock()
+        let provider = ZerionProvider(client: ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionAnalyticsMockSession(),
+            minimumRequestInterval: .zero,
+            maximumRetryAttempts: 0,
+            pacingNow: { clock.now },
+            pacingSleep: { try await clock.sleep(for: $0) }))
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        let result = try await provider.fetchPnL(
+            scope: scope,
+            range: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: Date(timeIntervalSince1970: 1_704_153_600))
+
+        #expect(result.totalGain == Decimal(string: "-637.8173517"))
+        #expect(ZerionAnalyticsMockURLProtocol.requests.count == 3)
+        #expect(clock.sleeps == [.seconds(30), .seconds(30)])
+    }
+
+    @Test func `wallet PnL stops preparing polls at the two minute deadline`() async {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        ZerionAnalyticsMockURLProtocol.respond { _ in
+            .init(
+                data: Data(#"{"errors":[]}"#.utf8),
+                statusCode: 503,
+                headers: ["Retry-After": "30"])
+        }
+        let clock = AnalyticsRetryClock()
+        let provider = ZerionProvider(client: ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionAnalyticsMockSession(),
+            minimumRequestInterval: .zero,
+            maximumRetryAttempts: 0,
+            pacingNow: { clock.now },
+            pacingSleep: { try await clock.sleep(for: $0) }))
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        await #expect(throws: ZerionError.temporarilyUnavailable(retryAfter: 30)) {
+            _ = try await provider.fetchPnL(
+                scope: scope,
+                range: .oneMonth,
+                currency: .usd,
+                implementations: [],
+                asOf: Date(timeIntervalSince1970: 1_704_153_600))
+        }
+
+        #expect(ZerionAnalyticsMockURLProtocol.requests.count == 4)
+        #expect(clock.sleeps == Array(repeating: .seconds(30), count: 4))
+    }
+
     @Test func `wallet set PnL uses addresses and keeps direct EUR denomination`() async throws {
         defer { ZerionAnalyticsMockURLProtocol.reset() }
         let fixture = try fixtureData("pnl-overall")
@@ -362,18 +454,19 @@ struct ZerionAnalyticsProviderTests {
                 remainingDay: 0,
                 remainingMonth: nil,
                 reset: nil)),
-            (503, ZerionError.temporarilyUnavailable(retryAfter: 7))
+            (503, ZerionError.temporarilyUnavailable(retryAfter: nil))
         ])
     func `typed chart failures propagate`(status: Int, expected: ZerionError) async {
         defer { ZerionAnalyticsMockURLProtocol.reset() }
         ZerionAnalyticsMockURLProtocol.respond { _ in
-            .init(
+            var headers = ["RateLimit-Org-Day-Remaining": "0"]
+            if status != 503 {
+                headers["Retry-After"] = "7"
+            }
+            return .init(
                 data: Data(#"{"errors":[]}"#.utf8),
                 statusCode: status,
-                headers: [
-                    "RateLimit-Org-Day-Remaining": "0",
-                    "Retry-After": "7"
-                ])
+                headers: headers)
         }
         let provider = makeProvider(maximumRetryAttempts: 0)
         let scope = PortfolioAnalyticsScope(

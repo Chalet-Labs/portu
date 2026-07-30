@@ -18,6 +18,11 @@ public actor ZerionAPIClient {
     private let pacingSleep: PacingSleep
     private var nextRequestTime: Duration?
 
+    private enum RetryMode {
+        case standard
+        case analyticsPreparation(maximumWait: Duration)
+    }
+
     public init(
         apiKey: @escaping APIKeyProvider,
         session: URLSession = .shared,
@@ -57,6 +62,23 @@ public actor ZerionAPIClient {
     func get<Response: Decodable & Sendable>(
         path: String,
         queryItems: [URLQueryItem] = []) async throws -> Response {
+        try await get(path: path, queryItems: queryItems, retryMode: .standard)
+    }
+
+    func getAnalytics<Response: Decodable & Sendable>(
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        maximumPreparationWait: Duration = .seconds(120)) async throws -> Response {
+        try await get(
+            path: path,
+            queryItems: queryItems,
+            retryMode: .analyticsPreparation(maximumWait: maximumPreparationWait))
+    }
+
+    private func get<Response: Decodable & Sendable>(
+        path: String,
+        queryItems: [URLQueryItem],
+        retryMode: RetryMode) async throws -> Response {
         guard
             !path.hasPrefix("/"),
             !path.contains(".."),
@@ -70,14 +92,16 @@ public actor ZerionAPIClient {
         guard let url = components.url else {
             throw ZerionError.untrustedURL
         }
-        return try await get(url: url)
+        return try await get(url: url, retryMode: retryMode)
     }
 
     func get<Response: Decodable & Sendable>(next url: URL) async throws -> Response {
-        try await get(url: url)
+        try await get(url: url, retryMode: .standard)
     }
 
-    private func get<Response: Decodable & Sendable>(url: URL) async throws -> Response {
+    private func get<Response: Decodable & Sendable>(
+        url: URL,
+        retryMode: RetryMode) async throws -> Response {
         try validate(url)
         let key = try apiKey().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
@@ -92,6 +116,12 @@ public actor ZerionAPIClient {
             forHTTPHeaderField: "Authorization")
 
         var attempt = 0
+        let preparationDeadline: Duration? = switch retryMode {
+        case .standard:
+            nil
+        case let .analyticsPreparation(maximumWait):
+            pacingNow() + max(.zero, maximumWait)
+        }
         while true {
             try await paceRequest()
             let (data, response) = try await session.data(for: request)
@@ -108,6 +138,22 @@ public actor ZerionAPIClient {
             }
 
             let error = Self.error(from: httpResponse, data: data)
+            if
+                case let .temporarilyUnavailable(retryAfter) = error,
+                let preparationDeadline,
+                let retryAfter,
+                retryAfter > 0 {
+                let delay = Duration.seconds(retryAfter)
+                let now = pacingNow()
+                guard now < preparationDeadline, now + delay <= preparationDeadline else {
+                    throw error
+                }
+                try await pacingSleep(delay)
+                guard pacingNow() < preparationDeadline else {
+                    throw error
+                }
+                continue
+            }
             guard attempt < maximumRetryAttempts, Self.isRetryable(httpResponse.statusCode) else {
                 throw error
             }

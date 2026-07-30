@@ -168,7 +168,12 @@ struct PortfolioAnalyticsFeature {
                 }
                 let requestID = context.requestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID
-                state.historyStatus = state.history.isEmpty ? .loading : .refreshing
+                if Self.supportsProviderHistory(context) {
+                    state.historyStatus = state.history.isEmpty ? .loading : .refreshing
+                } else {
+                    state.history = []
+                    state.historyStatus = .idle
+                }
                 state.pnlStatus = state.pnl == nil ? .loading : .refreshing
                 return refreshEffects(context: context, requestID: requestID, pnlRange: state.pnlRange)
 
@@ -231,18 +236,20 @@ struct PortfolioAnalyticsFeature {
 
             case let .cacheLoaded(context, requestID, .success(cache)):
                 guard requestID == state.activeRequestID else { return .none }
-                state.history = cache.history
-                state.historyStatus = .loaded
+                let supportsProviderHistory = Self.supportsProviderHistory(context)
+                state.history = supportsProviderHistory ? cache.history : []
+                state.historyStatus = supportsProviderHistory ? .loaded : .idle
                 state.pnl = cache.pnl
 
-                let historyNeedsRefresh = cache.history.isEmpty
-                    || cache.historyCoverageStartDate.map {
-                        $0 > HistoricalPriceCalendar.utcStartOfDay(
-                            for: context.chartRange.startDate(at: context.asOf))
-                    } ?? true
-                    || cache.historyFetchedAt.map {
-                        context.asOf.timeIntervalSince($0) >= ProviderPnLFreshness.freshTTL
-                    } ?? true
+                let historyNeedsRefresh = supportsProviderHistory
+                    && (cache.history.isEmpty
+                        || cache.historyCoverageStartDate.map {
+                            $0 > HistoricalPriceCalendar.utcStartOfDay(
+                                for: context.chartRange.startDate(at: context.asOf))
+                        } ?? true
+                        || cache.historyFetchedAt.map {
+                            context.asOf.timeIntervalSince($0) >= ProviderPnLFreshness.freshTTL
+                        } ?? true)
                 let pnlNeedsRefresh: Bool
                 if let pnl = cache.pnl {
                     pnlNeedsRefresh = ProviderPnLFreshness.evaluate(
@@ -307,13 +314,21 @@ struct PortfolioAnalyticsFeature {
             && context.scope.addresses.isEmpty == false
     }
 
+    private static func supportsProviderHistory(
+        _ context: PortfolioAnalyticsRequestContext) -> Bool {
+        context.chartRange != .custom
+    }
+
     private func refreshEffects(
         context: PortfolioAnalyticsRequestContext,
         requestID: String,
         pnlRange: ProviderPnLRange) -> Effect<Action> {
-        .merge(
-            historyEffect(context: context, requestID: requestID),
-            pnlEffect(context: context, requestID: requestID, pnlRange: pnlRange))
+        if Self.supportsProviderHistory(context) {
+            return .merge(
+                historyEffect(context: context, requestID: requestID),
+                pnlEffect(context: context, requestID: requestID, pnlRange: pnlRange))
+        }
+        return pnlEffect(context: context, requestID: requestID, pnlRange: pnlRange)
     }
 
     private func historyEffect(

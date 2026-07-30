@@ -203,13 +203,16 @@ extension PortfolioAnalyticsClient {
             },
             refreshHistory: { scope, chartRange in
                 let fetchedAt = now()
-                let period: ZerionChartPeriod = switch chartRange {
+                let period: ZerionChartPeriod? = switch chartRange {
                 case .oneWeek: .week
                 case .oneMonth: .month
                 case .threeMonths: .threeMonths
                 case .oneYear: .year
                 case .ytd: .yearToDate(at: now())
-                case .custom: .month
+                case .custom: nil
+                }
+                guard let period else {
+                    throw ZerionError.unsupportedAnalyticsScope
                 }
                 let history = try await service.fetchPortfolioValueHistory(
                     scope: scope,

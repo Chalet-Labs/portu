@@ -9,7 +9,7 @@ extension ZerionProvider: ZerionAnalyticsService {
         let coverage: PortfolioAnalyticsCoverage = scope.addresses.allSatisfy { $0.family == .evm }
             ? .noFilter
             : .providerReported
-        let envelope: ZerionSingleEnvelope<ZerionWalletChartResource> = try await client.get(
+        let envelope: ZerionSingleEnvelope<ZerionWalletChartResource> = try await client.getAnalytics(
             path: request.path,
             queryItems: request.queryItems)
 
@@ -51,7 +51,7 @@ extension ZerionProvider: ZerionAnalyticsService {
             range: range,
             currency: currency,
             asOf: asOf)
-        let overall: ZerionPnLEnvelope = try await client.get(
+        let overall: ZerionPnLEnvelope = try await client.getAnalytics(
             path: baseRequest.path,
             queryItems: baseRequest.queryItems)
 
@@ -65,7 +65,7 @@ extension ZerionProvider: ZerionAnalyticsService {
             normalizedImplementations,
             baseRequest: baseRequest) {
             try Task.checkCancellation()
-            let filtered: ZerionPnLEnvelope = try await client.get(
+            let filtered: ZerionPnLEnvelope = try await client.getAnalytics(
                 path: baseRequest.path,
                 queryItems: baseRequest.queryItems + [
                     URLQueryItem(
@@ -109,7 +109,7 @@ extension ZerionProvider: ZerionAnalyticsService {
     public func fetchPortfolioSummary(
         scope: PortfolioAnalyticsScope) async throws -> ZerionPortfolioSummary {
         let request = try portfolioRequest(for: scope)
-        let envelope: ZerionPortfolioEnvelope = try await client.get(
+        let envelope: ZerionPortfolioEnvelope = try await client.getAnalytics(
             path: request.path,
             queryItems: request.queryItems)
         let attributes = envelope.data.attributes
