@@ -4,6 +4,11 @@ import PortuCore
 import Testing
 
 struct WalletPnLPresentationTests {
+    @Test func `estimate disclosure explicitly says it is not tax advice`() {
+        #expect(WalletPnLPresentation.estimateDisclosure.localizedCaseInsensitiveContains(
+            "not tax advice"))
+    }
+
     @Test func `presentation includes external and NFT flow metrics`() {
         let pnl = makePnL()
 

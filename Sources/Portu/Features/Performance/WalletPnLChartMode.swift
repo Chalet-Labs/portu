@@ -26,6 +26,7 @@ struct WalletPnLChartMode: View {
                             }
                         }
                         .frame(width: 180)
+                        .disabled(context?.isAccountActive != true)
                 }
 
                 Picker("PnL range", selection: Binding(
@@ -39,6 +40,7 @@ struct WalletPnLChartMode: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .disabled(context?.isAccountActive != true)
 
                 Button("Refresh", systemImage: "arrow.clockwise") {
                     guard let context else { return }
@@ -60,7 +62,7 @@ struct WalletPnLChartMode: View {
 
             content
 
-            Text("Zerion FIFO estimate. Transfers, airdrops, excluded unpriced assets, and tax rules can change the result.")
+            Text(WalletPnLPresentation.estimateDisclosure)
                 .font(.caption)
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
         }

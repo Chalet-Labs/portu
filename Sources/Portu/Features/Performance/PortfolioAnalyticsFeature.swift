@@ -41,6 +41,16 @@ struct PortfolioAnalyticsRequestContext: Equatable {
             currency.rawValue
         ].joined(separator: "|")
     }
+
+    func stamped(at date: Date) -> Self {
+        Self(
+            scope: scope,
+            chartRange: chartRange,
+            currency: currency,
+            implementations: implementations,
+            asOf: date,
+            isAccountActive: isAccountActive)
+    }
 }
 
 enum PortfolioAnalyticsLoadStatus: Equatable {
@@ -94,6 +104,7 @@ struct PortfolioAnalyticsFeature {
         case pnl
     }
 
+    @Dependency(\.date.now) var now
     @Dependency(\.portfolioAnalytics) var client
 
     var body: some ReducerOf<Self> {
@@ -199,6 +210,7 @@ struct PortfolioAnalyticsFeature {
                 return refreshEffects(context: context, requestID: requestID, pnlRange: state.pnlRange)
 
             case let .refreshPnL(context):
+                let context = context.stamped(at: now)
                 guard Self.isEligible(context, isAvailable: state.isAvailable) else {
                     state.activeRequestID = nil
                     if state.historyStatus == .loading || state.historyStatus == .refreshing {
@@ -268,6 +280,7 @@ struct PortfolioAnalyticsFeature {
                     .cancel(id: CancelID.pnl))
 
             case let .pnlRangeChanged(range, context):
+                guard context.isAccountActive else { return .none }
                 state.pnlRange = range
                 state.activeRequestID = nil
                 state.pnl = nil

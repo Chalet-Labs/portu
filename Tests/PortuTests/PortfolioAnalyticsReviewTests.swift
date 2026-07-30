@@ -353,7 +353,7 @@ struct PortfolioAnalyticsReviewTests {
         await store.finish()
     }
 
-    @Test func `ineligible pnl range change cancels analytics refreshes`() async {
+    @Test func `inactive pnl range change preserves cached read only analytics`() async {
         let context = PortfolioAnalyticsRequestContext(
             scope: makeScope(),
             chartRange: .oneMonth,
@@ -367,37 +367,24 @@ struct PortfolioAnalyticsReviewTests {
             implementations: context.implementations,
             asOf: context.asOf,
             isAccountActive: false)
+        let cached = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: now)
         let store = TestStore(
-            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
-                PortfolioAnalyticsFeature()
-            } withDependencies: {
-                $0.portfolioAnalytics.refreshHistory = { _, _ in
-                    try await Task.sleep(for: .seconds(3600))
-                    return []
-                }
-                $0.portfolioAnalytics.refreshPnL = { _, _, _, _, _ in
-                    try await Task.sleep(for: .seconds(3600))
-                    return ProviderPnLDTO(
-                        range: .oneMonth,
-                        currency: .usd,
-                        totalGain: 0,
-                        fetchedAt: now)
-                }
-            }
+            initialState: PortfolioAnalyticsFeature.State(
+                isAvailable: true,
+                pnl: cached,
+                historyStatus: .loaded,
+                pnlStatus: .loaded)) {
+            PortfolioAnalyticsFeature()
+        }
 
-        await store.send(.refresh(context)) {
-            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
-            $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
-            $0.historyStatus = .loading
-            $0.pnlStatus = .loading
-        }
-        await store.send(.pnlRangeChanged(.oneYear, inactiveContext)) {
-            $0.pnlRange = .oneYear
-            $0.activeRequestID = nil
-            $0.historyStatus = .idle
-            $0.pnlStatus = .idle
-        }
-        await store.finish()
+        await store.send(.pnlRangeChanged(.oneYear, inactiveContext))
+        #expect(store.state.pnlRange == .oneMonth)
+        #expect(store.state.pnl == cached)
+        #expect(store.state.pnlStatus == .loaded)
     }
 
     @Test func `custom chart range does not request provider history`() async {
@@ -458,6 +445,7 @@ struct PortfolioAnalyticsReviewTests {
             initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
                 PortfolioAnalyticsFeature()
             } withDependencies: {
+                $0.date.now = now
                 $0.portfolioAnalytics.refreshHistory = { _, _ in
                     await calls.recordHistory()
                     return []
@@ -482,6 +470,44 @@ struct PortfolioAnalyticsReviewTests {
         #expect(await calls.pnlCount == 1)
     }
 
+    @Test func `pnl control refresh stamps the request at action handling time`() async {
+        let clickTime = now.addingTimeInterval(3600)
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let calls = ReviewAnalyticsCallRecorder()
+        let pnl = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: clickTime)
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.date.now = clickTime
+                $0.portfolioAnalytics.refreshPnL = { _, _, _, _, asOf in
+                    await calls.recordPnL(asOf: asOf)
+                    return pnl
+                }
+            }
+
+        await store.send(.refreshPnL(context)) {
+            $0.activeRequestID = context.requestID(pnlRange: .oneMonth)
+            $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.pnlResponse) {
+            $0.pnlRefreshAttemptID = nil
+            $0.pnl = pnl
+            $0.pnlStatus = .loaded
+        }
+        #expect(await calls.lastPnLAsOf == clickTime)
+    }
+
     private func makeScope() -> PortfolioAnalyticsScope {
         PortfolioAnalyticsScope(
             accountID: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
@@ -496,6 +522,7 @@ private actor ReviewAnalyticsCallRecorder {
     private(set) var cacheCount = 0
     private(set) var historyCount = 0
     private(set) var pnlCount = 0
+    private(set) var lastPnLAsOf: Date?
 
     func recordCache() {
         cacheCount += 1
@@ -507,5 +534,10 @@ private actor ReviewAnalyticsCallRecorder {
 
     func recordPnL() {
         pnlCount += 1
+    }
+
+    func recordPnL(asOf: Date) {
+        pnlCount += 1
+        lastPnLAsOf = asOf
     }
 }
