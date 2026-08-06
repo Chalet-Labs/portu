@@ -54,6 +54,12 @@ enum ProviderPortfolioHistory {
         return "Zerion history · historical complex DeFi coverage may be incomplete"
     }
 
+    static func renderedProviderPoints(
+        for points: [ProviderPortfolioValueDTO],
+        renderedTimestamps: Set<Date>) -> [ProviderPortfolioValueDTO] {
+        points.filter { renderedTimestamps.contains($0.timestamp) }
+    }
+
     static func merge(
         provider: [ProviderPortfolioValueDTO],
         local: [LocalPortfolioValueObservation],
@@ -99,7 +105,9 @@ enum ProviderPortfolioHistory {
                         isReliable: $0.isFresh)
                 }
             merged = (providerPoints + localSuffix).sorted {
-                if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
+                if $0.timestamp != $1.timestamp {
+                    return $0.timestamp < $1.timestamp
+                }
                 return $0.source.rawValue < $1.source.rawValue
             }
         } else {
@@ -207,7 +215,9 @@ enum ProviderPortfolioHistory {
             latest[point.day] = point
         }
         return latest.values.sorted {
-            if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
+            if $0.timestamp != $1.timestamp {
+                return $0.timestamp < $1.timestamp
+            }
             return $0.usdValue < $1.usdValue
         }
     }
@@ -230,7 +240,9 @@ enum ProviderPortfolioHistory {
             latest[day] = observation
         }
         return latest.values.sorted {
-            if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
+            if $0.timestamp != $1.timestamp {
+                return $0.timestamp < $1.timestamp
+            }
             return $0.usdValue < $1.usdValue
         }
     }

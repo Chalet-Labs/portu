@@ -488,6 +488,48 @@ struct ZerionAnalyticsProviderTests {
         ])
     }
 
+    @Test func `malformed PnL implementations remain provider only`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let response = Data(#"""
+        {
+          "data": {
+            "attributes": {
+              "total_gain": 0,
+              "breakdown": {
+                "by_implementation": {
+                  "ethereum:not-an-address": {"total_gain": 1},
+                  "solana:not-a-mint": {"total_gain": 2},
+                  "ethereum:0x1111111111111111111111111111111111111111": {"total_gain": 3}
+                }
+              }
+            }
+          }
+        }
+        """#.utf8)
+        ZerionAnalyticsMockURLProtocol.respond { _ in
+            .init(data: response, statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        let result = try await provider.fetchPnL(
+            scope: scope,
+            range: .oneMonth,
+            currency: .usd,
+            implementations: [OnchainTokenIdentity(
+                chain: .ethereum,
+                contractAddress: "0x1111111111111111111111111111111111111111")],
+            asOf: Date(timeIntervalSince1970: 1_704_153_600))
+
+        let assets = Dictionary(uniqueKeysWithValues: result.assets.map { ($0.implementationID, $0) })
+        #expect(assets["ethereum:not-an-address"]?.identity == nil)
+        #expect(assets["solana:not-a-mint"]?.identity == nil)
+        #expect(assets["ethereum:0x1111111111111111111111111111111111111111"]?.identity?.chain == .ethereum)
+    }
+
     @Test func `portfolio reconciliation parses normalized no filter summary`() async throws {
         defer { ZerionAnalyticsMockURLProtocol.reset() }
         let fixture = try fixtureData("portfolio")

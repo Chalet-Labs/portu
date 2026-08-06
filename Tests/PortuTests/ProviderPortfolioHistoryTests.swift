@@ -102,6 +102,16 @@ struct ProviderPortfolioHistoryTests {
         #expect(ProviderPortfolioHistory.disclosure(for: retained) == nil)
     }
 
+    @Test func `rendered provider points omit points dropped during conversion`() {
+        let day1 = Date(timeIntervalSince1970: 1_704_067_200)
+        let day2 = day1.addingTimeInterval(86400)
+        let rendered = ProviderPortfolioHistory.renderedProviderPoints(
+            for: [providerPoint(day1, 90), providerPoint(day2, 100)],
+            renderedTimestamps: Set([day2]))
+
+        #expect(rendered.map(\.timestamp) == [day2])
+    }
+
     @Test func `later failed sync on the same day preserves local authority`() {
         let authorityDay = Date(timeIntervalSince1970: 1_704_067_200)
         let providerDay = authorityDay.addingTimeInterval(86400)

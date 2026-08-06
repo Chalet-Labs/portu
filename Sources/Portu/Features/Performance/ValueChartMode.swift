@@ -148,6 +148,12 @@ struct ValueChartMode: View {
             historicalRatesByDay: currencyConversionContext.historicalUSDToDisplayRatesByDay)
     }
 
+    private var renderedProviderDTOs: [ProviderPortfolioValueDTO] {
+        ProviderPortfolioHistory.renderedProviderPoints(
+            for: retainedProviderDTOs,
+            renderedTimestamps: Set(convertedProviderHistory.points.map(\.timestamp)))
+    }
+
     private var scopedAssetSnapshots: [AssetSnapshot] {
         assetSnapshots.filter { accountId == nil || $0.accountId == accountId }
     }
@@ -277,7 +283,7 @@ struct ValueChartMode: View {
                 }
                 .frame(height: 300)
 
-                if let disclosure = ProviderPortfolioHistory.disclosure(for: retainedProviderDTOs) {
+                if let disclosure = ProviderPortfolioHistory.disclosure(for: renderedProviderDTOs) {
                     Label(
                         disclosure,
                         systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")

@@ -35,7 +35,9 @@ extension ZerionProvider: ZerionAnalyticsService {
             }
         }
         return latestByDay.values.sorted {
-            if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
+            if $0.timestamp != $1.timestamp {
+                return $0.timestamp < $1.timestamp
+            }
             return $0.usdValue < $1.usdValue
         }
     }
@@ -330,7 +332,7 @@ private extension ZerionProvider {
         metrics: ZerionPnLMetrics) -> ProviderPnLAssetDTO {
         ProviderPnLAssetDTO(
             implementationID: implementationID,
-            identity: try? ZerionChainMapping.identity(for: implementationID),
+            identity: validatedIdentity(for: implementationID),
             averageBuyPrice: metrics.averageBuyPrice,
             averageSellPrice: metrics.averageSellPrice,
             totalGain: metrics.totalGain,
@@ -347,6 +349,23 @@ private extension ZerionProvider {
             sentExternal: metrics.sentExternal,
             sentForNFTs: metrics.sentForNFTs,
             receivedForNFTs: metrics.receivedForNFTs)
+    }
+
+    func validatedIdentity(for implementationID: String) -> OnchainTokenIdentity? {
+        guard let identity = try? ZerionChainMapping.identity(for: implementationID) else {
+            return nil
+        }
+        guard identity.contractAddress == OnchainTokenIdentity.nativeAssetSentinel else {
+            let family: PortfolioAnalyticsAddressFamily = identity.chain == .solana ? .solana : .evm
+            guard
+                PortfolioAnalyticsAddress(
+                    family: family,
+                    value: identity.contractAddress).isValid else {
+                return nil
+            }
+            return identity
+        }
+        return identity
     }
 
     func normalizedPercentage(_ percentagePoints: Decimal?) -> Decimal? {
