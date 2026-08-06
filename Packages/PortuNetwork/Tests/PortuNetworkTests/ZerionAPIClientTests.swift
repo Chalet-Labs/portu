@@ -17,6 +17,27 @@ private final class PacingSleepRecorder: @unchecked Sendable {
     }
 }
 
+private final class AdvancingPacingClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: Duration = .zero
+    private var recordedSleeps: [Duration] = []
+
+    var now: Duration {
+        lock.withLock { current }
+    }
+
+    var sleeps: [Duration] {
+        lock.withLock { recordedSleeps }
+    }
+
+    func sleep(for duration: Duration) async throws {
+        lock.withLock {
+            recordedSleeps.append(duration)
+            current += duration
+        }
+    }
+}
+
 @Suite(.serialized)
 struct ZerionAPIClientTests {
     init() {
@@ -167,6 +188,30 @@ struct ZerionAPIClientTests {
         }
 
         #expect(sleepRecorder.durations == [.seconds(1), .seconds(2)])
+    }
+
+    @Test func `analytics deadline rejects a request after pacing delay`() async throws {
+        defer { ZerionAPIClientMockURLProtocol.reset() }
+        ZerionAPIClientMockURLProtocol.respond { _ in
+            .init(data: Data(#"{"data":[]}"#.utf8), statusCode: 200, headers: [:])
+        }
+        let clock = AdvancingPacingClock()
+        let client = ZerionAPIClient(
+            apiKey: { "test-key" },
+            session: makeZerionAPIClientMockSession(),
+            minimumRequestInterval: .seconds(10),
+            pacingNow: { clock.now },
+            pacingSleep: { try await clock.sleep(for: $0) })
+
+        let _: ZerionCollectionEnvelope<ZerionEmptyResource> = try await client.get(path: "chains/")
+        await #expect(throws: ZerionError.temporarilyUnavailable(retryAfter: nil)) {
+            let _: ZerionCollectionEnvelope<ZerionEmptyResource> = try await client.getAnalytics(
+                path: "chains/",
+                preparationDeadline: .seconds(5))
+        }
+
+        #expect(ZerionAPIClientMockURLProtocol.requests.count == 1)
+        #expect(clock.sleeps == [.seconds(10)])
     }
 
     @Test func `organization quota headers are retained in a rate limit error`() async {

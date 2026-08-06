@@ -140,6 +140,9 @@ public actor ZerionAPIClient {
         }
         while true {
             try await paceRequest()
+            if let preparationDeadline, pacingNow() >= preparationDeadline {
+                throw ZerionError.temporarilyUnavailable(retryAfter: nil)
+            }
             let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw ZerionError.invalidResponse
