@@ -204,18 +204,26 @@ struct PortfolioAnalyticsFeature {
                         .cancel(id: CancelID.pnl),
                         .cancel(id: CancelID.pnlCache))
                 }
+                let samePnLIdentity =
+                    state.pnlRefreshAttemptID == context.pnlRequestID(pnlRange: state.pnlRange)
+                let preservePnLRefresh = state.activePnLRequestID != nil && samePnLIdentity
                 state.loadRequestGeneration &+= 1
                 let requestID =
                     "\(context.requestID(pnlRange: state.pnlRange))|load|\(state.loadRequestGeneration)"
                 state.fallbackScopeFingerprint = context.fallbackScopeFingerprint
                 state.activeHistoryRequestID = nil
-                state.activePnLRequestID = nil
-                if state.activeRequestID != requestID {
+                if samePnLIdentity == false {
+                    state.activePnLRequestID = nil
+                    state.pnlRefreshAttemptID = nil
+                }
+                if state.activeRequestID != requestID, preservePnLRefresh == false {
                     state.pnl = nil
                 }
                 state.activeRequestID = requestID
                 state.historyStatus = .loading
-                state.pnlStatus = .loading
+                if preservePnLRefresh == false {
+                    state.pnlStatus = .loading
+                }
                 let pnlRange = state.pnlRange
                 let cacheEffect = Effect<Action>.run { send in
                     do {
@@ -235,11 +243,15 @@ struct PortfolioAnalyticsFeature {
                     }
                 }
                 .cancellable(id: CancelID.cache, cancelInFlight: true)
-                return .merge(
+                var effects: [Effect<Action>] = [
                     .cancel(id: CancelID.history),
-                    .cancel(id: CancelID.pnl),
                     .cancel(id: CancelID.pnlCache),
-                    cacheEffect)
+                    cacheEffect
+                ]
+                if preservePnLRefresh == false {
+                    effects.insert(.cancel(id: CancelID.pnl), at: 1)
+                }
+                return .merge(effects)
 
             case let .refresh(context):
                 guard Self.isEligible(context, isAvailable: state.isAvailable) else {

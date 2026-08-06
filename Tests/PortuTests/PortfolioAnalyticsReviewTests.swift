@@ -378,6 +378,91 @@ struct PortfolioAnalyticsReviewTests {
         #expect(await calls.pnlCount == 1)
     }
 
+    @Test func `history-only load preserves an in-flight pnl refresh`() async {
+        let shortContext = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneWeek,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let longContext = PortfolioAnalyticsRequestContext(
+            scope: shortContext.scope,
+            chartRange: .oneYear,
+            currency: shortContext.currency,
+            implementations: shortContext.implementations,
+            asOf: shortContext.asOf)
+        let stalePnL = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 10,
+            fetchedAt: now.addingTimeInterval(-86400))
+        let refreshedPnL = ProviderPnLDTO(
+            range: .oneMonth,
+            currency: .usd,
+            totalGain: 25,
+            fetchedAt: now)
+        let calls = ReviewAnalyticsCallRecorder()
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.loadCache = { _, _, _, startDate in
+                    PortfolioAnalyticsCache(
+                        history: [.init(
+                            timestamp: now,
+                            usdValue: 100,
+                            provider: .zerion,
+                            coverage: .providerReported)],
+                        historyFetchedAt: now,
+                        historyCoverageStartDate: startDate,
+                        pnl: stalePnL)
+                }
+                $0.portfolioAnalytics.refreshPnL = { _, _, _, _, _ in
+                    await calls.recordPnL()
+                    try await Task.sleep(for: .milliseconds(100))
+                    return refreshedPnL
+                }
+            }
+
+        await store.send(.load(shortContext)) {
+            $0.loadRequestGeneration = 1
+            $0.activeRequestID = "\(shortContext.requestID(pnlRange: .oneMonth))|load|1"
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.receive(\.cacheLoaded) {
+            $0.activePnLRequestID = "\(shortContext.requestID(pnlRange: .oneMonth))|load|1"
+            $0.history = [.init(
+                timestamp: now,
+                usdValue: 100,
+                provider: .zerion,
+                coverage: .providerReported)]
+            $0.historyStatus = .loaded
+            $0.pnl = stalePnL
+            $0.pnlStatus = .refreshing
+            $0.pnlRefreshAttemptID = shortContext.pnlRequestID(pnlRange: .oneMonth)
+        }
+
+        await store.send(.load(longContext)) {
+            $0.loadRequestGeneration = 2
+            $0.activeRequestID = "\(longContext.requestID(pnlRange: .oneMonth))|load|2"
+            $0.activePnLRequestID = "\(shortContext.requestID(pnlRange: .oneMonth))|load|1"
+            $0.historyStatus = .loading
+            $0.pnlStatus = .refreshing
+        }
+        await store.receive(\.cacheLoaded) {
+            $0.historyStatus = .loaded
+            $0.pnlStatus = .refreshing
+        }
+        await store.receive(\.pnlResponse) {
+            $0.activePnLRequestID = nil
+            $0.pnlRefreshAttemptID = nil
+            $0.pnl = refreshedPnL
+            $0.pnlStatus = .loaded
+        }
+        #expect(await calls.pnlCount == 1)
+    }
+
     @Test func `feature exit resets the pnl refresh attempt scope`() async {
         let store = TestStore(
             initialState: PortfolioAnalyticsFeature.State(
