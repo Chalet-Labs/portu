@@ -55,6 +55,15 @@ struct WalletPnLChartMode: View {
                 .disabled(context == nil)
             }
 
+            if
+                let disclosure = Self.partialScopeDisclosure(
+                    context: context,
+                    scopeOptions: scopeOptions) {
+                Label(disclosure, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+            }
+
             if context?.isAccountActive == false {
                 Label("Inactive account — cached analytics remain read-only", systemImage: "pause.circle")
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
@@ -67,6 +76,15 @@ struct WalletPnLChartMode: View {
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
         }
         .frame(minHeight: 320, alignment: .topLeading)
+    }
+
+    static func partialScopeDisclosure(
+        context: PortfolioAnalyticsRequestContext?,
+        scopeOptions: [PortfolioAnalyticsScopeOption]) -> String? {
+        guard let context, context.isFullAccountScope == false else { return nil }
+        let label = scopeOptions.first(where: { $0.id == context.scope.fingerprint })?.label
+            ?? "selected wallet"
+        return "Partial wallet scope · \(label) — other configured addresses are excluded"
     }
 
     @ViewBuilder

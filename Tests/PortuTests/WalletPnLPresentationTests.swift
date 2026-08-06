@@ -14,6 +14,29 @@ struct WalletPnLPresentationTests {
             "unavailable assets"))
     }
 
+    @MainActor
+    @Test func `partial wallet scope disclosure names active wallet`() {
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(
+                family: .evm,
+                value: "0x1111111111111111111111111111111111111111")])
+        let context = PortfolioAnalyticsRequestContext(
+            scope: scope,
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: Date(timeIntervalSince1970: 1_704_153_600),
+            isFullAccountScope: false)
+        let disclosure = WalletPnLChartMode.partialScopeDisclosure(
+            context: context,
+            scopeOptions: [.init(label: "0x111…11111", scope: scope)])
+
+        #expect(disclosure?.contains("0x111…11111") == true)
+        #expect(disclosure?.localizedCaseInsensitiveContains("excluded") == true)
+    }
+
     @Test func `presentation includes external and NFT flow metrics`() {
         let pnl = makePnL()
 
