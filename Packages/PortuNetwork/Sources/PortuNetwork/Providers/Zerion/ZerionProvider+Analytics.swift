@@ -13,8 +13,10 @@ extension ZerionProvider: ZerionAnalyticsService {
             path: request.path,
             queryItems: request.queryItems)
 
+        let attributes = envelope.data.attributes
+        let chartDateBounds = chartDateBounds(for: attributes)
         var latestByDay: [Date: ProviderPortfolioValueDTO] = [:]
-        for point in envelope.data.attributes.points {
+        for point in attributes.points {
             guard
                 let timestamp = point.timestamp,
                 timestamp.isFinite,
@@ -24,6 +26,13 @@ extension ZerionProvider: ZerionAnalyticsService {
                 continue
             }
             let date = Date(timeIntervalSince1970: timestamp)
+            guard
+                date.timeIntervalSince1970.isFinite,
+                chartDateBounds.lowerBound.map({ date >= $0 }) ?? true,
+                date <= chartDateBounds.upperBound
+            else {
+                continue
+            }
             let normalized = ProviderPortfolioValueDTO(
                 timestamp: date,
                 usdValue: value,
@@ -128,9 +137,35 @@ extension ZerionProvider: ZerionAnalyticsService {
 }
 
 private extension ZerionProvider {
+    static let maximumChartTimestampFutureSkew: TimeInterval = 24 * 60 * 60
+
     struct AnalyticsRequest {
         let path: String
         let queryItems: [URLQueryItem]
+    }
+
+    struct ChartDateBounds {
+        let lowerBound: Date?
+        let upperBound: Date
+    }
+
+    func chartDateBounds(
+        for attributes: ZerionWalletChartResource.Attributes) -> ChartDateBounds {
+        let responseBegin = parseISO8601Date(attributes.beginAt)
+        let responseEnd = parseISO8601Date(attributes.endAt)
+        let futureBound = Date.now.addingTimeInterval(Self.maximumChartTimestampFutureSkew)
+        let upperBound = [responseEnd, futureBound].compactMap(\.self).min() ?? futureBound
+        return ChartDateBounds(lowerBound: responseBegin, upperBound: upperBound)
+    }
+
+    func parseISO8601Date(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: value) {
+            return date
+        }
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: value)
     }
 
     func pnlRequest(

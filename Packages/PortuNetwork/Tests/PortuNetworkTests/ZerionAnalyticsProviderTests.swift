@@ -88,6 +88,60 @@ struct ZerionAnalyticsProviderTests {
         #expect(points.isEmpty == false)
     }
 
+    @Test func `wallet chart drops points outside response interval`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let response = Data(#"""
+        {
+          "data": {
+            "attributes": {
+              "begin_at": "2024-01-01T00:00:00Z",
+              "end_at": "2024-01-02T00:00:00Z",
+              "points": [[1704067200, 100], [1704240000, 200]]
+            }
+          }
+        }
+        """#.utf8)
+        ZerionAnalyticsMockURLProtocol.respond { _ in
+            .init(data: response, statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        let points = try await provider.fetchPortfolioValueHistory(scope: scope, period: .month)
+
+        #expect(points.map(\.usdValue) == [100])
+    }
+
+    @Test func `wallet chart drops far future points without response end`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let response = Data(#"""
+        {
+          "data": {
+            "attributes": {
+              "begin_at": "2024-01-01T00:00:00Z",
+              "end_at": null,
+              "points": [[1704067200, 100], [4000000000, 200]]
+            }
+          }
+        }
+        """#.utf8)
+        ZerionAnalyticsMockURLProtocol.respond { _ in
+            .init(data: response, statusCode: 200, headers: [:])
+        }
+        let provider = makeProvider()
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        let points = try await provider.fetchPortfolioValueHistory(scope: scope, period: .month)
+
+        #expect(points.map(\.usdValue) == [100])
+    }
+
     @Test func `wallet chart tuple decodes value independently from malformed timestamp`() throws {
         let data = Data(#"""
         {"attributes":{"points":[["malformed",130]],"begin_at":null,"end_at":null}}
