@@ -28,7 +28,7 @@ struct ProviderPortfolioHistoryTests {
         #expect(failure == .rateLimited)
         #expect(ProviderPortfolioHistory.refreshFailure(
             for: [],
-            status: .failed(.rateLimited)) == nil)
+            status: .failed(.rateLimited)) == .rateLimited)
     }
 
     private let accountID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!

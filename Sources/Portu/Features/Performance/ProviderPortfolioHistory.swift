@@ -37,9 +37,9 @@ struct ProviderHistoryMergeContext {
 
 enum ProviderPortfolioHistory {
     static func refreshFailure(
-        for points: [ProviderPortfolioValueDTO],
+        for _: [ProviderPortfolioValueDTO],
         status: PortfolioAnalyticsLoadStatus) -> PortfolioAnalyticsFailure? {
-        guard points.isEmpty == false, case let .failed(failure) = status else {
+        guard case let .failed(failure) = status else {
             return nil
         }
         return failure
