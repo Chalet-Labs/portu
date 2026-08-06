@@ -31,6 +31,13 @@ struct ProviderPortfolioHistoryTests {
             status: .failed(.rateLimited)) == .rateLimited)
     }
 
+    @MainActor
+    @Test func `empty value chart history failure remains actionable`() {
+        #expect(ValueChartMode.emptyStateFailure(
+            for: [],
+            status: .failed(.invalidCredential)) == .invalidCredential)
+    }
+
     private let accountID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
 
     @Test func `provider history stops strictly before earliest fresh local day`() {

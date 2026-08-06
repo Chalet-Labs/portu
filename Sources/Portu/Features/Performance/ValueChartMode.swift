@@ -221,6 +221,12 @@ struct ValueChartMode: View {
         }
     }
 
+    static func emptyStateFailure(
+        for points: [ProviderPortfolioValueDTO],
+        status: PortfolioAnalyticsLoadStatus) -> PortfolioAnalyticsFailure? {
+        ProviderPortfolioHistory.refreshFailure(for: points, status: status)
+    }
+
     var body: some View {
         let dataPoints = convertedDataPoints
         let retainedProviderDates = dataPoints.compactMap { date, _, _, source in
@@ -229,9 +235,17 @@ struct ValueChartMode: View {
         let estimatedPoints = ProviderPortfolioHistory.estimatesOutsideProviderCoverage(
             convertedEstimatedPoints,
             providerDates: retainedProviderDates)
+        let historyFailure = Self.emptyStateFailure(
+            for: retainedProviderDTOs,
+            status: historyStatus)
         if dataPoints.isEmpty, estimatedPoints.isEmpty {
             Group {
-                if
+                if let historyFailure {
+                    ContentUnavailableView(
+                        "Zerion history unavailable",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text(historyFailure.message))
+                } else if
                     appState.selectedCurrency != .usd,
                     retainedProviderDTOs.isEmpty == false,
                     convertedProviderHistory.points.isEmpty {
@@ -290,10 +304,7 @@ struct ValueChartMode: View {
                         .font(.caption)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 }
-                if
-                    let failure = ProviderPortfolioHistory.refreshFailure(
-                        for: retainedProviderDTOs,
-                        status: historyStatus) {
+                if let failure = historyFailure {
                     Label(failure.message, systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
