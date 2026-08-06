@@ -9,6 +9,11 @@ struct WalletPnLPresentationTests {
             "not tax advice"))
     }
 
+    @Test func `estimate disclosure identifies unavailable breakdown assets`() {
+        #expect(WalletPnLPresentation.estimateDisclosure.localizedCaseInsensitiveContains(
+            "unavailable assets"))
+    }
+
     @Test func `presentation includes external and NFT flow metrics`() {
         let pnl = makePnL()
 

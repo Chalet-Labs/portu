@@ -428,16 +428,16 @@ struct ZerionAnalyticsProviderTests {
                 contractAddress: String(format: "0x%040x", $0 + 1))
         }
 
-        await #expect(throws: ZerionError.temporarilyUnavailable(retryAfter: 60)) {
-            _ = try await provider.fetchPnL(
-                scope: scope,
-                range: .oneMonth,
-                currency: .usd,
-                implementations: identities,
-                asOf: Date(timeIntervalSince1970: 1_704_153_600))
-        }
+        let result = try await provider.fetchPnL(
+            scope: scope,
+            range: .oneMonth,
+            currency: .usd,
+            implementations: identities,
+            asOf: Date(timeIntervalSince1970: 1_704_153_600))
 
-        #expect(ZerionAnalyticsMockURLProtocol.requests.count == 4)
+        #expect(result.totalGain == Decimal(string: "-637.8173517"))
+        #expect(result.assets.count == 1)
+        #expect(ZerionAnalyticsMockURLProtocol.requests.count == 5)
         #expect(clock.sleeps == [.seconds(60), .seconds(60)])
     }
 
@@ -539,6 +539,44 @@ struct ZerionAnalyticsProviderTests {
             "ethereum:",
             "ethereum:0x000000000000000000000000000000000000dead",
             "ethereum:0x6b175474e89094c44da98b954eedeac495271d0f"
+        ])
+    }
+
+    @Test func `overall PnL survives a failed filtered breakdown batch`() async throws {
+        defer { ZerionAnalyticsMockURLProtocol.reset() }
+        let overall = try fixtureData("pnl-overall")
+        let implementation = "ethereum:\(evmAddress)"
+        ZerionAnalyticsMockURLProtocol.respond { request in
+            let items = try queryItems(in: request)
+            if items["filter[fungible_implementations]"] == nil {
+                return .init(data: overall, statusCode: 200, headers: [:])
+            }
+            #expect(items["filter[fungible_implementations]"] == implementation)
+            return .init(
+                data: Data(#"{"errors":[]}"#.utf8),
+                statusCode: 429,
+                headers: [:])
+        }
+        let provider = makeProvider(maximumRetryAttempts: 0)
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(family: .evm, value: evmAddress)])
+
+        let result = try await provider.fetchPnL(
+            scope: scope,
+            range: .allTime,
+            currency: .usd,
+            implementations: [OnchainTokenIdentity(
+                chain: .ethereum,
+                contractAddress: evmAddress)],
+            asOf: Date(timeIntervalSince1970: 1_704_153_600))
+
+        #expect(result.totalGain == Decimal(string: "-637.8173517"))
+        #expect(result.assets.isEmpty)
+        #expect(result.excludedIdentifiers == [
+            "ethereum:0x000000000000000000000000000000000000dead",
+            implementation
         ])
     }
 

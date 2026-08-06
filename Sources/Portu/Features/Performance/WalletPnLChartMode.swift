@@ -111,7 +111,7 @@ struct WalletPnLChartMode: View {
                 if pnl.excludedIdentifiers.isEmpty == false {
                     VStack(alignment: .leading, spacing: 3) {
                         Label(
-                            "\(pnl.excludedIdentifiers.count) unpriced assets excluded",
+                            "\(pnl.excludedIdentifiers.count) assets excluded or unavailable in breakdown",
                             systemImage: "exclamationmark.triangle")
                         Text(pnl.excludedIdentifiers.prefix(5).joined(separator: ", "))
                             .textSelection(.enabled)

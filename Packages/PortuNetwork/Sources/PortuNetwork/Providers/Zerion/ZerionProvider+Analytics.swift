@@ -77,15 +77,24 @@ extension ZerionProvider: ZerionAnalyticsService {
         for batch in try pnlImplementationBatches(
             normalizedImplementations,
             baseRequest: baseRequest) {
-            try Task.checkCancellation()
-            let filtered: ZerionPnLEnvelope = try await client.getAnalytics(
-                path: baseRequest.path,
-                queryItems: baseRequest.queryItems + [
-                    URLQueryItem(
-                        name: "filter[fungible_implementations]",
-                        value: batch.joined(separator: ","))
-                ],
-                preparationDeadline: preparationDeadline)
+            let filtered: ZerionPnLEnvelope
+            do {
+                try Task.checkCancellation()
+                filtered = try await client.getAnalytics(
+                    path: baseRequest.path,
+                    queryItems: baseRequest.queryItems + [
+                        URLQueryItem(
+                            name: "filter[fungible_implementations]",
+                            value: batch.joined(separator: ","))
+                    ],
+                    preparationDeadline: preparationDeadline)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                try Task.checkCancellation()
+                excluded.formUnion(batch)
+                continue
+            }
             for (implementationID, metrics) in filtered.data.attributes.breakdown?.byImplementation ?? [:] {
                 assetsByImplementation[implementationID] = assetDTO(
                     implementationID: implementationID,

@@ -60,7 +60,7 @@ struct WalletPnLAssetRow: Equatable, Identifiable {
 
 enum WalletPnLPresentation {
     static let estimateDisclosure =
-        "Zerion FIFO estimate, not tax advice. Transfers, airdrops, excluded unpriced assets, and tax rules can change the result."
+        "Zerion FIFO estimate, not tax advice. Transfers, airdrops, excluded or unavailable assets, and tax rules can change the result."
 
     static func flowRows(for pnl: ProviderPnLDTO) -> [WalletPnLFlowRow] {
         [
