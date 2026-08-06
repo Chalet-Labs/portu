@@ -158,6 +158,8 @@ struct PortfolioAnalyticsFeatureTests {
         await store.receive(\.cacheLoaded) {
             $0.activeHistoryRequestID =
                 "\(context.requestID(pnlRange: .oneMonth))|load|1"
+            $0.activePnLRequestID =
+                "\(context.requestID(pnlRange: .oneMonth))|load|1"
             $0.historyStatus = .loading
             $0.pnlStatus = .refreshing
             $0.pnl = stale
@@ -168,6 +170,7 @@ struct PortfolioAnalyticsFeatureTests {
             $0.historyStatus = .loaded
         }
         await store.receive(\.pnlResponse) {
+            $0.activePnLRequestID = nil
             $0.pnlRefreshAttemptID = nil
             $0.pnlStatus = .loaded
             $0.pnl = refreshed
@@ -353,6 +356,8 @@ struct PortfolioAnalyticsFeatureTests {
             $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
             $0.activeHistoryRequestID =
                 "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
+            $0.activePnLRequestID =
+                "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading
             $0.pnlStatus = .refreshing
@@ -363,6 +368,7 @@ struct PortfolioAnalyticsFeatureTests {
             $0.historyStatus = .loaded
         }
         await store.receive(\.pnlResponse) {
+            $0.activePnLRequestID = nil
             $0.pnlStatus = .failed(.planUnavailable)
         }
         #expect(store.state.pnl == cachedPnL)
@@ -387,6 +393,8 @@ struct PortfolioAnalyticsFeatureTests {
             $0.refreshRequestGeneration = 1
             $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
             $0.activeHistoryRequestID =
+                "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
+            $0.activePnLRequestID =
                 "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading

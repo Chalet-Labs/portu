@@ -141,9 +141,18 @@ struct PortfolioAnalyticsFeature {
         Reduce { state, action in
             switch action {
             case .featureExited:
+                state.activeRequestID = nil
+                state.activeHistoryRequestID = nil
+                state.activePnLRequestID = nil
                 state.fallbackScopeFingerprint = nil
                 state.pnlRefreshAttemptID = nil
-                return .none
+                if state.historyStatus == .loading || state.historyStatus == .refreshing {
+                    state.historyStatus = .idle
+                }
+                if state.pnlStatus == .loading || state.pnlStatus == .refreshing {
+                    state.pnlStatus = .idle
+                }
+                return cancelAnalyticsEffects()
 
             case .selectionUnavailable:
                 state.selectedWalletScopeFingerprint = nil
@@ -255,7 +264,7 @@ struct PortfolioAnalyticsFeature {
                 state.fallbackScopeFingerprint = context.fallbackScopeFingerprint
                 state.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
                 state.activeRequestID = requestID
-                state.activePnLRequestID = nil
+                state.activePnLRequestID = requestID
                 if Self.supportsProviderHistory(context) {
                     state.activeHistoryRequestID = requestID
                     state.historyStatus = state.history.isEmpty ? .loading : .refreshing
@@ -433,6 +442,7 @@ struct PortfolioAnalyticsFeature {
                 let pnlRefreshAttemptID = context.pnlRequestID(pnlRange: state.pnlRange)
                 if pnlNeedsRefresh, state.pnlRefreshAttemptID != pnlRefreshAttemptID {
                     state.pnlRefreshAttemptID = pnlRefreshAttemptID
+                    state.activePnLRequestID = requestID
                     effects.append(pnlEffect(
                         context: context,
                         requestID: requestID,
@@ -492,7 +502,7 @@ struct PortfolioAnalyticsFeature {
                 return .none
 
             case let .pnlResponse(requestID, .success(pnl)):
-                guard requestID == state.activePnLRequestID ?? state.activeRequestID else { return .none }
+                guard requestID == state.activePnLRequestID else { return .none }
                 state.activePnLRequestID = nil
                 state.pnlRefreshAttemptID = nil
                 state.pnl = pnl
@@ -500,7 +510,7 @@ struct PortfolioAnalyticsFeature {
                 return .none
 
             case let .pnlResponse(requestID, .failure(error)):
-                guard requestID == state.activePnLRequestID ?? state.activeRequestID else { return .none }
+                guard requestID == state.activePnLRequestID else { return .none }
                 state.activePnLRequestID = nil
                 if Self.selectFallbackIfAvailable(state: &state, failure: error.failure) {
                     return cancelAnalyticsEffects()

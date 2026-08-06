@@ -201,7 +201,9 @@ struct PortfolioAnalyticsReviewTests {
         let store = TestStore(
             initialState: PortfolioAnalyticsFeature.State(
                 isAvailable: true,
+                activeRequestID: "automatic",
                 activeHistoryRequestID: "in-flight-history",
+                activePnLRequestID: "automatic",
                 history: [.init(
                     timestamp: now,
                     usdValue: 100,
@@ -247,6 +249,11 @@ struct PortfolioAnalyticsReviewTests {
         #expect(store.state.activeHistoryRequestID == "in-flight-history")
         #expect(store.state.historyStatus == .refreshing)
         #expect(store.state.history.count == 1)
+        await store.send(.pnlResponse(
+            "automatic",
+            .failure(PortfolioAnalyticsClientError(URLError(.cancelled)))))
+        #expect(store.state.pnl == cached)
+        #expect(store.state.pnlStatus == .loaded)
         #expect(await calls.cacheCount == 1)
         #expect(await calls.pnlCount == 0)
     }
@@ -338,6 +345,8 @@ struct PortfolioAnalyticsReviewTests {
             $0.pnlStatus = .loading
         }
         await store.receive(\.cacheLoaded) {
+            $0.activePnLRequestID =
+                "\(shortContext.requestID(pnlRange: .oneMonth))|load|1"
             $0.history = [.init(
                 timestamp: now,
                 usdValue: 100,
@@ -349,6 +358,7 @@ struct PortfolioAnalyticsReviewTests {
             $0.pnlRefreshAttemptID = shortContext.pnlRequestID(pnlRange: .oneMonth)
         }
         await store.receive(\.pnlResponse) {
+            $0.activePnLRequestID = nil
             $0.pnlStatus = .failed(.planUnavailable)
         }
 
@@ -381,6 +391,52 @@ struct PortfolioAnalyticsReviewTests {
         await store.send(.featureExited) {
             $0.pnlRefreshAttemptID = nil
         }
+    }
+
+    @Test func `feature exit cancels in flight analytics and invalidates responses`() async {
+        let context = PortfolioAnalyticsRequestContext(
+            scope: makeScope(),
+            chartRange: .oneMonth,
+            currency: .usd,
+            implementations: [],
+            asOf: now)
+        let requestID = "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
+        let store = TestStore(
+            initialState: PortfolioAnalyticsFeature.State(isAvailable: true)) {
+                PortfolioAnalyticsFeature()
+            } withDependencies: {
+                $0.portfolioAnalytics.refreshHistory = { _, _ in
+                    try await Task.sleep(for: .seconds(3600))
+                    return []
+                }
+                $0.portfolioAnalytics.refreshPnL = { _, _, _, _, _ in
+                    try await Task.sleep(for: .seconds(3600))
+                    return .init(
+                        range: .oneMonth,
+                        currency: .usd,
+                        totalGain: 0,
+                        fetchedAt: now)
+                }
+            }
+
+        await store.send(.refresh(context)) {
+            $0.activeRequestID = requestID
+            $0.activeHistoryRequestID = requestID
+            $0.activePnLRequestID = requestID
+            $0.refreshRequestGeneration = 1
+            $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
+            $0.historyStatus = .loading
+            $0.pnlStatus = .loading
+        }
+        await store.send(.featureExited) {
+            $0.activeRequestID = nil
+            $0.activeHistoryRequestID = nil
+            $0.activePnLRequestID = nil
+            $0.pnlRefreshAttemptID = nil
+            $0.historyStatus = .idle
+            $0.pnlStatus = .idle
+        }
+        await store.finish()
     }
 
     @Test func `inactive transition clears loading indicators`() async {
@@ -462,6 +518,7 @@ struct PortfolioAnalyticsReviewTests {
             $0.refreshRequestGeneration = 1
             $0.activeRequestID = "\(requestID)|refresh|1"
             $0.activeHistoryRequestID = "\(requestID)|refresh|1"
+            $0.activePnLRequestID = "\(requestID)|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.historyStatus = .loading
             $0.pnlStatus = .loading
@@ -470,6 +527,7 @@ struct PortfolioAnalyticsReviewTests {
             $0.clearRequestGeneration = 1
             $0.activeRequestID = "\(requestID)|clear|1"
             $0.activeHistoryRequestID = nil
+            $0.activePnLRequestID = nil
             $0.pnlRefreshAttemptID = nil
         }
         #expect(store.state.activeRequestID != requestID)
@@ -544,10 +602,13 @@ struct PortfolioAnalyticsReviewTests {
         await store.send(.refresh(context)) {
             $0.refreshRequestGeneration = 1
             $0.activeRequestID = "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
+            $0.activePnLRequestID =
+                "\(context.requestID(pnlRange: .oneMonth))|refresh|1"
             $0.pnlRefreshAttemptID = context.pnlRequestID(pnlRange: .oneMonth)
             $0.pnlStatus = .loading
         }
         await store.receive(\.pnlResponse) {
+            $0.activePnLRequestID = nil
             $0.pnlRefreshAttemptID = nil
             $0.pnl = pnl
             $0.pnlStatus = .loaded
@@ -647,6 +708,7 @@ struct PortfolioAnalyticsReviewTests {
             initialState: PortfolioAnalyticsFeature.State(
                 isAvailable: true,
                 activeRequestID: "combined",
+                activePnLRequestID: "combined",
                 fallbackScopeFingerprint: "individual",
                 historyStatus: .loading,
                 pnlStatus: .loading)) {
@@ -658,6 +720,7 @@ struct PortfolioAnalyticsReviewTests {
             .failure(PortfolioAnalyticsClientError(ZerionError.notFound)))) {
                 $0.selectedWalletScopeFingerprint = "individual"
                 $0.activeRequestID = nil
+                $0.activePnLRequestID = nil
                 $0.fallbackScopeFingerprint = nil
                 $0.historyStatus = .idle
                 $0.pnlStatus = .idle
