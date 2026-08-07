@@ -2,7 +2,7 @@
 
 The skills speak in terms of five canonical triage roles. This file maps those roles to the label strings this repo's issue tracker should use.
 
-Only `wontfix` exists in the tracker today (`gh label list`). Create the rest with `gh label create <name>` before a skill applies them for the first time.
+Only `wontfix` from this canonical triage set exists in the tracker today (`gh label list`) — the repo also carries unrelated default labels (`bug`, `documentation`, `enhancement`, etc.) that this table doesn't cover. Create the remaining four triage labels with `gh label create <name>` before a skill applies them for the first time.
 
 | Label in mattpocock/skills | Label in our tracker | Meaning                                  |
 | -------------------------- | -------------------- | ---------------------------------------- |
