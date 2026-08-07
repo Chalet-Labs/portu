@@ -207,7 +207,7 @@ struct ZerionAPIClientTests {
         await #expect(throws: ZerionError.temporarilyUnavailable(retryAfter: nil)) {
             let _: ZerionCollectionEnvelope<ZerionEmptyResource> = try await client.getAnalytics(
                 path: "chains/",
-                preparationDeadline: .seconds(5))
+                preparationDeadline: clock.now + .seconds(5))
         }
 
         #expect(ZerionAPIClientMockURLProtocol.requests.count == 1)
