@@ -38,6 +38,16 @@ struct ProviderPortfolioHistoryTests {
             status: .failed(.invalidCredential)) == .invalidCredential)
     }
 
+    @MainActor
+    @Test func `unscoped value chart query uses a stable account sentinel`() {
+        let first = ValueChartMode.providerQueryAccountID(for: nil)
+        let second = ValueChartMode.providerQueryAccountID(for: nil)
+        let accountID = UUID()
+
+        #expect(first == second)
+        #expect(ValueChartMode.providerQueryAccountID(for: accountID) == accountID)
+    }
+
     private let accountID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
 
     @Test func `provider history stops strictly before earliest fresh local day`() {

@@ -437,7 +437,7 @@ struct ZerionAnalyticsProviderTests {
 
         #expect(result.totalGain == Decimal(string: "-637.8173517"))
         #expect(result.assets.count == 1)
-        #expect(ZerionAnalyticsMockURLProtocol.requests.count == 5)
+        #expect(ZerionAnalyticsMockURLProtocol.requests.count == 4)
         #expect(clock.sleeps == [.seconds(60), .seconds(60)])
     }
 

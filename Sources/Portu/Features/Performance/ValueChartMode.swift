@@ -5,6 +5,9 @@ import SwiftData
 import SwiftUI
 
 struct ValueChartMode: View {
+    private static let unscopedProviderQueryAccountID = UUID(
+        uuidString: "00000000-0000-0000-0000-000000000000")!
+
     let accountId: UUID?
     let startDate: Date
     let analyticsScopeFingerprint: String?
@@ -47,7 +50,7 @@ struct ValueChartMode: View {
         self.analyticsScopeFingerprint = analyticsScopeFingerprint
         self.historyStatus = historyStatus
         let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
-        let queryAccountID = accountId ?? UUID()
+        let queryAccountID = Self.providerQueryAccountID(for: accountId)
         let queryScopeFingerprint = analyticsScopeFingerprint ?? ""
         _historicalPrices = Query(
             filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
@@ -225,6 +228,10 @@ struct ValueChartMode: View {
         for points: [ProviderPortfolioValueDTO],
         status: PortfolioAnalyticsLoadStatus) -> PortfolioAnalyticsFailure? {
         ProviderPortfolioHistory.refreshFailure(for: points, status: status)
+    }
+
+    static func providerQueryAccountID(for accountId: UUID?) -> UUID {
+        accountId ?? unscopedProviderQueryAccountID
     }
 
     var body: some View {
