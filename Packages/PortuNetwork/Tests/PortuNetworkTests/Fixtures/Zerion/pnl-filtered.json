@@ -1,0 +1,43 @@
+{
+  "links": {
+    "self": "https://api.zerion.io/v1/wallets/0x1111111111111111111111111111111111111111/pnl"
+  },
+  "data": {
+    "type": "pnl",
+    "id": "fixture-wallet",
+    "attributes": {
+      "total_gain": 999999,
+      "realized_gain": 999999,
+      "unrealized_gain": 0,
+      "relative_total_gain_percentage": 25,
+      "breakdown": {
+        "by_implementation": {
+          "ethereum:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
+            "average_buy_price": 1,
+            "average_sell_price": 1.1,
+            "total_gain": 10,
+            "realized_gain": 8,
+            "unrealized_gain": 2,
+            "relative_total_gain_percentage": 2.5,
+            "relative_realized_gain_percentage": 2,
+            "relative_unrealized_gain_percentage": 0.5,
+            "total_fee": 1,
+            "total_invested": 500,
+            "realized_cost_basis": 300,
+            "net_invested": 200,
+            "received_external": 100,
+            "sent_external": 50,
+            "sent_for_nfts": 0,
+            "received_for_nfts": 0
+          }
+        }
+      }
+    }
+  },
+  "meta": {
+    "excluded_fungible_implementations": [
+      "ethereum:0x6b175474e89094c44da98b954eedeac495271d0f",
+      "ethereum:"
+    ]
+  }
+}

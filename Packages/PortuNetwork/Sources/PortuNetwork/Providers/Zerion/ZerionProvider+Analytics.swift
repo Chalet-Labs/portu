@@ -1,0 +1,418 @@
+import Foundation
+import PortuCore
+
+extension ZerionProvider: ZerionAnalyticsService {
+    public func fetchPortfolioValueHistory(
+        scope: PortfolioAnalyticsScope,
+        period: ZerionChartPeriod) async throws -> [ProviderPortfolioValueDTO] {
+        let request = try analyticsRequest(for: scope, period: period)
+        let coverage: PortfolioAnalyticsCoverage = scope.addresses.allSatisfy { $0.family == .evm }
+            ? .noFilter
+            : .providerReported
+        let envelope: ZerionSingleEnvelope<ZerionWalletChartResource> = try await client.getAnalytics(
+            path: request.path,
+            queryItems: request.queryItems)
+
+        let attributes = envelope.data.attributes
+        let chartDateBounds = chartDateBounds(for: attributes)
+        var latestByDay: [Date: ProviderPortfolioValueDTO] = [:]
+        for point in attributes.points {
+            guard
+                let timestamp = point.timestamp,
+                timestamp.isFinite,
+                let value = point.value,
+                value >= 0
+            else {
+                continue
+            }
+            let date = Date(timeIntervalSince1970: timestamp)
+            guard
+                date.timeIntervalSince1970.isFinite,
+                chartDateBounds.lowerBound.map({ date >= $0 }) ?? true,
+                date <= chartDateBounds.upperBound
+            else {
+                continue
+            }
+            let normalized = ProviderPortfolioValueDTO(
+                timestamp: date,
+                usdValue: value,
+                provider: .zerion,
+                coverage: coverage)
+            let day = normalized.day
+            if latestByDay[day].map({ $0.timestamp < date }) ?? true {
+                latestByDay[day] = normalized
+            }
+        }
+        return latestByDay.values.sorted {
+            if $0.timestamp != $1.timestamp {
+                return $0.timestamp < $1.timestamp
+            }
+            return $0.usdValue < $1.usdValue
+        }
+    }
+
+    public func fetchPnL(
+        scope: PortfolioAnalyticsScope,
+        range: ProviderPnLRange,
+        currency: FiatCurrency,
+        implementations: [OnchainTokenIdentity],
+        asOf: Date) async throws -> ProviderPnLDTO {
+        let baseRequest = try pnlRequest(
+            for: scope,
+            range: range,
+            currency: currency,
+            asOf: asOf)
+        let preparationDeadline = await client.analyticsPreparationDeadline()
+        let overall: ZerionPnLEnvelope = try await client.getAnalytics(
+            path: baseRequest.path,
+            queryItems: baseRequest.queryItems,
+            preparationDeadline: preparationDeadline)
+
+        let normalizedImplementations = try Array(Set(implementations.map {
+            try pnlImplementation(for: $0)
+        })).sorted()
+        var assetsByImplementation: [String: ProviderPnLAssetDTO] = [:]
+        var excluded = Set(overall.meta?.excludedFungibleIDs ?? [])
+        excluded.formUnion(overall.meta?.excludedFungibleImplementations ?? [])
+        for batch in try pnlImplementationBatches(
+            normalizedImplementations,
+            baseRequest: baseRequest) {
+            let filtered: ZerionPnLEnvelope
+            do {
+                try Task.checkCancellation()
+                filtered = try await client.getAnalytics(
+                    path: baseRequest.path,
+                    queryItems: baseRequest.queryItems + [
+                        URLQueryItem(
+                            name: "filter[fungible_implementations]",
+                            value: batch.joined(separator: ","))
+                    ],
+                    preparationDeadline: preparationDeadline)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                try Task.checkCancellation()
+                excluded.formUnion(batch)
+                continue
+            }
+            for (implementationID, metrics) in filtered.data.attributes.breakdown?.byImplementation ?? [:] {
+                assetsByImplementation[implementationID] = assetDTO(
+                    implementationID: implementationID,
+                    metrics: metrics)
+            }
+            excluded.formUnion(filtered.meta?.excludedFungibleIDs ?? [])
+            excluded.formUnion(filtered.meta?.excludedFungibleImplementations ?? [])
+        }
+
+        let metrics = overall.data.attributes
+        return ProviderPnLDTO(
+            range: range,
+            currency: currency,
+            totalGain: metrics.totalGain,
+            realizedGain: metrics.realizedGain,
+            unrealizedGain: metrics.unrealizedGain,
+            relativeTotalGain: normalizedPercentage(metrics.relativeTotalGainPercentage),
+            relativeRealizedGain: normalizedPercentage(metrics.relativeRealizedGainPercentage),
+            relativeUnrealizedGain: normalizedPercentage(metrics.relativeUnrealizedGainPercentage),
+            totalFee: metrics.totalFee,
+            totalInvested: metrics.totalInvested,
+            realizedCostBasis: metrics.realizedCostBasis,
+            netInvested: metrics.netInvested,
+            receivedExternal: metrics.receivedExternal,
+            sentExternal: metrics.sentExternal,
+            sentForNFTs: metrics.sentForNFTs,
+            receivedForNFTs: metrics.receivedForNFTs,
+            excludedIdentifiers: excluded.sorted(),
+            assets: assetsByImplementation.values.sorted {
+                $0.implementationID < $1.implementationID
+            },
+            fetchedAt: asOf)
+    }
+
+    public func fetchPortfolioSummary(
+        scope: PortfolioAnalyticsScope) async throws -> ZerionPortfolioSummary {
+        let request = try portfolioRequest(for: scope)
+        let envelope: ZerionPortfolioEnvelope = try await client.getAnalytics(
+            path: request.path,
+            queryItems: request.queryItems)
+        let attributes = envelope.data.attributes
+        return ZerionPortfolioSummary(
+            totalPositions: attributes.total.positions,
+            positionsByChain: attributes.positionsDistributionByChain,
+            positionsByType: attributes.positionsDistributionByType,
+            absoluteChange1D: attributes.changes?.absolute1D,
+            relativeChange1D: normalizedPercentage(attributes.changes?.percent1D))
+    }
+}
+
+private extension ZerionProvider {
+    static let maximumChartTimestampFutureSkew: TimeInterval = 24 * 60 * 60
+
+    struct AnalyticsRequest {
+        let path: String
+        let queryItems: [URLQueryItem]
+    }
+
+    struct ChartDateBounds {
+        let lowerBound: Date?
+        let upperBound: Date
+    }
+
+    func chartDateBounds(
+        for attributes: ZerionWalletChartResource.Attributes) -> ChartDateBounds {
+        let responseBegin = parseISO8601Date(attributes.beginAt)
+        let responseEnd = parseISO8601Date(attributes.endAt)
+        let futureBound = Date.now.addingTimeInterval(Self.maximumChartTimestampFutureSkew)
+        let upperBound = [responseEnd, futureBound].compactMap(\.self).min() ?? futureBound
+        return ChartDateBounds(lowerBound: responseBegin, upperBound: upperBound)
+    }
+
+    func parseISO8601Date(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        let formatter = ISO8601DateFormatter()
+        if let date = formatter.date(from: value) {
+            return date
+        }
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: value)
+    }
+
+    func pnlRequest(
+        for scope: PortfolioAnalyticsScope,
+        range: ProviderPnLRange,
+        currency: FiatCurrency,
+        asOf: Date) throws -> AnalyticsRequest {
+        guard scope.dataSource == .zerion else {
+            throw ZerionError.unsupportedAnalyticsScope
+        }
+        try validate(addresses: scope.addresses)
+
+        let path: String
+        var queryItems: [URLQueryItem] = []
+        if scope.addresses.count == 1, let address = scope.addresses.first {
+            path = "wallets/\(address.value)/pnl"
+        } else if
+            scope.addresses.count == 2,
+            Set(scope.addresses.map(\.family)) == Set(PortfolioAnalyticsAddressFamily.allCases) {
+            path = "wallet-sets/pnl"
+            queryItems.append(URLQueryItem(
+                name: "addresses",
+                value: scope.addresses.map(\.value).joined(separator: ",")))
+        } else {
+            throw ZerionError.unsupportedAnalyticsScope
+        }
+
+        if scope.chainIDs.isEmpty == false {
+            let chainIDs = try analyticsChainIDs(for: scope)
+            guard chainIDs.count <= 25 else {
+                throw ZerionError.invalidData("wallet PnL supports at most 25 chains")
+            }
+            queryItems.append(URLQueryItem(
+                name: "filter[chain_ids]",
+                value: chainIDs.joined(separator: ",")))
+        }
+        queryItems.append(URLQueryItem(name: "currency", value: currency.rawValue))
+        if let since = range.zerionSinceMilliseconds(asOf: asOf) {
+            queryItems.append(URLQueryItem(name: "since", value: since))
+        }
+        return AnalyticsRequest(path: path, queryItems: queryItems)
+    }
+
+    func analyticsRequest(
+        for scope: PortfolioAnalyticsScope,
+        period: ZerionChartPeriod) throws -> AnalyticsRequest {
+        guard scope.dataSource == .zerion else {
+            throw ZerionError.unsupportedAnalyticsScope
+        }
+        try validate(addresses: scope.addresses)
+
+        let path: String
+        var queryItems: [URLQueryItem] = []
+        if scope.addresses.count == 1, let address = scope.addresses.first {
+            path = "wallets/\(address.value)/charts/\(period.rawValue)"
+        } else if
+            scope.addresses.count == 2,
+            Set(scope.addresses.map(\.family)) == Set(PortfolioAnalyticsAddressFamily.allCases) {
+            path = "wallet-sets/charts/\(period.rawValue)"
+            queryItems.append(URLQueryItem(
+                name: "addresses",
+                value: scope.addresses.map(\.value).joined(separator: ",")))
+        } else {
+            throw ZerionError.unsupportedAnalyticsScope
+        }
+
+        if scope.chainIDs.isEmpty == false {
+            let chainIDs = try analyticsChainIDs(for: scope)
+            guard chainIDs.count <= 25 else {
+                throw ZerionError.invalidData("wallet chart supports at most 25 chains")
+            }
+            queryItems.append(URLQueryItem(
+                name: "filter[chain_ids]",
+                value: chainIDs.joined(separator: ",")))
+        }
+        queryItems.append(URLQueryItem(name: "currency", value: "usd"))
+        if scope.addresses.allSatisfy({ $0.family == .evm }) {
+            queryItems.append(URLQueryItem(name: "filter[positions]", value: "no_filter"))
+        }
+        return AnalyticsRequest(path: path, queryItems: queryItems)
+    }
+
+    func portfolioRequest(
+        for scope: PortfolioAnalyticsScope) throws -> AnalyticsRequest {
+        guard scope.dataSource == .zerion else {
+            throw ZerionError.unsupportedAnalyticsScope
+        }
+        try validate(addresses: scope.addresses)
+
+        let path: String
+        var queryItems: [URLQueryItem] = []
+        if scope.addresses.count == 1, let address = scope.addresses.first {
+            path = "wallets/\(address.value)/portfolio"
+        } else if
+            scope.addresses.count == 2,
+            Set(scope.addresses.map(\.family)) == Set(PortfolioAnalyticsAddressFamily.allCases) {
+            path = "wallet-sets/portfolio"
+            queryItems.append(URLQueryItem(
+                name: "addresses",
+                value: scope.addresses.map(\.value).joined(separator: ",")))
+        } else {
+            throw ZerionError.unsupportedAnalyticsScope
+        }
+        queryItems.append(contentsOf: [
+            URLQueryItem(name: "currency", value: "usd"),
+            URLQueryItem(name: "filter[positions]", value: "no_filter"),
+            URLQueryItem(name: "sync", value: "false")
+        ])
+        return AnalyticsRequest(path: path, queryItems: queryItems)
+    }
+
+    func analyticsChainIDs(for scope: PortfolioAnalyticsScope) throws -> [String] {
+        let families = Set(scope.addresses.map(\.family))
+        if scope.chainIDs.isEmpty {
+            return ZerionChainMapping.analyticsChainIDs.filter { chainID in
+                chainID == "solana" ? families.contains(.solana) : families.contains(.evm)
+            }
+        }
+
+        let supported = Set(ZerionChainMapping.analyticsChainIDs)
+        let mapped = try scope.chainIDs.map { rawValue -> String in
+            if let chain = Chain.normalized(rawValue: rawValue) {
+                return try ZerionChainMapping.positionID(for: chain)
+            }
+            let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard supported.contains(normalized) else {
+                throw ZerionError.unsupportedChain(rawValue)
+            }
+            return normalized
+        }
+        return Array(Set(mapped)).sorted()
+    }
+
+    func validate(addresses: [PortfolioAnalyticsAddress]) throws {
+        guard addresses.isEmpty == false else {
+            throw ZerionError.unsupportedAnalyticsScope
+        }
+        for address in addresses {
+            guard address.isValid else {
+                throw ZerionError.invalidAddress(address.value)
+            }
+        }
+    }
+
+    func pnlImplementation(for identity: OnchainTokenIdentity) throws -> String {
+        let implementation = try ZerionChainMapping.implementation(for: identity)
+        return identity.contractAddress == OnchainTokenIdentity.nativeAssetSentinel
+            ? "\(implementation):"
+            : implementation
+    }
+
+    func pnlImplementationBatches(
+        _ implementations: [String],
+        baseRequest: AnalyticsRequest) throws -> [[String]] {
+        let maximumImplementationCount = 100
+        let maximumURLLength = 2000
+        var batches: [[String]] = []
+        var current: [String] = []
+
+        for implementation in implementations {
+            let candidate = current + [implementation]
+            if
+                candidate.count > maximumImplementationCount
+                || pnlURLLength(for: candidate, baseRequest: baseRequest) > maximumURLLength {
+                guard current.isEmpty == false else {
+                    throw ZerionError.invalidData("PnL implementation filter exceeds safe URL length")
+                }
+                batches.append(current)
+                current = [implementation]
+                guard pnlURLLength(for: current, baseRequest: baseRequest) <= maximumURLLength else {
+                    throw ZerionError.invalidData("PnL implementation filter exceeds safe URL length")
+                }
+            } else {
+                current = candidate
+            }
+        }
+
+        if current.isEmpty == false {
+            batches.append(current)
+        }
+        return batches
+    }
+
+    func pnlURLLength(
+        for implementations: [String],
+        baseRequest: AnalyticsRequest) -> Int {
+        var components = URLComponents(
+            string: "https://api.zerion.io/v1/\(baseRequest.path)")!
+        components.queryItems = baseRequest.queryItems + [
+            URLQueryItem(
+                name: "filter[fungible_implementations]",
+                value: implementations.joined(separator: ","))
+        ]
+        return components.url?.absoluteString.count ?? .max
+    }
+
+    func assetDTO(
+        implementationID: String,
+        metrics: ZerionPnLMetrics) -> ProviderPnLAssetDTO {
+        ProviderPnLAssetDTO(
+            implementationID: implementationID,
+            identity: validatedIdentity(for: implementationID),
+            averageBuyPrice: metrics.averageBuyPrice,
+            averageSellPrice: metrics.averageSellPrice,
+            totalGain: metrics.totalGain,
+            realizedGain: metrics.realizedGain,
+            unrealizedGain: metrics.unrealizedGain,
+            relativeTotalGain: normalizedPercentage(metrics.relativeTotalGainPercentage),
+            relativeRealizedGain: normalizedPercentage(metrics.relativeRealizedGainPercentage),
+            relativeUnrealizedGain: normalizedPercentage(metrics.relativeUnrealizedGainPercentage),
+            totalFee: metrics.totalFee,
+            totalInvested: metrics.totalInvested,
+            realizedCostBasis: metrics.realizedCostBasis,
+            netInvested: metrics.netInvested,
+            receivedExternal: metrics.receivedExternal,
+            sentExternal: metrics.sentExternal,
+            sentForNFTs: metrics.sentForNFTs,
+            receivedForNFTs: metrics.receivedForNFTs)
+    }
+
+    func validatedIdentity(for implementationID: String) -> OnchainTokenIdentity? {
+        guard let identity = try? ZerionChainMapping.identity(for: implementationID) else {
+            return nil
+        }
+        guard identity.contractAddress == OnchainTokenIdentity.nativeAssetSentinel else {
+            let family: PortfolioAnalyticsAddressFamily = identity.chain == .solana ? .solana : .evm
+            guard
+                PortfolioAnalyticsAddress(
+                    family: family,
+                    value: identity.contractAddress).isValid else {
+                return nil
+            }
+            return identity
+        }
+        return identity
+    }
+
+    func normalizedPercentage(_ percentagePoints: Decimal?) -> Decimal? {
+        percentagePoints.map { $0 / 100 }
+    }
+}

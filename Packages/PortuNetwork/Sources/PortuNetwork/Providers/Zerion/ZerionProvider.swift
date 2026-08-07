@@ -109,6 +109,9 @@ public actor ZerionProvider: PortfolioDataProvider {
         var grouped: [GroupKey: (metadata: ZerionPositionResource, tokens: [TokenDTO])] = [:]
 
         for resource in resources {
+            guard resource.attributes.flags?.displayable != false else {
+                continue
+            }
             let chainID = try required(resource.relationships.chain.data?.id, context: "missing chain")
             let chain = try ZerionChainMapping.chain(for: chainID)
             let token = try token(from: resource, chain: chain, chainID: chainID)

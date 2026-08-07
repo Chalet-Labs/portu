@@ -6,6 +6,62 @@ import Testing
 
 @MainActor
 struct ModelContainerFactoryTests {
+    @Test func `existing store opens after analytics models are added`() throws {
+        #expect(ModelContainerFactory.schema.entity(for: ProviderPortfolioValuePoint.self) != nil)
+        #expect(ModelContainerFactory.schema.entity(for: ProviderPortfolioHistoryRefresh.self) != nil)
+        #expect(ModelContainerFactory.schema.entity(for: ProviderPnLSnapshot.self) != nil)
+        #expect(ModelContainerFactory.schema.entity(for: ProviderPnLAssetBreakdown.self) != nil)
+
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appending(path: "PortuAnalyticsSchemaMigrationTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: directory) }
+        let storeURL = directory.appending(path: "Portu.store", directoryHint: .notDirectory)
+        let accountID = UUID()
+
+        do {
+            let legacySchema = Schema([
+                Account.self,
+                WalletAddress.self,
+                Position.self,
+                PositionToken.self,
+                Asset.self,
+                TokenPricingOverride.self,
+                TokenIdentityMapping.self,
+                HistoricalPricePoint.self,
+                CurrencyConversionRatePoint.self,
+                PortfolioCategory.self,
+                CategorySymbolRule.self,
+                PortfolioSnapshot.self,
+                AccountSnapshot.self,
+                AssetSnapshot.self
+            ])
+            let legacyConfiguration = ModelConfiguration(
+                "Portu",
+                schema: legacySchema,
+                url: storeURL,
+                cloudKitDatabase: .none)
+            let legacyContainer = try ModelContainer(
+                for: legacySchema,
+                configurations: [legacyConfiguration])
+            legacyContainer.mainContext.insert(Account(
+                id: accountID,
+                name: "Existing",
+                kind: .wallet,
+                dataSource: .zerion))
+            try legacyContainer.mainContext.save()
+        }
+
+        let result = try ModelContainerFactory(storeURL: storeURL).bootstrap()
+
+        #expect(result.isEphemeral == false)
+        #expect(try result.container.mainContext.fetch(FetchDescriptor<Account>()).map(\.id) == [accountID])
+        #expect(try result.container.mainContext.fetch(FetchDescriptor<ProviderPortfolioValuePoint>()).isEmpty)
+        #expect(try result.container.mainContext.fetch(FetchDescriptor<ProviderPortfolioHistoryRefresh>()).isEmpty)
+        #expect(try result.container.mainContext.fetch(FetchDescriptor<ProviderPnLSnapshot>()).isEmpty)
+    }
+
     @Test func `production open failure leaves existing store artifacts intact`() throws {
         let directory = FileManager.default.temporaryDirectory
             .appending(path: "PortuModelContainerFactoryTests-\(UUID().uuidString)", directoryHint: .isDirectory)

@@ -1,0 +1,239 @@
+import Foundation
+@testable import Portu
+import PortuCore
+import Testing
+
+struct ProviderPortfolioHistoryTests {
+    @Test func `provider history disclosure distinguishes provider reported coverage`() {
+        let noFilter = ProviderPortfolioHistory.disclosure(for: [.init(
+            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+            usdValue: 100,
+            provider: .zerion,
+            coverage: .noFilter)])
+        let providerReported = ProviderPortfolioHistory.disclosure(for: [.init(
+            timestamp: Date(timeIntervalSince1970: 1_704_067_200),
+            usdValue: 100,
+            provider: .zerion,
+            coverage: .providerReported)])
+
+        #expect(noFilter != providerReported)
+        #expect(providerReported?.contains("provider-reported") == true)
+    }
+
+    @Test func `failed refresh remains disclosed while cached provider history is visible`() {
+        let failure = ProviderPortfolioHistory.refreshFailure(
+            for: [providerPoint(Date(timeIntervalSince1970: 1_704_067_200), 100)],
+            status: .failed(.rateLimited))
+
+        #expect(failure == .rateLimited)
+        #expect(ProviderPortfolioHistory.refreshFailure(
+            for: [],
+            status: .failed(.rateLimited)) == .rateLimited)
+    }
+
+    @MainActor
+    @Test func `empty value chart history failure remains actionable`() {
+        #expect(ValueChartMode.emptyStateFailure(
+            for: [],
+            status: .failed(.invalidCredential)) == .invalidCredential)
+    }
+
+    @MainActor
+    @Test func `unscoped value chart query uses a stable account sentinel`() {
+        let first = ValueChartMode.providerQueryAccountID(for: nil)
+        let second = ValueChartMode.providerQueryAccountID(for: nil)
+        let accountID = UUID()
+
+        #expect(first == second)
+        #expect(ValueChartMode.providerQueryAccountID(for: accountID) == accountID)
+    }
+
+    private let accountID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+
+    @Test func `provider history stops strictly before earliest fresh local day`() {
+        let day1 = Date(timeIntervalSince1970: 1_704_067_200)
+        let day2 = day1.addingTimeInterval(86400)
+        let day3 = day2.addingTimeInterval(86400)
+        let provider = [
+            providerPoint(day1, 90),
+            providerPoint(day2, 100),
+            providerPoint(day3, 110)
+        ]
+        let local = [
+            LocalPortfolioValueObservation(
+                timestamp: day2.addingTimeInterval(3600),
+                usdValue: 105,
+                isFresh: true),
+            LocalPortfolioValueObservation(
+                timestamp: day3,
+                usdValue: 115,
+                isFresh: false)
+        ]
+
+        let merged = ProviderPortfolioHistory.merge(
+            provider: provider,
+            local: local,
+            selectedAccountID: accountID)
+
+        #expect(merged.map(\.source) == [.zerion, .local, .local])
+        #expect(merged.map(\.usdValue) == [90, 105, 115])
+    }
+
+    @Test func `provider is sole authority until a fresh local snapshot exists`() {
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        let merged = ProviderPortfolioHistory.merge(
+            provider: [providerPoint(day, 90)],
+            local: [.init(timestamp: day, usdValue: 50, isFresh: false)],
+            selectedAccountID: accountID)
+
+        #expect(merged.map(\.source) == [.zerion])
+        #expect(merged.map(\.usdValue) == [90])
+    }
+
+    @Test func `provider never fills gaps after local authority begins`() {
+        let day1 = Date(timeIntervalSince1970: 1_704_067_200)
+        let day2 = day1.addingTimeInterval(86400)
+        let day3 = day2.addingTimeInterval(86400)
+        let merged = ProviderPortfolioHistory.merge(
+            provider: [providerPoint(day2, 100)],
+            local: [
+                .init(timestamp: day1, usdValue: 90, isFresh: true),
+                .init(timestamp: day3, usdValue: 110, isFresh: true)
+            ],
+            selectedAccountID: accountID)
+
+        #expect(merged.map(\.timestamp) == [day1, day3])
+        #expect(merged.allSatisfy { $0.source == .local })
+    }
+
+    @Test func `provider notices omit points discarded by local authority`() {
+        let localDay = Date(timeIntervalSince1970: 1_704_067_200)
+        let provider = [providerPoint(localDay.addingTimeInterval(86400), 100)]
+
+        let retained = ProviderPortfolioHistory.retainedProviderPoints(
+            provider,
+            local: [.init(timestamp: localDay, usdValue: 90, isFresh: true)],
+            selectedAccountID: accountID)
+
+        #expect(retained.isEmpty)
+        #expect(ProviderPortfolioHistory.disclosure(for: retained) == nil)
+    }
+
+    @Test func `rendered provider points omit points dropped during conversion`() {
+        let day1 = Date(timeIntervalSince1970: 1_704_067_200)
+        let day2 = day1.addingTimeInterval(86400)
+        let rendered = ProviderPortfolioHistory.renderedProviderPoints(
+            for: [providerPoint(day1, 90), providerPoint(day2, 100)],
+            renderedTimestamps: Set([day2]))
+
+        #expect(rendered.map(\.timestamp) == [day2])
+    }
+
+    @Test func `later failed sync on the same day preserves local authority`() {
+        let authorityDay = Date(timeIntervalSince1970: 1_704_067_200)
+        let providerDay = authorityDay.addingTimeInterval(86400)
+        let merged = ProviderPortfolioHistory.merge(
+            provider: [providerPoint(providerDay, 100)],
+            local: [
+                .init(
+                    timestamp: authorityDay.addingTimeInterval(3600),
+                    usdValue: 90,
+                    isFresh: true),
+                .init(
+                    timestamp: authorityDay.addingTimeInterval(7200),
+                    usdValue: 80,
+                    isFresh: false)
+            ],
+            selectedAccountID: accountID)
+
+        #expect(merged.map(\.source) == [.local])
+        #expect(merged.map(\.usdValue) == [80])
+        #expect(merged.map(\.isReliable) == [false])
+    }
+
+    @Test func `range filtering preserves an earlier local authority boundary`() {
+        let authorityDay = Date(timeIntervalSince1970: 1_704_067_200)
+        let rangeStart = authorityDay.addingTimeInterval(86400)
+        let providerDay = rangeStart.addingTimeInterval(86400)
+
+        let merged = ProviderPortfolioHistory.merge(
+            provider: [providerPoint(providerDay, 100)],
+            local: [
+                .init(timestamp: authorityDay, usdValue: 90, isFresh: true),
+                .init(timestamp: providerDay, usdValue: 0, isFresh: false)
+            ],
+            selectedAccountID: accountID,
+            startDate: rangeStart)
+
+        #expect(merged.map(\.timestamp) == [providerDay])
+        #expect(merged.map(\.source) == [.local])
+        #expect(merged.map(\.isReliable) == [false])
+    }
+
+    @Test func `provider history never enters all accounts scope`() {
+        let day = Date(timeIntervalSince1970: 1_704_067_200)
+        let merged = ProviderPortfolioHistory.merge(
+            provider: [providerPoint(day, 90)],
+            local: [.init(timestamp: day, usdValue: 100, isFresh: true)],
+            selectedAccountID: nil)
+
+        #expect(merged.map(\.source) == [.local])
+    }
+
+    @Test func `estimates remain outside retained provider coverage`() {
+        let day1 = Date(timeIntervalSince1970: 1_704_067_200)
+        let day2 = day1.addingTimeInterval(86400)
+        let day3 = day2.addingTimeInterval(86400)
+        let day4 = day3.addingTimeInterval(86400)
+        let estimates = [day1, day2, day3, day4].map {
+            HistoricalPortfolioValuePoint(date: $0, value: 100, kind: .estimated)
+        }
+
+        let retained = ProviderPortfolioHistory.estimatesOutsideProviderCoverage(
+            estimates,
+            providerDates: [
+                day2.addingTimeInterval(3600),
+                day3.addingTimeInterval(3600)
+            ])
+
+        #expect(retained.map(\.date) == [day1, day4])
+    }
+
+    @Test func `missing FX yields longest contiguous converted suffix without spot fallback`() {
+        let day1 = Date(timeIntervalSince1970: 1_704_067_200)
+        let day2 = day1.addingTimeInterval(86400)
+        let day3 = day2.addingTimeInterval(86400)
+        let result = ProviderPortfolioHistory.convertProviderHistory(
+            [providerPoint(day1, 100), providerPoint(day2, 110), providerPoint(day3, 120)],
+            currency: .chf,
+            historicalRatesByDay: [day2: 0.9, day3: 0.8])
+
+        #expect(result.points.map(\.value) == [99, 96])
+        #expect(result.historicalFXUnavailableBefore == day2)
+    }
+
+    @Test func `provider splice discards later missing FX before selecting convertible suffix`() {
+        let day1 = Date(timeIntervalSince1970: 1_704_067_200)
+        let day2 = day1.addingTimeInterval(86400)
+        let authorityDay = day2.addingTimeInterval(86400)
+        let result = ProviderPortfolioHistory.convertProviderHistory(
+            [providerPoint(day1, 100), providerPoint(day2, 110), providerPoint(authorityDay, 120)],
+            mergeContext: ProviderHistoryMergeContext(
+                local: [.init(timestamp: authorityDay, usdValue: 130, isFresh: true)],
+                selectedAccountID: UUID(),
+                startDate: day1),
+            currency: .chf,
+            historicalRatesByDay: [day1: 0.9, day2: 0.8])
+
+        #expect(result.points.map(\.value) == [90, 88])
+        #expect(result.historicalFXUnavailableBefore == nil)
+    }
+
+    private func providerPoint(_ date: Date, _ value: Decimal) -> ProviderPortfolioValueDTO {
+        ProviderPortfolioValueDTO(
+            timestamp: date,
+            usdValue: value,
+            provider: .zerion,
+            coverage: .providerReported)
+    }
+}

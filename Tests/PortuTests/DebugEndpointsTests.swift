@@ -13,7 +13,10 @@
                 PositionToken.self, Asset.self, TokenPricingOverride.self,
                 TokenIdentityMapping.self,
                 HistoricalPricePoint.self,
-                PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
+                PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
+                ProviderPortfolioValuePoint.self, ProviderPortfolioHistoryRefresh.self,
+                ProviderPnLSnapshot.self,
+                ProviderPnLAssetBreakdown.self
             ])
             let config = ModelConfiguration(isStoredInMemoryOnly: true)
             return try ModelContainer(for: schema, configurations: [config])
@@ -448,11 +451,11 @@
             context.insert(Account(name: "Integrated", kind: .manual, dataSource: .manual))
             try context.save()
 
-            let port = UInt16.random(in: 49152 ... 65535)
-            let server = DebugServer(port: port, modelContainer: container)
+            let server = DebugServer(port: 0, modelContainer: container)
             try await server.start()
             defer { server.stop() }
 
+            let port = try #require(server.listeningPort)
             let (data, response) = try await URLSession.shared.data(
                 from: #require(URL(string: "http://127.0.0.1:\(port)/state/accounts")))
             let httpResponse = try #require(response as? HTTPURLResponse)

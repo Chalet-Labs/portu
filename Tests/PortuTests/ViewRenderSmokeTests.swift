@@ -180,6 +180,56 @@ struct ViewRenderSmokeTests {
         render(view)
     }
 
+    @Test func `wallet PnL summary and asset breakdown render without crashing`() {
+        let scope = PortfolioAnalyticsScope(
+            accountID: UUID(),
+            dataSource: .zerion,
+            addresses: [.init(
+                family: .evm,
+                value: "0x1111111111111111111111111111111111111111")])
+        let context = PortfolioAnalyticsRequestContext(
+            scope: scope,
+            chartRange: .oneMonth,
+            currency: .chf,
+            implementations: [],
+            asOf: Date(timeIntervalSince1970: 1_704_153_600))
+        var state = populatedState(section: .performance)
+        state.performance.analytics = PortfolioAnalyticsFeature.State(
+            isAvailable: true,
+            activeRequestID: context.requestID(pnlRange: .oneMonth),
+            pnl: ProviderPnLDTO(
+                range: .oneMonth,
+                currency: .chf,
+                totalGain: 120,
+                realizedGain: 80,
+                unrealizedGain: 40,
+                totalFee: 4,
+                netInvested: 1000,
+                receivedExternal: 200,
+                excludedIdentifiers: ["ethereum:0xdead"],
+                assets: [.init(
+                    implementationID: "ethereum:",
+                    identity: .init(chain: .ethereum, contractAddress: nil),
+                    averageBuyPrice: 2000,
+                    totalGain: 120,
+                    realizedGain: 80,
+                    unrealizedGain: 40,
+                    totalFee: 4,
+                    totalInvested: 1000)],
+                fetchedAt: Date(timeIntervalSince1970: 1_704_153_600)),
+            pnlStatus: .loaded)
+        let store = makeStore(state: state)
+
+        let view = WalletPnLChartMode(
+            store: store,
+            context: context,
+            scopeOptions: [.init(label: "Wallet", scope: scope)])
+            .environment(\.colorScheme, .dark)
+            .frame(width: 1200, height: 700)
+
+        render(view, size: CGSize(width: 1200, height: 700))
+    }
+
     private func makeStore(section: SidebarSection) -> StoreOf<AppFeature> {
         makeStore(state: populatedState(section: section))
     }
@@ -219,7 +269,11 @@ struct ViewRenderSmokeTests {
             CategorySymbolRule.self,
             PortfolioSnapshot.self,
             AccountSnapshot.self,
-            AssetSnapshot.self
+            AssetSnapshot.self,
+            ProviderPortfolioValuePoint.self,
+            ProviderPortfolioHistoryRefresh.self,
+            ProviderPnLSnapshot.self,
+            ProviderPnLAssetBreakdown.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])

@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import Foundation
 import PortuCore
 import SwiftData
@@ -271,6 +273,9 @@ enum AccountSheetSaveCoordinator {
                 modelContext: modelContext)
             if identityChanged {
                 invalidateSyncedPositions(for: account, modelContext: modelContext)
+                _ = try PortfolioAnalyticsCacheWriter.deleteRows(
+                    accountID: account.id,
+                    in: modelContext)
             }
 
         case .manual:
@@ -356,7 +361,10 @@ enum AccountSheetSaveCoordinator {
         guard addresses.count == 1, let existing = addresses.first else {
             return true
         }
-        return existing.chain != chain || existing.address != address
+        guard existing.chain == chain else { return true }
+        let family: PortfolioAnalyticsAddressFamily = chain == .solana ? .solana : .evm
+        return PortfolioAnalyticsAddress(family: family, value: existing.address)
+            != PortfolioAnalyticsAddress(family: family, value: address)
     }
 
     @MainActor
@@ -421,8 +429,11 @@ enum AccountSheetSaveCoordinator {
                 throw AccountSheetSaveError.credentialSaveFailed(error.localizedDescription)
             }
         }
-        modelContext.delete(account)
         do {
+            _ = try PortfolioAnalyticsCacheWriter.deleteRows(
+                accountID: accountID,
+                in: modelContext)
+            modelContext.delete(account)
             try save(modelContext)
         } catch let saveError {
             modelContext.rollback()
@@ -473,9 +484,8 @@ enum AccountSheetSaveCoordinator {
             passphrase: passphrase)
     }
 
-    /// Removes all keychain entries for an account. Safe to call for non-exchange
-    /// accounts (deletes of missing keys are no-ops); used both by the failure-cleanup
-    /// paths here and by account deletion.
+    /// Removes all keychain entries for an account. Missing keys are no-ops; used by
+    /// both failure cleanup and account deletion.
     static func deleteExchangeCredentials(_ accountID: UUID, secretStore: any SecretStore) async throws {
         let credentialStore = AccountCredentialStore(secretStore: secretStore)
         do {

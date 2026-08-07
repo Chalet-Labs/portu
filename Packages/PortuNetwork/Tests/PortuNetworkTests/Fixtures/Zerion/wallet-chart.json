@@ -1,0 +1,22 @@
+{
+  "links": {
+    "self": "https://api.zerion.io/v1/wallets/0x1111111111111111111111111111111111111111/charts/month"
+  },
+  "data": {
+    "type": "wallet_chart",
+    "id": "fixture-wallet-month",
+    "attributes": {
+      "begin_at": "2024-01-01T00:00:00Z",
+      "end_at": "2024-01-03T00:00:00Z",
+      "points": [
+        [1704067200, 100],
+        [1704100000, 110],
+        [1704153600, 120],
+        [1704240000, 0],
+        [1704326400, -10],
+        ["malformed", 130],
+        [1704412800, "malformed"]
+      ]
+    }
+  }
+}

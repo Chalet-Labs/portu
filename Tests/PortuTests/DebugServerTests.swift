@@ -44,6 +44,20 @@
 
         // MARK: - Server Lifecycle
 
+        @Test func `zero port uses an OS-assigned listening port`() async throws {
+            let server = DebugServer(port: 0)
+            try await server.start()
+            defer { server.stop() }
+
+            let port = try #require(server.listeningPort)
+            #expect(port != 0)
+
+            let (_, response) = try await URLSession.shared.data(
+                from: #require(URL(string: "http://127.0.0.1:\(port)/health")))
+            let httpResponse = try #require(response as? HTTPURLResponse)
+            #expect(httpResponse.statusCode == 200)
+        }
+
         @Test func `server stop cancels listener`() async throws {
             let server = DebugServer(port: 19003)
             try await server.start()

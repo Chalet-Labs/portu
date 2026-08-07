@@ -17,6 +17,7 @@ Portu is local-first. Portfolio data stays on your Mac, provider credentials are
 - Exposure, performance, all-assets, all-positions, account, and asset-detail views.
 - Live and historical pricing through CoinGecko, with Zerion fallback for onchain tokens that CoinGecko cannot price.
 - Historical price backfill for local performance charts.
+- Individual Zerion-wallet history and FIFO P&L analytics behind a local release gate.
 - Token settings for CoinGecko ID overrides, pricing overrides, hidden dust, and unpriced assets.
 - Custom RPC settings and configurable provider sync intervals.
 
@@ -42,6 +43,14 @@ Optional credentials:
 
 Use read-only exchange API credentials where the exchange supports them. Portu stores provider secrets locally in macOS Keychain.
 Wallet addresses are sent directly from the app to the configured portfolio and pricing providers; Portu has no proxy or backend that receives them.
+
+### Experimental Zerion analytics
+
+Portu can augment an individual Zerion account with provider wallet-value history and a separate FIFO P&L summary. The existing snapshot-delta chart is labeled **Value Change** because deposits, withdrawals, and transfers affect it; it is not cost-basis P&L.
+
+Analytics are local-only and off by default during rollout. Developers can opt in for testing with `PORTU_ZERION_ANALYTICS=1`. Authenticated smoke tests confirmed the endpoints with a Zerion demo-tier key, but effective quotas remain specific to each user's BYOK plan. Portu stores only normalized daily values and P&L fields, retains at most 400 days of provider history, and never stores raw API bodies or authorization headers.
+
+Wallet history may omit unsupported historical DeFi positions. Zerion P&L can exclude unpriced assets, uses FIFO, values unrealized gains with current prices, and can misclassify some airdrops. It is an estimate, not tax advice. Multiple same-family wallet addresses are shown separately and are never added into a fabricated combined P&L total.
 
 ## Getting Started
 

@@ -5,6 +5,7 @@ public actor ZerionAPIClient {
     typealias PacingNow = @Sendable () -> Duration
     typealias PacingSleep = @Sendable (Duration) async throws -> Void
 
+    public static let defaultMinimumRequestInterval: Duration = .seconds(1)
     private static let baseURL = URL(string: "https://api.zerion.io/v1/")!
 
     private let apiKey: APIKeyProvider
@@ -17,10 +18,15 @@ public actor ZerionAPIClient {
     private let pacingSleep: PacingSleep
     private var nextRequestTime: Duration?
 
+    private enum RetryMode {
+        case standard
+        case analyticsPreparation(deadline: Duration)
+    }
+
     public init(
         apiKey: @escaping APIKeyProvider,
         session: URLSession = .shared,
-        minimumRequestInterval: Duration = .milliseconds(350),
+        minimumRequestInterval: Duration = defaultMinimumRequestInterval,
         maximumRetryAttempts: Int = 2,
         maximumRetryDelaySeconds: Int = 10) {
         self.apiKey = apiKey
@@ -56,6 +62,39 @@ public actor ZerionAPIClient {
     func get<Response: Decodable & Sendable>(
         path: String,
         queryItems: [URLQueryItem] = []) async throws -> Response {
+        try await get(path: path, queryItems: queryItems, retryMode: .standard)
+    }
+
+    func getAnalytics<Response: Decodable & Sendable>(
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        maximumPreparationWait: Duration = .seconds(120)) async throws -> Response {
+        let deadline = analyticsPreparationDeadline(maximumWait: maximumPreparationWait)
+        return try await getAnalytics(
+            path: path,
+            queryItems: queryItems,
+            preparationDeadline: deadline)
+    }
+
+    func analyticsPreparationDeadline(
+        maximumWait: Duration = .seconds(120)) -> Duration {
+        pacingNow() + max(.zero, maximumWait)
+    }
+
+    func getAnalytics<Response: Decodable & Sendable>(
+        path: String,
+        queryItems: [URLQueryItem] = [],
+        preparationDeadline: Duration) async throws -> Response {
+        try await get(
+            path: path,
+            queryItems: queryItems,
+            retryMode: .analyticsPreparation(deadline: preparationDeadline))
+    }
+
+    private func get<Response: Decodable & Sendable>(
+        path: String,
+        queryItems: [URLQueryItem],
+        retryMode: RetryMode) async throws -> Response {
         guard
             !path.hasPrefix("/"),
             !path.contains(".."),
@@ -69,14 +108,16 @@ public actor ZerionAPIClient {
         guard let url = components.url else {
             throw ZerionError.untrustedURL
         }
-        return try await get(url: url)
+        return try await get(url: url, retryMode: retryMode)
     }
 
     func get<Response: Decodable & Sendable>(next url: URL) async throws -> Response {
-        try await get(url: url)
+        try await get(url: url, retryMode: .standard)
     }
 
-    private func get<Response: Decodable & Sendable>(url: URL) async throws -> Response {
+    private func get<Response: Decodable & Sendable>(
+        url: URL,
+        retryMode: RetryMode) async throws -> Response {
         try validate(url)
         let key = try apiKey().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
@@ -91,8 +132,17 @@ public actor ZerionAPIClient {
             forHTTPHeaderField: "Authorization")
 
         var attempt = 0
+        let preparationDeadline: Duration? = switch retryMode {
+        case .standard:
+            nil
+        case let .analyticsPreparation(deadline):
+            deadline
+        }
         while true {
             try await paceRequest()
+            if let preparationDeadline, pacingNow() >= preparationDeadline {
+                throw ZerionError.temporarilyUnavailable(retryAfter: nil)
+            }
             let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw ZerionError.invalidResponse
@@ -107,6 +157,22 @@ public actor ZerionAPIClient {
             }
 
             let error = Self.error(from: httpResponse, data: data)
+            if
+                case let .temporarilyUnavailable(retryAfter) = error,
+                let preparationDeadline,
+                let retryAfter,
+                retryAfter > 0 {
+                let delay = Duration.seconds(retryAfter)
+                let now = pacingNow()
+                guard now < preparationDeadline, now + delay <= preparationDeadline else {
+                    throw error
+                }
+                try await pacingSleep(delay)
+                guard pacingNow() < preparationDeadline else {
+                    throw error
+                }
+                continue
+            }
             guard attempt < maximumRetryAttempts, Self.isRetryable(httpResponse.statusCode) else {
                 throw error
             }

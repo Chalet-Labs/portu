@@ -19,7 +19,10 @@ struct SyncEngineTests {
             TokenIdentityMapping.self,
             HistoricalPricePoint.self,
             PortfolioCategory.self, CategorySymbolRule.self,
-            PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self
+            PortfolioSnapshot.self, AccountSnapshot.self, AssetSnapshot.self,
+            ProviderPortfolioValuePoint.self, ProviderPortfolioHistoryRefresh.self,
+            ProviderPnLSnapshot.self,
+            ProviderPnLAssetBreakdown.self
         ])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])
