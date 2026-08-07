@@ -119,7 +119,7 @@ Issues are tracked in GitHub Issues for `Chalet-Labs/portu`. See `docs/agents/is
 
 ### Triage labels
 
-Triage uses the five default canonical labels. See `docs/agents/triage-labels.md`.
+Triage uses the five default canonical labels — see `docs/agents/triage-labels.md` for the mapping and which of them exist in this repo's tracker today.
 
 ### Domain docs
 
