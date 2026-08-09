@@ -107,22 +107,20 @@ struct ReleaseAutomationTests {
         #expect(workflow.contains("PR title must use Conventional Commits"))
     }
 
-    @Test func `release packaging requires authorized signing for data protection keychain`() throws {
+    @Test func `release packaging uses ad hoc signing without paid Apple credentials`() throws {
         let packageScript = try string("scripts/package_release_dmg.sh")
         let workflow = try string(".github/workflows/release.yml")
 
-        #expect(!packageScript.contains("CODE_SIGN_IDENTITY=\"-\""))
-        #expect(packageScript.contains("PORTU_CODE_SIGN_IDENTITY"))
-        #expect(packageScript.contains("PORTU_DEVELOPMENT_TEAM"))
-        #expect(packageScript.contains("PORTU_PROVISIONING_PROFILE_SPECIFIER"))
-        #expect(packageScript.contains("CODE_SIGN_STYLE=Manual"))
+        #expect(packageScript.contains("CODE_SIGN_IDENTITY=\"-\""))
+        #expect(packageScript.contains("PORTU_CODE_SIGN_IDENTITY") == false)
+        #expect(packageScript.contains("PORTU_DEVELOPMENT_TEAM") == false)
+        #expect(packageScript.contains("PORTU_PROVISIONING_PROFILE_SPECIFIER") == false)
         #expect(packageScript.contains("CODE_SIGNING_REQUIRED=YES"))
-        #expect(packageScript.contains("codesign -d --entitlements"))
-        #expect(packageScript.contains("com.apple.application-identifier"))
-        #expect(workflow.contains("PORTU_SIGNING_CERTIFICATE_P12_BASE64"))
-        #expect(workflow.contains("PORTU_SIGNING_CERTIFICATE_PASSWORD"))
-        #expect(workflow.contains("PORTU_PROVISIONING_PROFILE_BASE64"))
-        #expect(workflow.contains("security set-key-partition-list"))
+        #expect(packageScript.contains("codesign -d --entitlements") == false)
+        #expect(workflow.contains("PORTU_SIGNING_CERTIFICATE_P12_BASE64") == false)
+        #expect(workflow.contains("PORTU_SIGNING_CERTIFICATE_PASSWORD") == false)
+        #expect(workflow.contains("PORTU_PROVISIONING_PROFILE_BASE64") == false)
+        #expect(workflow.contains("Install release signing assets") == false)
         #expect(packageScript.contains("BUNDLE_MARKETING_VERSION=\"${VERSION%%[-+]*}\""))
         #expect(packageScript.contains("MARKETING_VERSION=\"$BUNDLE_MARKETING_VERSION\""))
         #expect(packageScript.contains("CURRENT_PROJECT_VERSION=\"$BUILD_NUMBER\""))
@@ -131,7 +129,7 @@ struct ReleaseAutomationTests {
         #expect(packageScript.contains("shasum -a 256"))
         #expect(packageScript.contains("CFBundleShortVersionString"))
         #expect(packageScript.contains("expected CFBundleShortVersionString $BUNDLE_MARKETING_VERSION"))
-        #expect(!fileExists("scripts/mark_github_release_prerelease.sh"))
+        #expect(fileExists("scripts/mark_github_release_prerelease.sh") == false)
     }
 
     @Test func `local run script uses a stable development signing identity`() throws {
