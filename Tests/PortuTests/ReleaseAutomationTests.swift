@@ -74,6 +74,13 @@ struct ReleaseAutomationTests {
         ] {
             #expect(devDependencies[dependency] != nil)
         }
+
+        #expect(devDependencies["@semantic-release/github"] == "^12.0.9")
+
+        let lockfile = try jsonObject("package-lock.json")
+        let packages = try #require(lockfile["packages"] as? [String: Any])
+        let githubPackage = try #require(packages["node_modules/@semantic-release/github"] as? [String: Any])
+        #expect(githubPackage["version"] as? String == "12.0.9")
     }
 
     @Test func `release workflow runs tests then semantic release on push`() throws {
