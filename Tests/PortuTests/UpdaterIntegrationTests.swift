@@ -51,6 +51,7 @@ struct UpdaterIntegrationTests {
         #expect(info["SUAutomaticallyUpdate"] as? Bool == false)
         #expect(info["SUAllowsAutomaticUpdates"] as? Bool == false)
         #expect(info["SUEnableSystemProfiling"] as? Bool == false)
+        #expect(info["SUVerifyUpdateBeforeExtraction"] as? String == "$(PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION)")
     }
 
     @Test func `updater configuration requires HTTPS feed and a public key`() {

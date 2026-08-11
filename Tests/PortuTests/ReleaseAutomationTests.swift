@@ -132,11 +132,138 @@ struct ReleaseAutomationTests {
         #expect(packageScript.contains("MARKETING_VERSION=\"$BUNDLE_MARKETING_VERSION\""))
         #expect(packageScript.contains("CURRENT_PROJECT_VERSION=\"$BUILD_NUMBER\""))
         #expect(packageScript.contains("hdiutil create"))
-        #expect(packageScript.contains("hdiutil verify"))
+        #expect(packageScript.contains("verify_dmg"))
+        #expect(packageScript.contains("hdiutil verify \"$dmg_path\""))
+        #expect(packageScript.contains("for attempt in 1 2 3"))
         #expect(packageScript.contains("shasum -a 256"))
         #expect(packageScript.contains("CFBundleShortVersionString"))
         #expect(packageScript.contains("expected CFBundleShortVersionString $BUNDLE_MARKETING_VERSION"))
         #expect(fileExists("scripts/mark_github_release_prerelease.sh") == false)
+    }
+
+    @Test func `proof updater configuration requires HTTPS and a valid disposable public key`() throws {
+        let validKey = "bwdTmUzcenVsxzIQb737hznwxvpJr7uveKIzVkxVd00="
+
+        let valid = try runScript(
+            "scripts/validate_sparkle_proof_configuration.sh",
+            arguments: ["https://localhost:8443/appcast.xml", validKey])
+        #expect(valid.status == 0)
+
+        let insecure = try runScript(
+            "scripts/validate_sparkle_proof_configuration.sh",
+            arguments: ["http://localhost:8443/appcast.xml", validKey])
+        #expect(insecure.status == 2)
+        #expect(insecure.error.contains("HTTPS"))
+
+        let malformedKey = try runScript(
+            "scripts/validate_sparkle_proof_configuration.sh",
+            arguments: ["https://localhost:8443/appcast.xml", "not-a-public-key"])
+        #expect(malformedKey.status == 2)
+        #expect(malformedKey.error.contains("32-byte"))
+    }
+
+    @Test func `proof release overrides are explicit and verify the archive before extraction`() throws {
+        let packageScript = try string("scripts/package_release_dmg.sh")
+        let proofScript = try string("scripts/prepare_sparkle_adhoc_proof.sh")
+        let infoPlist = try string("Sources/Portu/Resources/Info.plist")
+        let project = try string("project.yml")
+
+        #expect(packageScript.contains("PORTU_SPARKLE_PROOF"))
+        #expect(packageScript.contains("validate_sparkle_proof_configuration.sh"))
+        #expect(packageScript.contains("PORTU_UPDATE_FEED_URL"))
+        #expect(packageScript.contains("PORTU_UPDATE_PUBLIC_KEY"))
+        #expect(packageScript.contains("PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION=YES"))
+        #expect(infoPlist.contains("<key>SUVerifyUpdateBeforeExtraction</key>"))
+        #expect(infoPlist.contains("<string>$(PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION)</string>"))
+        #expect(project.contains("PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION: NO"))
+        #expect(proofScript.contains("signature_metadata=\"$(codesign -d --verbose=4"))
+        #expect(proofScript.contains("grep -q '^Signature=adhoc$' <<< \"$signature_metadata\""))
+        #expect(!proofScript.contains("grep -R -F -- \"$PRIVATE_SEED\""))
+        #expect(proofScript.contains("seed = sys.stdin.buffer.readline().rstrip"))
+        #expect(proofScript.contains("TAMPERED_LENGTH=\"$(stat -f '%z' \"$TAMPERED_DMG\")\""))
+        #expect(proofScript.contains("TAMPERED_APPCAST_LENGTH"))
+        #expect(proofScript.contains("\"archive_length\": int(\"$TAMPERED_LENGTH\")"))
+        #expect(proofScript.contains("verify_release_dmg() ("))
+        #expect(proofScript.contains("trap cleanup_mounted_release EXIT"))
+    }
+
+    @Test func `proof key derivation matches the RFC 8032 Ed25519 vector`() throws {
+        let privateSeed = "nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A="
+        let expectedPublicKey = "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo="
+
+        let result = try runScript(
+            "scripts/derive_sparkle_public_key.swift",
+            arguments: [],
+            input: privateSeed + "\n")
+
+        #expect(result.status == 0)
+        #expect(result.output.trimmingCharacters(in: .whitespacesAndNewlines) == expectedPublicKey)
+        #expect(result.error.isEmpty)
+    }
+
+    @Test func `proof preparation plan requires HTTPS and increasing build numbers`() throws {
+        let valid = try runScript(
+            "scripts/prepare_sparkle_adhoc_proof.sh",
+            arguments: [
+                "--base-url", "https://localhost:8443",
+                "--n-version", "79.0.0",
+                "--n-build", "79000",
+                "--next-version", "79.0.1",
+                "--next-build", "79001",
+                "--output", ".build/updater-proof",
+                "--plan-only"
+            ])
+        #expect(valid.status == 0)
+        #expect(valid.output.contains("proof_feed_url=https://localhost:8443/appcast.xml"))
+        #expect(valid.output.contains("n=79.0.0+79000"))
+        #expect(valid.output.contains("next=79.0.1+79001"))
+        #expect(!valid.output.localizedCaseInsensitiveContains("private"))
+
+        let insecure = try runScript(
+            "scripts/prepare_sparkle_adhoc_proof.sh",
+            arguments: [
+                "--base-url", "http://localhost:8443",
+                "--n-version", "79.0.0",
+                "--n-build", "79000",
+                "--next-version", "79.0.1",
+                "--next-build", "79001",
+                "--output", ".build/updater-proof",
+                "--plan-only"
+            ])
+        #expect(insecure.status == 2)
+        #expect(insecure.error.contains("HTTPS"))
+
+        let nonIncreasing = try runScript(
+            "scripts/prepare_sparkle_adhoc_proof.sh",
+            arguments: [
+                "--base-url", "https://localhost:8443",
+                "--n-version", "79.0.0",
+                "--n-build", "79000",
+                "--next-version", "79.0.1",
+                "--next-build", "79000",
+                "--output", ".build/updater-proof",
+                "--plan-only"
+            ])
+        #expect(nonIncreasing.status == 2)
+        #expect(nonIncreasing.error.contains("greater"))
+    }
+
+    @Test func `proof HTTPS server selects immutable negative appcast scenarios`() throws {
+        let help = try runScript(
+            "scripts/serve_sparkle_adhoc_proof.py",
+            arguments: ["--help"])
+
+        #expect(help.status == 0)
+        #expect(help.output.contains("--scenario {normal,tampered,missing}"))
+        #expect(help.output.contains("--installer INSTALLER"))
+
+        let server = try string("scripts/serve_sparkle_adhoc_proof.py")
+        #expect(server.contains("tampered-appcast.xml"))
+        #expect(server.contains("missing-enclosure-appcast.xml"))
+        #expect(server.contains("if request_path == \"/appcast.xml\""))
+        #expect(server.contains("if request_path == \"/install.dmg\""))
+        #expect(server.contains("def do_HEAD(self)"))
+        #expect(server.contains("except KeyboardInterrupt:"))
     }
 
     @Test func `local run script uses a stable development signing identity`() throws {
@@ -177,6 +304,34 @@ struct ReleaseAutomationTests {
 
     private func fileExists(_ path: String) -> Bool {
         FileManager.default.fileExists(atPath: repoRoot.appending(path: path).path(percentEncoded: false))
+    }
+
+    private func runScript(
+        _ path: String,
+        arguments: [String],
+        input: String? = nil) throws -> (status: Int32, output: String, error: String) {
+        let process = Process()
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        let inputPipe = Pipe()
+        process.executableURL = repoRoot.appending(path: path)
+        process.arguments = arguments
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+        if input != nil {
+            process.standardInput = inputPipe
+        }
+
+        try process.run()
+        if let input {
+            inputPipe.fileHandleForWriting.write(Data(input.utf8))
+            try inputPipe.fileHandleForWriting.close()
+        }
+        process.waitUntilExit()
+
+        let output = String(bytes: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let error = String(bytes: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        return (process.terminationStatus, output, error)
     }
 
     private func workflowPushBranches(in workflow: String) throws -> Set<String> {
