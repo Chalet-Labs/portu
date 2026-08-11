@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+    <channel>
+        <title>Portu Updater Proof</title>
+        <link>https://raw.githubusercontent.com/Chalet-Labs/portu/master/Tests/Fixtures/Updater/appcast.xml</link>
+        <description>An isolated no-update feed for exercising Sparkle's manual check interface.</description>
+        <language>en</language>
+    </channel>
+</rss>

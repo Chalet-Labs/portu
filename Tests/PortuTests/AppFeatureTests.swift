@@ -12,6 +12,22 @@ import Testing
 struct AppFeatureTests {
     // MARK: - Section Navigation
 
+    @Test func `manual update check reaches updater client`() async {
+        nonisolated(unsafe) var didCheckForUpdates = false
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.updater.checkForUpdates = {
+                didCheckForUpdates = true
+            }
+        }
+
+        await store.send(.checkForUpdatesTapped)
+        await store.finish()
+
+        #expect(didCheckForUpdates)
+    }
+
     @Test func `section selection updates state`() async {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
@@ -278,7 +294,9 @@ struct AppFeatureTests {
             AppFeature()
         } withDependencies: {
             $0.priceService.fetchCoinGeckoPrices = { request, currency, _ in
-                if request.coinGeckoIDs == ["bitcoin"] { throw CoinFailed() }
+                if request.coinGeckoIDs == ["bitcoin"] {
+                    throw CoinFailed()
+                }
                 // Token fetch succeeds but returns nothing for the onchain identity.
                 return PriceUpdate(currency: currency, prices: [:], changes24h: [:])
             }
