@@ -51,6 +51,7 @@ struct AppFeature {
 
     enum Action {
         case appLaunched
+        case checkForUpdatesTapped
         case sectionSelected(SidebarSection)
         case settingsSelected
         case syncTapped
@@ -94,6 +95,7 @@ struct AppFeature {
     @Dependency(\.providerSyncSettings) var providerSyncSettings
     @Dependency(\.continuousClock) var clock
     @Dependency(\.currentDate) var currentDate
+    @Dependency(\.updater) var updater
 
     var body: some ReducerOf<Self> {
         Scope(state: \.allAssets, action: \.allAssets) {
@@ -126,6 +128,11 @@ struct AppFeature {
                 state.historicalFXAvailability = .loading
                 return currencyConversionEffect(currency: pending)
 
+            case .checkForUpdatesTapped:
+                return .run { _ in
+                    await updater.checkForUpdates()
+                }
+
             case let .sectionSelected(section):
                 state.selectedSection = section
                 state.isSettingsPresented = false
@@ -136,7 +143,9 @@ struct AppFeature {
                 return .none
 
             case .syncTapped:
-                if case .syncing = state.syncStatus { return .none }
+                if case .syncing = state.syncStatus {
+                    return .none
+                }
                 state.syncStatus = .syncing(progress: 0)
                 state.syncingAccountID = nil
                 return .run { send in
@@ -147,7 +156,9 @@ struct AppFeature {
                 }
 
             case let .accountSyncTapped(accountID):
-                if case .syncing = state.syncStatus { return .none }
+                if case .syncing = state.syncStatus {
+                    return .none
+                }
                 state.syncStatus = .syncing(progress: 0)
                 state.syncingAccountID = accountID
                 return .run { send in
@@ -240,7 +251,9 @@ struct AppFeature {
                 return .cancel(id: CancelID.scheduledSync)
 
             case let .scheduledSyncDue(scope):
-                if case .syncing = state.syncStatus { return .none }
+                if case .syncing = state.syncStatus {
+                    return .none
+                }
                 state.syncStatus = .syncing(progress: 0)
                 state.syncingAccountID = nil
                 return .run { send in
