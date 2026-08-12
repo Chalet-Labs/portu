@@ -306,6 +306,9 @@ extension ReleaseAutomationTests {
         #expect(server.contains("except KeyboardInterrupt:"))
         #expect(preparer.contains("--installer '$RELEASES_DIR/Portu-$N_VERSION.dmg'"))
         #expect(playbook.contains("SERVE_STATUS=\"$(tailscale serve status --json)\" ||"))
+        #expect(playbook.contains("PORT_IN_USE=\"$(jq -r"))
+        #expect(playbook.contains("Could not parse Tailscale Serve configuration"))
+        #expect(playbook.contains("[[ \"$PORT_IN_USE\" != \"false\" ]]"))
         #expect(playbook.contains("tailscale serve --https=\"$TAILSCALE_SERVE_PORT\" --set-path=/ off"))
         #expect(!playbook.contains("tailscale serve reset"))
     }

@@ -64,8 +64,16 @@ SERVE_STATUS="$(tailscale serve status --json)" || {
   echo "Could not inspect Tailscale Serve configuration; refusing to change it." >&2
   exit 1
 }
-if jq -e --arg port "$TAILSCALE_SERVE_PORT" '(.TCP[$port]? != null) or ([((.Web? // {}) | to_entries[]) | select(.key | endswith(":" + $port))] | length > 0)' <<< "$SERVE_STATUS" >/dev/null; then
+PORT_IN_USE="$(jq -r --arg port "$TAILSCALE_SERVE_PORT" '(.TCP[$port]? != null) or ([((.Web? // {}) | to_entries[]) | select(.key | endswith(":" + $port))] | length > 0)' <<< "$SERVE_STATUS")" || {
+  echo "Could not parse Tailscale Serve configuration; refusing to change it." >&2
+  exit 1
+}
+if [[ "$PORT_IN_USE" == "true" ]]; then
   echo "Tailscale Serve HTTPS port $TAILSCALE_SERVE_PORT is already in use; choose another unused port, set TAILSCALE_SERVE_PORT to it, and rebuild the proof." >&2
+  exit 1
+fi
+if [[ "$PORT_IN_USE" != "false" ]]; then
+  echo "Unexpected Tailscale Serve configuration result; refusing to change it." >&2
   exit 1
 fi
 tailscale serve --bg --https="$TAILSCALE_SERVE_PORT" --set-path=/ "https+insecure://localhost:$ORIGIN_PORT"
