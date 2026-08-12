@@ -305,6 +305,7 @@ extension ReleaseAutomationTests {
         #expect(server.contains("ThreadingHTTPServer((\"127.0.0.1\", args.port)"))
         #expect(server.contains("except KeyboardInterrupt:"))
         #expect(preparer.contains("--installer '$RELEASES_DIR/Portu-$N_VERSION.dmg'"))
+        #expect(playbook.contains("SERVE_STATUS=\"$(tailscale serve status --json)\" ||"))
         #expect(playbook.contains("tailscale serve --https=\"$TAILSCALE_SERVE_PORT\" --set-path=/ off"))
         #expect(!playbook.contains("tailscale serve reset"))
     }

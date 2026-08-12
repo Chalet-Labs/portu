@@ -60,7 +60,11 @@ The origin deliberately binds only to `127.0.0.1`. In a second terminal, confirm
 ```bash
 TAILSCALE_SERVE_PORT="$(jq -r '.tailscale_serve_https_port' .build/updater-proof-79/manifest.json)"
 ORIGIN_PORT="$(jq -r '.origin_url | capture(":(?<port>[0-9]+)$").port' .build/updater-proof-79/manifest.json)"
-if tailscale serve status --json | jq -e --arg port "$TAILSCALE_SERVE_PORT" '(.TCP[$port]? != null) or ([((.Web? // {}) | to_entries[]) | select(.key | endswith(":" + $port))] | length > 0)' >/dev/null; then
+SERVE_STATUS="$(tailscale serve status --json)" || {
+  echo "Could not inspect Tailscale Serve configuration; refusing to change it." >&2
+  exit 1
+}
+if jq -e --arg port "$TAILSCALE_SERVE_PORT" '(.TCP[$port]? != null) or ([((.Web? // {}) | to_entries[]) | select(.key | endswith(":" + $port))] | length > 0)' <<< "$SERVE_STATUS" >/dev/null; then
   echo "Tailscale Serve HTTPS port $TAILSCALE_SERVE_PORT is already in use; choose another unused port, set TAILSCALE_SERVE_PORT to it, and rebuild the proof." >&2
   exit 1
 fi
