@@ -7,16 +7,22 @@ N_BUILD=""
 NEXT_VERSION=""
 NEXT_BUILD=""
 OUTPUT_DIR=""
+ORIGIN_PORT=""
 PLAN_ONLY="NO"
+USE_TAILSCALE_SERVE="NO"
 
 usage() {
-  echo "usage: $0 --base-url <https-url> --n-version <version> --n-build <build> --next-version <version> --next-build <build> --output <directory> [--plan-only]" >&2
+  echo "usage: $0 --base-url <https-url> [--origin-port <port>] --n-version <version> --n-build <build> --next-version <version> --next-build <build> --output <directory> [--plan-only]" >&2
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base-url)
       BASE_URL="${2:-}"
+      shift 2
+      ;;
+    --origin-port)
+      ORIGIN_PORT="${2:-}"
       shift 2
       ;;
     --n-version)
@@ -53,12 +59,22 @@ done
 BASE_URL="${BASE_URL%/}"
 SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
 
-if [[ ! "$BASE_URL" =~ ^https://localhost:([0-9]+)$ ]]; then
-  echo "error: proof base URL must use HTTPS localhost with an explicit port" >&2
+if [[ "$BASE_URL" =~ ^https://localhost:([0-9]+)$ ]]; then
+  BASE_URL_PORT="${BASH_REMATCH[1]}"
+  if [[ -z "$ORIGIN_PORT" ]]; then
+    ORIGIN_PORT="$BASE_URL_PORT"
+  elif [[ "$ORIGIN_PORT" != "$BASE_URL_PORT" ]]; then
+    echo "error: localhost base URL and origin port must match" >&2
+    exit 2
+  fi
+elif [[ "$BASE_URL" =~ ^https://[a-z0-9]([a-z0-9-]*[a-z0-9])?\.[a-z0-9]([a-z0-9-]*[a-z0-9])?\.ts\.net$ ]]; then
+  USE_TAILSCALE_SERVE="YES"
+  ORIGIN_PORT="${ORIGIN_PORT:-8443}"
+else
+  echo "error: proof base URL must use HTTPS localhost with an explicit port or a Tailscale HTTPS hostname" >&2
   exit 2
 fi
-PROOF_PORT="${BASE_URL##*:}"
-if (( PROOF_PORT < 1 || PROOF_PORT > 65535 )); then
+if [[ ! "$ORIGIN_PORT" =~ ^[0-9]+$ ]] || (( ORIGIN_PORT < 1 || ORIGIN_PORT > 65535 )); then
   echo "error: proof HTTPS port must be between 1 and 65535" >&2
   exit 2
 fi
@@ -80,6 +96,11 @@ if [[ -z "$OUTPUT_DIR" ]]; then
 fi
 
 echo "proof_feed_url=$BASE_URL/appcast.xml"
+echo "install_url=$BASE_URL/install.dmg"
+echo "origin_url=https://localhost:$ORIGIN_PORT"
+if [[ "$USE_TAILSCALE_SERVE" == "YES" ]]; then
+  echo "tailscale_serve_command=tailscale serve --bg https+insecure://localhost:$ORIGIN_PORT"
+fi
 echo "n=$N_VERSION+$N_BUILD"
 echo "next=$NEXT_VERSION+$NEXT_BUILD"
 echo "output=$OUTPUT_DIR"
@@ -292,6 +313,10 @@ N_SHA256="$(shasum -a 256 "$N_DMG" | awk '{print $1}')"
 NEXT_SHA256="$(shasum -a 256 "$NEXT_DMG" | awk '{print $1}')"
 TAMPERED_SHA256="$(shasum -a 256 "$TAMPERED_DMG" | awk '{print $1}')"
 APPCAST_SHA256="$(shasum -a 256 "$SERVER_DIR/appcast.xml" | awk '{print $1}')"
+TAILSCALE_SERVE_JSON="False"
+if [[ "$USE_TAILSCALE_SERVE" == "YES" ]]; then
+  TAILSCALE_SERVE_JSON="True"
+fi
 
 python3 - "$OUTPUT_DIR/manifest.json" <<EOF
 import json
@@ -299,6 +324,9 @@ import sys
 
 manifest = {
     "feed_url": "$BASE_URL/appcast.xml",
+    "install_url": "$BASE_URL/install.dmg",
+    "origin_url": "https://localhost:$ORIGIN_PORT",
+    "tailscale_serve": $TAILSCALE_SERVE_JSON,
     "public_key": "$PUBLIC_KEY",
     "private_key_persisted": False,
     "apple_signing": "adhoc",
@@ -362,4 +390,7 @@ fi
 
 echo "Prepared proof artifacts in $OUTPUT_DIR"
 echo "Public key: $PUBLIC_KEY"
-echo "Start the feed with: scripts/serve_sparkle_adhoc_proof.py --directory '$SERVER_DIR' --cert '$TLS_DIR/server-cert.pem' --key '$TLS_DIR/server-key.pem' --port '$PROOF_PORT'"
+echo "Start the origin with: scripts/serve_sparkle_adhoc_proof.py --directory '$SERVER_DIR' --cert '$TLS_DIR/server-cert.pem' --key '$TLS_DIR/server-key.pem' --port '$ORIGIN_PORT'"
+if [[ "$USE_TAILSCALE_SERVE" == "YES" ]]; then
+  echo "Expose it to the tailnet with: tailscale serve --bg https+insecure://localhost:$ORIGIN_PORT"
+fi

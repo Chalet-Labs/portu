@@ -202,6 +202,27 @@ struct ReleaseAutomationTests {
     }
 
     @Test func `proof preparation plan requires HTTPS and increasing build numbers`() throws {
+        let tailscale = try runScript(
+            "scripts/prepare_sparkle_adhoc_proof.sh",
+            arguments: [
+                "--base-url", "https://works-macbook-pro-1.tailb38892.ts.net",
+                "--origin-port", "8443",
+                "--n-version", "79.0.0",
+                "--n-build", "79000",
+                "--next-version", "79.0.1",
+                "--next-build", "79001",
+                "--output", ".build/updater-proof",
+                "--plan-only"
+            ])
+        #expect(tailscale.status == 0)
+        #expect(tailscale.output.contains(
+            "proof_feed_url=https://works-macbook-pro-1.tailb38892.ts.net/appcast.xml"))
+        #expect(tailscale.output.contains(
+            "install_url=https://works-macbook-pro-1.tailb38892.ts.net/install.dmg"))
+        #expect(tailscale.output.contains("origin_url=https://localhost:8443"))
+        #expect(tailscale.output.contains(
+            "tailscale_serve_command=tailscale serve --bg https+insecure://localhost:8443"))
+
         let valid = try runScript(
             "scripts/prepare_sparkle_adhoc_proof.sh",
             arguments: [
@@ -233,6 +254,20 @@ struct ReleaseAutomationTests {
         #expect(insecure.status == 2)
         #expect(insecure.error.contains("HTTPS"))
 
+        let publicInternetHost = try runScript(
+            "scripts/prepare_sparkle_adhoc_proof.sh",
+            arguments: [
+                "--base-url", "https://example.com",
+                "--n-version", "79.0.0",
+                "--n-build", "79000",
+                "--next-version", "79.0.1",
+                "--next-build", "79001",
+                "--output", ".build/updater-proof",
+                "--plan-only"
+            ])
+        #expect(publicInternetHost.status == 2)
+        #expect(publicInternetHost.error.contains("Tailscale HTTPS hostname"))
+
         let nonIncreasing = try runScript(
             "scripts/prepare_sparkle_adhoc_proof.sh",
             arguments: [
@@ -263,6 +298,7 @@ struct ReleaseAutomationTests {
         #expect(server.contains("if request_path == \"/appcast.xml\""))
         #expect(server.contains("if request_path == \"/install.dmg\""))
         #expect(server.contains("def do_HEAD(self)"))
+        #expect(server.contains("ThreadingHTTPServer((\"127.0.0.1\", args.port)"))
         #expect(server.contains("except KeyboardInterrupt:"))
     }
 
