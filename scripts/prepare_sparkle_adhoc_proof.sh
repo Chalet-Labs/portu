@@ -10,6 +10,8 @@ OUTPUT_DIR=""
 ORIGIN_PORT=""
 PLAN_ONLY="NO"
 USE_TAILSCALE_SERVE="NO"
+TAILSCALE_SERVE_COMMAND=""
+TAILSCALE_SERVE_PORT=""
 
 usage() {
   echo "usage: $0 --base-url <https-url> [--origin-port <port>] --n-version <version> --n-build <build> --next-version <version> --next-build <build> --output <directory> [--plan-only]" >&2
@@ -67,16 +69,24 @@ if [[ "$BASE_URL" =~ ^https://localhost:([0-9]+)$ ]]; then
     echo "error: localhost base URL and origin port must match" >&2
     exit 2
   fi
-elif [[ "$BASE_URL" =~ ^https://[a-z0-9]([a-z0-9-]*[a-z0-9])?\.[a-z0-9]([a-z0-9-]*[a-z0-9])?\.ts\.net$ ]]; then
+elif [[ "$BASE_URL" =~ ^https://[a-z0-9-]+\.[a-z0-9-]+\.ts\.net:([0-9]+)$ ]]; then
   USE_TAILSCALE_SERVE="YES"
+  TAILSCALE_SERVE_PORT="${BASH_REMATCH[1]}"
   ORIGIN_PORT="${ORIGIN_PORT:-8443}"
 else
-  echo "error: proof base URL must use HTTPS localhost with an explicit port or a Tailscale HTTPS hostname" >&2
+  echo "error: proof base URL must use HTTPS localhost or a Tailscale HTTPS hostname, both with an explicit port" >&2
   exit 2
 fi
 if [[ ! "$ORIGIN_PORT" =~ ^[0-9]+$ ]] || (( ORIGIN_PORT < 1 || ORIGIN_PORT > 65535 )); then
   echo "error: proof HTTPS port must be between 1 and 65535" >&2
   exit 2
+fi
+if [[ "$USE_TAILSCALE_SERVE" == "YES" ]]; then
+  if (( TAILSCALE_SERVE_PORT < 1 || TAILSCALE_SERVE_PORT > 65535 )); then
+    echo "error: Tailscale Serve HTTPS port must be between 1 and 65535" >&2
+    exit 2
+  fi
+  TAILSCALE_SERVE_COMMAND="tailscale serve --bg --https=$TAILSCALE_SERVE_PORT --set-path=/ https+insecure://localhost:$ORIGIN_PORT"
 fi
 if [[ ! "$N_VERSION" =~ $SEMVER_REGEX || ! "$NEXT_VERSION" =~ $SEMVER_REGEX ]]; then
   echo "error: proof versions must use semantic versioning" >&2
@@ -99,7 +109,7 @@ echo "proof_feed_url=$BASE_URL/appcast.xml"
 echo "install_url=$BASE_URL/install.dmg"
 echo "origin_url=https://localhost:$ORIGIN_PORT"
 if [[ "$USE_TAILSCALE_SERVE" == "YES" ]]; then
-  echo "tailscale_serve_command=tailscale serve --bg https+insecure://localhost:$ORIGIN_PORT"
+  echo "tailscale_serve_command=$TAILSCALE_SERVE_COMMAND"
 fi
 echo "n=$N_VERSION+$N_BUILD"
 echo "next=$NEXT_VERSION+$NEXT_BUILD"
@@ -327,6 +337,7 @@ manifest = {
     "install_url": "$BASE_URL/install.dmg",
     "origin_url": "https://localhost:$ORIGIN_PORT",
     "tailscale_serve": $TAILSCALE_SERVE_JSON,
+    "tailscale_serve_https_port": ${TAILSCALE_SERVE_PORT:-None},
     "public_key": "$PUBLIC_KEY",
     "private_key_persisted": False,
     "apple_signing": "adhoc",
@@ -390,7 +401,7 @@ fi
 
 echo "Prepared proof artifacts in $OUTPUT_DIR"
 echo "Public key: $PUBLIC_KEY"
-echo "Start the origin with: scripts/serve_sparkle_adhoc_proof.py --directory '$SERVER_DIR' --cert '$TLS_DIR/server-cert.pem' --key '$TLS_DIR/server-key.pem' --port '$ORIGIN_PORT'"
+echo "Start the origin with: scripts/serve_sparkle_adhoc_proof.py --directory '$SERVER_DIR' --cert '$TLS_DIR/server-cert.pem' --key '$TLS_DIR/server-key.pem' --port '$ORIGIN_PORT' --installer '$RELEASES_DIR/Portu-$N_VERSION.dmg'"
 if [[ "$USE_TAILSCALE_SERVE" == "YES" ]]; then
-  echo "Expose it to the tailnet with: tailscale serve --bg https+insecure://localhost:$ORIGIN_PORT"
+  echo "Expose it to the tailnet with: $TAILSCALE_SERVE_COMMAND"
 fi

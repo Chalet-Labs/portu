@@ -10,6 +10,8 @@ Both Macs must be connected to the same tailnet. From the repository root on the
 
 ```bash
 TAILSCALE_DNS_NAME="$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')"
+TAILSCALE_SERVE_PORT=8444
+ORIGIN_PORT=8443
 echo "$TAILSCALE_DNS_NAME"
 ```
 
@@ -19,8 +21,8 @@ Prepare the artifacts with that hostname embedded in N and N+1:
 
 ```bash
 ./scripts/prepare_sparkle_adhoc_proof.sh \
-  --base-url "https://$TAILSCALE_DNS_NAME" \
-  --origin-port 8443 \
+  --base-url "https://$TAILSCALE_DNS_NAME:$TAILSCALE_SERVE_PORT" \
+  --origin-port "$ORIGIN_PORT" \
   --n-version 79.0.0 \
   --n-build 79000 \
   --next-version 79.0.1 \
@@ -28,7 +30,7 @@ Prepare the artifacts with that hostname embedded in N and N+1:
   --output .build/updater-proof-79
 ```
 
-The command prints and records the tailnet `install_url`, public `feed_url`, localhost `origin_url`, and Tailscale Serve command. It fails unless both DMGs are universal, ad-hoc signed, configured with the same disposable public update key, and configured to verify the archive before extraction. Sparkle's own tools generate and verify the appcast signature. The disposable private update key exists only in process memory and standard input; it is not written to the proof directory or command line.
+The command prints and records the tailnet `install_url` and `feed_url`, localhost `origin_url`, and Tailscale Serve command. It fails unless both DMGs are universal, ad-hoc signed, configured with the same disposable public update key, and configured to verify the archive before extraction. Sparkle's own tools generate and verify the appcast signature. The disposable private update key exists only in process memory and standard input; it is not written to the proof directory or command line.
 
 Keep these generated files as the non-secret automated evidence:
 
@@ -43,29 +45,38 @@ Keep these generated files as the non-secret automated evidence:
 Leave this terminal running on the developer Mac:
 
 ```bash
+ORIGIN_PORT="$(jq -r '.origin_url | capture(":(?<port>[0-9]+)$").port' .build/updater-proof-79/manifest.json)"
 ./scripts/serve_sparkle_adhoc_proof.py \
   --directory .build/updater-proof-79/server \
   --cert .build/updater-proof-79/tls/server-cert.pem \
   --key .build/updater-proof-79/tls/server-key.pem \
   --installer .build/updater-proof-79/releases/Portu-79.0.0.dmg \
-  --port 8443 \
+  --port "$ORIGIN_PORT" \
   --scenario normal
 ```
 
-The origin deliberately binds only to `127.0.0.1`. In a second terminal, expose it through Tailscale Serve:
+The origin deliberately binds only to `127.0.0.1`. In a second terminal, confirm the proof's dedicated HTTPS port is unused before configuring it:
 
 ```bash
-tailscale serve --bg https+insecure://localhost:8443
+TAILSCALE_SERVE_PORT="$(jq -r '.tailscale_serve_https_port' .build/updater-proof-79/manifest.json)"
+ORIGIN_PORT="$(jq -r '.origin_url | capture(":(?<port>[0-9]+)$").port' .build/updater-proof-79/manifest.json)"
+if tailscale serve status --json | jq -e --arg port "$TAILSCALE_SERVE_PORT" '(.TCP[$port]? != null) or ([((.Web? // {}) | to_entries[]) | select(.key | endswith(":" + $port))] | length > 0)' >/dev/null; then
+  echo "Tailscale Serve HTTPS port $TAILSCALE_SERVE_PORT is already in use; choose another unused port, set TAILSCALE_SERVE_PORT to it, and rebuild the proof." >&2
+  exit 1
+fi
+tailscale serve --bg --https="$TAILSCALE_SERVE_PORT" --set-path=/ "https+insecure://localhost:$ORIGIN_PORT"
 tailscale serve status
 ```
 
-The first command may open a Tailscale consent page if tailnet HTTPS is not enabled. Do not use Tailscale Funnel; the proof must remain private to the tailnet.
+The Serve port must match the port embedded in `--base-url`. The first Serve command may open a Tailscale consent page if tailnet HTTPS is not enabled. Do not use Tailscale Funnel; the proof must remain private to the tailnet.
 
-Verify from the second Mac, replacing the example hostname with the one printed during preparation:
+Verify from the second Mac, copying the exact URLs printed during preparation or recorded in `manifest.json`:
 
 ```bash
-curl --fail --head https://developer-mac.example-tailnet.ts.net/install.dmg
-curl --fail https://developer-mac.example-tailnet.ts.net/appcast.xml
+INSTALL_URL="<install_url from manifest.json>"
+FEED_URL="<feed_url from manifest.json>"
+curl --fail --head "$INSTALL_URL"
+curl --fail "$FEED_URL"
 ```
 
 These requests must succeed without importing the disposable localhost CA. If the hostname does not resolve, enable MagicDNS and confirm both Macs are connected to the same tailnet and allowed by its access rules.
@@ -74,7 +85,7 @@ These requests must succeed without importing the disposable localhost CA. If th
 
 Create or use a clean account on the second macOS 15 machine that has never launched Portu. The developer account cannot substitute for this gate because its application data and Keychain may hide continuity failures.
 
-1. In Safari, open the `install_url` from `.build/updater-proof-79/manifest.json`, such as `https://developer-mac.example-tailnet.ts.net/install.dmg`.
+1. In Safari, open the exact `install_url` from `.build/updater-proof-79/manifest.json.
 2. Open the downloaded N DMG in Finder, drag `Portu.app` to `/Applications`, and launch it using the normal Gatekeeper flow shown by macOS. Record every Gatekeeper step rather than bypassing quarantine with `xattr` or disabling Gatekeeper.
 3. Confirm About reports `79.0.0 (79000)`.
 4. Add a recognizable manual portfolio position, change one visible setting such as display currency, and save a disposable value such as `issue-79-disposable` in Settings > API Keys > CoinGecko. Confirm the Keychain field can be revealed before updating.
@@ -112,7 +123,15 @@ Record each outcome in `manifest.json`. A failed replacement, lost data or Keych
 After evidence is captured, quit Portu on the second Mac and remove the tailnet exposure on the developer Mac:
 
 ```bash
-tailscale serve reset
+TAILSCALE_DNS_NAME="$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')"
+TAILSCALE_SERVE_PORT="$(jq -r '.tailscale_serve_https_port' .build/updater-proof-79/manifest.json)"
+ORIGIN_PORT="$(jq -r '.origin_url | capture(":(?<port>[0-9]+)$").port' .build/updater-proof-79/manifest.json)"
+CURRENT_PROXY="$(tailscale serve status --json | jq -r --arg host "$TAILSCALE_DNS_NAME:$TAILSCALE_SERVE_PORT" '.Web[$host].Handlers["/"].Proxy // empty')"
+if [[ "$CURRENT_PROXY" != "https+insecure://localhost:$ORIGIN_PORT" ]]; then
+  echo "Tailscale Serve root no longer points to this proof; inspect it instead of removing it automatically." >&2
+  exit 1
+fi
+tailscale serve --https="$TAILSCALE_SERVE_PORT" --set-path=/ off
 ```
 
 No certificate was imported on the second Mac. Remove the clean test account only if its owner approves. The proof artifacts under `.build/` are ignored by Git and may be deleted after the issue evidence has been preserved.

@@ -205,7 +205,7 @@ struct ReleaseAutomationTests {
         let tailscale = try runScript(
             "scripts/prepare_sparkle_adhoc_proof.sh",
             arguments: [
-                "--base-url", "https://works-macbook-pro-1.tailb38892.ts.net",
+                "--base-url", "https://works-macbook-pro-1.tailb38892.ts.net:8444",
                 "--origin-port", "8443",
                 "--n-version", "79.0.0",
                 "--n-build", "79000",
@@ -216,12 +216,12 @@ struct ReleaseAutomationTests {
             ])
         #expect(tailscale.status == 0)
         #expect(tailscale.output.contains(
-            "proof_feed_url=https://works-macbook-pro-1.tailb38892.ts.net/appcast.xml"))
+            "proof_feed_url=https://works-macbook-pro-1.tailb38892.ts.net:8444/appcast.xml"))
         #expect(tailscale.output.contains(
-            "install_url=https://works-macbook-pro-1.tailb38892.ts.net/install.dmg"))
+            "install_url=https://works-macbook-pro-1.tailb38892.ts.net:8444/install.dmg"))
         #expect(tailscale.output.contains("origin_url=https://localhost:8443"))
         #expect(tailscale.output.contains(
-            "tailscale_serve_command=tailscale serve --bg https+insecure://localhost:8443"))
+            "tailscale_serve_command=tailscale serve --bg --https=8444 --set-path=/ https+insecure://localhost:8443"))
 
         let valid = try runScript(
             "scripts/prepare_sparkle_adhoc_proof.sh",
@@ -282,7 +282,9 @@ struct ReleaseAutomationTests {
         #expect(nonIncreasing.status == 2)
         #expect(nonIncreasing.error.contains("greater"))
     }
+}
 
+extension ReleaseAutomationTests {
     @Test func `proof HTTPS server selects immutable negative appcast scenarios`() throws {
         let help = try runScript(
             "scripts/serve_sparkle_adhoc_proof.py",
@@ -293,6 +295,8 @@ struct ReleaseAutomationTests {
         #expect(help.output.contains("--installer INSTALLER"))
 
         let server = try string("scripts/serve_sparkle_adhoc_proof.py")
+        let preparer = try string("scripts/prepare_sparkle_adhoc_proof.sh")
+        let playbook = try string("docs/agents/sparkle-adhoc-proof.md")
         #expect(server.contains("tampered-appcast.xml"))
         #expect(server.contains("missing-enclosure-appcast.xml"))
         #expect(server.contains("if request_path == \"/appcast.xml\""))
@@ -300,6 +304,9 @@ struct ReleaseAutomationTests {
         #expect(server.contains("def do_HEAD(self)"))
         #expect(server.contains("ThreadingHTTPServer((\"127.0.0.1\", args.port)"))
         #expect(server.contains("except KeyboardInterrupt:"))
+        #expect(preparer.contains("--installer '$RELEASES_DIR/Portu-$N_VERSION.dmg'"))
+        #expect(playbook.contains("tailscale serve --https=\"$TAILSCALE_SERVE_PORT\" --set-path=/ off"))
+        #expect(!playbook.contains("tailscale serve reset"))
     }
 
     @Test func `local run script uses a stable development signing identity`() throws {
