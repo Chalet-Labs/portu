@@ -25,6 +25,66 @@ DMG_PATH="$DIST_DIR/$APP_NAME-$VERSION.dmg"
 CHECKSUM_PATH="$DMG_PATH.sha256"
 BUILD_NUMBER="${GITHUB_RUN_NUMBER:-0}"
 BUNDLE_MARKETING_VERSION="${VERSION%%[-+]*}"
+PROOF_MODE="${PORTU_SPARKLE_PROOF:-NO}"
+PROOF_FEED_URL="${PORTU_UPDATE_FEED_URL:-}"
+PROOF_PUBLIC_KEY="${PORTU_UPDATE_PUBLIC_KEY:-}"
+UPDATE_BUILD_SETTINGS=()
+
+mounted_devices_for_image() {
+  hdiutil info -plist | /usr/bin/python3 -c '
+import os
+import plistlib
+import sys
+
+target = os.path.realpath(sys.argv[1])
+info = plistlib.load(sys.stdin.buffer)
+for image in info.get("images", []):
+    if os.path.realpath(image.get("image-path", "")) == target:
+        entities = image.get("system-entities", [])
+        if entities and entities[0].get("dev-entry"):
+            print(entities[0]["dev-entry"])
+' "$1"
+}
+
+verify_dmg() {
+  local dmg_path="$1"
+  local attempt
+  local mounted_device
+
+  for attempt in 1 2 3; do
+    if hdiutil verify "$dmg_path"; then
+      return 0
+    fi
+
+    while IFS= read -r mounted_device; do
+      [[ -z "$mounted_device" ]] || hdiutil detach "$mounted_device" || true
+    done < <(mounted_devices_for_image "$dmg_path")
+
+    if (( attempt < 3 )); then
+      sleep "$attempt"
+    fi
+  done
+
+  return 1
+}
+
+if [[ "$PROOF_MODE" == "YES" || -n "$PROOF_FEED_URL" || -n "$PROOF_PUBLIC_KEY" ]]; then
+  if [[ "$PROOF_MODE" != "YES" ]]; then
+    echo "error: proof updater overrides require PORTU_SPARKLE_PROOF=YES" >&2
+    exit 2
+  fi
+  if [[ -z "$PROOF_FEED_URL" || -z "$PROOF_PUBLIC_KEY" ]]; then
+    echo "error: proof updater overrides require both feed URL and public key" >&2
+    exit 2
+  fi
+
+  "$ROOT_DIR/scripts/validate_sparkle_proof_configuration.sh" "$PROOF_FEED_URL" "$PROOF_PUBLIC_KEY"
+  UPDATE_BUILD_SETTINGS+=(
+    PORTU_UPDATE_FEED_URL="$PROOF_FEED_URL"
+    PORTU_UPDATE_PUBLIC_KEY="$PROOF_PUBLIC_KEY"
+    PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION=YES
+  )
+fi
 
 cd "$ROOT_DIR"
 
@@ -38,11 +98,13 @@ xcodebuild \
   -scheme "$APP_NAME" \
   -configuration Release \
   -derivedDataPath "$DERIVED_DATA" \
+  -packageAuthorizationProvider netrc \
   -skipMacroValidation \
   MARKETING_VERSION="$BUNDLE_MARKETING_VERSION" \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   CODE_SIGN_IDENTITY="-" \
   CODE_SIGNING_REQUIRED=YES \
+  ${UPDATE_BUILD_SETTINGS[@]+"${UPDATE_BUILD_SETTINGS[@]}"} \
   build
 
 if [[ ! -d "$APP_BUNDLE" ]]; then
@@ -66,7 +128,7 @@ hdiutil create \
   -format UDZO \
   "$DMG_PATH"
 
-hdiutil verify "$DMG_PATH"
+verify_dmg "$DMG_PATH"
 
 (
   cd "$DIST_DIR"

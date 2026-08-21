@@ -54,10 +54,12 @@ targets:
         CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
+        PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION: NO
       configs:
         Debug:
           PORTU_UPDATE_FEED_URL: "https://raw.githubusercontent.com/Chalet-Labs/portu/master/Tests/Fixtures/Updater/appcast.xml"
           PORTU_UPDATE_PUBLIC_KEY: "bwdTmUzcenVsxzIQb737hznwxvpJr7uveKIzVkxVd00="
+          PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION: YES
         Release:
           PORTU_UPDATE_FEED_URL: ""
           PORTU_UPDATE_PUBLIC_KEY: ""

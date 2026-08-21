@@ -162,6 +162,7 @@
 		CFC30415788A774E28D05A82 /* SyncEngineLegacyAccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C098AACD3A503135E31467D1 /* SyncEngineLegacyAccountTests.swift */; };
 		CFE9060530486693BFF3461C /* AssetPositionsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F756C31F93737292F0F09AB /* AssetPositionsTable.swift */; };
 		D06FF041CE44B377F45B4B2C /* PortfolioAnalyticsCacheWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C5C5749654501CDBB8A418 /* PortfolioAnalyticsCacheWriter.swift */; };
+		D120727AA9A3C5131B6E2621 /* ReleaseAutomationScriptTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2827FD578F2AC2984DC22DCF /* ReleaseAutomationScriptTests.swift */; };
 		D12FE9896DEB2426C63EE6CD /* PriceWatchlist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324795298041BC4BF594505C /* PriceWatchlist.swift */; };
 		D274E559468D7FD5BA3B3DE1 /* PortuUI in Frameworks */ = {isa = PBXBuildFile; productRef = C25A3843B24FFDF40B5B1172 /* PortuUI */; };
 		D4B37B7013275E0393B345B1 /* ExposureFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0F997F49008BE7A368532C /* ExposureFeature.swift */; };
@@ -242,6 +243,7 @@
 		23962AE5BD7C6E6B32655CDC /* PortfolioAnalyticsFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAnalyticsFeature.swift; sourceTree = "<group>"; };
 		2484DC04A5C1AFF75F895D46 /* ManualPositionPricingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualPositionPricingTests.swift; sourceTree = "<group>"; };
 		2624CDAC2AEF7348B52DC311 /* AllAssetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllAssetsView.swift; sourceTree = "<group>"; };
+		2827FD578F2AC2984DC22DCF /* ReleaseAutomationScriptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseAutomationScriptTests.swift; sourceTree = "<group>"; };
 		28F36B6C43CF041F988F7F8E /* PerformanceBottomPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceBottomPanel.swift; sourceTree = "<group>"; };
 		2900A801C5F8F01CEBC99503 /* ExposureFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExposureFeatureTests.swift; sourceTree = "<group>"; };
 		2BDA745BD7623E3372B0DA2D /* WalletPnLPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletPnLPresentation.swift; sourceTree = "<group>"; };
@@ -721,6 +723,7 @@
 				FE40A8EC06DB30B0B54BE934 /* PriceUpdateCurrencyTests.swift */,
 				2E83779E156800BF99D5B42F /* ProtocolFilterTests.swift */,
 				62643CCED7A5091869CDB00E /* ProviderPortfolioHistoryTests.swift */,
+				2827FD578F2AC2984DC22DCF /* ReleaseAutomationScriptTests.swift */,
 				5A372B5E40F5617842721225 /* ReleaseAutomationTests.swift */,
 				E9C14B6E1BF95CE173602DD3 /* SendableArray.swift */,
 				726D62A9E7F60014EDC7E0EC /* SettingsTabTests.swift */,
@@ -1072,6 +1075,7 @@
 				DF180AE55477034425EE7A90 /* PriceUpdateCurrencyTests.swift in Sources */,
 				199AC50AADF5D13C0A51DFBD /* ProtocolFilterTests.swift in Sources */,
 				A20767232F14DABE89550EA2 /* ProviderPortfolioHistoryTests.swift in Sources */,
+				D120727AA9A3C5131B6E2621 /* ReleaseAutomationScriptTests.swift in Sources */,
 				0654CA81A46C611A8907B53C /* ReleaseAutomationTests.swift in Sources */,
 				3D506EB5FDC7350FB3AFF9B3 /* SendableArray.swift in Sources */,
 				09EFC1288E41DCA2CF416638 /* SettingsTabTests.swift in Sources */,
@@ -1132,6 +1136,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PORTU_UPDATE_FEED_URL = "";
 				PORTU_UPDATE_PUBLIC_KEY = "";
+				PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portu.app;
 				SDKROOT = macosx;
 			};
@@ -1291,6 +1296,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PORTU_UPDATE_FEED_URL = "https://raw.githubusercontent.com/Chalet-Labs/portu/master/Tests/Fixtures/Updater/appcast.xml";
 				PORTU_UPDATE_PUBLIC_KEY = "bwdTmUzcenVsxzIQb737hznwxvpJr7uveKIzVkxVd00=";
+				PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portu.app;
 				SDKROOT = macosx;
 			};
