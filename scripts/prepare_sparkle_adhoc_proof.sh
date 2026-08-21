@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 BASE_URL="${BASE_URL%/}"
-SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
 
 if [[ "$BASE_URL" =~ ^https://localhost:([0-9]+)$ ]]; then
   BASE_URL_PORT="${BASH_REMATCH[1]}"
@@ -89,7 +89,11 @@ if [[ "$USE_TAILSCALE_SERVE" == "YES" ]]; then
   TAILSCALE_SERVE_COMMAND="tailscale serve --bg --https=$TAILSCALE_SERVE_PORT --set-path=/ https+insecure://localhost:$ORIGIN_PORT"
 fi
 if [[ ! "$N_VERSION" =~ $SEMVER_REGEX || ! "$NEXT_VERSION" =~ $SEMVER_REGEX ]]; then
-  echo "error: proof versions must use semantic versioning" >&2
+  echo "error: proof versions must use plain semantic versions without prerelease or build suffixes" >&2
+  exit 2
+fi
+if [[ "$USE_TAILSCALE_SERVE" != "YES" && "$PLAN_ONLY" != "YES" ]]; then
+  echo "error: full proof requires a Tailscale HTTPS hostname; localhost is supported only with --plan-only" >&2
   exit 2
 fi
 if [[ ! "$N_BUILD" =~ ^[0-9]+$ || ! "$NEXT_BUILD" =~ ^[0-9]+$ ]]; then
@@ -229,8 +233,9 @@ NEXT_DMG="$SERVER_DIR/Portu-$NEXT_VERSION.dmg"
 verify_release_dmg "$N_DMG" "$N_VERSION" "$N_BUILD"
 verify_release_dmg "$NEXT_DMG" "$NEXT_VERSION" "$NEXT_BUILD"
 
-GENERATE_APPCAST="$(find "$ROOT_DIR/.build/DerivedData/SourcePackages/artifacts" -path '*/Sparkle/bin/generate_appcast' -type f -print -quit)"
-SIGN_UPDATE="$(find "$ROOT_DIR/.build/DerivedData/SourcePackages/artifacts" -path '*/Sparkle/bin/sign_update' -type f -print -quit)"
+ARTIFACTS_DIR="$ROOT_DIR/.build/DerivedData/SourcePackages/artifacts"
+GENERATE_APPCAST="$(find "$ARTIFACTS_DIR" -path '*/Sparkle/bin/generate_appcast' -type f -print -quit 2>/dev/null || true)"
+SIGN_UPDATE="$(find "$ARTIFACTS_DIR" -path '*/Sparkle/bin/sign_update' -type f -print -quit 2>/dev/null || true)"
 if [[ ! -x "$GENERATE_APPCAST" || ! -x "$SIGN_UPDATE" ]]; then
   echo "error: Sparkle proof tools were not resolved by the release builds" >&2
   exit 1
@@ -385,16 +390,7 @@ with open(sys.argv[1], "w", encoding="utf-8") as output:
     output.write("\n")
 EOF
 
-if ! printf '%s\n' "$PRIVATE_SEED" | python3 -c '
-import pathlib
-import sys
-
-seed = sys.stdin.buffer.readline().rstrip(b"\n")
-root = pathlib.Path(sys.argv[1])
-for path in root.rglob("*"):
-    if path.is_file() and seed in path.read_bytes():
-        sys.exit(1)
-' "$OUTPUT_DIR"; then
+if ! printf '%s\n' "$PRIVATE_SEED" | "$ROOT_DIR/scripts/assert_secret_absent.py" "$OUTPUT_DIR"; then
   echo "error: disposable private key leaked into proof artifacts" >&2
   exit 1
 fi

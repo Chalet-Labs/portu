@@ -93,11 +93,11 @@ curl --fail "$FEED_URL"
 
 These requests must succeed without importing the disposable localhost CA. If the hostname does not resolve, enable MagicDNS and confirm both Macs are connected to the same tailnet and allowed by its access rules.
 
-## Prepare a clean macOS 15 account
+## Prepare a clean account on the target Mac
 
-Create or use a clean account on the second macOS 15 machine that has never launched Portu. The developer account cannot substitute for this gate because its application data and Keychain may hide continuity failures.
+Create or use a clean account on the target Mac that has never launched Portu. The developer account cannot substitute for this gate because its application data and Keychain may hide continuity failures.
 
-1. In Safari, open the exact `install_url` from `.build/updater-proof-79/manifest.json.
+1. In Safari, open the exact `install_url` from `.build/updater-proof-79/manifest.json`.
 2. Open the downloaded N DMG in Finder, drag `Portu.app` to `/Applications`, and launch it using the normal Gatekeeper flow shown by macOS. Record every Gatekeeper step rather than bypassing quarantine with `xattr` or disabling Gatekeeper.
 3. Confirm About reports `79.0.0 (79000)`.
 4. Add a recognizable manual portfolio position, change one visible setting such as display currency, and save a disposable value such as `issue-79-disposable` in Settings > API Keys > CoinGecko. Confirm the Keychain field can be revealed before updating.

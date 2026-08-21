@@ -63,6 +63,8 @@ def main() -> None:
     args = parser.parse_args()
 
     directory = os.path.realpath(args.directory)
+    if not os.path.isdir(directory):
+        parser.error(f"directory does not exist: {directory}")
     installer_path = os.path.realpath(args.installer) if args.installer else None
     if installer_path is not None and not os.path.isfile(installer_path):
         parser.error(f"installer does not exist: {installer_path}")

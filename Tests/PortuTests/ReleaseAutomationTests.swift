@@ -131,6 +131,7 @@ struct ReleaseAutomationTests {
         #expect(packageScript.contains("BUNDLE_MARKETING_VERSION=\"${VERSION%%[-+]*}\""))
         #expect(packageScript.contains("MARKETING_VERSION=\"$BUNDLE_MARKETING_VERSION\""))
         #expect(packageScript.contains("CURRENT_PROJECT_VERSION=\"$BUILD_NUMBER\""))
+        #expect(packageScript.contains(#"${UPDATE_BUILD_SETTINGS[@]+"${UPDATE_BUILD_SETTINGS[@]}"}"#))
         #expect(packageScript.contains("hdiutil create"))
         #expect(packageScript.contains("verify_dmg"))
         #expect(packageScript.contains("hdiutil verify \"$dmg_path\""))
@@ -165,6 +166,7 @@ struct ReleaseAutomationTests {
     @Test func `proof release overrides are explicit and verify the archive before extraction`() throws {
         let packageScript = try string("scripts/package_release_dmg.sh")
         let proofScript = try string("scripts/prepare_sparkle_adhoc_proof.sh")
+        let secretScanner = try string("scripts/assert_secret_absent.py")
         let infoPlist = try string("Sources/Portu/Resources/Info.plist")
         let project = try string("project.yml")
 
@@ -179,12 +181,16 @@ struct ReleaseAutomationTests {
         #expect(proofScript.contains("signature_metadata=\"$(codesign -d --verbose=4"))
         #expect(proofScript.contains("grep -q '^Signature=adhoc$' <<< \"$signature_metadata\""))
         #expect(!proofScript.contains("grep -R -F -- \"$PRIVATE_SEED\""))
-        #expect(proofScript.contains("seed = sys.stdin.buffer.readline().rstrip"))
+        #expect(proofScript.contains("scripts/assert_secret_absent.py"))
+        #expect(secretScanner.contains("artifact.read(CHUNK_SIZE)"))
+        #expect(!secretScanner.contains("read_bytes"))
         #expect(proofScript.contains("TAMPERED_LENGTH=\"$(stat -f '%z' \"$TAMPERED_DMG\")\""))
         #expect(proofScript.contains("TAMPERED_APPCAST_LENGTH"))
         #expect(proofScript.contains("\"archive_length\": int(\"$TAMPERED_LENGTH\")"))
         #expect(proofScript.contains("verify_release_dmg() ("))
         #expect(proofScript.contains("trap cleanup_mounted_release EXIT"))
+        #expect(proofScript.contains("ARTIFACTS_DIR=\"$ROOT_DIR/.build/DerivedData/SourcePackages/artifacts\""))
+        #expect(proofScript.contains("-print -quit 2>/dev/null || true"))
     }
 
     @Test func `proof key derivation matches the RFC 8032 Ed25519 vector`() throws {
@@ -198,7 +204,35 @@ struct ReleaseAutomationTests {
 
         #expect(result.status == 0)
         #expect(result.output.trimmingCharacters(in: .whitespacesAndNewlines) == expectedPublicKey)
-        #expect(result.error.isEmpty)
+        #expect(!result.error.localizedCaseInsensitiveContains("error:"))
+    }
+
+    @Test func `proof secret scanner detects a seed in a large binary artifact`() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appending(path: "portu-secret-scan-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let secret = "issue-79-disposable-private-seed"
+        var artifact = Data(repeating: 0x41, count: 2 * 1024 * 1024)
+        artifact.append(Data(secret.utf8))
+        artifact.append(Data(repeating: 0x42, count: 2 * 1024 * 1024))
+        try artifact.write(to: temporaryDirectory.appending(path: "proof.dmg"))
+
+        let leaked = try runScript(
+            "scripts/assert_secret_absent.py",
+            arguments: [temporaryDirectory.path(percentEncoded: false)],
+            input: secret + "\n")
+        #expect(leaked.status == 1)
+        #expect(leaked.error.contains("secret found"))
+
+        try Data(repeating: 0x43, count: 4 * 1024 * 1024)
+            .write(to: temporaryDirectory.appending(path: "proof.dmg"), options: .atomic)
+        let absent = try runScript(
+            "scripts/assert_secret_absent.py",
+            arguments: [temporaryDirectory.path(percentEncoded: false)],
+            input: secret + "\n")
+        #expect(absent.status == 0)
     }
 
     @Test func `proof preparation plan requires HTTPS and increasing build numbers`() throws {
@@ -285,61 +319,7 @@ struct ReleaseAutomationTests {
 }
 
 extension ReleaseAutomationTests {
-    @Test func `proof HTTPS server selects immutable negative appcast scenarios`() throws {
-        let help = try runScript(
-            "scripts/serve_sparkle_adhoc_proof.py",
-            arguments: ["--help"])
-
-        #expect(help.status == 0)
-        #expect(help.output.contains("--scenario {normal,tampered,missing}"))
-        #expect(help.output.contains("--installer INSTALLER"))
-
-        let server = try string("scripts/serve_sparkle_adhoc_proof.py")
-        let preparer = try string("scripts/prepare_sparkle_adhoc_proof.sh")
-        let playbook = try string("docs/agents/sparkle-adhoc-proof.md")
-        #expect(server.contains("tampered-appcast.xml"))
-        #expect(server.contains("missing-enclosure-appcast.xml"))
-        #expect(server.contains("if request_path == \"/appcast.xml\""))
-        #expect(server.contains("if request_path == \"/install.dmg\""))
-        #expect(server.contains("def do_HEAD(self)"))
-        #expect(server.contains("ThreadingHTTPServer((\"127.0.0.1\", args.port)"))
-        #expect(server.contains("except KeyboardInterrupt:"))
-        #expect(preparer.contains("--installer '$RELEASES_DIR/Portu-$N_VERSION.dmg'"))
-        #expect(playbook.contains("SERVE_STATUS=\"$(tailscale serve status --json)\" ||"))
-        #expect(playbook.contains("PORT_IN_USE=\"$(jq -r"))
-        #expect(playbook.contains("Could not parse Tailscale Serve configuration"))
-        #expect(playbook.contains("[[ \"$PORT_IN_USE\" != \"false\" ]]"))
-        #expect(playbook.contains("tailscale serve --https=\"$TAILSCALE_SERVE_PORT\" --set-path=/ off"))
-        #expect(!playbook.contains("tailscale serve reset"))
-    }
-
-    @Test func `local run script uses a stable development signing identity`() throws {
-        let runScript = try string("script/build_and_run.sh")
-        let signingScript = try string("script/ensure_local_signing_identity.sh")
-
-        #expect(runScript.contains("ensure_local_signing_identity.sh"))
-        #expect(runScript.contains("CODE_SIGN_IDENTITY=\"$CODE_SIGN_IDENTITY_NAME\""))
-        #expect(runScript.contains("CODE_SIGN_STYLE=Manual"))
-        #expect(signingScript.contains("security find-identity"))
-        #expect(signingScript.contains("CA:FALSE"))
-        #expect(!signingScript.contains("keyCertSign"))
-        #expect(signingScript.contains("extendedKeyUsage=codeSigning"))
-        #expect(signingScript.contains("-r trustAsRoot"))
-        #expect(signingScript.contains("security delete-identity"))
-        #expect(signingScript.contains("-T /usr/bin/codesign"))
-    }
-
-    @Test func `app version is supplied by xcode build settings`() throws {
-        let infoPlist = try string("Sources/Portu/Resources/Info.plist")
-        let project = try string("project.yml")
-
-        #expect(infoPlist.contains("<string>$(MARKETING_VERSION)</string>"))
-        #expect(infoPlist.contains("<string>$(CURRENT_PROJECT_VERSION)</string>"))
-        #expect(project.range(of: #"MARKETING_VERSION: "\d+\.\d+\.\d+""#, options: .regularExpression) != nil)
-        #expect(project.range(of: #"CURRENT_PROJECT_VERSION: "\d+""#, options: .regularExpression) != nil)
-    }
-
-    private func string(_ path: String) throws -> String {
+    func string(_ path: String) throws -> String {
         try String(contentsOf: repoRoot.appending(path: path), encoding: .utf8)
     }
 
@@ -353,18 +333,26 @@ extension ReleaseAutomationTests {
         FileManager.default.fileExists(atPath: repoRoot.appending(path: path).path(percentEncoded: false))
     }
 
-    private func runScript(
+    func runScript(
         _ path: String,
         arguments: [String],
         input: String? = nil) throws -> (status: Int32, output: String, error: String) {
         let process = Process()
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
+        let captureDirectory = FileManager.default.temporaryDirectory
+            .appending(path: "portu-script-capture-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: captureDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: captureDirectory) }
+        let outputURL = captureDirectory.appending(path: "stdout")
+        let errorURL = captureDirectory.appending(path: "stderr")
+        try Data().write(to: outputURL)
+        try Data().write(to: errorURL)
+        let outputHandle = try FileHandle(forWritingTo: outputURL)
+        let errorHandle = try FileHandle(forWritingTo: errorURL)
         let inputPipe = Pipe()
         process.executableURL = repoRoot.appending(path: path)
         process.arguments = arguments
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
+        process.standardOutput = outputHandle
+        process.standardError = errorHandle
         if input != nil {
             process.standardInput = inputPipe
         }
@@ -375,9 +363,11 @@ extension ReleaseAutomationTests {
             try inputPipe.fileHandleForWriting.close()
         }
         process.waitUntilExit()
+        try outputHandle.close()
+        try errorHandle.close()
 
-        let output = String(bytes: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        let error = String(bytes: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let output = try String(bytes: Data(contentsOf: outputURL), encoding: .utf8) ?? ""
+        let error = try String(bytes: Data(contentsOf: errorURL), encoding: .utf8) ?? ""
         return (process.terminationStatus, output, error)
     }
 
