@@ -205,4 +205,34 @@ struct AppFeatureUpdaterSettingsTests {
         #expect(!store.state.updateSettingsAvailable)
         await store.finish()
     }
+
+    @Test func `rapid channel changes cancel stale write effects`() async {
+        nonisolated(unsafe) var capturedChannels: [UpdateChannel] = []
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.updater.isAvailable = { true }
+            $0.updater.preferences = { UpdaterPreferences() }
+            // The Alpha write suspends long enough for the Stable selection to
+            // cancel it; the Stable write commits instantly. Only .stable may land.
+            $0.updater.setChannel = { channel in
+                if channel == .alpha {
+                    try? await Task.sleep(for: .seconds(3600))
+                }
+                guard !Task.isCancelled else { return }
+                capturedChannels.append(channel)
+            }
+            $0.updater.preferenceChanges = { AsyncStream { $0.finish() } }
+        }
+
+        await store.send(.setUpdateChannel(.alpha)) {
+            $0.updatePreferences.channel = .alpha
+        }
+        await store.send(.setUpdateChannel(.stable)) {
+            $0.updatePreferences.channel = .stable
+        }
+
+        await store.finish()
+        #expect(capturedChannels == [.stable])
+    }
 }

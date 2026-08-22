@@ -95,6 +95,7 @@ struct AppFeature {
         case displayRateRefresh
         case historicalFXTopUp
         case updaterPreferences
+        case updaterPreferenceWrite
     }
 
     @Dependency(\.syncEngine) var syncEngine
@@ -174,15 +175,20 @@ struct AppFeature {
 
             case let .setAutomaticChecksEnabled(enabled):
                 state.updatePreferences.automaticallyChecksForUpdates = enabled
+                // cancelInFlight serializes rapid toggles: only the newest write
+                // effect survives, so a stale Alpha write can never land after a
+                // later Stable one and revert the persisted value.
                 return .run { _ in
                     await updater.setAutomaticallyChecksForUpdates(enabled)
                 }
+                .cancellable(id: CancelID.updaterPreferenceWrite, cancelInFlight: true)
 
             case let .setUpdateChannel(channel):
                 state.updatePreferences.channel = channel
                 return .run { _ in
                     await updater.setChannel(channel)
                 }
+                .cancellable(id: CancelID.updaterPreferenceWrite, cancelInFlight: true)
 
             case let .sectionSelected(section):
                 state.selectedSection = section
