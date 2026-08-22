@@ -31,7 +31,7 @@ struct UpdaterConfiguration: Equatable, Sendable {
 
 final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
     private let lock = NSLock()
-    private var subscribers: [UUID: AsyncStream<UpdaterPreferences>.Continuation] = [:]
+    private var subscribers: [UUID: (continuation: AsyncStream<UpdaterPreferences>.Continuation, primed: Bool)] = [:]
     private var latestPreferences: UpdaterPreferences
 
     init(initialPreferences: UpdaterPreferences) {
@@ -47,7 +47,13 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
     func update(_ preferences: UpdaterPreferences) {
         let continuations: [AsyncStream<UpdaterPreferences>.Continuation] = lock.withLock {
             latestPreferences = preferences
-            return Array(subscribers.values)
+            // Only primed subscribers (initial replay already delivered) receive
+            // updates, so a fresh subscriber can never see a newer update before
+            // its own initial replay.
+            for id in subscribers.keys where subscribers[id]?.primed == false {
+                subscribers[id]?.primed = true
+            }
+            return subscribers.values.filter(\.primed).map(\.continuation)
         }
         for continuation in continuations {
             continuation.yield(preferences)
@@ -57,18 +63,23 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
     func stream() -> AsyncStream<UpdaterPreferences> {
         let id = UUID()
         return AsyncStream { continuation in
-            let initial: UpdaterPreferences = lock.withLock {
-                // Register under the lock, but yield OUTSIDE it: `yield` can
-                // synchronously resume a suspended consumer, and calling out
-                // while holding the lock risks re-entrancy. A concurrent
-                // update() may deliver a newer value first — duplicates are
-                // idempotent for consumers, out-of-order delivery is not.
-                subscribers[id] = continuation
-                return latestPreferences
-            }
-            continuation.yield(initial)
             continuation.onTermination = { [weak self, id] _ in
                 self?.removeSubscriber(id: id)
+            }
+            let initial: UpdaterPreferences = lock.withLock {
+                subscribers[id] = (continuation, primed: false)
+                return latestPreferences
+            }
+            // Initial replay happens outside the lock (yield can synchronously
+            // resume a suspended consumer). update() skips unprimed subscribers,
+            // so no newer value can precede this replay; priming afterwards lets
+            // subsequent updates flow normally.
+            continuation.yield(initial)
+            lock.withLock {
+                if var entry = subscribers[id] {
+                    entry.primed = true
+                    subscribers[id] = entry
+                }
             }
         }
     }
