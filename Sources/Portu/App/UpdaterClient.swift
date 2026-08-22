@@ -38,6 +38,8 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
     /// are strictly ordered, while independent subscribers never block each other.
     final class Subscriber {
         let continuation: AsyncStream<UpdaterPreferences>.Continuation
+        // Primed is written under the broadcaster's registry `lock` and read
+        // under the same lock, so access is consistently synchronized.
         var primed = false
         let deliveryLock = NSLock()
 
@@ -52,14 +54,14 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
         }
 
         func replayThenPrime(_ initial: UpdaterPreferences, latest: UpdaterPreferences) {
-            deliveryLock.withLock {
-                continuation.yield(initial)
-                if latest != initial {
-                    // An update committed after registration but before priming;
-                    // deliver it right behind the replay so nothing is withheld.
-                    continuation.yield(latest)
-                }
-                primed = true
+            // Hold the delivery lock across both yields so nothing can interleave
+            // between replay and catch-up; priming itself happens in stream()
+            // under the registry lock while this lock is still held.
+            deliveryLock.lock()
+            defer { deliveryLock.unlock() }
+            continuation.yield(initial)
+            if latest != initial {
+                continuation.yield(latest)
             }
         }
     }
@@ -99,7 +101,14 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
                 subscribers[id] = subscriber
                 return (subscriber, latestPreferences)
             }
+            // Replay + catch-up happen under the subscriber's delivery lock; the
+            // registry lock is then taken to mark primed. Because update() only
+            // delivers to subscribers that are already primed under the same
+            // registry lock, no update can be delivered ahead of the replay.
             subscriber.replayThenPrime(latest, latest: latest)
+            lock.withLock {
+                subscriber.primed = true
+            }
         }
     }
 
