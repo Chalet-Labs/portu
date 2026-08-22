@@ -1,5 +1,4 @@
 import Foundation
-@testable import Portu
 import Testing
 
 struct UpdaterSettingsUITests {
