@@ -115,21 +115,28 @@ final class SparkleUpdaterController {
         // Broadcaster and delegate provider are installed BEFORE startUpdater() so
         // the first update cycle already sees the saved channel; a stable fallback
         // during startup would hand an Alpha user stable-only results.
-        let initialPrefs = UpdaterPreferences(
-            automaticallyChecksForUpdates: false,
-            channel: initialChannel)
-        let broadcaster = UpdaterPreferencesBroadcaster(initialPreferences: initialPrefs)
-        self.broadcaster = broadcaster
-
-        let delegate = ChannelUpdaterDelegate(preferencesProvider: { [weak broadcaster] in
-            broadcaster?.currentPreferences() ?? UpdaterPreferences()
-        })
+        //
+        // The automatic-checks seed is read AFTER the SPUStandardUpdaterController
+        // exists: Sparkle restores its SUEnableAutomaticChecks default into the
+        // property at controller creation, and seeding from it keeps Settings in
+        // sync with checks Sparkle has already scheduled.
+        let delegate = ChannelUpdaterDelegate()
         self.delegate = delegate
 
         let controller = SPUStandardUpdaterController(
             startingUpdater: false,
             updaterDelegate: delegate,
             userDriverDelegate: nil)
+
+        let initialPrefs = UpdaterPreferences(
+            automaticallyChecksForUpdates: controller.updater.automaticallyChecksForUpdates,
+            channel: initialChannel)
+        let broadcaster = UpdaterPreferencesBroadcaster(initialPreferences: initialPrefs)
+        self.broadcaster = broadcaster
+
+        delegate.preferencesProvider = { [weak broadcaster] in
+            broadcaster?.currentPreferences() ?? UpdaterPreferences()
+        }
 
         // Sparkle owns the SUEnableAutomaticChecks default (the native permission
         // prompt and Settings toggles both persist through it); never mirror it.
