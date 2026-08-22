@@ -65,7 +65,6 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
             deliveryLock.lock()
             defer { deliveryLock.unlock() }
             continuation.yield(initial)
-            primed = true
             let latest = readLatest()
             if latest != initial {
                 continuation.yield(latest)
@@ -108,14 +107,16 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
                 subscribers[id] = subscriber
                 return (subscriber, latestPreferences)
             }
-            // Replay, priming, and the catch-up read all happen inside one
-            // delivery-lock scope (see replayPrimeAndCatchUp). update() records
-            // new values under the registry lock and delivers under this same
-            // delivery lock, so nothing can interleave between replay and
-            // catch-up: per-stream ordering is strict.
+            // Replay happens under the subscriber's delivery lock; priming and
+            // the latest-value re-read happen inside readLatest under the
+            // registry lock — the same lock update() uses to record new values
+            // and filter primed subscribers. One synchronization domain for the
+            // flag, and the delivery lock is held across the whole sequence so
+            // nothing can interleave between replay and catch-up.
             subscriber.replayPrimeAndCatchUp(initial: latest) { [self] in
                 lock.withLock {
-                    latestPreferences
+                    subscriber.primed = true
+                    return latestPreferences
                 }
             }
         }
