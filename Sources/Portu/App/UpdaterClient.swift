@@ -45,15 +45,15 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
     }
 
     func update(_ preferences: UpdaterPreferences) {
+        // Deliver only to subscribers whose initial replay has completed
+        // (primed). A fresh subscriber registered mid-flight misses this update,
+        // but its own replay yields `latestPreferences` — which already contains
+        // it — so nothing is lost and ordering per subscriber is preserved.
         let continuations: [AsyncStream<UpdaterPreferences>.Continuation] = lock.withLock {
             latestPreferences = preferences
-            // Only primed subscribers (initial replay already delivered) receive
-            // updates, so a fresh subscriber can never see a newer update before
-            // its own initial replay.
-            for id in subscribers.keys where subscribers[id]?.primed == false {
-                subscribers[id]?.primed = true
-            }
-            return subscribers.values.filter(\.primed).map(\.continuation)
+            return subscribers.values
+                .filter(\.primed)
+                .map(\.continuation)
         }
         for continuation in continuations {
             continuation.yield(preferences)
