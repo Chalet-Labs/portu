@@ -103,9 +103,6 @@ final class SparkleUpdaterController {
     private let broadcaster: UpdaterPreferencesBroadcaster
     private var kvoObservation: NSKeyValueObservation?
     private let userDefaults: UserDefaults
-    /// Serializes preference writes so rapid selections commit in arrival order;
-    /// a stale in-flight write cannot overtake or interleave with a newer one.
-    private let writeQueue = DispatchQueue(label: "com.portu.app.updater-writes")
 
     static let channelKey = "portu.update.channel"
 
@@ -165,34 +162,30 @@ final class SparkleUpdaterController {
     }
 
     func setAutomaticallyChecksForUpdates(_ enabled: Bool) {
-        // Ordered through the serial queue alongside channel writes so rapid
-        // selections of either preference commit in arrival order.
-        writeQueue.sync {
-            // Assign unconditionally so Sparkle records the user's decision even
-            // when the effective value is unchanged (declining an off prompt).
-            controller.updater.automaticallyChecksForUpdates = enabled
-            let current = broadcaster.currentPreferences()
-            if current.automaticallyChecksForUpdates != enabled {
-                let updated = UpdaterPreferences(
-                    automaticallyChecksForUpdates: enabled,
-                    channel: current.channel)
-                broadcaster.update(updated)
-            }
+        // Assign unconditionally so Sparkle records the user's decision even when
+        // the effective value is unchanged (declining an already-off prompt).
+        controller.updater.automaticallyChecksForUpdates = enabled
+        let current = broadcaster.currentPreferences()
+        if current.automaticallyChecksForUpdates != enabled {
+            let updated = UpdaterPreferences(
+                automaticallyChecksForUpdates: enabled,
+                channel: current.channel)
+            broadcaster.update(updated)
         }
     }
 
+    // Serialization: both setters run on the main actor (as does Sparkle), so
+    // writes commit one at a time in the order tasks reach it. The reducer's
+    // cancel-in-flight ID supplies ordering — a newer selection cancels the
+    // older effect before it can re-enter here.
     func setChannel(_ channel: UpdateChannel) {
-        // Ordered through the serial queue so rapid selections commit in arrival
-        // order — a stale in-flight Alpha cannot land after a newer Stable.
-        writeQueue.sync {
-            userDefaults.set(channel.rawValue, forKey: Self.channelKey)
-            let current = broadcaster.currentPreferences()
-            if current.channel != channel {
-                let updated = UpdaterPreferences(
-                    automaticallyChecksForUpdates: current.automaticallyChecksForUpdates,
-                    channel: channel)
-                broadcaster.update(updated)
-            }
+        userDefaults.set(channel.rawValue, forKey: Self.channelKey)
+        let current = broadcaster.currentPreferences()
+        if current.channel != channel {
+            let updated = UpdaterPreferences(
+                automaticallyChecksForUpdates: current.automaticallyChecksForUpdates,
+                channel: channel)
+            broadcaster.update(updated)
         }
     }
 
