@@ -11,10 +11,13 @@ enum SettingsSectionIcon: Equatable {
     case debugServer
     case notices
     case launchArgument
+    case softwareUpdates
 
     var presentation: SettingsSectionIconPresentation {
         let palette: (foreground: Color, background: Color) = switch self {
         case .priceUpdates, .tokenOverrides, .customRPCs:
+            (SettingsDesign.accentPrimary, SettingsDesign.primaryGlyphBackground)
+        case .softwareUpdates:
             (SettingsDesign.accentPrimary, SettingsDesign.primaryGlyphBackground)
         case .dashboardVisibility:
             (SettingsDesign.tokenTeal, SettingsDesign.tokenGlyphBackground)
@@ -45,6 +48,7 @@ enum SettingsSectionIcon: Equatable {
         case .debugServer: "wrench.and.screwdriver"
         case .notices: "bell"
         case .launchArgument: "terminal"
+        case .softwareUpdates: "arrow.down.circle"
         }
     }
 }

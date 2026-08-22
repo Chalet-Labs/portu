@@ -42,12 +42,13 @@ struct UpdaterIntegrationTests {
         #expect(!appcast.contains("<enclosure"))
     }
 
-    @Test func `sparkle configuration is manual only and disables profiling`() throws {
+    @Test func `sparkle configuration preserves permission prompt defaults and disables profiling`() throws {
         let info = try propertyList("Sources/Portu/Resources/Info.plist")
 
         #expect(info["SUFeedURL"] as? String == "$(PORTU_UPDATE_FEED_URL)")
         #expect(info["SUPublicEDKey"] as? String == "$(PORTU_UPDATE_PUBLIC_KEY)")
-        #expect(info["SUEnableAutomaticChecks"] as? Bool == false)
+        #expect(info["SUEnableAutomaticChecks"] == nil)
+        #expect(info["SUPromptUserOnFirstLaunch"] as? Bool == true)
         #expect(info["SUAutomaticallyUpdate"] as? Bool == false)
         #expect(info["SUAllowsAutomaticUpdates"] as? Bool == false)
         #expect(info["SUEnableSystemProfiling"] as? Bool == false)

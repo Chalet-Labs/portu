@@ -363,6 +363,22 @@ private struct GeneralSettingsTab: View {
                         }
                     }
 
+                SettingsSectionCard(
+                    title: "Updates",
+                    subtitle: "Privacy-preserving update checks that notify without downloading or restarting.",
+                    icon: .softwareUpdates) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            SettingsSwitchRow(
+                                title: "Check for updates automatically",
+                                subtitle: "Asks once, checks daily, and notifies without downloading or restarting.",
+                                isOn: Binding(
+                                    get: { store.updatePreferences.automaticallyChecksForUpdates },
+                                    set: { store.send(.setAutomaticChecksEnabled($0)) }))
+
+                            SettingsUpdateChannelPicker(store: store)
+                        }
+                    }
+
                 SettingsInfoCard(
                     title: "Auto-saved",
                     message: "These settings are stored locally with AppStorage and apply across Portu views.")

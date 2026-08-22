@@ -93,6 +93,10 @@ schemes:
       config: Debug
     test:
       config: Debug
+      # Test host only: suppress Sparkle's first-launch permission prompt modal.
+      # Production prompt behavior stays enabled (no SUEnableAutomaticChecks in Info.plist).
+      commandLineArguments:
+        "-SUEnableAutomaticChecks NO": true
       targets:
         - PortuTests
     profile:
