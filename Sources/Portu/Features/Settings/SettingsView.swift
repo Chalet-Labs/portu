@@ -25,7 +25,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
-        case .general: "Currency and price refresh preferences for portfolio data."
+        case .general: "Currency, price refresh, and software update preferences."
         case .tokens: "Manual pricing, low-value visibility, and token overrides."
         case .categories: "Category symbol rules for app-wide portfolio categories."
         case .apiKeys: "Provider credentials and optional custom RPC endpoints."
