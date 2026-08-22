@@ -53,16 +53,12 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
             }
         }
 
-        func replayThenPrime(_ initial: UpdaterPreferences, latest: UpdaterPreferences) {
-            // Hold the delivery lock across both yields so nothing can interleave
-            // between replay and catch-up; priming itself happens in stream()
-            // under the registry lock while this lock is still held.
+        func replay(_ initial: UpdaterPreferences) {
+            // Hold the delivery lock across the replay so a concurrent update()
+            // (which delivers under this same lock) cannot interleave ahead of it.
             deliveryLock.lock()
             defer { deliveryLock.unlock() }
             continuation.yield(initial)
-            if latest != initial {
-                continuation.yield(latest)
-            }
         }
     }
 
@@ -101,13 +97,19 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
                 subscribers[id] = subscriber
                 return (subscriber, latestPreferences)
             }
-            // Replay + catch-up happen under the subscriber's delivery lock; the
-            // registry lock is then taken to mark primed. Because update() only
-            // delivers to subscribers that are already primed under the same
-            // registry lock, no update can be delivered ahead of the replay.
-            subscriber.replayThenPrime(latest, latest: latest)
-            lock.withLock {
+            // Replay the registration snapshot under the delivery lock, then — in
+            // ONE registry-lock section — mark primed and re-read latest. Any
+            // update committed during the unlocked replay window is captured by
+            // this read (update() records into latestPreferences under the same
+            // registry lock) and delivered here; updates after priming flow
+            // through update() normally. No value can be skipped or reordered.
+            subscriber.replay(latest)
+            let current = lock.withLock {
                 subscriber.primed = true
+                return latestPreferences
+            }
+            if current != latest {
+                subscriber.deliver(current)
             }
         }
     }
