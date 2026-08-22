@@ -175,8 +175,13 @@ final class SparkleUpdaterController {
     }
 
     func setChannel(_ channel: UpdateChannel) {
-        userDefaults.set(channel.rawValue, forKey: Self.channelKey)
+        // Stale-write guard: if a newer selection already committed (e.g. Alpha
+        // then quickly Stable), an older in-flight write must not overwrite it.
         let current = broadcaster.currentPreferences()
+        guard current.channel != channel || userDefaults.string(forKey: Self.channelKey) != channel.rawValue else {
+            return
+        }
+        userDefaults.set(channel.rawValue, forKey: Self.channelKey)
         if current.channel != channel {
             let updated = UpdaterPreferences(
                 automaticallyChecksForUpdates: current.automaticallyChecksForUpdates,
