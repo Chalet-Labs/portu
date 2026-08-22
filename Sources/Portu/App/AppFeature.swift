@@ -135,6 +135,7 @@ struct AppFeature {
                 // latest value on subscribe — a duplicate of the load above that is
                 // idempotent for the reducer.
                 let loadPreferencesEffect = Effect<Action>.run { send in
+                    await send(.updateSettingsAvailabilityChanged(updater.isAvailable()))
                     let preferences = await updater.preferences()
                     await send(.updatePreferencesLoaded(preferences))
                 }
