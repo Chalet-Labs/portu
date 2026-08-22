@@ -112,7 +112,18 @@ final class SparkleUpdaterController {
         let savedChannelString = userDefaults.string(forKey: Self.channelKey)
         let initialChannel = savedChannelString.flatMap(UpdateChannel.init(rawValue:)) ?? .stable
 
-        let delegate = ChannelUpdaterDelegate()
+        // Broadcaster and delegate provider are installed BEFORE startUpdater() so
+        // the first update cycle already sees the saved channel; a stable fallback
+        // during startup would hand an Alpha user stable-only results.
+        let initialPrefs = UpdaterPreferences(
+            automaticallyChecksForUpdates: false,
+            channel: initialChannel)
+        let broadcaster = UpdaterPreferencesBroadcaster(initialPreferences: initialPrefs)
+        self.broadcaster = broadcaster
+
+        let delegate = ChannelUpdaterDelegate(preferencesProvider: { [weak broadcaster] in
+            broadcaster?.currentPreferences() ?? UpdaterPreferences()
+        })
         self.delegate = delegate
 
         let controller = SPUStandardUpdaterController(
@@ -125,16 +136,6 @@ final class SparkleUpdaterController {
         controller.updater.automaticallyDownloadsUpdates = false
         controller.startUpdater()
         self.controller = controller
-
-        let initialPrefs = UpdaterPreferences(
-            automaticallyChecksForUpdates: controller.updater.automaticallyChecksForUpdates,
-            channel: initialChannel)
-        let broadcaster = UpdaterPreferencesBroadcaster(initialPreferences: initialPrefs)
-        self.broadcaster = broadcaster
-
-        delegate.preferencesProvider = { [weak broadcaster] in
-            broadcaster?.currentPreferences() ?? UpdaterPreferences()
-        }
 
         self.kvoObservation = controller.updater.observe(
             \.automaticallyChecksForUpdates,
