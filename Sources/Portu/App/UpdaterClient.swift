@@ -71,10 +71,16 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
                 return latestPreferences
             }
             // Initial replay happens outside the lock (yield can synchronously
-            // resume a suspended consumer). update() skips unprimed subscribers,
-            // so no newer value can precede this replay; priming afterwards lets
-            // subsequent updates flow normally.
+            // resume a suspended consumer). update() withholds values from
+            // unprimed subscribers, so nothing can precede this replay.
             continuation.yield(initial)
+            // Re-read latest while priming: an update stored during the unlocked
+            // yield window was withheld from this subscriber, so replay it now —
+            // otherwise Settings would stay stale until another change arrives.
+            let latest = currentPreferences()
+            if latest != initial {
+                continuation.yield(latest)
+            }
             lock.withLock {
                 if var entry = subscribers[id] {
                     entry.primed = true
