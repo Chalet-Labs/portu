@@ -103,6 +103,9 @@ final class SparkleUpdaterController {
     private let broadcaster: UpdaterPreferencesBroadcaster
     private var kvoObservation: NSKeyValueObservation?
     private let userDefaults: UserDefaults
+    /// Serializes preference writes so rapid selections commit in arrival order;
+    /// a stale in-flight write cannot overtake or interleave with a newer one.
+    private let writeQueue = DispatchQueue(label: "com.portu.app.updater-writes")
 
     static let channelKey = "portu.update.channel"
 
@@ -162,26 +165,34 @@ final class SparkleUpdaterController {
     }
 
     func setAutomaticallyChecksForUpdates(_ enabled: Bool) {
-        // Assign unconditionally so Sparkle records the user's decision even when
-        // the effective value is unchanged (e.g. declining an already-off prompt).
-        controller.updater.automaticallyChecksForUpdates = enabled
-        let current = broadcaster.currentPreferences()
-        if current.automaticallyChecksForUpdates != enabled {
-            let updated = UpdaterPreferences(
-                automaticallyChecksForUpdates: enabled,
-                channel: current.channel)
-            broadcaster.update(updated)
+        // Ordered through the serial queue alongside channel writes so rapid
+        // selections of either preference commit in arrival order.
+        writeQueue.sync {
+            // Assign unconditionally so Sparkle records the user's decision even
+            // when the effective value is unchanged (declining an off prompt).
+            controller.updater.automaticallyChecksForUpdates = enabled
+            let current = broadcaster.currentPreferences()
+            if current.automaticallyChecksForUpdates != enabled {
+                let updated = UpdaterPreferences(
+                    automaticallyChecksForUpdates: enabled,
+                    channel: current.channel)
+                broadcaster.update(updated)
+            }
         }
     }
 
     func setChannel(_ channel: UpdateChannel) {
-        userDefaults.set(channel.rawValue, forKey: Self.channelKey)
-        let current = broadcaster.currentPreferences()
-        if current.channel != channel {
-            let updated = UpdaterPreferences(
-                automaticallyChecksForUpdates: current.automaticallyChecksForUpdates,
-                channel: channel)
-            broadcaster.update(updated)
+        // Ordered through the serial queue so rapid selections commit in arrival
+        // order — a stale in-flight Alpha cannot land after a newer Stable.
+        writeQueue.sync {
+            userDefaults.set(channel.rawValue, forKey: Self.channelKey)
+            let current = broadcaster.currentPreferences()
+            if current.channel != channel {
+                let updated = UpdaterPreferences(
+                    automaticallyChecksForUpdates: current.automaticallyChecksForUpdates,
+                    channel: channel)
+                broadcaster.update(updated)
+            }
         }
     }
 
