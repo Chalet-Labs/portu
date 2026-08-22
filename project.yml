@@ -95,8 +95,12 @@ schemes:
       config: Debug
       # Test host only: suppress Sparkle's first-launch permission prompt modal.
       # Production prompt behavior stays enabled (no SUEnableAutomaticChecks in Info.plist).
+      # Xcode passes each entry as ONE argv token; UserDefaults' argument domain
+      # only parses -Key Value pairs from ADJACENT argv entries, so a single
+      # "-SUEnableAutomaticChecks NO" token is inert. Two entries required.
       commandLineArguments:
-        "-SUEnableAutomaticChecks NO": true
+        "-SUEnableAutomaticChecks": true
+        "NO": true
       targets:
         - PortuTests
     profile:
