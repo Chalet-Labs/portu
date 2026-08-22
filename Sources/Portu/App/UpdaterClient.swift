@@ -31,8 +31,38 @@ struct UpdaterConfiguration: Equatable, Sendable {
 
 final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
     private let lock = NSLock()
-    private var subscribers: [UUID: (continuation: AsyncStream<UpdaterPreferences>.Continuation, primed: Bool)] = [:]
+    private var subscribers: [UUID: Subscriber] = [:]
     private var latestPreferences: UpdaterPreferences
+
+    /// One delivery lock per subscriber so replay + updates for a single stream
+    /// are strictly ordered, while independent subscribers never block each other.
+    final class Subscriber {
+        let continuation: AsyncStream<UpdaterPreferences>.Continuation
+        var primed = false
+        let deliveryLock = NSLock()
+
+        init(continuation: AsyncStream<UpdaterPreferences>.Continuation) {
+            self.continuation = continuation
+        }
+
+        func deliver(_ preferences: UpdaterPreferences) {
+            deliveryLock.withLock {
+                continuation.yield(preferences)
+            }
+        }
+
+        func replayThenPrime(_ initial: UpdaterPreferences, latest: UpdaterPreferences) {
+            deliveryLock.withLock {
+                continuation.yield(initial)
+                if latest != initial {
+                    // An update committed after registration but before priming;
+                    // deliver it right behind the replay so nothing is withheld.
+                    continuation.yield(latest)
+                }
+                primed = true
+            }
+        }
+    }
 
     init(initialPreferences: UpdaterPreferences) {
         self.latestPreferences = initialPreferences
@@ -45,18 +75,16 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
     }
 
     func update(_ preferences: UpdaterPreferences) {
-        // Deliver only to subscribers whose initial replay has completed
-        // (primed). A fresh subscriber registered mid-flight misses this update,
-        // but its own replay yields `latestPreferences` — which already contains
-        // it — so nothing is lost and ordering per subscriber is preserved.
-        let continuations: [AsyncStream<UpdaterPreferences>.Continuation] = lock.withLock {
+        // Deliver only to primed subscribers. A fresh subscriber registered
+        // mid-flight misses this update, but its replay yields `latestPreferences`
+        // — which already contains it — so nothing is lost and per-stream
+        // ordering is preserved.
+        let subscribersSnapshot: [Subscriber] = lock.withLock {
             latestPreferences = preferences
-            return subscribers.values
-                .filter(\.primed)
-                .map(\.continuation)
+            return subscribers.values.filter(\.primed)
         }
-        for continuation in continuations {
-            continuation.yield(preferences)
+        for subscriber in subscribersSnapshot {
+            subscriber.deliver(preferences)
         }
     }
 
@@ -66,26 +94,12 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
             continuation.onTermination = { [weak self, id] _ in
                 self?.removeSubscriber(id: id)
             }
-            let initial: UpdaterPreferences = lock.withLock {
-                subscribers[id] = (continuation, primed: false)
-                return latestPreferences
+            let (subscriber, latest): (Subscriber, UpdaterPreferences) = lock.withLock {
+                let subscriber = Subscriber(continuation: continuation)
+                subscribers[id] = subscriber
+                return (subscriber, latestPreferences)
             }
-            // Initial replay happens outside the lock (yield can synchronously
-            // resume a suspended consumer). update() withholds values from
-            // unprimed subscribers, so nothing can precede this replay.
-            // Re-read latest and prime in ONE lock section: an update landing
-            // after the read but before priming is otherwise withheld forever
-            // (unprimed subscribers get no updates), leaving Settings stale.
-            let latest = lock.withLock {
-                if var entry = subscribers[id] {
-                    entry.primed = true
-                    subscribers[id] = entry
-                }
-                return latestPreferences
-            }
-            if latest != initial {
-                continuation.yield(latest)
-            }
+            subscriber.replayThenPrime(latest, latest: latest)
         }
     }
 
