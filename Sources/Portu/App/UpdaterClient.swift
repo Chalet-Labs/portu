@@ -57,12 +57,16 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
     func stream() -> AsyncStream<UpdaterPreferences> {
         let id = UUID()
         return AsyncStream { continuation in
-            lock.withLock {
+            let initial: UpdaterPreferences = lock.withLock {
+                // Register under the lock, but yield OUTSIDE it: `yield` can
+                // synchronously resume a suspended consumer, and calling out
+                // while holding the lock risks re-entrancy. A concurrent
+                // update() may deliver a newer value first — duplicates are
+                // idempotent for consumers, out-of-order delivery is not.
                 subscribers[id] = continuation
-                // Yield inside the lock so a concurrent update() cannot deliver a
-                // newer value to this subscriber before its initial replay lands.
-                continuation.yield(latestPreferences)
+                return latestPreferences
             }
+            continuation.yield(initial)
             continuation.onTermination = { [weak self, id] _ in
                 self?.removeSubscriber(id: id)
             }
