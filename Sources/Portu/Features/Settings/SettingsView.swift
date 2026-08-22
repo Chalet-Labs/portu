@@ -370,12 +370,16 @@ private struct GeneralSettingsTab: View {
                         VStack(alignment: .leading, spacing: 10) {
                             SettingsSwitchRow(
                                 title: "Check for updates automatically",
-                                subtitle: "Asks once, checks daily, and notifies without downloading or restarting.",
+                                subtitle: store.updateSettingsAvailable
+                                    ? "Asks once, checks daily, and notifies without downloading or restarting."
+                                    : "Update checks are unavailable in this build (no update feed configured).",
                                 isOn: Binding(
                                     get: { store.updatePreferences.automaticallyChecksForUpdates },
                                     set: { store.send(.setAutomaticChecksEnabled($0)) }))
+                                .disabled(!store.updateSettingsAvailable)
 
                             SettingsUpdateChannelPicker(store: store)
+                                .disabled(!store.updateSettingsAvailable)
                         }
                     }
 

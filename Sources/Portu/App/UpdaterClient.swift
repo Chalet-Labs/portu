@@ -203,6 +203,9 @@ final class SparkleUpdaterController {
 }
 
 struct UpdaterClient: Sendable {
+    // False for the inert `.disabled` client (no configured feed, e.g. Release
+    // builds without updater credentials); Settings gates its update controls on it.
+    var isAvailable: @Sendable () -> Bool
     var checkForUpdates: @Sendable () async -> Void
     var preferences: @Sendable () async -> UpdaterPreferences
     var setAutomaticallyChecksForUpdates: @Sendable (Bool) async -> Void
@@ -214,6 +217,7 @@ struct UpdaterClient: Sendable {
             return .disabled
         }
         return Self(
+            isAvailable: { true },
             checkForUpdates: {
                 await controller.checkForUpdates()
             },
@@ -232,6 +236,7 @@ struct UpdaterClient: Sendable {
     }
 
     static let disabled = Self(
+        isAvailable: { false },
         checkForUpdates: {},
         preferences: { UpdaterPreferences() },
         setAutomaticallyChecksForUpdates: { _ in },

@@ -37,6 +37,10 @@ struct AppFeature {
         // no historical data has ever been fetched yet for that currency.
         var historicalFXLastRefreshDayByCurrency: [FiatCurrency: Date] = [:]
         var updatePreferences = UpdaterPreferences()
+        // False until launch proves a live updater exists (configured feed + key);
+        // Settings disables the update controls while false so Release users without
+        // an updater never stage preference changes that cannot persist.
+        var updateSettingsAvailable = false
         var prices: [String: Decimal] = [:]
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?
@@ -52,6 +56,7 @@ struct AppFeature {
 
     enum Action {
         case appLaunched
+        case updateSettingsAvailabilityChanged(Bool)
         case checkForUpdatesTapped
         case updatePreferencesLoaded(UpdaterPreferences)
         case setAutomaticChecksEnabled(Bool)
@@ -130,6 +135,7 @@ struct AppFeature {
                 // latest value on subscribe — a duplicate of the load above that is
                 // idempotent for the reducer.
                 let loadPreferencesEffect = Effect<Action>.run { send in
+                    await send(.updateSettingsAvailabilityChanged(updater.isAvailable()))
                     await send(.updatePreferencesLoaded(updater.preferences()))
                 }
                 let preferenceStreamEffect = Effect<Action>.run { send in
@@ -156,6 +162,10 @@ struct AppFeature {
                 return .run { _ in
                     await updater.checkForUpdates()
                 }
+
+            case let .updateSettingsAvailabilityChanged(available):
+                state.updateSettingsAvailable = available
+                return .none
 
             case let .updatePreferencesLoaded(preferences):
                 state.updatePreferences = preferences
@@ -737,6 +747,7 @@ extension AppFeature.Action: Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.appLaunched, .appLaunched): true
+        case let (.updateSettingsAvailabilityChanged(l), .updateSettingsAvailabilityChanged(r)): l == r
         case (.checkForUpdatesTapped, .checkForUpdatesTapped): true
         case let (.updatePreferencesLoaded(l), .updatePreferencesLoaded(r)): l == r
         case let (.setAutomaticChecksEnabled(l), .setAutomaticChecksEnabled(r)): l == r

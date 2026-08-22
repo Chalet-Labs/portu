@@ -26,6 +26,7 @@ struct AppFeatureUpdaterSettingsTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
+            $0.updater.isAvailable = { true }
             $0.updater.checkForUpdates = { didCheckForUpdates = true }
             $0.updater.preferences = { UpdaterPreferences() }
             $0.updater.setAutomaticallyChecksForUpdates = { capturedAutomaticallyChecks.append($0) }
@@ -34,6 +35,9 @@ struct AppFeatureUpdaterSettingsTests {
         }
 
         await store.send(.appLaunched)
+        await store.receive(.updateSettingsAvailabilityChanged(true)) {
+            $0.updateSettingsAvailable = true
+        }
         await store.receive(.updatePreferencesLoaded(UpdaterPreferences()))
 
         await store.send(.setAutomaticChecksEnabled(true)) {
@@ -58,6 +62,7 @@ struct AppFeatureUpdaterSettingsTests {
         let store = TestStore(initialState: AppFeature.State(updatePreferences: initialPreferences)) {
             AppFeature()
         } withDependencies: {
+            $0.updater.isAvailable = { true }
             $0.updater.checkForUpdates = { didCheckForUpdates = true }
             $0.updater.preferences = { initialPreferences }
             $0.updater.setAutomaticallyChecksForUpdates = { capturedAutomaticallyChecks.append($0) }
@@ -121,6 +126,7 @@ struct AppFeatureUpdaterSettingsTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
+            $0.updater.isAvailable = { true }
             $0.updater.checkForUpdates = { didCheckForUpdates = true }
             $0.updater.preferences = { storedPreferences }
             $0.updater.setAutomaticallyChecksForUpdates = { capturedAutomaticallyChecks.append($0) }
@@ -129,10 +135,14 @@ struct AppFeatureUpdaterSettingsTests {
         }
 
         await store.send(.appLaunched)
+        await store.receive(.updateSettingsAvailabilityChanged(true)) {
+            $0.updateSettingsAvailable = true
+        }
         await store.receive(.updatePreferencesLoaded(storedPreferences)) {
             $0.updatePreferences = storedPreferences
         }
 
+        #expect(store.state.updateSettingsAvailable)
         #expect(store.state.updatePreferences == storedPreferences)
         #expect(!didCheckForUpdates)
         #expect(capturedAutomaticallyChecks.isEmpty)
@@ -153,6 +163,7 @@ struct AppFeatureUpdaterSettingsTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
+            $0.updater.isAvailable = { true }
             $0.updater.checkForUpdates = { didCheckForUpdates = true }
             $0.updater.preferences = { initialPreferences }
             $0.updater.setAutomaticallyChecksForUpdates = { capturedAutomaticallyChecks.append($0) }
@@ -161,6 +172,9 @@ struct AppFeatureUpdaterSettingsTests {
         }
 
         await store.send(.appLaunched)
+        await store.receive(.updateSettingsAvailabilityChanged(true)) {
+            $0.updateSettingsAvailable = true
+        }
         await store.receive(.updatePreferencesLoaded(initialPreferences))
 
         preferenceStream.continuation.yield(updatedPreferences)
@@ -171,8 +185,24 @@ struct AppFeatureUpdaterSettingsTests {
 
         #expect(store.state.updatePreferences.automaticallyChecksForUpdates == true)
         #expect(store.state.updatePreferences.channel == .stable)
-
         preferenceStream.continuation.finish()
+        await store.finish()
+    }
+
+    @Test func `launch marks settings unavailable when updater is disabled`() async {
+        let store = TestStore(initialState: AppFeature.State()) {
+            AppFeature()
+        } withDependencies: {
+            $0.updater.isAvailable = { false }
+            $0.updater.preferences = { UpdaterPreferences() }
+            $0.updater.preferenceChanges = { AsyncStream { $0.finish() } }
+        }
+
+        await store.send(.appLaunched)
+        await store.receive(.updateSettingsAvailabilityChanged(false))
+        await store.receive(.updatePreferencesLoaded(UpdaterPreferences()))
+
+        #expect(!store.state.updateSettingsAvailable)
         await store.finish()
     }
 }
