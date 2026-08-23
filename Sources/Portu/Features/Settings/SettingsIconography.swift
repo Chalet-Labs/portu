@@ -15,9 +15,7 @@ enum SettingsSectionIcon: Equatable {
 
     var presentation: SettingsSectionIconPresentation {
         let palette: (foreground: Color, background: Color) = switch self {
-        case .priceUpdates, .tokenOverrides, .customRPCs:
-            (SettingsDesign.accentPrimary, SettingsDesign.primaryGlyphBackground)
-        case .softwareUpdates:
+        case .priceUpdates, .tokenOverrides, .customRPCs, .softwareUpdates:
             (SettingsDesign.accentPrimary, SettingsDesign.primaryGlyphBackground)
         case .dashboardVisibility:
             (SettingsDesign.tokenTeal, SettingsDesign.tokenGlyphBackground)
