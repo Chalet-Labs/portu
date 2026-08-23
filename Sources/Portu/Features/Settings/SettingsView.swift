@@ -25,7 +25,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
-        case .general: "Currency and price refresh preferences for portfolio data."
+        case .general: "Currency, price refresh, and software update preferences."
         case .tokens: "Manual pricing, low-value visibility, and token overrides."
         case .categories: "Category symbol rules for app-wide portfolio categories."
         case .apiKeys: "Provider credentials and optional custom RPC endpoints."
@@ -360,6 +360,26 @@ private struct GeneralSettingsTab: View {
                             }
 
                             HistoricalBackfillStatusText(status: store.historicalPriceBackfill.status)
+                        }
+                    }
+
+                SettingsSectionCard(
+                    title: "Updates",
+                    subtitle: "Privacy-preserving update checks that notify without downloading or restarting.",
+                    icon: .softwareUpdates) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            SettingsSwitchRow(
+                                title: "Check for updates automatically",
+                                subtitle: store.updateSettingsAvailable
+                                    ? "Asks once, checks daily, and notifies without downloading or restarting."
+                                    : "Update checks are unavailable in this build (no update feed configured).",
+                                isOn: Binding(
+                                    get: { store.updatePreferences.automaticallyChecksForUpdates },
+                                    set: { store.send(.setAutomaticChecksEnabled($0)) }))
+                                .disabled(!store.updateSettingsAvailable)
+
+                            SettingsUpdateChannelPicker(store: store)
+                                .disabled(!store.updateSettingsAvailable)
                         }
                     }
 

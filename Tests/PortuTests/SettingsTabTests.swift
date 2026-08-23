@@ -36,6 +36,7 @@ struct SettingsTabTests {
         #expect(SettingsTab.filter(tabs, query: "category") == [.categories])
         #expect(SettingsTab.filter(tabs, query: "server") == [.debug])
         #expect(SettingsTab.filter(tabs, query: "price") == [.general])
+        #expect(SettingsTab.filter(tabs, query: "update") == [.general])
         #expect(SettingsTab.filter(tabs, query: "currency") == [.general])
         #expect(SettingsTab.filter(tabs, query: " ") == tabs)
     }

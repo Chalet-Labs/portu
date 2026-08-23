@@ -129,7 +129,7 @@ struct PortuApp: App {
 
     // swiftlint:disable:next function_body_length
     init() {
-        let updaterController = UpdaterConfiguration().map(SparkleUpdaterController.init)
+        let updaterController = UpdaterConfiguration().map { SparkleUpdaterController(configuration: $0) }
         self.updaterController = updaterController
         let factory = ModelContainerFactory()
         let isEphemeral: Bool

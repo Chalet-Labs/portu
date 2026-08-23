@@ -24,8 +24,8 @@
     <string>$(PORTU_UPDATE_PUBLIC_KEY)</string>
     <key>SUVerifyUpdateBeforeExtraction</key>
     <string>$(PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION)</string>
-    <key>SUEnableAutomaticChecks</key>
-    <false/>
+    <key>SUPromptUserOnFirstLaunch</key>
+    <true/>
     <key>SUAutomaticallyUpdate</key>
     <false/>
     <key>SUAllowsAutomaticUpdates</key>

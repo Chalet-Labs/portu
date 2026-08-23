@@ -336,6 +336,8 @@ struct AppFeatureTests {
         await store.send(.appLaunched) {
             $0.historicalFXAvailability = .loading
         }
+        await store.receive(.updateSettingsAvailabilityChanged(false))
+        await store.receive(.updatePreferencesLoaded(UpdaterPreferences()))
         // The restored EUR preference must not stick with a stale 1:1 rate: the launch
         // stays on USD and surfaces the failure instead of relabeling USD balances.
         await store.receive(\.currentCurrencyConversionRateReceived) {

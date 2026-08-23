@@ -36,6 +36,11 @@ struct AppFeature {
         // stale stamp suppress or under-size another currency's retry. No entry means
         // no historical data has ever been fetched yet for that currency.
         var historicalFXLastRefreshDayByCurrency: [FiatCurrency: Date] = [:]
+        var updatePreferences = UpdaterPreferences()
+        // False until launch proves a live updater exists (configured feed + key);
+        // Settings disables the update controls while false so Release users without
+        // an updater never stage preference changes that cannot persist.
+        var updateSettingsAvailable = false
         var prices: [String: Decimal] = [:]
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?
@@ -51,7 +56,11 @@ struct AppFeature {
 
     enum Action {
         case appLaunched
+        case updateSettingsAvailabilityChanged(Bool)
         case checkForUpdatesTapped
+        case updatePreferencesLoaded(UpdaterPreferences)
+        case setAutomaticChecksEnabled(Bool)
+        case setUpdateChannel(UpdateChannel)
         case sectionSelected(SidebarSection)
         case settingsSelected
         case syncTapped
@@ -85,6 +94,9 @@ struct AppFeature {
         case currencyConversion
         case displayRateRefresh
         case historicalFXTopUp
+        case updaterPreferences
+        case automaticChecksWrite
+        case updateChannelWrite
     }
 
     @Dependency(\.syncEngine) var syncEngine
@@ -119,19 +131,67 @@ struct AppFeature {
         Reduce { state, action in
             switch action {
             case .appLaunched:
+                // Stored preferences are loaded and announced first; the live
+                // KVO/prompt stream starts afterwards so a change landing during the
+                // handoff is replayed instead of lost. The stream also replays its
+                // latest value on subscribe — a duplicate of the load above that is
+                // idempotent for the reducer.
+                let loadPreferencesEffect = Effect<Action>.run { send in
+                    await send(.updateSettingsAvailabilityChanged(updater.isAvailable()))
+                    let preferences = await updater.preferences()
+                    await send(.updatePreferencesLoaded(preferences))
+                }
+                let preferenceStreamEffect = Effect<Action>.run { send in
+                    for await updated in updater.preferenceChanges() {
+                        await send(.updatePreferencesLoaded(updated))
+                    }
+                }
+                .cancellable(id: CancelID.updaterPreferences, cancelInFlight: true)
+
                 // A saved non-USD currency is restored as `pendingCurrency` with the
                 // display kept on USD, so a failed launch FX request falls back to USD
                 // instead of formatting cached USD balances as EUR/CHF at a stale 1:1
                 // rate. The rate-received handler commits the pending switch on success
                 // and clears it (staying on USD) on failure.
-                guard let pending = state.pendingCurrency else { return .none }
+                guard let pending = state.pendingCurrency else {
+                    return .concatenate(loadPreferencesEffect, preferenceStreamEffect)
+                }
                 state.historicalFXAvailability = .loading
-                return currencyConversionEffect(currency: pending)
+                return .concatenate(
+                    loadPreferencesEffect,
+                    .merge(preferenceStreamEffect, currencyConversionEffect(currency: pending)))
 
             case .checkForUpdatesTapped:
                 return .run { _ in
                     await updater.checkForUpdates()
                 }
+
+            case let .updateSettingsAvailabilityChanged(available):
+                state.updateSettingsAvailable = available
+                return .none
+
+            case let .updatePreferencesLoaded(preferences):
+                state.updatePreferences = preferences
+                return .none
+
+            case let .setAutomaticChecksEnabled(enabled):
+                state.updatePreferences.automaticallyChecksForUpdates = enabled
+                // Per-field cancel-in-flight: rapid changes to the same setting
+                // keep only the newest write, while a change to the other setting
+                // never cancels this one (its write would be dropped entirely).
+                return .run { _ in
+                    await updater.setAutomaticallyChecksForUpdates(enabled)
+                }
+                .cancellable(id: CancelID.automaticChecksWrite, cancelInFlight: true)
+
+            case let .setUpdateChannel(channel):
+                state.updatePreferences.channel = channel
+                // Same-field cancel-in-flight: a newer channel selection cancels
+                // the previous channel write so only the newest can commit.
+                return .run { _ in
+                    await updater.setChannel(channel)
+                }
+                .cancellable(id: CancelID.updateChannelWrite, cancelInFlight: true)
 
             case let .sectionSelected(section):
                 state.selectedSection = section
@@ -697,6 +757,11 @@ extension AppFeature.Action: Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.appLaunched, .appLaunched): true
+        case let (.updateSettingsAvailabilityChanged(l), .updateSettingsAvailabilityChanged(r)): l == r
+        case (.checkForUpdatesTapped, .checkForUpdatesTapped): true
+        case let (.updatePreferencesLoaded(l), .updatePreferencesLoaded(r)): l == r
+        case let (.setAutomaticChecksEnabled(l), .setAutomaticChecksEnabled(r)): l == r
+        case let (.setUpdateChannel(l), .setUpdateChannel(r)): l == r
         case let (.sectionSelected(l), .sectionSelected(r)): l == r
         case (.settingsSelected, .settingsSelected): true
         case (.syncTapped, .syncTapped): true
