@@ -218,7 +218,7 @@ extension ReleaseAutomationTests {
         #expect(appcast.contains("edSignature:"))
     }
 
-    @Test func `appcast generation fails closed for missing or invalid inputs`() throws {
+    @Test func `appcast generation fails closed for missing files and arguments`() throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appending(path: "portu-appcast-errors-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
@@ -271,7 +271,34 @@ extension ReleaseAutomationTests {
         #expect(missingDmg.status == 2)
         #expect(missingDmg.error.contains("DMG") || missingDmg.error.contains("exist"))
 
-        // 4. Invalid semver
+        // 4. Missing release notes file
+        let missingNotes = try runScript(
+            "scripts/generate_sparkle_appcast.sh",
+            arguments: [
+                "--version", "1.0.0",
+                "--build-number", "1000",
+                "--dmg", testDmg.path(percentEncoded: false),
+                "--appcast", appcastPath,
+                "--download-url-prefix", "https://github.com/Chalet-Labs/portu/releases/download/v1.0.0",
+                "--release-notes", temporaryDirectory.appending(path: "missing-notes.md").path(percentEncoded: false)
+            ],
+            input: validKey + "\n")
+        #expect(missingNotes.status == 2)
+        #expect(missingNotes.error.contains("release notes") || missingNotes.error.contains("exist"))
+    }
+
+    @Test func `appcast generation fails closed for invalid or mismatched metadata`() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appending(path: "portu-appcast-meta-errors-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let validKey = "nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A="
+        let testDmg = temporaryDirectory.appending(path: "Portu-1.0.0.dmg")
+        try createTestDmg(at: testDmg, version: "1.0.0", build: "1000")
+        let appcastPath = temporaryDirectory.appending(path: "appcast.xml").path(percentEncoded: false)
+
+        // 1. Invalid semver
         let invalidSemver = try runScript(
             "scripts/generate_sparkle_appcast.sh",
             arguments: [
@@ -285,7 +312,7 @@ extension ReleaseAutomationTests {
         #expect(invalidSemver.status == 2)
         #expect(invalidSemver.error.contains("semantic version"))
 
-        // 5. Invalid build number
+        // 2. Invalid build number
         let invalidBuild = try runScript(
             "scripts/generate_sparkle_appcast.sh",
             arguments: [
@@ -298,6 +325,20 @@ extension ReleaseAutomationTests {
             input: validKey + "\n")
         #expect(invalidBuild.status == 2)
         #expect(invalidBuild.error.contains("build number"))
+
+        // 3. Mismatched build number in DMG vs CLI argument
+        let mismatchedBuild = try runScript(
+            "scripts/generate_sparkle_appcast.sh",
+            arguments: [
+                "--version", "1.0.0",
+                "--build-number", "9999",
+                "--dmg", testDmg.path(percentEncoded: false),
+                "--appcast", appcastPath,
+                "--download-url-prefix", "https://github.com/Chalet-Labs/portu/releases/download/v1.0.0"
+            ],
+            input: validKey + "\n")
+        #expect(mismatchedBuild.status == 1)
+        #expect(mismatchedBuild.error.contains("build number") || mismatchedBuild.error.contains("match"))
     }
 
     @Test func `appcast generation never leaks private seed to disk or feed`() throws {
@@ -306,13 +347,12 @@ extension ReleaseAutomationTests {
         try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
 
-        let secretSeed = "issue-81-secret-rehearsal-seed-unique-value"
-        let base64SecretSeed = Data(secretSeed.utf8).base64EncodedString()
+        let validSeed = "nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A="
         let testDmg = temporaryDirectory.appending(path: "Portu-1.0.0.dmg")
         try createTestDmg(at: testDmg, version: "1.0.0", build: "1000")
         let appcastPath = temporaryDirectory.appending(path: "appcast.xml").path(percentEncoded: false)
 
-        _ = try runScript(
+        let result = try runScript(
             "scripts/generate_sparkle_appcast.sh",
             arguments: [
                 "--version", "1.0.0",
@@ -321,12 +361,14 @@ extension ReleaseAutomationTests {
                 "--appcast", appcastPath,
                 "--download-url-prefix", "https://github.com/Chalet-Labs/portu/releases/download/v1.0.0"
             ],
-            input: base64SecretSeed + "\n")
+            input: validSeed + "\n")
+
+        #expect(result.status == 0)
 
         let leaked = try runScript(
             "scripts/assert_secret_absent.py",
             arguments: [temporaryDirectory.path(percentEncoded: false)],
-            input: secretSeed + "\n")
+            input: validSeed + "\n")
         #expect(leaked.status == 0)
     }
 }

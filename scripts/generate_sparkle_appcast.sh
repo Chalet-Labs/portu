@@ -92,6 +92,13 @@ if [[ ! -f "$DMG_PATH" ]]; then
   exit 2
 fi
 
+if [[ -n "$RELEASE_NOTES_PATH" ]]; then
+  if [[ ! -f "$RELEASE_NOTES_PATH" ]]; then
+    echo "error: release notes file does not exist: $RELEASE_NOTES_PATH" >&2
+    exit 2
+  fi
+fi
+
 if [[ -z "$APPCAST_PATH" ]]; then
   echo "error: appcast output path is required" >&2
   exit 2
@@ -223,7 +230,20 @@ if [[ ! -f "$STAGE_DIR/appcast.xml" ]]; then
   exit 1
 fi
 
-# 6. Verify enclosure signature, URL, and byte length in generated appcast
+# 6. Validate generated item's version and build number against CLI inputs
+BUNDLE_MARKETING_VERSION="${VERSION%%[-+]*}"
+if ! grep -q "<sparkle:version>$BUILD_NUMBER</sparkle:version>" "$STAGE_DIR/appcast.xml"; then
+  echo "error: generated appcast does not match expected build number $BUILD_NUMBER" >&2
+  exit 1
+fi
+
+if ! grep -q "<sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>" "$STAGE_DIR/appcast.xml" && \
+   ! grep -q "<sparkle:shortVersionString>$BUNDLE_MARKETING_VERSION</sparkle:shortVersionString>" "$STAGE_DIR/appcast.xml"; then
+  echo "error: generated appcast does not match expected short version $VERSION" >&2
+  exit 1
+fi
+
+# 7. Verify enclosure signature, URL, and byte length in generated appcast
 EXPECTED_URL="${DOWNLOAD_URL_PREFIX%/}/$DMG_FILENAME"
 EXPECTED_LENGTH="$(stat -f '%z' "$DMG_PATH")"
 
@@ -237,11 +257,6 @@ if ! grep -q "length=\"$EXPECTED_LENGTH\"" "$STAGE_DIR/appcast.xml"; then
   exit 1
 fi
 
-if ! grep -q "sparkle:edSignature=" "$STAGE_DIR/appcast.xml"; then
-  echo "error: generated appcast does not contain an Ed25519 signature" >&2
-  exit 1
-fi
-
 if [[ -n "$CHANNEL" ]]; then
   if ! grep -q "<sparkle:channel>$CHANNEL</sparkle:channel>" "$STAGE_DIR/appcast.xml"; then
     echo "error: generated appcast missing channel tag for $CHANNEL" >&2
@@ -249,19 +264,30 @@ if [[ -n "$CHANNEL" ]]; then
   fi
 fi
 
-# Verify signature using sign_update --verify
-SIGNATURE="$(printf '%s\n' "$PRIVATE_SEED" | "$SIGN_UPDATE" -p --ed-key-file - "$DMG_PATH")"
-if ! printf '%s\n' "$PRIVATE_SEED" | "$SIGN_UPDATE" --verify --ed-key-file - "$DMG_PATH" "$SIGNATURE" >/dev/null 2>&1; then
-  echo "error: generated Ed25519 signature failed verification against DMG" >&2
+# Extract the actual enclosure signature generated in appcast.xml using xmllint
+ENCLOSURE_SIGNATURE="$(xmllint --xpath 'string(//*[local-name()="enclosure"]/@*[local-name()="edSignature"])' "$STAGE_DIR/appcast.xml" 2>/dev/null || true)"
+
+if [[ -z "$ENCLOSURE_SIGNATURE" ]]; then
+  echo "error: generated appcast does not contain a valid enclosure Ed25519 signature" >&2
   exit 1
 fi
 
-# 7. Optionally sign feed if --sign-feed was specified
-if [[ "$SIGN_FEED" == "YES" ]]; then
-  printf '%s\n' "$PRIVATE_SEED" | "$SIGN_UPDATE" --ed-key-file - "$STAGE_DIR/appcast.xml" >/dev/null 2>&1
+# Verify the extracted enclosure signature directly with sign_update --verify
+if ! printf '%s\n' "$PRIVATE_SEED" | "$SIGN_UPDATE" --verify --ed-key-file - "$DMG_PATH" "$ENCLOSURE_SIGNATURE" >/dev/null 2>&1; then
+  echo "error: generated Ed25519 enclosure signature failed verification against DMG" >&2
+  exit 1
 fi
 
-# 8. Write to destination appcast path
+# 8. Optionally sign feed if --sign-feed was specified
+if [[ "$SIGN_FEED" == "YES" ]]; then
+  printf '%s\n' "$PRIVATE_SEED" | "$SIGN_UPDATE" --ed-key-file - "$STAGE_DIR/appcast.xml"
+  if ! printf '%s\n' "$PRIVATE_SEED" | "$SIGN_UPDATE" --verify --ed-key-file - "$STAGE_DIR/appcast.xml" >/dev/null 2>&1; then
+    echo "error: signed feed signature failed verification" >&2
+    exit 1
+  fi
+fi
+
+# 9. Write to destination appcast path
 mkdir -p "$(dirname "$APPCAST_PATH")"
 cp "$STAGE_DIR/appcast.xml" "$APPCAST_PATH"
 
