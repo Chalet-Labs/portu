@@ -53,6 +53,7 @@
 		41D3D4320D5DBB104D837166 /* HistoricalPriceChanges24hProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE9024AF502998B64A46F8AC /* HistoricalPriceChanges24hProvider.swift */; };
 		44652004FEA936D651446318 /* PerformanceHistoricalPriceChangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5F4BE776CC6D1B2E9953432 /* PerformanceHistoricalPriceChangeTests.swift */; };
 		446DB5318394D5247E6A5316 /* TokenPricingOverrideWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C5B647C18FB90D4BF98BB5E /* TokenPricingOverrideWriter.swift */; };
+		44FA8359AB2FA3579E815D18 /* ReleaseAutomationPublishTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB355DD3AD1A388B41953998 /* ReleaseAutomationPublishTests.swift */; };
 		4544E119D1FB01F324F42387 /* CSVDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF666281E56D489791E155DE /* CSVDocument.swift */; };
 		45923BC0EE5B78DE49CDCF66 /* OverviewPositionTabComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33C7EC8BA3C811AEF2E2D2DB /* OverviewPositionTabComponents.swift */; };
 		462A7D62D2D04E4AF70BC552 /* TokenIdentityMappingFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0412B0DAC1B4988B6325F2A /* TokenIdentityMappingFeatureTests.swift */; };
@@ -379,6 +380,7 @@
 		C89E200AA14746D4F976DBB1 /* APIKeyNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyNormalizationTests.swift; sourceTree = "<group>"; };
 		C9435D98F3F4AC7D4A8F7310 /* HistoricalPriceBackfillFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillFeatureTests.swift; sourceTree = "<group>"; };
 		C95F1EDADED217BABCD15C10 /* PortfolioHealthPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHealthPanel.swift; sourceTree = "<group>"; };
+		CB355DD3AD1A388B41953998 /* ReleaseAutomationPublishTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseAutomationPublishTests.swift; sourceTree = "<group>"; };
 		CD844541D34035B9A3D430E6 /* PerformanceFeature+ValueChange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PerformanceFeature+ValueChange.swift"; sourceTree = "<group>"; };
 		D3539209B8431690D9850A7F /* ModelContainerFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerFactory.swift; sourceTree = "<group>"; };
 		D371F61690CB468F79B57512 /* PortfolioAnalyticsFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAnalyticsFeatureTests.swift; sourceTree = "<group>"; };
@@ -737,6 +739,7 @@
 				2E83779E156800BF99D5B42F /* ProtocolFilterTests.swift */,
 				62643CCED7A5091869CDB00E /* ProviderPortfolioHistoryTests.swift */,
 				2D0708A3CAD107615F1558A8 /* ReleaseAutomationAppcastTests.swift */,
+				CB355DD3AD1A388B41953998 /* ReleaseAutomationPublishTests.swift */,
 				2827FD578F2AC2984DC22DCF /* ReleaseAutomationScriptTests.swift */,
 				5A372B5E40F5617842721225 /* ReleaseAutomationTests.swift */,
 				E9C14B6E1BF95CE173602DD3 /* SendableArray.swift */,
@@ -1094,6 +1097,7 @@
 				199AC50AADF5D13C0A51DFBD /* ProtocolFilterTests.swift in Sources */,
 				A20767232F14DABE89550EA2 /* ProviderPortfolioHistoryTests.swift in Sources */,
 				F4403C41A6D97B5EB2DCC95C /* ReleaseAutomationAppcastTests.swift in Sources */,
+				44FA8359AB2FA3579E815D18 /* ReleaseAutomationPublishTests.swift in Sources */,
 				D120727AA9A3C5131B6E2621 /* ReleaseAutomationScriptTests.swift in Sources */,
 				0654CA81A46C611A8907B53C /* ReleaseAutomationTests.swift in Sources */,
 				3D506EB5FDC7350FB3AFF9B3 /* SendableArray.swift in Sources */,
@@ -1154,7 +1158,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PORTU_UPDATE_FEED_URL = "";
+				PORTU_UPDATE_FEED_URL = "https://raw.githubusercontent.com/Chalet-Labs/portu/updates/appcast.xml";
 				PORTU_UPDATE_PUBLIC_KEY = "";
 				PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portu.app;

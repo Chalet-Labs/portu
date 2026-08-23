@@ -3,9 +3,15 @@ name: Release
 on:
   push:
     branches: [master, alpha]
+  workflow_dispatch:
+    inputs:
+      retry_version:
+        description: 'Release version to publish/retry appcast for (e.g. 1.0.0)'
+        required: false
+        type: string
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-global
   cancel-in-progress: false
 
 permissions:
@@ -55,6 +61,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
           GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
+          PORTU_SPARKLE_PRIVATE_KEY: ${{ secrets.PORTU_SPARKLE_PRIVATE_KEY || secrets.SPARKLE_PRIVATE_KEY }}
           GIT_AUTHOR_NAME: semantic-release-bot
           GIT_AUTHOR_EMAIL: semantic-release-bot@users.noreply.github.com
           GIT_COMMITTER_NAME: semantic-release-bot
