@@ -3,9 +3,15 @@ name: Release
 on:
   push:
     branches: [master, alpha]
+  workflow_dispatch:
+    inputs:
+      retry_version:
+        description: 'Release version to publish/retry appcast for (e.g. 1.0.0)'
+        required: false
+        type: string
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-global
   cancel-in-progress: false
 
 permissions:
@@ -40,21 +46,39 @@ jobs:
         run: npm ci
 
       - name: Generate Xcode project
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just generate
 
       - name: Build
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just build
 
       - name: Test SPM packages
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just test-packages
 
       - name: Test app
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just test
-
-      - name: Release
+      - name: Retry Appcast Publication
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.retry_version != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
           GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
+          PORTU_SPARKLE_PRIVATE_KEY: ${{ secrets.PORTU_SPARKLE_PRIVATE_KEY || secrets.SPARKLE_PRIVATE_KEY }}
+          RETRY_VERSION: ${{ inputs.retry_version }}
+        run: |
+          echo "Retrying appcast publication for version $RETRY_VERSION..."
+          mkdir -p dist
+          gh release download "v$RETRY_VERSION" -D dist -p "Portu-$RETRY_VERSION.dmg*"
+          scripts/publish_sparkle_appcast.sh --version "$RETRY_VERSION" --dmg "dist/Portu-$RETRY_VERSION.dmg"
+
+      - name: Release
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
+          PORTU_SPARKLE_PRIVATE_KEY: ${{ secrets.PORTU_SPARKLE_PRIVATE_KEY || secrets.SPARKLE_PRIVATE_KEY }}
           GIT_AUTHOR_NAME: semantic-release-bot
           GIT_AUTHOR_EMAIL: semantic-release-bot@users.noreply.github.com
           GIT_COMMITTER_NAME: semantic-release-bot

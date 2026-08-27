@@ -2,7 +2,7 @@ import Foundation
 import Testing
 
 extension ReleaseAutomationTests {
-    private func createTestDmg(
+    func createTestDmg(
         at path: URL,
         version: String,
         build: String,

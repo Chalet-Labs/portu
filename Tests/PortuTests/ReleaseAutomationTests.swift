@@ -53,7 +53,10 @@ struct ReleaseAutomationTests {
 
         let exec = try #require(pluginConfig("@semantic-release/exec", in: plugins))
         #expect(exec["prepareCmd"] as? String == "scripts/package_release_dmg.sh ${nextRelease.version}")
-        #expect(exec["publishCmd"] == nil)
+        let publishCmd = try #require(exec["publishCmd"] as? String)
+        #expect(publishCmd.contains("scripts/publish_sparkle_appcast.sh"))
+        #expect(publishCmd.contains("--version ${nextRelease.version}"))
+        #expect(publishCmd.contains("--dmg dist/Portu-${nextRelease.version}.dmg"))
     }
 
     @Test func `package manifest installs semantic release tooling only for development`() throws {
@@ -323,13 +326,13 @@ extension ReleaseAutomationTests {
         try String(contentsOf: repoRoot.appending(path: path), encoding: .utf8)
     }
 
-    private func jsonObject(_ path: String) throws -> [String: Any] {
+    func jsonObject(_ path: String) throws -> [String: Any] {
         let data = try Data(contentsOf: repoRoot.appending(path: path))
         let object = try JSONSerialization.jsonObject(with: data)
         return try #require(object as? [String: Any])
     }
 
-    private func fileExists(_ path: String) -> Bool {
+    func fileExists(_ path: String) -> Bool {
         FileManager.default.fileExists(atPath: repoRoot.appending(path: path).path(percentEncoded: false))
     }
 
@@ -426,7 +429,7 @@ extension ReleaseAutomationTests {
         line.prefix(while: { $0 == " " }).count
     }
 
-    private static func pluginName(_ plugin: Any) -> String? {
+    static func pluginName(_ plugin: Any) -> String? {
         if let name = plugin as? String {
             return name
         }
@@ -451,7 +454,7 @@ extension ReleaseAutomationTests {
         }
     }
 
-    private func pluginConfig(_ name: String, in plugins: [Any]) -> [String: Any]? {
+    func pluginConfig(_ name: String, in plugins: [Any]) -> [String: Any]? {
         for plugin in plugins {
             guard
                 let pair = plugin as? [Any],
