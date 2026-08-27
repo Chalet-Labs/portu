@@ -63,12 +63,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
           GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
           PORTU_SPARKLE_PRIVATE_KEY: ${{ secrets.PORTU_SPARKLE_PRIVATE_KEY || secrets.SPARKLE_PRIVATE_KEY }}
+          RETRY_VERSION: ${{ inputs.retry_version }}
         run: |
-          RETRY_VER="${{ inputs.retry_version }}"
-          echo "Retrying appcast publication for version $RETRY_VER..."
+          echo "Retrying appcast publication for version $RETRY_VERSION..."
           mkdir -p dist
-          gh release download "v$RETRY_VER" -D dist -p "Portu-$RETRY_VER.dmg*"
-          scripts/publish_sparkle_appcast.sh --version "$RETRY_VER" --dmg "dist/Portu-$RETRY_VER.dmg"
+          gh release download "v$RETRY_VERSION" -D dist -p "Portu-$RETRY_VERSION.dmg*"
+          scripts/publish_sparkle_appcast.sh --version "$RETRY_VERSION" --dmg "dist/Portu-$RETRY_VERSION.dmg"
 
       - name: Release
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}

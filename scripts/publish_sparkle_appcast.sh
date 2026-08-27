@@ -113,18 +113,19 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Infer build number if not passed
 if [[ -z "$BUILD_NUMBER" ]]; then
-  if [[ -n "${GITHUB_RUN_NUMBER:-}" && "$GITHUB_RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-    BUILD_NUMBER="$GITHUB_RUN_NUMBER"
-  else
-    # Try reading CFBundleVersion from DMG
-    MOUNT_POINT="$(mktemp -d "${TMPDIR:-/tmp}/portu-dmg-inspect.XXXXXX")"
-    if hdiutil attach "$DMG_PATH" -mountpoint "$MOUNT_POINT" -nobrowse -readonly -quiet; then
-      if [[ -f "$MOUNT_POINT/Portu.app/Contents/Info.plist" ]]; then
-        BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$MOUNT_POINT/Portu.app/Contents/Info.plist" 2>/dev/null || true)"
-      fi
-      hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+  # Inspect CFBundleVersion from DMG first
+  MOUNT_POINT="$(mktemp -d "${TMPDIR:-/tmp}/portu-dmg-inspect.XXXXXX")"
+  if hdiutil attach "$DMG_PATH" -mountpoint "$MOUNT_POINT" -nobrowse -readonly -quiet; then
+    if [[ -f "$MOUNT_POINT/Portu.app/Contents/Info.plist" ]]; then
+      BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$MOUNT_POINT/Portu.app/Contents/Info.plist" 2>/dev/null || true)"
     fi
-    rm -rf "$MOUNT_POINT"
+    hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
+  fi
+  rm -rf "$MOUNT_POINT"
+
+  # If DMG inspection did not yield a build number, fall back to GITHUB_RUN_NUMBER
+  if [[ -z "$BUILD_NUMBER" && -n "${GITHUB_RUN_NUMBER:-}" && "$GITHUB_RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+    BUILD_NUMBER="$GITHUB_RUN_NUMBER"
   fi
 fi
 
@@ -221,11 +222,6 @@ else
   git init -b "$UPDATES_BRANCH" "$WORK_DIR" >/dev/null 2>&1
   git -C "$WORK_DIR" remote add origin "$REPO_URL"
 fi
-
-git -C "$WORK_DIR" config commit.gpgsign false
-git -C "$WORK_DIR" config user.name "${GIT_COMMITTER_NAME:-semantic-release-bot}"
-git -C "$WORK_DIR" config user.email "${GIT_COMMITTER_EMAIL:-semantic-release-bot@users.noreply.github.com}"
-
 # Configure token authentication for GitHub remotes if token is available
 GIT_AUTH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 if [[ -n "$GIT_AUTH_TOKEN" && "$REPO_URL" =~ github\.com ]]; then

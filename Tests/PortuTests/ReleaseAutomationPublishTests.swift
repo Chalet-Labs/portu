@@ -51,7 +51,8 @@ extension ReleaseAutomationTests {
         #expect(workflow.contains("workflow_dispatch:"))
         #expect(workflow.contains("retry_version"))
         #expect(workflow.contains("Retry Appcast Publication"))
-        #expect(workflow.contains("publish_sparkle_appcast.sh --version \"$RETRY_VER\""))
+        #expect(workflow.contains("RETRY_VERSION: ${{ inputs.retry_version }}"))
+        #expect(workflow.contains("publish_sparkle_appcast.sh --version \"$RETRY_VERSION\""))
     }
 
     @Test func `pull request workflows cannot publish feed or receive signing credentials`() throws {
