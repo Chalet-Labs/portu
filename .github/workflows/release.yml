@@ -46,17 +46,20 @@ jobs:
         run: npm ci
 
       - name: Generate Xcode project
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just generate
 
       - name: Build
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just build
 
       - name: Test SPM packages
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just test-packages
 
       - name: Test app
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just test
-
       - name: Retry Appcast Publication
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.retry_version != '' }}
         env:

@@ -229,7 +229,8 @@ fi
 # Configure token authentication for GitHub remotes if token is available
 GIT_AUTH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 if [[ -n "$GIT_AUTH_TOKEN" && "$REPO_URL" =~ github\.com ]]; then
-  git -C "$WORK_DIR" config http.https://github.com/.extraheader "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GIT_AUTH_TOKEN" | base64)"
+  ENCODED_AUTH="$(printf 'x-access-token:%s' "$GIT_AUTH_TOKEN" | base64 | tr -d '[:space:]')"
+  git -C "$WORK_DIR" config http.https://github.com/.extraheader "AUTHORIZATION: basic $ENCODED_AUTH"
 fi
 
 git -C "$WORK_DIR" config commit.gpgsign false
