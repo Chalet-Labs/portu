@@ -368,18 +368,24 @@ struct ZerionProviderTests {
 
     @Test func `historical chart uses seconds and keeps latest point per UTC day`() async throws {
         defer { ZerionMockURLProtocol.reset() }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let todayUTC = calendar.startOfDay(for: Date.now)
+        let day1Early = Int(todayUTC.addingTimeInterval(-2 * 86400 + 3600).timeIntervalSince1970)
+        let day1Late = Int(todayUTC.addingTimeInterval(-2 * 86400 + 7200).timeIntervalSince1970)
+        let day2 = Int(todayUTC.addingTimeInterval(-1 * 86400 + 3600).timeIntervalSince1970)
         ZerionMockURLProtocol.respond { request in
             let components = try #require(URLComponents(url: request.url!, resolvingAgainstBaseURL: false))
             let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value) })
             #expect(request.url?.path == "/v1/fungibles/by-implementation/charts/month")
             #expect(query["implementation"] == "ethereum")
             #expect(query["currency"] == "usd")
-            return .init(data: Data(#"""
+            return .init(data: Data("""
             {"data":{"type":"fungible_charts","id":"eth","attributes":{
               "begin_at":"2026-07-25T00:00:00Z","end_at":"2026-07-26T00:00:00Z",
-              "points":[[1784937600,1900],[1784941200,1910],[1785024000,1920]]
+              "points":[[\(day1Early),1900],[\(day1Late),1910],[\(day2),1920]]
             }}}
-            """#.utf8), statusCode: 200, headers: [:])
+            """.utf8), statusCode: 200, headers: [:])
         }
         let provider = ZerionProvider(client: ZerionAPIClient(
             apiKey: { "test-key" },
@@ -390,10 +396,10 @@ struct ZerionProviderTests {
         let history = try await provider.fetchHistoricalPrices(identity: identity, days: 30)
 
         #expect(history.count == 2)
-        #expect(history[0].timestamp == Date(timeIntervalSince1970: 1_784_941_200))
+        #expect(history[0].timestamp == Date(timeIntervalSince1970: TimeInterval(day1Late)))
         #expect(history[0].price == 1910)
         #expect(history[0].source == .zerion)
-        #expect(history[1].timestamp == Date(timeIntervalSince1970: 1_785_024_000))
+        #expect(history[1].timestamp == Date(timeIntervalSince1970: TimeInterval(day2)))
     }
 
     @Test func `historical chart excludes points older than the requested horizon`() async throws {

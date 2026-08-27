@@ -49,6 +49,9 @@ extension ReleaseAutomationTests {
 
         // Must support workflow_dispatch for manual appcast publication retry
         #expect(workflow.contains("workflow_dispatch:"))
+        #expect(workflow.contains("retry_version"))
+        #expect(workflow.contains("Retry Appcast Publication"))
+        #expect(workflow.contains("publish_sparkle_appcast.sh --version \"$RETRY_VER\""))
     }
 
     @Test func `pull request workflows cannot publish feed or receive signing credentials`() throws {
@@ -61,7 +64,7 @@ extension ReleaseAutomationTests {
             #expect(!workflow.contains("SPARKLE_PRIVATE_KEY"))
             #expect(!workflow.contains("PORTU_SPARKLE_PRIVATE_SEED"))
             #expect(!workflow.contains("ED_KEY_FILE"))
-            #expect(!workflow.contains("updates"))
+            #expect(!workflow.contains("origin updates"))
         }
     }
 

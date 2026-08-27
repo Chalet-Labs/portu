@@ -129,7 +129,8 @@ if [[ -z "$BUILD_NUMBER" ]]; then
 fi
 
 if [[ -z "$BUILD_NUMBER" || ! "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-  BUILD_NUMBER="1"
+  echo "error: build number could not be determined and must be a positive integer" >&2
+  exit 2
 fi
 
 if [[ -z "$DOWNLOAD_URL_PREFIX" ]]; then
@@ -159,7 +160,9 @@ elif [[ -n "${PORTU_SPARKLE_PRIVATE_SEED:-}" ]]; then
   PRIVATE_SEED="$PORTU_SPARKLE_PRIVATE_SEED"
 elif [[ -n "${SPARKLE_PRIVATE_KEY:-}" ]]; then
   PRIVATE_SEED="$SPARKLE_PRIVATE_KEY"
-elif [[ -n "${ED_KEY_FILE:-}" && "$ED_KEY_FILE" == "-" ]] || [[ ! -t 0 ]]; then
+elif [[ -n "${ED_KEY_FILE:-}" && "$ED_KEY_FILE" == "-" ]]; then
+  PRIVATE_SEED="$(cat)"
+elif [[ ! -t 0 ]]; then
   PRIVATE_SEED="$(cat)"
 fi
 
@@ -182,7 +185,7 @@ ENCLOSURE_URL="${DOWNLOAD_URL_PREFIX%/}/$DMG_FILENAME"
 
 if [[ "$SKIP_REACHABILITY_CHECK" != "YES" ]]; then
   echo "Verifying public DMG enclosure reachability at $ENCLOSURE_URL..."
-  if ! curl --fail -s -I -L --retry 5 --retry-delay 2 -o /dev/null "$ENCLOSURE_URL"; then
+  if ! curl --fail -s -I -L --retry 5 --retry-delay 2 --connect-timeout 10 --max-time 60 -o /dev/null "$ENCLOSURE_URL"; then
     echo "error: release enclosure URL is unreachable: $ENCLOSURE_URL" >&2
     exit 1
   fi
@@ -212,11 +215,21 @@ if git ls-remote --exit-code --heads "$REPO_URL" "$UPDATES_BRANCH" >/dev/null 2>
 fi
 
 if [[ "$HAS_REMOTE_BRANCH" == "YES" ]]; then
-  git clone --depth 1 -b "$UPDATES_BRANCH" "$REPO_URL" "$WORK_DIR" >/dev/null 2>&1
+  git clone -b "$UPDATES_BRANCH" "$REPO_URL" "$WORK_DIR" >/dev/null 2>&1
 else
   # Initialize fresh orphan/updates branch in temporary repo
   git init -b "$UPDATES_BRANCH" "$WORK_DIR" >/dev/null 2>&1
   git -C "$WORK_DIR" remote add origin "$REPO_URL"
+fi
+
+git -C "$WORK_DIR" config commit.gpgsign false
+git -C "$WORK_DIR" config user.name "${GIT_COMMITTER_NAME:-semantic-release-bot}"
+git -C "$WORK_DIR" config user.email "${GIT_COMMITTER_EMAIL:-semantic-release-bot@users.noreply.github.com}"
+
+# Configure token authentication for GitHub remotes if token is available
+GIT_AUTH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+if [[ -n "$GIT_AUTH_TOKEN" && "$REPO_URL" =~ github\.com ]]; then
+  git -C "$WORK_DIR" config http.https://github.com/.extraheader "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GIT_AUTH_TOKEN" | base64)"
 fi
 
 git -C "$WORK_DIR" config commit.gpgsign false
@@ -270,7 +283,8 @@ if [[ "$NO_PUSH" != "YES" ]]; then
     # Push to existing branch with retry on potential concurrent update
     for attempt in 1 2 3; do
       if git push origin "$UPDATES_BRANCH" >/dev/null 2>&1; then
-        break
+        echo "Successfully published updated Sparkle appcast to branch '$UPDATES_BRANCH' for v$VERSION"
+        exit 0
       fi
       if [[ "$attempt" -eq 3 ]]; then
         echo "error: failed to push appcast update to branch '$UPDATES_BRANCH'" >&2
@@ -279,18 +293,17 @@ if [[ "$NO_PUSH" != "YES" ]]; then
       git pull --rebase origin "$UPDATES_BRANCH" >/dev/null 2>&1 || true
       printf '%s\n' "$PRIVATE_SEED" | "$GENERATE_SCRIPT" "${GEN_ARGS[@]}"
       git add appcast.xml
-      if git diff --cached --quiet; then
-        break
+      if ! git diff --cached --quiet; then
+        git commit --no-gpg-sign --amend --no-edit >/dev/null 2>&1 || git commit --no-gpg-sign -m "chore(release): update Sparkle appcast for v${VERSION} [skip ci]" >/dev/null 2>&1
       fi
-      git commit --no-gpg-sign --amend --no-edit >/dev/null 2>&1 || true
     done
   else
     git push -u origin "$UPDATES_BRANCH" >/dev/null 2>&1 || {
       echo "error: failed to create and push to branch '$UPDATES_BRANCH'" >&2
       exit 1
     }
+    echo "Successfully published updated Sparkle appcast to branch '$UPDATES_BRANCH' for v$VERSION"
   fi
-  echo "Successfully published updated Sparkle appcast to branch '$UPDATES_BRANCH' for v$VERSION"
 else
   echo "Appcast generated and committed locally (--no-push active)."
 fi
