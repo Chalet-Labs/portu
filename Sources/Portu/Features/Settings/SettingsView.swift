@@ -368,18 +368,22 @@ private struct GeneralSettingsTab: View {
                     subtitle: "Privacy-preserving update checks that notify without downloading or restarting.",
                     icon: .softwareUpdates) {
                         VStack(alignment: .leading, spacing: 10) {
+                            SettingsUpdateStatusNotice(
+                                status: store.updaterStatus,
+                                onDismiss: { store.send(.dismissUpdaterFailure) })
+
                             SettingsSwitchRow(
                                 title: "Check for updates automatically",
-                                subtitle: store.updateSettingsAvailable
+                                subtitle: store.updaterStatus.isUpdaterEligible
                                     ? "Asks once, checks daily, and notifies without downloading or restarting."
-                                    : "Update checks are unavailable in this build (no update feed configured).",
+                                    : "Update checks are not available in this build.",
                                 isOn: Binding(
                                     get: { store.updatePreferences.automaticallyChecksForUpdates },
                                     set: { store.send(.setAutomaticChecksEnabled($0)) }))
-                                .disabled(!store.updateSettingsAvailable)
+                                .disabled(!store.updaterStatus.isUpdaterEligible)
 
                             SettingsUpdateChannelPicker(store: store)
-                                .disabled(!store.updateSettingsAvailable)
+                                .disabled(!store.updaterStatus.isUpdaterEligible)
                         }
                     }
 

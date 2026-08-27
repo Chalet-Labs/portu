@@ -129,7 +129,14 @@ struct PortuApp: App {
 
     // swiftlint:disable:next function_body_length
     init() {
-        let updaterController = UpdaterConfiguration().map { SparkleUpdaterController(configuration: $0) }
+        let owner = PortuUpdateOwner(bundle: .main)
+        let configuration = UpdaterConfiguration()
+        let initialStatus = UpdaterStatus.resolve(owner: owner, configuration: configuration)
+        let updaterController: SparkleUpdaterController? = if case .available = initialStatus.availability, let cfg = configuration {
+            SparkleUpdaterController(configuration: cfg)
+        } else {
+            nil
+        }
         self.updaterController = updaterController
         let factory = ModelContainerFactory()
         let isEphemeral: Bool
@@ -235,7 +242,11 @@ struct PortuApp: App {
                 modelContext: modelContext,
                 priceService: priceServiceClient,
                 dashboardSettings: { TokenDashboardSettings.fromDefaults() })
-            $0.updater = .live(controller: updaterController)
+            if let ctrl = updaterController {
+                $0.updater = .live(controller: ctrl)
+            } else {
+                $0.updater = .disabled(status: initialStatus)
+            }
         }
 
         // Bridge: features can trigger sync via AppState until migrated to TCA
@@ -282,7 +293,7 @@ struct PortuApp: App {
                 Button("Check for Updates…") {
                     store.send(.checkForUpdatesTapped)
                 }
-                .disabled(updaterController == nil)
+                .disabled(!store.state.updaterStatus.canCheckForUpdates)
             }
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {

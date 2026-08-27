@@ -37,10 +37,10 @@ struct AppFeature {
         // no historical data has ever been fetched yet for that currency.
         var historicalFXLastRefreshDayByCurrency: [FiatCurrency: Date] = [:]
         var updatePreferences = UpdaterPreferences()
-        // False until launch proves a live updater exists (configured feed + key);
-        // Settings disables the update controls while false so Release users without
-        // an updater never stage preference changes that cannot persist.
-        var updateSettingsAvailable = false
+        // Unavailable until launch resolves the live status (configured feed + key,
+        // or external manager); the placeholder reason is truthful for that window.
+        // Settings and the application menu both gate on it.
+        var updaterStatus = UpdaterStatus.unavailable(reason: "Checking update availability…")
         var prices: [String: Decimal] = [:]
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?
@@ -56,7 +56,8 @@ struct AppFeature {
 
     enum Action {
         case appLaunched
-        case updateSettingsAvailabilityChanged(Bool)
+        case updaterStatusChanged(UpdaterStatus)
+        case dismissUpdaterFailure
         case checkForUpdatesTapped
         case updatePreferencesLoaded(UpdaterPreferences)
         case setAutomaticChecksEnabled(Bool)
@@ -95,6 +96,7 @@ struct AppFeature {
         case displayRateRefresh
         case historicalFXTopUp
         case updaterPreferences
+        case updaterStatus
         case automaticChecksWrite
         case updateChannelWrite
     }
@@ -131,16 +133,22 @@ struct AppFeature {
         Reduce { state, action in
             switch action {
             case .appLaunched:
-                // Stored preferences are loaded and announced first; the live
-                // KVO/prompt stream starts afterwards so a change landing during the
-                // handoff is replayed instead of lost. The stream also replays its
-                // latest value on subscribe — a duplicate of the load above that is
-                // idempotent for the reducer.
-                let loadPreferencesEffect = Effect<Action>.run { send in
-                    await send(.updateSettingsAvailabilityChanged(updater.isAvailable()))
+                // Load current status and stored preferences up-front before the
+                // long-lived streams start. Each stream independently replays its
+                // latest value on subscribe, so a concurrent delivery during the
+                // handoff window is idempotent for the reducer.
+                let loadEffect = Effect<Action>.run { send in
+                    let currentStatus = await updater.status()
+                    await send(.updaterStatusChanged(currentStatus))
                     let preferences = await updater.preferences()
                     await send(.updatePreferencesLoaded(preferences))
                 }
+                let statusStreamEffect = Effect<Action>.run { send in
+                    for await status in updater.statusChanges() {
+                        await send(.updaterStatusChanged(status))
+                    }
+                }
+                .cancellable(id: CancelID.updaterStatus, cancelInFlight: true)
                 let preferenceStreamEffect = Effect<Action>.run { send in
                     for await updated in updater.preferenceChanges() {
                         await send(.updatePreferencesLoaded(updated))
@@ -154,21 +162,28 @@ struct AppFeature {
                 // rate. The rate-received handler commits the pending switch on success
                 // and clears it (staying on USD) on failure.
                 guard let pending = state.pendingCurrency else {
-                    return .concatenate(loadPreferencesEffect, preferenceStreamEffect)
+                    return .concatenate(loadEffect, .merge(statusStreamEffect, preferenceStreamEffect))
                 }
                 state.historicalFXAvailability = .loading
                 return .concatenate(
-                    loadPreferencesEffect,
-                    .merge(preferenceStreamEffect, currencyConversionEffect(currency: pending)))
+                    loadEffect,
+                    .merge(statusStreamEffect, preferenceStreamEffect, currencyConversionEffect(currency: pending)))
 
             case .checkForUpdatesTapped:
+                guard state.updaterStatus.canCheckForUpdates else { return .none }
                 return .run { _ in
                     await updater.checkForUpdates()
                 }
 
-            case let .updateSettingsAvailabilityChanged(available):
-                state.updateSettingsAvailable = available
+            case let .updaterStatusChanged(status):
+                state.updaterStatus = status
                 return .none
+
+            case .dismissUpdaterFailure:
+                state.updaterStatus.failure = nil
+                return .run { _ in
+                    await updater.dismissFailure()
+                }
 
             case let .updatePreferencesLoaded(preferences):
                 state.updatePreferences = preferences
@@ -757,7 +772,8 @@ extension AppFeature.Action: Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.appLaunched, .appLaunched): true
-        case let (.updateSettingsAvailabilityChanged(l), .updateSettingsAvailabilityChanged(r)): l == r
+        case let (.updaterStatusChanged(l), .updaterStatusChanged(r)): l == r
+        case (.dismissUpdaterFailure, .dismissUpdaterFailure): true
         case (.checkForUpdatesTapped, .checkForUpdatesTapped): true
         case let (.updatePreferencesLoaded(l), .updatePreferencesLoaded(r)): l == r
         case let (.setAutomaticChecksEnabled(l), .setAutomaticChecksEnabled(r)): l == r

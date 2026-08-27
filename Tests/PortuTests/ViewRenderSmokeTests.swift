@@ -230,6 +230,19 @@ struct ViewRenderSmokeTests {
         render(view, size: CGSize(width: 1200, height: 700))
     }
 
+    // MARK: - Updater status notice render
+
+    @Test func `update status notice renders without crashing when validation failure is present`() {
+        let status = UpdaterStatus(availability: .available, canCheckForUpdates: true, failure: .validationFailed)
+        let view = SettingsUpdateStatusNotice(
+            status: status,
+            onDismiss: {})
+            .environment(\.colorScheme, .dark)
+            .frame(width: 780, height: 200)
+
+        render(view, size: CGSize(width: 780, height: 200))
+    }
+
     private func makeStore(section: SidebarSection) -> StoreOf<AppFeature> {
         makeStore(state: populatedState(section: section))
     }
