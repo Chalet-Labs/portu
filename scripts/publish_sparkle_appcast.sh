@@ -162,6 +162,10 @@ elif [[ -n "${PORTU_SPARKLE_PRIVATE_SEED:-}" ]]; then
 elif [[ -n "${SPARKLE_PRIVATE_KEY:-}" ]]; then
   PRIVATE_SEED="$SPARKLE_PRIVATE_KEY"
 elif [[ -n "${ED_KEY_FILE:-}" && "$ED_KEY_FILE" == "-" ]]; then
+  if [[ -t 0 ]]; then
+    echo "error: stdin is a TTY; private key must be piped when using '--ed-key-file -'" >&2
+    exit 2
+  fi
   PRIVATE_SEED="$(cat)"
 elif [[ ! -t 0 ]]; then
   PRIVATE_SEED="$(cat)"
@@ -216,7 +220,7 @@ if git ls-remote --exit-code --heads "$REPO_URL" "$UPDATES_BRANCH" >/dev/null 2>
 fi
 
 if [[ "$HAS_REMOTE_BRANCH" == "YES" ]]; then
-  git clone -b "$UPDATES_BRANCH" "$REPO_URL" "$WORK_DIR" >/dev/null 2>&1
+  git clone --single-branch -b "$UPDATES_BRANCH" "$REPO_URL" "$WORK_DIR" >/dev/null 2>&1
 else
   # Initialize fresh orphan/updates branch in temporary repo
   git init -b "$UPDATES_BRANCH" "$WORK_DIR" >/dev/null 2>&1
@@ -286,7 +290,9 @@ if [[ "$NO_PUSH" != "YES" ]]; then
         echo "error: failed to push appcast update to branch '$UPDATES_BRANCH'" >&2
         exit 1
       fi
-      git pull --rebase origin "$UPDATES_BRANCH" >/dev/null 2>&1 || true
+      if ! git pull --rebase origin "$UPDATES_BRANCH" >/dev/null 2>&1; then
+        git rebase --abort >/dev/null 2>&1 || true
+      fi
       printf '%s\n' "$PRIVATE_SEED" | "$GENERATE_SCRIPT" "${GEN_ARGS[@]}"
       git add appcast.xml
       if ! git diff --cached --quiet; then
