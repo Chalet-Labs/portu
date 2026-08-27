@@ -222,11 +222,11 @@ if git ${GIT_AUTH_OPTS[@]+"${GIT_AUTH_OPTS[@]}"} ls-remote --exit-code --heads "
 fi
 
 if [[ "$HAS_REMOTE_BRANCH" == "YES" ]]; then
-  git ${GIT_AUTH_OPTS[@]+"${GIT_AUTH_OPTS[@]}"} clone --single-branch -b "$UPDATES_BRANCH" "$REPO_URL" "$WORK_DIR" >/dev/null 2>&1
+  git ${GIT_AUTH_OPTS[@]+"${GIT_AUTH_OPTS[@]}"} clone -o "$REMOTE_NAME" --single-branch -b "$UPDATES_BRANCH" "$REPO_URL" "$WORK_DIR" >/dev/null 2>&1
 else
   # Initialize fresh orphan/updates branch in temporary repo
   git init -b "$UPDATES_BRANCH" "$WORK_DIR" >/dev/null 2>&1
-  git -C "$WORK_DIR" remote add origin "$REPO_URL"
+  git -C "$WORK_DIR" remote add "$REMOTE_NAME" "$REPO_URL"
 fi
 
 if [[ -n "$GIT_AUTH_TOKEN" && "$REPO_URL" =~ github\.com ]]; then
@@ -283,7 +283,7 @@ if [[ "$NO_PUSH" != "YES" ]]; then
   if [[ "$HAS_REMOTE_BRANCH" == "YES" ]]; then
     # Push to existing branch with retry on potential concurrent update
     for attempt in 1 2 3; do
-      if git push origin "$UPDATES_BRANCH" >/dev/null 2>&1; then
+      if git push "$REMOTE_NAME" "$UPDATES_BRANCH" >/dev/null 2>&1; then
         echo "Successfully published updated Sparkle appcast to branch '$UPDATES_BRANCH' for v$VERSION"
         exit 0
       fi
@@ -291,7 +291,7 @@ if [[ "$NO_PUSH" != "YES" ]]; then
         echo "error: failed to push appcast update to branch '$UPDATES_BRANCH'" >&2
         exit 1
       fi
-      if ! git pull --rebase origin "$UPDATES_BRANCH" >/dev/null 2>&1; then
+      if ! git pull --rebase "$REMOTE_NAME" "$UPDATES_BRANCH" >/dev/null 2>&1; then
         git rebase --abort >/dev/null 2>&1 || true
       fi
       printf '%s\n' "$PRIVATE_SEED" | "$GENERATE_SCRIPT" "${GEN_ARGS[@]}"
@@ -301,7 +301,7 @@ if [[ "$NO_PUSH" != "YES" ]]; then
       fi
     done
   else
-    git push -u origin "$UPDATES_BRANCH" >/dev/null 2>&1 || {
+    git push -u "$REMOTE_NAME" "$UPDATES_BRANCH" >/dev/null 2>&1 || {
       echo "error: failed to create and push to branch '$UPDATES_BRANCH'" >&2
       exit 1
     }
