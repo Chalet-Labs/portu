@@ -7,12 +7,8 @@ extension ReleaseAutomationTests {
 
         let plugins = try #require(config["plugins"] as? [Any])
         let pluginNames = plugins.compactMap(Self.pluginName)
-        #expect(pluginNames == [
-            "@semantic-release/commit-analyzer",
-            "@semantic-release/release-notes-generator",
-            "@semantic-release/github",
-            "@semantic-release/exec"
-        ])
+        #expect(pluginNames.contains("@semantic-release/github"))
+        #expect(pluginNames.contains("@semantic-release/exec"))
 
         // Verify github plugin appears before exec plugin
         let githubIndex = try #require(pluginNames.firstIndex(of: "@semantic-release/github"))

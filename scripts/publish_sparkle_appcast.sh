@@ -213,23 +213,29 @@ cleanup_workdir() {
 }
 trap cleanup_workdir EXIT
 
+# Prepare authentication options for GitHub remotes if token is available
+GIT_AUTH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+GIT_AUTH_OPTS=()
+if [[ -n "$GIT_AUTH_TOKEN" && "$REPO_URL" =~ github\.com ]]; then
+  ENCODED_AUTH="$(printf 'x-access-token:%s' "$GIT_AUTH_TOKEN" | base64 | tr -d '[:space:]')"
+  GIT_AUTH_OPTS=(-c "http.https://github.com/.extraheader=AUTHORIZATION: basic $ENCODED_AUTH")
+fi
+
 # Clone or initialize the updates branch in isolation
 HAS_REMOTE_BRANCH="NO"
-if git ls-remote --exit-code --heads "$REPO_URL" "$UPDATES_BRANCH" >/dev/null 2>&1; then
+if git ${GIT_AUTH_OPTS[@]+"${GIT_AUTH_OPTS[@]}"} ls-remote --exit-code --heads "$REPO_URL" "$UPDATES_BRANCH" >/dev/null 2>&1; then
   HAS_REMOTE_BRANCH="YES"
 fi
 
 if [[ "$HAS_REMOTE_BRANCH" == "YES" ]]; then
-  git clone --single-branch -b "$UPDATES_BRANCH" "$REPO_URL" "$WORK_DIR" >/dev/null 2>&1
+  git ${GIT_AUTH_OPTS[@]+"${GIT_AUTH_OPTS[@]}"} clone --single-branch -b "$UPDATES_BRANCH" "$REPO_URL" "$WORK_DIR" >/dev/null 2>&1
 else
   # Initialize fresh orphan/updates branch in temporary repo
   git init -b "$UPDATES_BRANCH" "$WORK_DIR" >/dev/null 2>&1
   git -C "$WORK_DIR" remote add origin "$REPO_URL"
 fi
-# Configure token authentication for GitHub remotes if token is available
-GIT_AUTH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
 if [[ -n "$GIT_AUTH_TOKEN" && "$REPO_URL" =~ github\.com ]]; then
-  ENCODED_AUTH="$(printf 'x-access-token:%s' "$GIT_AUTH_TOKEN" | base64 | tr -d '[:space:]')"
   git -C "$WORK_DIR" config http.https://github.com/.extraheader "AUTHORIZATION: basic $ENCODED_AUTH"
 fi
 
