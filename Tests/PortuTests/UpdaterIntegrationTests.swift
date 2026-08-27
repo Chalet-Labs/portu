@@ -33,7 +33,7 @@ struct UpdaterIntegrationTests {
         #expect(project.contains("PORTU_UPDATE_PUBLIC_KEY:"))
         #expect(project.contains("PORTU_UPDATE_FEED_URL: \"https://raw.githubusercontent.com/Chalet-Labs/portu/updates/appcast.xml\""))
         #expect(project.contains("PORTU_UPDATE_PUBLIC_KEY: \"\""))
-        #expect(!project.contains("github.com/Chalet-Labs/portu/releases/download/appcast.xml"))
+        #expect(!project.contains("github.com/Chalet-Labs/portu/releases"))
         let appcast = try string(feedPath)
         #expect(appcast.contains("xmlns:sparkle=\"http://www.andymatuschak.org/xml-namespaces/sparkle\""))
         #expect(appcast.contains("<channel>"))
