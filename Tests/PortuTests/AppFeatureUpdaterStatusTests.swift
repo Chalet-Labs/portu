@@ -93,12 +93,31 @@ struct AppFeatureUpdaterStatusTests {
 
         #expect(!UpdaterStatus.unavailable(reason: "No feed configured").isUpdaterEligible)
         #expect(!UpdaterStatus.externallyManaged(owner: "Homebrew").isUpdaterEligible)
+        #expect(!UpdaterStatus.resolving.isUpdaterEligible)
     }
 
-    @Test func `default app feature state updater status blocks checks with truthful copy`() {
-        let status = AppFeature.State().updaterStatus
+    @Test func `resolving status blocks checks carries no failure and stays ineligible`() {
+        let status = UpdaterStatus.resolving
+        #expect(status.isResolving)
         #expect(!status.canCheckForUpdates)
-        #expect(status.availability == .unavailable(reason: "Checking update availability…"))
+        #expect(status.failure == nil)
+        #expect(!status.isUpdaterEligible)
+    }
+
+    @Test func `resolving is distinct from unavailable so launch is never mislabeled a failure`() {
+        #expect(UpdaterStatus.resolving.availability == .resolving)
+        if case .unavailable = UpdaterStatus.resolving.availability {
+            Issue.record("Resolving must not be mislabeled as unavailable")
+        }
+    }
+
+    @Test func `default app feature state updater status is resolving until launch`() {
+        let status = AppFeature.State().updaterStatus
+        #expect(status == .resolving)
+        #expect(status.isResolving)
+        #expect(!status.canCheckForUpdates)
+        #expect(status.failure == nil)
+        #expect(!status.isUpdaterEligible)
     }
 
     // MARK: - Launch paths
@@ -257,6 +276,27 @@ struct AppFeatureUpdaterStatusTests {
         } withDependencies: {
             $0.updater.checkForUpdates = { didCheckForUpdates = true }
             $0.updater.status = { .externallyManaged(owner: "Homebrew") }
+            $0.updater.statusChanges = { AsyncStream { $0.finish() } }
+            $0.updater.preferences = { UpdaterPreferences() }
+            $0.updater.preferenceChanges = { AsyncStream { $0.finish() } }
+        }
+
+        await store.send(.checkForUpdatesTapped)
+
+        #expect(!didCheckForUpdates)
+        await store.finish()
+    }
+
+    @Test func `check for updates is suppressed while status is resolving`() async {
+        nonisolated(unsafe) var didCheckForUpdates = false
+        var initialState = AppFeature.State()
+        initialState.updaterStatus = .resolving
+
+        let store = TestStore(initialState: initialState) {
+            AppFeature()
+        } withDependencies: {
+            $0.updater.checkForUpdates = { didCheckForUpdates = true }
+            $0.updater.status = { .resolving }
             $0.updater.statusChanges = { AsyncStream { $0.finish() } }
             $0.updater.preferences = { UpdaterPreferences() }
             $0.updater.preferenceChanges = { AsyncStream { $0.finish() } }

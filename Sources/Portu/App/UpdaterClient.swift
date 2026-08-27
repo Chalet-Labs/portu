@@ -159,8 +159,8 @@ final class ChannelUpdaterDelegate: NSObject, SPUUpdaterDelegate {
 final class SparkleUpdaterController {
     private let controller: SPUStandardUpdaterController
     private let delegate: ChannelUpdaterDelegate
-    private let preferencesBroadcaster: UpdaterBroadcaster<UpdaterPreferences>
-    private let statusBroadcaster: UpdaterBroadcaster<UpdaterStatus>
+    nonisolated private let preferencesBroadcaster: UpdaterBroadcaster<UpdaterPreferences>
+    nonisolated private let statusBroadcaster: UpdaterBroadcaster<UpdaterStatus>
     private var automaticChecksObservation: NSKeyValueObservation?
     private var canCheckObservation: NSKeyValueObservation?
     private let userDefaults: UserDefaults

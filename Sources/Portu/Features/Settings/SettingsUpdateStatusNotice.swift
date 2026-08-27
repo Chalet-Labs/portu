@@ -99,12 +99,25 @@ struct SettingsUpdateStatusNotice: View {
             return .failure(failure)
         }
         switch status.availability {
-        case .available:
+        case .available, .resolving:
             return .none
         case let .externallyManaged(owner):
             return .externallyManaged(owner)
         case let .unavailable(reason):
             return .staticUnavailable(reason)
+        }
+    }
+}
+
+extension UpdaterStatus {
+    /// Subtitle for the "Check for updates automatically" row in General Settings.
+    var updateSettingsSubtitle: String {
+        if isResolving {
+            "Checking update availability…"
+        } else if isUpdaterEligible {
+            "Asks once, checks daily, and notifies without downloading or restarting."
+        } else {
+            "Update checks are not available in this build."
         }
     }
 }

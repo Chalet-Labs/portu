@@ -37,10 +37,11 @@ struct AppFeature {
         // no historical data has ever been fetched yet for that currency.
         var historicalFXLastRefreshDayByCurrency: [FiatCurrency: Date] = [:]
         var updatePreferences = UpdaterPreferences()
-        // Unavailable until launch resolves the live status (configured feed + key,
-        // or external manager); the placeholder reason is truthful for that window.
-        // Settings and the application menu both gate on it.
-        var updaterStatus = UpdaterStatus.unavailable(reason: "Checking update availability…")
+        // Resolving until launch lands the live status (configured feed + key,
+        // or external manager); that window is progress, not failure, so
+        // Settings renders checking copy with no notice. The application menu
+        // gates on it.
+        var updaterStatus = UpdaterStatus.resolving
         var prices: [String: Decimal] = [:]
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?

@@ -374,9 +374,7 @@ private struct GeneralSettingsTab: View {
 
                             SettingsSwitchRow(
                                 title: "Check for updates automatically",
-                                subtitle: store.updaterStatus.isUpdaterEligible
-                                    ? "Asks once, checks daily, and notifies without downloading or restarting."
-                                    : "Update checks are not available in this build.",
+                                subtitle: store.updaterStatus.updateSettingsSubtitle,
                                 isOn: Binding(
                                     get: { store.updatePreferences.automaticallyChecksForUpdates },
                                     set: { store.send(.setAutomaticChecksEnabled($0)) }))

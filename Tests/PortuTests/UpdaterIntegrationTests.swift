@@ -182,6 +182,58 @@ struct UpdaterIntegrationTests {
         #expect(UpdaterStatus.resolve(owner: .development, configuration: localhost).canCheckForUpdates)
     }
 
+    @Test func `development owner rejects dot-segment and refs-heads production feed aliases`() {
+        let testKey = "bwdTmUzcenVsxzIQb737hznwxvpJr7uveKIzVkxVd00="
+        let aliases = [
+            // Dot segments resolving back to the shorthand production path
+            "https://raw.githubusercontent.com/Chalet-Labs/portu/./updates/appcast.xml",
+            "https://raw.githubusercontent.com/Chalet-Labs/portu/rehearsal/../updates/appcast.xml",
+            "https://github.com/Chalet-Labs/portu/raw/./updates/appcast.xml",
+            "https://github.com/Chalet-Labs/portu/raw/preview/../updates/appcast.xml",
+            // Percent-encoded dots decode to the same segments a server sees
+            "https://raw.githubusercontent.com/Chalet-Labs/portu/x/%2e%2e/updates/appcast.xml",
+            // Canonical refs/heads spellings of the updates branch, both hosts
+            "https://raw.githubusercontent.com/Chalet-Labs/portu/refs/heads/updates/appcast.xml",
+            "https://github.com/Chalet-Labs/portu/raw/refs/heads/updates/appcast.xml",
+            "https://RAW.githubusercontent.com/Chalet-Labs/PORTU/refs/heads/updates/appcast.xml",
+            "https://www.github.com/Chalet-Labs/portu/raw/refs/heads/updates/appcast.xml",
+            // Dot segments stacked on the canonical spelling
+            "https://raw.githubusercontent.com/Chalet-Labs/portu/refs/./heads/updates/appcast.xml",
+            "https://github.com/Chalet-Labs/portu/raw/refs/heads/../heads/updates/appcast.xml"
+        ]
+        for alias in aliases {
+            let config = UpdaterConfiguration(infoDictionary: [
+                "SUFeedURL": alias,
+                "SUPublicEDKey": testKey
+            ])
+            #expect(config != nil, "Alias must parse as a valid configuration: \(alias)")
+            let status = UpdaterStatus.resolve(owner: .development, configuration: config)
+            #expect(!status.canCheckForUpdates, "Production feed alias must be rejected: \(alias)")
+            if case .unavailable = status.availability { } else {
+                Issue.record("Expected .unavailable for alias \(alias), got \(status.availability)")
+            }
+        }
+
+        // Dot segments that resolve away from every production path stay allowed,
+        // as do non-production branches and alternate hosts used for proofs.
+        let allowed = [
+            "https://raw.githubusercontent.com/Chalet-Labs/portu/master/Tests/Fixtures/Updater/../Updater/appcast.xml",
+            "https://raw.githubusercontent.com/Chalet-Labs/portu/master/appcast.xml",
+            "https://example.com/chalet-labs/portu/updates/appcast.xml",
+            "https://localhost:8443/updates/appcast.xml"
+        ]
+        for feed in allowed {
+            let config = UpdaterConfiguration(infoDictionary: [
+                "SUFeedURL": feed,
+                "SUPublicEDKey": testKey
+            ])
+            #expect(config != nil, "Feed must parse as a valid configuration: \(feed)")
+            #expect(
+                UpdaterStatus.resolve(owner: .development, configuration: config).canCheckForUpdates,
+                "Non-production feed must stay allowed: \(feed)")
+        }
+    }
+
     @Test func `externallyManaged owner produces externallyManaged status with preserved label`() {
         let status = UpdaterStatus.resolve(owner: .externallyManaged("Homebrew"), configuration: nil)
         #expect(!status.canCheckForUpdates)

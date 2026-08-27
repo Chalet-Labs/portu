@@ -104,6 +104,11 @@ enum UpdaterFailure: Equatable, Sendable {
 /// user may check right now, and any dismissible failure from the last cycle.
 struct UpdaterStatus: Equatable, Sendable {
     enum Availability: Equatable, Sendable {
+        /// The launch-time posture before owner and feed configuration have
+        /// been resolved. Distinct from `.unavailable` so Settings can render
+        /// progress copy instead of a failure notice; `resolve` never
+        /// produces it.
+        case resolving
         case available
         case unavailable(reason: String)
         case externallyManaged(owner: String)
@@ -124,6 +129,20 @@ struct UpdaterStatus: Equatable, Sendable {
         availability == .available
     }
 
+    /// True only while the launch-time posture is still being resolved. Like
+    /// `isUpdaterEligible` this reads availability, not the transient check
+    /// flag; a resolving build is never eligible.
+    var isResolving: Bool {
+        availability == .resolving
+    }
+
+    /// The launch-time placeholder until owner/feed resolution lands. Blocks
+    /// checks and carries no failure: nothing has gone wrong yet.
+    static let resolving = UpdaterStatus(
+        availability: .resolving,
+        canCheckForUpdates: false,
+        failure: nil)
+
     static let available = UpdaterStatus(
         availability: .available,
         canCheckForUpdates: true,
@@ -143,15 +162,16 @@ struct UpdaterStatus: Equatable, Sendable {
             failure: nil)
     }
 
-    /// The production appcast feed published from the `updates` branch, plus
-    /// its user-facing github.com alias. A development build pointed at either
-    /// would be offered real releases over rehearsal bits, so `.development`
-    /// refuses them by normalized host and path: letter case, query, fragment,
-    /// port, and scheme never make production content safe, while localhost or
-    /// any other explicit proof feed stays allowed.
-    private static let productionFeedLocations: [(host: String, path: String)] = [
-        (host: "raw.githubusercontent.com", path: "/chalet-labs/portu/updates/appcast.xml"),
-        (host: "github.com", path: "/chalet-labs/portu/raw/updates/appcast.xml")
+    /// The production appcast feed published from the `updates` branch, in
+    /// every spelling GitHub serves it: raw.githubusercontent.com and the
+    /// github.com/raw alias, each with the shorthand (`updates`) and canonical
+    /// (`refs/heads/updates`) branch form. A development build pointed at any
+    /// of them would be offered real releases over rehearsal bits.
+    private static let productionFeedLocations: [(host: String, path: [String])] = [
+        (host: "raw.githubusercontent.com", path: ["chalet-labs", "portu", "updates", "appcast.xml"]),
+        (host: "raw.githubusercontent.com", path: ["chalet-labs", "portu", "refs", "heads", "updates", "appcast.xml"]),
+        (host: "github.com", path: ["chalet-labs", "portu", "raw", "updates", "appcast.xml"]),
+        (host: "github.com", path: ["chalet-labs", "portu", "raw", "refs", "heads", "updates", "appcast.xml"])
     ]
 
     private static func isProductionFeed(_ url: URL) -> Bool {
@@ -161,8 +181,32 @@ struct UpdaterStatus: Equatable, Sendable {
         if host.hasPrefix("www.") {
             host.removeFirst("www.".count)
         }
-        let path = url.path(percentEncoded: false).lowercased()
+        let path = normalizedPathComponents(url.path(percentEncoded: false))
         return productionFeedLocations.contains { $0.host == host && $0.path == path }
+    }
+
+    /// RFC 3986 dot-segment removal over lowercased path components: `.` drops
+    /// out and `..` pops its predecessor, so a path like
+    /// `/portu/rehearsal/../updates/appcast.xml` still resolves to the
+    /// production location. Percent-decoding happens first, so an encoded
+    /// `%2e%2e` is treated as the `..` a server would see. Query, fragment,
+    /// port, and scheme never make production content safe, while localhost or
+    /// any other explicit proof feed stays allowed.
+    private static func normalizedPathComponents(_ path: String) -> [String] {
+        var components: [String] = []
+        for component in path.split(separator: "/") {
+            switch component {
+            case ".":
+                continue
+            case "..":
+                if !components.isEmpty {
+                    components.removeLast()
+                }
+            default:
+                components.append(component.lowercased())
+            }
+        }
+        return components
     }
 
     /// Resolves the build's update posture from its declared owner and its
