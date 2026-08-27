@@ -111,9 +111,8 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Infer build number if not passed
+# Infer build number from DMG if not passed
 if [[ -z "$BUILD_NUMBER" ]]; then
-  # Inspect CFBundleVersion from DMG first
   MOUNT_POINT="$(mktemp -d "${TMPDIR:-/tmp}/portu-dmg-inspect.XXXXXX")"
   if hdiutil attach "$DMG_PATH" -mountpoint "$MOUNT_POINT" -nobrowse -readonly -quiet; then
     if [[ -f "$MOUNT_POINT/Portu.app/Contents/Info.plist" ]]; then
@@ -122,15 +121,10 @@ if [[ -z "$BUILD_NUMBER" ]]; then
     hdiutil detach "$MOUNT_POINT" -quiet 2>/dev/null || true
   fi
   rm -rf "$MOUNT_POINT"
-
-  # If DMG inspection did not yield a build number, fall back to GITHUB_RUN_NUMBER
-  if [[ -z "$BUILD_NUMBER" && -n "${GITHUB_RUN_NUMBER:-}" && "$GITHUB_RUN_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-    BUILD_NUMBER="$GITHUB_RUN_NUMBER"
-  fi
 fi
 
 if [[ -z "$BUILD_NUMBER" || ! "$BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-  echo "error: build number could not be determined and must be a positive integer" >&2
+  echo "error: build number could not be read from DMG '$DMG_PATH' and was not specified via --build-number" >&2
   exit 2
 fi
 

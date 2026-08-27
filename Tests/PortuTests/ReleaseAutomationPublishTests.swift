@@ -383,4 +383,47 @@ extension ReleaseAutomationTests {
         #expect(appcast.contains("<sparkle:channel>alpha</sparkle:channel>"))
         #expect(appcast.contains("Portu-1.1.0-alpha.1.dmg"))
     }
+
+    @Test func `appcast publication extracts build number directly from DMG when omitted`() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appending(path: "portu-publish-dmg-build-test-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let remoteRepo = temporaryDirectory.appending(path: "remote.git", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: remoteRepo, withIntermediateDirectories: true)
+        let initBare = Process()
+        initBare.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        initBare.arguments = ["init", "--bare", "-b", "master", remoteRepo.path(percentEncoded: false)]
+        try initBare.run()
+        initBare.waitUntilExit()
+
+        let privateSeed = "nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A="
+        let dmg = temporaryDirectory.appending(path: "Portu-2.5.0.dmg")
+        try createTestDmg(at: dmg, version: "2.5.0", build: "2500")
+
+        let res = try runScript(
+            "scripts/publish_sparkle_appcast.sh",
+            arguments: [
+                "--version", "2.5.0",
+                "--dmg", dmg.path(percentEncoded: false),
+                "--download-url-prefix", "https://github.com/Chalet-Labs/portu/releases/download/v2.5.0",
+                "--repo-url", remoteRepo.path(percentEncoded: false),
+                "--updates-branch", "updates",
+                "--skip-reachability-check"
+            ],
+            input: privateSeed + "\n")
+        #expect(res.status == 0)
+
+        let cloneDir = temporaryDirectory.appending(path: "verify-dmg-build", directoryHint: .isDirectory)
+        let cloneProc = Process()
+        cloneProc.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        cloneProc.arguments = ["clone", "-b", "updates", remoteRepo.path(percentEncoded: false), cloneDir.path(percentEncoded: false)]
+        try cloneProc.run()
+        cloneProc.waitUntilExit()
+
+        let appcast = try String(contentsOfFile: cloneDir.appending(path: "appcast.xml").path(percentEncoded: false), encoding: .utf8)
+        #expect(appcast.contains("<sparkle:version>2500</sparkle:version>"))
+        #expect(appcast.contains("<sparkle:shortVersionString>2.5.0</sparkle:shortVersionString>"))
+    }
 }
