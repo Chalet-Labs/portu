@@ -1,6 +1,13 @@
 import Foundation
 import Testing
 
+/// Single source of truth for the production Ed25519 public key in tests.
+/// Rotating the key touches this constant, `project.yml`, and the generated
+/// project — tests referencing the fixture cannot drift from each other.
+enum ProductionUpdateSigningFixture {
+    static let publicKey = "cOsrWIKHer18euTD1qZi2KJ0Anxc+tW8UPl6da9Pmx4="
+}
+
 /// Issue #84 — production update signing boundary.
 /// The production Ed25519 private key never enters the repository, PR workflows,
 /// or ordinary builds. Signing happens only inside the protected
@@ -9,7 +16,7 @@ import Testing
 /// is missing, malformed, or does not match the public key embedded in release
 /// builds.
 extension ReleaseAutomationTests {
-    private static let productionPublicKey = "cOsrWIKHer18euTD1qZi2KJ0Anxc+tW8UPl6da9Pmx4="
+    private static let productionPublicKey = ProductionUpdateSigningFixture.publicKey
     private static let rfc8032Seed = "nWGxne/9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A="
     private static let rfc8032PublicKey = "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo="
 

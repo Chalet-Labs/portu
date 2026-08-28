@@ -22,11 +22,21 @@ usage() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --expected-public-key)
-      EXPECTED_PUBLIC_KEY="${2:-}"
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "error: --expected-public-key requires a value" >&2
+        usage
+        exit 2
+      fi
+      EXPECTED_PUBLIC_KEY="$2"
       shift 2
       ;;
     --project-config)
-      PROJECT_CONFIG="${2:-}"
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "error: --project-config requires a value" >&2
+        usage
+        exit 2
+      fi
+      PROJECT_CONFIG="$2"
       shift 2
       ;;
     -h|--help)

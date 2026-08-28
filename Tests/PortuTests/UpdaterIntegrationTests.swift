@@ -33,7 +33,7 @@ struct UpdaterIntegrationTests {
         #expect(project.contains("PORTU_UPDATE_PUBLIC_KEY:"))
         #expect(project.contains("PORTU_UPDATE_FEED_URL: \"https://raw.githubusercontent.com/Chalet-Labs/portu/updates/appcast.xml\""))
         // Issue #84: release builds now embed the production Ed25519 public key.
-        #expect(project.contains("PORTU_UPDATE_PUBLIC_KEY: \"cOsrWIKHer18euTD1qZi2KJ0Anxc+tW8UPl6da9Pmx4=\""))
+        #expect(project.contains("PORTU_UPDATE_PUBLIC_KEY: \"\(ProductionUpdateSigningFixture.publicKey)\""))
         #expect(!project.contains("PORTU_UPDATE_PUBLIC_KEY: \"\""))
         #expect(!project.contains("github.com/Chalet-Labs/portu/releases"))
         let appcast = try string(feedPath)
