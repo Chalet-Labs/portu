@@ -59,6 +59,17 @@ extension ReleaseAutomationTests {
         #expect(Self.productionPublicKey != "bwdTmUzcenVsxzIQb737hznwxvpJr7uveKIzVkxVd00=")
     }
 
+    @Test func `generated project embeds the production trust anchor in release builds`() throws {
+        // `just release` and scripts/build.sh build from the checked-in project
+        // without regenerating it, so the anchor must live in the pbxproj too.
+        let project = try string("Portu.xcodeproj/project.pbxproj")
+
+        #expect(project.contains("PORTU_UPDATE_PUBLIC_KEY = \"\(Self.productionPublicKey)\";"))
+        #expect(!project.contains("PORTU_UPDATE_PUBLIC_KEY = \"\";"))
+        // The development fixture key stays isolated to the Debug configuration.
+        #expect(project.contains("PORTU_UPDATE_PUBLIC_KEY = \"bwdTmUzcenVsxzIQb737hznwxvpJr7uveKIzVkxVd00=\";"))
+    }
+
     @Test func `signing and feed publication run only inside the protected production environment`() throws {
         let workflow = try string(".github/workflows/release.yml")
         let jobs = workflowJobBlocks(in: workflow)
@@ -202,9 +213,58 @@ extension ReleaseAutomationTests {
         let config = try jsonObject(".releaserc.json")
         let plugins = try #require(config["plugins"] as? [Any])
         let exec = try #require(pluginConfig("@semantic-release/exec", in: plugins))
-        #expect(exec["publishCmd"] as? String == "scripts/record_released_version.sh ${nextRelease.version}")
+        #expect(exec["publishCmd"] as? String == "scripts/record_released_version.sh ${nextRelease.version} dist/Portu-${nextRelease.version}.dmg")
         #expect(fileExists("scripts/record_released_version.sh"))
         #expect(fileExists("scripts/verify_production_signing.sh"))
+    }
+
+    @Test func `gated publication binds signing to the release job artifact digest`() throws {
+        let workflow = try string(".github/workflows/release.yml")
+        let recorder = try string("scripts/record_released_version.sh")
+
+        // The build job records the digest of the DMG it produced; the gated
+        // job refuses to sign bytes whose digest does not match, closing the
+        // mutable-release-asset substitution window before approval.
+        #expect(recorder.contains("dmg_sha256="))
+        #expect(workflow.contains("dmg_sha256: ${{ steps.semantic.outputs.dmg_sha256 }}"))
+        #expect(workflow.contains("retry_sha256"))
+        let digestCheckIndex = try #require(workflow.range(
+            of: "does not match the digest recorded by the release job")?.lowerBound)
+        let gateIndex = try #require(workflow.range(of: "verify_production_signing.sh")?.lowerBound)
+        #expect(digestCheckIndex < gateIndex)
+
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appending(path: "portu-record-digest-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let dmg = temporaryDirectory.appending(path: "Portu-3.0.0.dmg")
+        try Data("digest-me".utf8).write(to: dmg)
+        let recorded = try runScript(
+            "scripts/record_released_version.sh",
+            arguments: ["3.0.0", dmg.path(percentEncoded: false)])
+        #expect(recorded.status == 0)
+        #expect(recorded.output.contains("Recorded DMG digest"))
+
+        let missing = try runScript(
+            "scripts/record_released_version.sh",
+            arguments: ["3.0.0", temporaryDirectory.appending(path: "absent.dmg").path(percentEncoded: false)])
+        #expect(missing.status == 2)
+        #expect(missing.error.contains("not found"))
+    }
+
+    @Test func `workflow values reach run scripts through env and are validated first`() throws {
+        let workflow = try string(".github/workflows/release.yml")
+
+        // No step output, job output, or dispatch input is expanded inside a
+        // run body — hostile workflow_dispatch input must never become shell
+        // source in steps that hold the signing key.
+        #expect(!workflow.contains("\"${{"))
+        #expect(!workflow.contains(":-${{"))
+        #expect(workflow.contains("SEMVER_REGEX"))
+        #expect(workflow.contains("is not a valid semantic version; refusing to publish"))
+        #expect(workflow.contains("VERSION: ${{ steps.version.outputs.version }}"))
+        #expect(workflow.contains("EXPECTED_PUBLIC_KEY: ${{ steps.signing.outputs.public_key }}"))
     }
 
     @Test func `key loss guidance requires manual bootstrap and forbids unsigned recovery`() throws {

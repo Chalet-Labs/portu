@@ -28,7 +28,7 @@ extension ReleaseAutomationTests {
 
         let exec = try #require(pluginConfig("@semantic-release/exec", in: plugins))
         #expect(exec["prepareCmd"] as? String == "scripts/package_release_dmg.sh ${nextRelease.version}")
-        #expect(exec["publishCmd"] as? String == "scripts/record_released_version.sh ${nextRelease.version}")
+        #expect(exec["publishCmd"] as? String == "scripts/record_released_version.sh ${nextRelease.version} dist/Portu-${nextRelease.version}.dmg")
     }
 
     @Test func `release workflow shares one global non-cancelling concurrency group across release channels`() throws {
