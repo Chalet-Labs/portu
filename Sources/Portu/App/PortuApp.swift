@@ -293,7 +293,7 @@ struct PortuApp: App {
                 Button("Check for Updates…") {
                     store.send(.checkForUpdatesTapped)
                 }
-                .disabled(!store.state.updaterStatus.canCheckForUpdates)
+                .disabled(!store.updaterStatus.canCheckForUpdates)
             }
             CommandGroup(replacing: .appSettings) {
                 Button("Settings...") {
