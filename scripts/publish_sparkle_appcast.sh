@@ -51,7 +51,12 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --expected-public-key)
-      EXPECTED_PUBLIC_KEY="${2:-}"
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "error: --expected-public-key requires a value" >&2
+        usage
+        exit 2
+      fi
+      EXPECTED_PUBLIC_KEY="$2"
       shift 2
       ;;
     --sign-feed)

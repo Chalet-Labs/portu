@@ -37,8 +37,11 @@ do {
     fail("could not read file at '\(arguments[2])'")
 }
 
-guard let signature = Data(base64Encoded: arguments[3]) else {
-    fail("signature is not valid base64")
+guard
+    let signature = Data(base64Encoded: arguments[3]),
+    signature.count == 64
+else {
+    fail("expected a base64-encoded 64-byte Ed25519 signature")
 }
 
 guard publicKey.isValidSignature(signature, for: fileData) else {
