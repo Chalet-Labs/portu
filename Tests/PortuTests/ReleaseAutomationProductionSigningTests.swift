@@ -17,12 +17,19 @@ extension ReleaseAutomationTests {
         var blocks: [String: Substring] = [:]
         var lines = workflow.split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init)
+
+        // Only the `jobs:` section contains job headers; starting anywhere
+        // earlier would misread `on:`'s nested keys (`push:`,
+        // `workflow_dispatch:`) as jobs and weaken the assertions below.
+        guard let jobsIndex = lines.firstIndex(of: "jobs:") else {
+            return blocks
+        }
+        lines = Array(lines[(jobsIndex + 1)...])
         lines.append("  __end__:")
 
         var currentName: String?
         var start = 0
         for (index, line) in lines.enumerated() {
-            guard index >= 2 else { continue }
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             let isJobHeader = line.hasPrefix("  ")
                 && !line.hasPrefix("   ")
