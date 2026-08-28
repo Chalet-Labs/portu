@@ -1176,7 +1176,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PORTU_UPDATE_FEED_URL = "https://raw.githubusercontent.com/Chalet-Labs/portu/updates/appcast.xml";
 				PORTU_UPDATE_OWNER = directGitHub;
-				PORTU_UPDATE_PUBLIC_KEY = "";
+				PORTU_UPDATE_PUBLIC_KEY = "cOsrWIKHer18euTD1qZi2KJ0Anxc+tW8UPl6da9Pmx4=";
 				PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.portu.app;
 				SDKROOT = macosx;

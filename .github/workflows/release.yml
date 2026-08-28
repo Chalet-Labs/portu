@@ -9,6 +9,10 @@ on:
         description: 'Release version to publish/retry appcast for (e.g. 1.0.0)'
         required: false
         type: string
+      retry_sha256:
+        description: 'Expected SHA-256 of the release DMG (required when retry_version is set; take it from the original release run)'
+        required: false
+        type: string
 
 concurrency:
   group: release-global
@@ -24,6 +28,7 @@ jobs:
     timeout-minutes: 45
     outputs:
       released_version: ${{ steps.semantic.outputs.released_version }}
+      dmg_sha256: ${{ steps.semantic.outputs.dmg_sha256 }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -63,8 +68,8 @@ jobs:
         run: just test
 
       # Runs without any signing credential: builds, tests, and publishes the
-      # GitHub Release (DMG + checksum + notes). Only the released version is
-      # recorded for the gated signing job.
+      # GitHub Release (DMG + checksum + notes). Only the released version and
+      # the build-time DMG digest are recorded for the gated signing job.
       - name: Release
         id: semantic
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
@@ -103,26 +108,48 @@ jobs:
           xcodebuild -project Portu.xcodeproj -scheme Portu \
             -resolvePackageDependencies -derivedDataPath .build/DerivedData
 
+      # Resolves and validates version + digest before anything touches the
+      # signing key. Values are passed via env, never interpolated into run
+      # scripts, so hostile workflow_dispatch input cannot become shell source.
       - name: Resolve Release Version
         id: version
         env:
           RETRY_VERSION: ${{ inputs.retry_version }}
+          RETRY_SHA256: ${{ inputs.retry_sha256 }}
+          RELEASED_VERSION: ${{ needs.release.outputs.released_version }}
+          RELEASED_SHA256: ${{ needs.release.outputs.dmg_sha256 }}
         run: |
-          VERSION="${RETRY_VERSION:-${{ needs.release.outputs.released_version }}}"
-          if [[ -z "$VERSION" ]]; then
-            echo "error: no release version to publish" >&2
+          VERSION="${RETRY_VERSION:-$RELEASED_VERSION}"
+          EXPECTED_SHA256="${RETRY_SHA256:-$RELEASED_SHA256}"
+          SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          if [[ -z "$VERSION" || ! "$VERSION" =~ $SEMVER_REGEX ]]; then
+            echo "error: '$VERSION' is not a valid semantic version; refusing to publish" >&2
+            exit 2
+          fi
+          if [[ -z "$EXPECTED_SHA256" ]] || [[ ! "$EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "error: expected DMG SHA-256 digest is missing or malformed; refusing to publish" >&2
             exit 2
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha256=$EXPECTED_SHA256" >> "$GITHUB_OUTPUT"
 
       - name: Download Release Assets
         env:
           GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          EXPECTED_SHA256: ${{ steps.version.outputs.sha256 }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           mkdir -p dist
           gh release download "v$VERSION" -D dist -p "Portu-$VERSION.dmg*"
           gh release view "v$VERSION" --json body --jq .body > "dist/Portu-$VERSION.md"
+          # Bind signing to the bytes the release job produced: GitHub Release
+          # assets are mutable (--clobber), so the digest recorded at build
+          # time must match before the signing key is ever exposed.
+          ACTUAL_SHA256="$(shasum -a 256 "dist/Portu-$VERSION.dmg" | awk '{print $1}')"
+          if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
+            echo "error: downloaded DMG digest $ACTUAL_SHA256 does not match the digest recorded by the release job; refusing to sign" >&2
+            exit 1
+          fi
 
       # Fail closed before any feed publication when the key is missing,
       # malformed, or does not pair with the public key embedded in release
@@ -137,13 +164,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
           PORTU_SPARKLE_PRIVATE_KEY: ${{ secrets.PORTU_SPARKLE_PRIVATE_KEY }}
+          VERSION: ${{ steps.version.outputs.version }}
+          EXPECTED_PUBLIC_KEY: ${{ steps.signing.outputs.public_key }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           scripts/publish_sparkle_appcast.sh \
             --version "$VERSION" \
             --dmg "dist/Portu-$VERSION.dmg" \
             --release-notes "dist/Portu-$VERSION.md" \
-            --expected-public-key "${{ steps.signing.outputs.public_key }}"
+            --expected-public-key "$EXPECTED_PUBLIC_KEY"
 
       - name: Assert No Secret Material In Artifacts
         env:

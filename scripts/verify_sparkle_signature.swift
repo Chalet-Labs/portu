@@ -28,7 +28,12 @@ else {
     fail("expected a base64-encoded 32-byte Ed25519 public key")
 }
 
-guard let fileData = FileManager.default.contents(atPath: arguments[2]) else {
+let fileData: Data
+do {
+    // Memory-mapped read keeps large DMGs out of the heap; CryptoKit
+    // verifies against the mapped bytes without copying them.
+    fileData = try Data(contentsOf: URL(fileURLWithPath: arguments[2]), options: .mappedIfSafe)
+} catch {
     fail("could not read file at '\(arguments[2])'")
 }
 

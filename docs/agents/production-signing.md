@@ -23,7 +23,8 @@ in `sparkle-adhoc-proof.md`.
 
 1. `release` — builds, tests, and publishes the GitHub Release (DMG + SHA-256 +
    notes) via semantic-release. It holds no signing credential and needs no
-   approval. It records the released version for the gated job.
+   approval. It records the released version and the build-time DMG digest for
+   the gated signing job.
 2. `publish-feed` — declares `environment: production-signing` (required
    reviewer + branch policy `master`/`alpha`). After human approval it
    downloads the release DMG, runs `scripts/verify_production_signing.sh`
@@ -32,7 +33,9 @@ in `sparkle-adhoc-proof.md`.
    embedded as signed feed metadata.
 
 A failure in the gated job leaves the GitHub Release and the previous appcast
-untouched; re-run it with the workflow's `retry_version` input. Pull requests
+untouched; re-run it with the workflow's `retry_version` input plus the
+`retry_sha256` digest of the DMG from the original release run, so signing
+still binds to the bytes the release job produced. Pull requests
 and helper agent workflows can never reach the secret: environment secrets
 resolve only inside jobs that declare the environment, from allowed branches.
 
@@ -82,6 +85,6 @@ If the private seed is lost and no tested offline backup exists:
   under the signing seed.
 - `scripts/assert_secret_absent.py` — the gated job scans its artifacts for
   the secret value after publication.
-- `tests/PortuTests/ReleaseAutomationProductionSigningTests.swift` — keeps the
+- `Tests/PortuTests/ReleaseAutomationProductionSigningTests.swift` — keeps the
   boundary enforced: environment gating, secret isolation, and fail-closed
   behavior.

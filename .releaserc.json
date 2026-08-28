@@ -89,7 +89,7 @@
       "@semantic-release/exec",
       {
         "prepareCmd": "scripts/package_release_dmg.sh ${nextRelease.version}",
-        "publishCmd": "scripts/record_released_version.sh ${nextRelease.version}"
+        "publishCmd": "scripts/record_released_version.sh ${nextRelease.version} dist/Portu-${nextRelease.version}.dmg"
       }
     ]
   ]
