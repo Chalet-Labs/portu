@@ -142,8 +142,9 @@ jobs:
           mkdir -p dist
           gh release download "v$VERSION" -D dist -p "Portu-$VERSION.dmg*"
           gh release view "v$VERSION" --json body --jq .body > "dist/Portu-$VERSION.md"
-          # Bind signing to the bytes the release job produced: GitHub Release
-          # assets are mutable (--clobber), so the digest recorded at build
+          # Bind signing to the bytes the release job produced: release
+          # assets can be replaced after upload (e.g. via
+          # `gh release upload --clobber`), so the digest recorded at build
           # time must match before the signing key is ever exposed.
           ACTUAL_SHA256="$(shasum -a 256 "dist/Portu-$VERSION.dmg" | awk '{print $1}')"
           if [[ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]]; then
