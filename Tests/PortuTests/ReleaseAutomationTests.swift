@@ -53,10 +53,7 @@ struct ReleaseAutomationTests {
 
         let exec = try #require(pluginConfig("@semantic-release/exec", in: plugins))
         #expect(exec["prepareCmd"] as? String == "scripts/package_release_dmg.sh ${nextRelease.version}")
-        let publishCmd = try #require(exec["publishCmd"] as? String)
-        #expect(publishCmd.contains("scripts/publish_sparkle_appcast.sh"))
-        #expect(publishCmd.contains("--version ${nextRelease.version}"))
-        #expect(publishCmd.contains("--dmg dist/Portu-${nextRelease.version}.dmg"))
+        #expect(exec["publishCmd"] as? String == "scripts/record_released_version.sh ${nextRelease.version}")
     }
 
     @Test func `package manifest installs semantic release tooling only for development`() throws {
@@ -339,7 +336,8 @@ extension ReleaseAutomationTests {
     func runScript(
         _ path: String,
         arguments: [String],
-        input: String? = nil) throws -> (status: Int32, output: String, error: String) {
+        input: String? = nil,
+        environment: [String: String] = [:]) throws -> (status: Int32, output: String, error: String) {
         let process = Process()
         let captureDirectory = FileManager.default.temporaryDirectory
             .appending(path: "portu-script-capture-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -355,6 +353,13 @@ extension ReleaseAutomationTests {
         process.executableURL = repoRoot.appending(path: path)
         process.arguments = arguments
         process.standardOutput = outputHandle
+        if !environment.isEmpty {
+            var merged = ProcessInfo.processInfo.environment
+            for (key, value) in environment {
+                merged[key] = value
+            }
+            process.environment = merged
+        }
         process.standardError = errorHandle
         if input != nil {
             process.standardInput = inputPipe

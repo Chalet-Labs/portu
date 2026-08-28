@@ -22,7 +22,8 @@ jobs:
     name: Semantic Release
     runs-on: macos-15
     timeout-minutes: 45
-
+    outputs:
+      released_version: ${{ steps.semantic.outputs.released_version }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -60,27 +61,91 @@ jobs:
       - name: Test app
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just test
-      - name: Retry Appcast Publication
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.retry_version != '' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
-          GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
-          PORTU_SPARKLE_PRIVATE_KEY: ${{ secrets.PORTU_SPARKLE_PRIVATE_KEY || secrets.SPARKLE_PRIVATE_KEY }}
-          RETRY_VERSION: ${{ inputs.retry_version }}
-        run: |
-          echo "Retrying appcast publication for version $RETRY_VERSION..."
-          mkdir -p dist
-          gh release download "v$RETRY_VERSION" -D dist -p "Portu-$RETRY_VERSION.dmg*"
-          scripts/publish_sparkle_appcast.sh --version "$RETRY_VERSION" --dmg "dist/Portu-$RETRY_VERSION.dmg"
 
+      # Runs without any signing credential: builds, tests, and publishes the
+      # GitHub Release (DMG + checksum + notes). Only the released version is
+      # recorded for the gated signing job.
       - name: Release
+        id: semantic
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
           GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
-          PORTU_SPARKLE_PRIVATE_KEY: ${{ secrets.PORTU_SPARKLE_PRIVATE_KEY || secrets.SPARKLE_PRIVATE_KEY }}
           GIT_AUTHOR_NAME: semantic-release-bot
           GIT_AUTHOR_EMAIL: semantic-release-bot@users.noreply.github.com
           GIT_COMMITTER_NAME: semantic-release-bot
           GIT_COMMITTER_EMAIL: semantic-release-bot@users.noreply.github.com
         run: npx semantic-release
+
+  publish-feed:
+    name: Sign and Publish Appcast
+    needs: release
+    if: ${{ inputs.retry_version != '' || needs.release.outputs.released_version != '' }}
+    runs-on: macos-15
+    timeout-minutes: 30
+    # Protected environment: required reviewer approval + branch policy
+    # (master, alpha). The production signing secret exists only here and is
+    # unreachable from pull requests, ordinary builds, and unapproved runs.
+    environment: production-signing
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Resolve signing tools
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          xcodebuild -project Portu.xcodeproj -scheme Portu \
+            -resolvePackageDependencies -derivedDataPath .build/DerivedData
+
+      - name: Resolve Release Version
+        id: version
+        env:
+          RETRY_VERSION: ${{ inputs.retry_version }}
+        run: |
+          VERSION="${RETRY_VERSION:-${{ needs.release.outputs.released_version }}}"
+          if [[ -z "$VERSION" ]]; then
+            echo "error: no release version to publish" >&2
+            exit 2
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download Release Assets
+        env:
+          GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p dist
+          gh release download "v$VERSION" -D dist -p "Portu-$VERSION.dmg*"
+          gh release view "v$VERSION" --json body --jq .body > "dist/Portu-$VERSION.md"
+
+      # Fail closed before any feed publication when the key is missing,
+      # malformed, or does not pair with the public key embedded in release
+      # builds. Outputs the verified public key for the publish step.
+      - name: Verify Production Signing Key
+        id: signing
+        env:
+          PORTU_SPARKLE_PRIVATE_KEY: ${{ secrets.PORTU_SPARKLE_PRIVATE_KEY }}
+        run: scripts/verify_production_signing.sh
+
+      - name: Publish Signed Sparkle Appcast
+        env:
+          GH_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN || github.token }}
+          PORTU_SPARKLE_PRIVATE_KEY: ${{ secrets.PORTU_SPARKLE_PRIVATE_KEY }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          scripts/publish_sparkle_appcast.sh \
+            --version "$VERSION" \
+            --dmg "dist/Portu-$VERSION.dmg" \
+            --release-notes "dist/Portu-$VERSION.md" \
+            --expected-public-key "${{ steps.signing.outputs.public_key }}"
+
+      - name: Assert No Secret Material In Artifacts
+        env:
+          PORTU_SPARKLE_PRIVATE_KEY: ${{ secrets.PORTU_SPARKLE_PRIVATE_KEY }}
+        run: printf '%s\n' "$PORTU_SPARKLE_PRIVATE_KEY" | scripts/assert_secret_absent.py dist
