@@ -30,3 +30,6 @@ pnevma.toml
 # Claude Code
 .claude/files/
 .claude/scheduled_tasks.lock
+
+# Local watchdog configuration
+/WATCHDOG.yml

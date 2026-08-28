@@ -29,27 +29,30 @@ struct UpdaterConfiguration: Equatable, Sendable {
     }
 }
 
-final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
+/// Replay-then-live broadcaster shared by the preference and status streams:
+/// every new subscriber first receives the latest committed value, then each
+/// subsequent update, with strict per-stream ordering.
+final class UpdaterBroadcaster<Value: Equatable & Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var subscribers: [UUID: Subscriber] = [:]
-    private var latestPreferences: UpdaterPreferences
+    private var latestValue: Value
 
     /// One delivery lock per subscriber so replay + updates for a single stream
     /// are strictly ordered, while independent subscribers never block each other.
     final class Subscriber {
-        let continuation: AsyncStream<UpdaterPreferences>.Continuation
+        let continuation: AsyncStream<Value>.Continuation
         // Primed is written under the broadcaster's registry `lock` and read
         // under the same lock, so access is consistently synchronized.
         var primed = false
         let deliveryLock = NSLock()
 
-        init(continuation: AsyncStream<UpdaterPreferences>.Continuation) {
+        init(continuation: AsyncStream<Value>.Continuation) {
             self.continuation = continuation
         }
 
-        func deliver(_ preferences: UpdaterPreferences) {
-            deliveryLock.withLock {
-                continuation.yield(preferences)
+        func deliver(_ value: Value) {
+            _ = deliveryLock.withLock {
+                continuation.yield(value)
             }
         }
 
@@ -60,8 +63,8 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
         /// lock to yield) cannot interleave a newer delivery between the replay
         /// and the catch-up, so per-stream ordering is strict.
         func replayPrimeAndCatchUp(
-            initial: UpdaterPreferences,
-            readLatest: () -> UpdaterPreferences) {
+            initial: Value,
+            readLatest: () -> Value) {
             deliveryLock.lock()
             defer { deliveryLock.unlock() }
             continuation.yield(initial)
@@ -72,40 +75,40 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
         }
     }
 
-    init(initialPreferences: UpdaterPreferences) {
-        self.latestPreferences = initialPreferences
+    init(initialValue: Value) {
+        self.latestValue = initialValue
     }
 
-    func currentPreferences() -> UpdaterPreferences {
+    func current() -> Value {
         lock.withLock {
-            latestPreferences
+            latestValue
         }
     }
 
-    func update(_ preferences: UpdaterPreferences) {
+    func update(_ value: Value) {
         // Deliver only to primed subscribers. A fresh subscriber registered
-        // mid-flight misses this update, but its replay yields `latestPreferences`
-        // — which already contains it — so nothing is lost and per-stream
+        // mid-flight misses this update, but its replay yields `latestValue` —
+        // which already contains it — so nothing is lost and per-stream
         // ordering is preserved.
         let subscribersSnapshot: [Subscriber] = lock.withLock {
-            latestPreferences = preferences
+            latestValue = value
             return subscribers.values.filter(\.primed)
         }
         for subscriber in subscribersSnapshot {
-            subscriber.deliver(preferences)
+            subscriber.deliver(value)
         }
     }
 
-    func stream() -> AsyncStream<UpdaterPreferences> {
+    func stream() -> AsyncStream<Value> {
         let id = UUID()
         return AsyncStream { continuation in
             continuation.onTermination = { [weak self, id] _ in
                 self?.removeSubscriber(id: id)
             }
-            let (subscriber, latest): (Subscriber, UpdaterPreferences) = lock.withLock {
+            let (subscriber, latest): (Subscriber, Value) = lock.withLock {
                 let subscriber = Subscriber(continuation: continuation)
                 subscribers[id] = subscriber
-                return (subscriber, latestPreferences)
+                return (subscriber, latestValue)
             }
             // Replay happens under the subscriber's delivery lock; priming and
             // the latest-value re-read happen inside readLatest under the
@@ -116,7 +119,7 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
             subscriber.replayPrimeAndCatchUp(initial: latest) { [self] in
                 lock.withLock {
                     subscriber.primed = true
-                    return latestPreferences
+                    return latestValue
                 }
             }
         }
@@ -132,11 +135,10 @@ final class UpdaterPreferencesBroadcaster: @unchecked Sendable {
 @MainActor
 final class ChannelUpdaterDelegate: NSObject, SPUUpdaterDelegate {
     var preferencesProvider: (@MainActor () -> UpdaterPreferences)?
-
-    init(preferencesProvider: (@MainActor () -> UpdaterPreferences)? = nil) {
-        self.preferencesProvider = preferencesProvider
-        super.init()
-    }
+    /// Receives Sparkle's terminal outcome for every finished update cycle.
+    /// `updater(_:didFinishUpdateCycleFor:error:)` is the only cycle callback
+    /// this delegate listens to.
+    var updateCycleFinished: (@MainActor ((any Error)?) -> Void)?
 
     @objc func allowedChannels(for _: SPUUpdater) -> Set<String> {
         let prefs = preferencesProvider?() ?? UpdaterPreferences()
@@ -147,14 +149,20 @@ final class ChannelUpdaterDelegate: NSObject, SPUUpdaterDelegate {
             return ["alpha"]
         }
     }
+
+    func updater(_: SPUUpdater, didFinishUpdateCycleFor _: SPUUpdateCheck, error: (any Error)?) {
+        updateCycleFinished?(error)
+    }
 }
 
 @MainActor
 final class SparkleUpdaterController {
     private let controller: SPUStandardUpdaterController
     private let delegate: ChannelUpdaterDelegate
-    private let broadcaster: UpdaterPreferencesBroadcaster
-    private var kvoObservation: NSKeyValueObservation?
+    nonisolated private let preferencesBroadcaster: UpdaterBroadcaster<UpdaterPreferences>
+    nonisolated private let statusBroadcaster: UpdaterBroadcaster<UpdaterStatus>
+    private var automaticChecksObservation: NSKeyValueObservation?
+    private var canCheckObservation: NSKeyValueObservation?
     private let userDefaults: UserDefaults
 
     static let channelKey = "portu.update.channel"
@@ -184,11 +192,11 @@ final class SparkleUpdaterController {
         let initialPrefs = UpdaterPreferences(
             automaticallyChecksForUpdates: controller.updater.automaticallyChecksForUpdates,
             channel: initialChannel)
-        let broadcaster = UpdaterPreferencesBroadcaster(initialPreferences: initialPrefs)
-        self.broadcaster = broadcaster
+        let preferencesBroadcaster = UpdaterBroadcaster(initialValue: initialPrefs)
+        self.preferencesBroadcaster = preferencesBroadcaster
 
-        delegate.preferencesProvider = { [weak broadcaster] in
-            broadcaster?.currentPreferences() ?? UpdaterPreferences()
+        delegate.preferencesProvider = { [weak preferencesBroadcaster] in
+            preferencesBroadcaster?.current() ?? UpdaterPreferences()
         }
 
         // Sparkle owns the SUEnableAutomaticChecks default (the native permission
@@ -197,33 +205,68 @@ final class SparkleUpdaterController {
         controller.startUpdater()
         self.controller = controller
 
-        self.kvoObservation = controller.updater.observe(
+        // Seeded AFTER startUpdater() so the first status reflects the started
+        // updater's real canCheckForUpdates. A controller only exists for a
+        // resolved-available build, so availability here is always .available.
+        let statusBroadcaster = UpdaterBroadcaster(initialValue: UpdaterStatus(
+            availability: .available,
+            canCheckForUpdates: controller.updater.canCheckForUpdates,
+            failure: nil))
+        self.statusBroadcaster = statusBroadcaster
+
+        // Delegate callbacks and KVO both reach the main actor after init
+        // returns, so installing these hooks after startUpdater() cannot miss
+        // a terminal cycle.
+        delegate.updateCycleFinished = { [weak self] error in
+            self?.handleUpdateCycleFinished(error: error)
+        }
+
+        self.automaticChecksObservation = controller.updater.observe(
             \.automaticallyChecksForUpdates,
             options: [.new]) { [weak self] updater, _ in
                 Task { @MainActor [weak self] in
                     self?.handleAutomaticChecksKVOChanged(updater.automaticallyChecksForUpdates)
                 }
             }
+
+        self.canCheckObservation = controller.updater.observe(
+            \.canCheckForUpdates,
+            options: [.new]) { [weak self] updater, _ in
+                Task { @MainActor [weak self] in
+                    self?.handleCanCheckKVOChanged(updater.canCheckForUpdates)
+                }
+            }
     }
 
     func checkForUpdates() {
+        // A new check supersedes any previous failure; clear it as the check
+        // starts so a stale notice never overlaps the fresh cycle's outcome.
+        clearFailure()
         controller.checkForUpdates(nil)
     }
 
     func preferences() -> UpdaterPreferences {
-        broadcaster.currentPreferences()
+        preferencesBroadcaster.current()
+    }
+
+    func status() -> UpdaterStatus {
+        statusBroadcaster.current()
+    }
+
+    func dismissFailure() {
+        clearFailure()
     }
 
     func setAutomaticallyChecksForUpdates(_ enabled: Bool) {
         // Assign unconditionally so Sparkle records the user's decision even when
         // the effective value is unchanged (declining an already-off prompt).
         controller.updater.automaticallyChecksForUpdates = enabled
-        let current = broadcaster.currentPreferences()
+        let current = preferencesBroadcaster.current()
         if current.automaticallyChecksForUpdates != enabled {
             let updated = UpdaterPreferences(
                 automaticallyChecksForUpdates: enabled,
                 channel: current.channel)
-            broadcaster.update(updated)
+            preferencesBroadcaster.update(updated)
         }
     }
 
@@ -233,50 +276,92 @@ final class SparkleUpdaterController {
     // older effect before it can re-enter here.
     func setChannel(_ channel: UpdateChannel) {
         userDefaults.set(channel.rawValue, forKey: Self.channelKey)
-        let current = broadcaster.currentPreferences()
+        let current = preferencesBroadcaster.current()
         if current.channel != channel {
             let updated = UpdaterPreferences(
                 automaticallyChecksForUpdates: current.automaticallyChecksForUpdates,
                 channel: channel)
-            broadcaster.update(updated)
+            preferencesBroadcaster.update(updated)
         }
     }
 
     nonisolated func preferenceChanges() -> AsyncStream<UpdaterPreferences> {
-        broadcaster.stream()
+        preferencesBroadcaster.stream()
+    }
+
+    nonisolated func statusChanges() -> AsyncStream<UpdaterStatus> {
+        statusBroadcaster.stream()
     }
 
     private func handleAutomaticChecksKVOChanged(_ enabled: Bool) {
         // The native prompt answered directly through Sparkle; just mirror the
         // observed value into the broadcast so TCA state cannot drift.
-        let current = broadcaster.currentPreferences()
+        let current = preferencesBroadcaster.current()
         if current.automaticallyChecksForUpdates != enabled {
             let updated = UpdaterPreferences(
                 automaticallyChecksForUpdates: enabled,
                 channel: current.channel)
-            broadcaster.update(updated)
+            preferencesBroadcaster.update(updated)
+        }
+    }
+
+    private func handleCanCheckKVOChanged(_ canCheck: Bool) {
+        // Sparkle alone decides when checks are possible (it flips this during
+        // in-flight sessions and back afterwards); mirror it into the status.
+        var current = statusBroadcaster.current()
+        if current.canCheckForUpdates != canCheck {
+            current.canCheckForUpdates = canCheck
+            statusBroadcaster.update(current)
+        }
+    }
+
+    /// One terminal Sparkle callback yields at most one status broadcast: the
+    /// cycle's classification — nil for success and for benign outcomes — is
+    /// assigned unconditionally, so a clean cycle clears a stale failure and an
+    /// unchanged value is never re-emitted.
+    private func handleUpdateCycleFinished(error: (any Error)?) {
+        let failure = UpdaterFailure(terminalUpdateCycleError: error)
+        var current = statusBroadcaster.current()
+        if current.failure != failure {
+            current.failure = failure
+            statusBroadcaster.update(current)
+        }
+    }
+
+    private func clearFailure() {
+        var current = statusBroadcaster.current()
+        if current.failure != nil {
+            current.failure = nil
+            statusBroadcaster.update(current)
         }
     }
 }
 
 struct UpdaterClient: Sendable {
-    // False for the inert `.disabled` client (no configured feed, e.g. Release
-    // builds without updater credentials); Settings gates its update controls on it.
-    var isAvailable: @Sendable () -> Bool
+    var status: @Sendable () async -> UpdaterStatus
+    var statusChanges: @Sendable () -> AsyncStream<UpdaterStatus>
     var checkForUpdates: @Sendable () async -> Void
+    var dismissFailure: @Sendable () async -> Void
     var preferences: @Sendable () async -> UpdaterPreferences
     var setAutomaticallyChecksForUpdates: @Sendable (Bool) async -> Void
     var setChannel: @Sendable (UpdateChannel) async -> Void
     var preferenceChanges: @Sendable () -> AsyncStream<UpdaterPreferences>
 
-    static func live(controller: SparkleUpdaterController?) -> Self {
-        guard let controller else {
-            return .disabled
-        }
-        return Self(
-            isAvailable: { true },
+    /// A controller exists only for a build whose resolved status is available,
+    /// so the live client is never constructed around a missing updater.
+    static func live(controller: SparkleUpdaterController) -> Self {
+        Self(
+            status: {
+                await controller.status()
+            },
+            statusChanges: {
+                controller.statusChanges()
+            },
             checkForUpdates: {
                 await controller.checkForUpdates()
+            },
+            dismissFailure: {
+                await controller.dismissFailure()
             },
             preferences: {
                 await controller.preferences()
@@ -292,17 +377,29 @@ struct UpdaterClient: Sendable {
             })
     }
 
-    static let disabled = Self(
-        isAvailable: { false },
-        checkForUpdates: {},
-        preferences: { UpdaterPreferences() },
-        setAutomaticallyChecksForUpdates: { _ in },
-        setChannel: { _ in },
-        preferenceChanges: {
-            // Inert client: an immediately-finished stream lets launch-path effects
-            // conclude instead of awaiting a broadcast that never comes.
-            AsyncStream { $0.finish() }
-        })
+    /// Inert client for a build whose resolved status disables Sparkle
+    /// (unavailable or externally managed). Preserves the resolved status so
+    /// Settings and the menu can explain exactly why checks are off.
+    static func disabled(status: UpdaterStatus) -> Self {
+        Self(
+            status: { status },
+            statusChanges: {
+                // Inert client: an immediately-finished stream lets launch-path
+                // effects conclude instead of awaiting a broadcast that never comes.
+                AsyncStream { $0.finish() }
+            },
+            checkForUpdates: {},
+            dismissFailure: {},
+            preferences: { UpdaterPreferences() },
+            setAutomaticallyChecksForUpdates: { _ in },
+            setChannel: { _ in },
+            preferenceChanges: {
+                AsyncStream { $0.finish() }
+            })
+    }
+
+    static let disabled = Self.disabled(
+        status: .unavailable(reason: "Software updates are not configured for this build."))
 }
 
 extension UpdaterClient: DependencyKey {

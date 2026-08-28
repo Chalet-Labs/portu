@@ -14,7 +14,9 @@ struct AppFeatureTests {
 
     @Test func `manual update check reaches updater client`() async {
         nonisolated(unsafe) var didCheckForUpdates = false
-        let store = TestStore(initialState: AppFeature.State()) {
+        var initialState = AppFeature.State()
+        initialState.updaterStatus = .available
+        let store = TestStore(initialState: initialState) {
             AppFeature()
         } withDependencies: {
             $0.updater.checkForUpdates = {
@@ -336,7 +338,9 @@ struct AppFeatureTests {
         await store.send(.appLaunched) {
             $0.historicalFXAvailability = .loading
         }
-        await store.receive(.updateSettingsAvailabilityChanged(false))
+        await store.receive(.updaterStatusChanged(.unavailable(reason: "Software updates are not configured for this build."))) {
+            $0.updaterStatus = .unavailable(reason: "Software updates are not configured for this build.")
+        }
         await store.receive(.updatePreferencesLoaded(UpdaterPreferences()))
         // The restored EUR preference must not stick with a stale 1:1 rate: the launch
         // stays on USD and surfaces the failure instead of relabeling USD balances.
