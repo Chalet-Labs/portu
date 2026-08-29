@@ -3,6 +3,23 @@
     <channel>
         <title>Portu</title>
         <item>
+            <title>1.9.0</title>
+            <pubDate>Sat, 29 Aug 2026 14:31:50 +0000</pubDate>
+            <link>https://github.com/Chalet-Labs/portu</link>
+            <sparkle:version>23</sparkle:version>
+            <sparkle:shortVersionString>1.9.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[# [1.9.0](https://github.com/Chalet-Labs/portu/compare/v1.8.0...v1.9.0) (2026-08-29)
+
+
+### Features
+
+* redesign settings with standalone window and modular sidebar navigation ([#94](https://github.com/Chalet-Labs/portu/issues/94)) ([07699e3](https://github.com/Chalet-Labs/portu/commit/07699e3dd754edf1b7046d506719e82b90bd79f6)), closes [#else](https://github.com/Chalet-Labs/portu/issues/else)
+
+]]></description>
+            <enclosure url="https://github.com/Chalet-Labs/portu/releases/download/v1.9.0/Portu-1.9.0.dmg" length="12838497" type="application/octet-stream" sparkle:edSignature="UnrByIqaWXbU5k+HXQcWThGm2xZG7WmXyqFkufHC24iMHAsCG6plLJIH2hEdFeaz0w4nJdWoikAAeufhhlEaBA=="/>
+        </item>
+        <item>
             <title>1.8.0</title>
             <pubDate>Sat, 29 Aug 2026 09:35:18 +0000</pubDate>
             <link>https://github.com/Chalet-Labs/portu</link>
