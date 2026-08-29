@@ -252,7 +252,9 @@ enum TokenSettingsFeature {
         guard token.amount > 0 else { return false }
         guard token.role.isPositive || token.role.isBorrow else { return false }
         guard override?.isIgnored != true else { return false }
-        if override?.alwaysShow == true { return true }
+        if override?.alwaysShow == true {
+            return true
+        }
 
         guard
             let value = resolvedDisplayValue(

@@ -108,7 +108,7 @@ enum APIKeysSaveTaskCoordinator {
     }
 }
 
-struct APIKeysSettingsTab: View {
+struct APIKeysSettingsView: View {
     @State private var viewModel: APIKeysViewModel
     @State private var newRPCChain: Chain = .ethereum
     @State private var newRPCURL = ""
@@ -187,7 +187,11 @@ struct APIKeysSettingsTab: View {
                 }
             }
         }
-        .task { if !viewModel.hasLoaded { await viewModel.load() } }
+        .task {
+            if !viewModel.hasLoaded {
+                await viewModel.load()
+            }
+        }
         .onChange(of: viewModel.zerionAPIKey) { _, _ in debounceSave() }
         .onChange(of: viewModel.debankAPIKey) { _, _ in debounceSave() }
         .onChange(of: viewModel.coingeckoAPIKey) { _, _ in debounceSave() }

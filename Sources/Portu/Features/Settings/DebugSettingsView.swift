@@ -2,7 +2,7 @@
 
     import SwiftUI
 
-    struct DebugSettingsTab: View {
+    struct DebugSettingsView: View {
         @Environment(AppState.self) private var appState
         @AppStorage(DebugMode.enabledKey) private var isEnabled = false
         @AppStorage(DebugMode.portKey) private var port = Int(DebugMode.defaultPort)
@@ -17,11 +17,17 @@
 
         private var needsRestart: Bool {
             if launchArgActive {
-                if isRunning, let serverPort = appState.debugServer?.port, port != Int(serverPort) { return true }
+                if isRunning, let serverPort = appState.debugServer?.port, port != Int(serverPort) {
+                    return true
+                }
                 return false
             }
-            if isEnabled != isRunning { return true }
-            if isRunning, let serverPort = appState.debugServer?.port, port != Int(serverPort) { return true }
+            if isEnabled != isRunning {
+                return true
+            }
+            if isRunning, let serverPort = appState.debugServer?.port, port != Int(serverPort) {
+                return true
+            }
             return false
         }
 

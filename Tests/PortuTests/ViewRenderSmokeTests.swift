@@ -130,7 +130,7 @@ struct ViewRenderSmokeTests {
     @Test func `category settings tab renders without crashing`() throws {
         let container = try makeContainer()
 
-        let view = CategorySettingsTab()
+        let view = CategorySettingsView()
             .modelContainer(container)
             .environment(\.colorScheme, .dark)
             .frame(width: 980, height: 720)
@@ -143,7 +143,7 @@ struct ViewRenderSmokeTests {
         let appState = AppState()
         appState.prices = ["ethereum": 3050, "usd-coin": 1]
 
-        let view = TokenSettingsTab()
+        let view = TokenSettingsView()
             .modelContainer(container)
             .environment(appState)
             .environment(\.colorScheme, .dark)

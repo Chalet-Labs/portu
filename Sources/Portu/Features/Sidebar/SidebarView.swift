@@ -8,6 +8,7 @@ struct SidebarView: View {
     let store: StoreOf<AppFeature>
 
     @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var positions: [Position]
@@ -99,8 +100,7 @@ struct SidebarView: View {
                         ForEach(filteredSections) { section in
                             SidebarNavigationSection(
                                 section: section,
-                                selectedSection: store.sidebarSelection,
-                                isSettingsSelected: store.isSettingsPresented) { item in
+                                selectedSection: store.sidebarSelection) { item in
                                     select(item)
                                 }
                         }
@@ -112,9 +112,8 @@ struct SidebarView: View {
             }
 
             SidebarFooter(
-                items: SidebarLayout.footerItems,
-                isSettingsSelected: store.isSettingsPresented) {
-                    store.send(.settingsSelected)
+                items: SidebarLayout.footerItems) {
+                    openSettings()
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -126,7 +125,7 @@ struct SidebarView: View {
         case let .section(section):
             store.send(.sectionSelected(section))
         case .settings:
-            store.send(.settingsSelected)
+            openSettings()
         case .strategies:
             break
         }
@@ -170,9 +169,7 @@ private struct SidebarPortfolioHeader: View {
 private struct SidebarNavigationSection: View {
     let section: SidebarLayoutSection
     let selectedSection: SidebarSection?
-    let isSettingsSelected: Bool
     let select: (SidebarItem) -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let title = section.title {
@@ -200,10 +197,8 @@ private struct SidebarNavigationSection: View {
     private func isSelected(_ item: SidebarItem) -> Bool {
         switch item {
         case let .section(section):
-            selectedSection == section && !isSettingsSelected
-        case .settings:
-            isSettingsSelected
-        case .strategies:
+            selectedSection == section
+        case .settings, .strategies:
             false
         }
     }
@@ -240,19 +235,22 @@ private struct SidebarNavigationRow: View {
     }
 
     private var iconColor: Color {
-        if isDisabled { return PortuTheme.dashboardTertiaryText }
+        if isDisabled {
+            return PortuTheme.dashboardTertiaryText
+        }
         return isSelected ? PortuTheme.dashboardGold : PortuTheme.dashboardSecondaryText
     }
 
     private var textColor: Color {
-        if isDisabled { return PortuTheme.dashboardTertiaryText }
+        if isDisabled {
+            return PortuTheme.dashboardTertiaryText
+        }
         return isSelected ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText
     }
 }
 
 private struct SidebarFooter: View {
     let items: [SidebarItem]
-    let isSettingsSelected: Bool
     let settingsAction: () -> Void
 
     var body: some View {
@@ -269,7 +267,7 @@ private struct SidebarFooter: View {
                     } label: {
                         SidebarNavigationRow(
                             item: item,
-                            isSelected: isSettingsSelected,
+                            isSelected: false,
                             isDisabled: false)
                     }
                     .buttonStyle(.plain)

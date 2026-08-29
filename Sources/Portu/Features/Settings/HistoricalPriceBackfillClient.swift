@@ -199,13 +199,17 @@ private struct BackfillRunner {
         let unavailableZerionCandidates = canFetchOnchainHistoricalPrices
             ? []
             : candidates.filter { candidate in
-                if case .zerion = candidate.source { return true }
+                if case .zerion = candidate.source {
+                    return true
+                }
                 return false
             }
         let runnableCandidates = canFetchOnchainHistoricalPrices
             ? candidates
             : candidates.filter { candidate in
-                if case .zerion = candidate.source { return false }
+                if case .zerion = candidate.source {
+                    return false
+                }
                 return true
             }
 

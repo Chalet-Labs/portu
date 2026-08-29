@@ -7,7 +7,7 @@ private let tokenSettingsLogger = Logger(
     subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app",
     category: "TokenSettings")
 
-struct TokenSettingsTab: View {
+struct TokenSettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Query private var positionTokens: [PositionToken]
@@ -61,7 +61,11 @@ struct TokenSettingsTab: View {
         }
         .alert("Could Not Save Token Setting", isPresented: Binding(
             get: { saveError != nil },
-            set: { if !$0 { saveError = nil } })) {
+            set: {
+                if !$0 {
+                    saveError = nil
+                }
+            })) {
                 Button("OK") { saveError = nil }
         } message: {
             Text(saveError ?? "")
@@ -102,32 +106,41 @@ struct TokenSettingsTab: View {
 
     private var dashboardControls: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Minimum value")
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Minimum value threshold")
                         .font(.system(size: SettingsMetrics.rowTitleSize, weight: .bold))
                         .foregroundStyle(SettingsDesign.primaryText)
-                    Text("$ \(TokenSettingsFormat.number(Decimal(minimumDashboardValue)))")
+                    Text("Tokens with balances below this value are classified as dust.")
                         .font(.footnote)
                         .foregroundStyle(SettingsDesign.secondaryText)
                 }
-                .frame(width: 160, alignment: .leading)
 
-                TextField(
-                    "Minimum value",
-                    value: $minimumDashboardValue,
-                    format: .number.precision(.fractionLength(0 ... 4)))
-                    .textFieldStyle(.plain)
-                    .settingsInputFrame(height: SettingsMetrics.compactInputHeight)
+                Spacer(minLength: 16)
 
-                Stepper("", value: $minimumDashboardValue, in: 0 ... 10000, step: 1)
-                    .labelsHidden()
-                    .frame(width: 70)
+                HStack(spacing: 8) {
+                    TextField(
+                        "Minimum value",
+                        value: $minimumDashboardValue,
+                        format: .number.precision(.fractionLength(0 ... 4)))
+                        .textFieldStyle(.plain)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(SettingsDesign.primaryText)
+                        .multilineTextAlignment(.trailing)
+                        .settingsInputFrame(height: SettingsMetrics.compactInputHeight)
+                        .frame(width: 100)
 
-                Toggle(TokenDashboardSettings.hideDustTitle, isOn: $hideDust)
-                    .settingsSwitchToggle()
-                    .fixedSize()
+                    Stepper("", value: $minimumDashboardValue, in: 0 ... 10000, step: 1)
+                        .labelsHidden()
+                }
             }
+
+            SettingsDivider()
+
+            SettingsSwitchRow(
+                title: TokenDashboardSettings.hideDustTitle,
+                subtitle: "Automatically hide tokens below the minimum value threshold from heavy views.",
+                isOn: $hideDust)
 
             SettingsSwitchRow(
                 title: TokenDashboardSettings.hideUnpricedTitle,
@@ -170,8 +183,6 @@ struct TokenSettingsTab: View {
                 style: .action)
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                TokenSettingsTableHeader()
-
                 LazyVStack(spacing: 8) {
                     ForEach(result.rows) { row in
                         TokenSettingsRowView(
@@ -304,24 +315,5 @@ private struct TokenSettingsCountsBar: View {
         .overlay(
             Capsule()
                 .stroke(SettingsDesign.cardStroke, lineWidth: 1))
-    }
-}
-
-private struct TokenSettingsTableHeader: View {
-    var body: some View {
-        HStack(spacing: 12) {
-            header("Token", width: 170)
-            header("Value", width: 104)
-            header("Pricing", width: 118)
-            header("Overrides", width: nil)
-        }
-        .padding(.horizontal, 14)
-    }
-
-    private func header(_ title: String, width: CGFloat?) -> some View {
-        Text(title)
-            .font(.caption.weight(.bold))
-            .foregroundStyle(SettingsDesign.secondaryText)
-            .frame(width: width, alignment: .leading)
     }
 }
