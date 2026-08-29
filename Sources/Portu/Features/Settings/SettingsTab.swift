@@ -43,7 +43,7 @@ enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
 
     var subtitle: String {
         switch self {
-        case .general: "Currency, price refresh, and general application preferences."
+        case .general: "Display currency and general application preferences."
         case .updates: "Software update checks, release channels, and Sparkle status."
         case .livePricesAndSync: "Polling intervals for CoinGecko, Zerion, and exchange providers."
         case .historicalData: "Historical price cache backfill controls and status."
