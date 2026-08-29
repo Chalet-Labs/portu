@@ -39,10 +39,10 @@ struct SettingsView: View {
         }
         .frame(
             minWidth: SettingsMetrics.minimumWidth,
-            idealWidth: 980,
+            idealWidth: SettingsMetrics.idealWidth,
             maxWidth: .infinity,
             minHeight: SettingsMetrics.minimumHeight,
-            idealHeight: 680,
+            idealHeight: SettingsMetrics.idealHeight,
             maxHeight: .infinity)
         .onChange(of: filteredTabs) { _, newTabs in
             guard !newTabs.isEmpty else { return }

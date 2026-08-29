@@ -128,32 +128,6 @@ struct SettingsInfoCard: View {
     }
 }
 
-struct SettingsGlyphTile: View {
-    let tab: SettingsTab
-    var isSelected = false
-
-    var body: some View {
-        let palette = tabPalette
-        SettingsIconTile(
-            systemImage: SettingsIconography.sidebarSystemImage(for: tab),
-            foreground: palette.foreground,
-            background: isSelected ? SettingsDesign.selectedGlyphBackground : palette.background)
-    }
-
-    private var tabPalette: (foreground: Color, background: Color) {
-        switch tab {
-        case .general: (SettingsDesign.accentPrimary, SettingsDesign.primaryGlyphBackground)
-        case .updates: (SettingsDesign.accentPrimary, SettingsDesign.primaryGlyphBackground)
-        case .livePricesAndSync: (SettingsDesign.tokenTeal, SettingsDesign.tokenGlyphBackground)
-        case .historicalData: (SettingsDesign.accentPrimary, SettingsDesign.primaryGlyphBackground)
-        case .tokens: (SettingsDesign.tokenTeal, SettingsDesign.tokenGlyphBackground)
-        case .categories: (SettingsDesign.successBadgeText, SettingsDesign.successBadgeBackground)
-        case .apiKeys: (SettingsDesign.warningOrange, SettingsDesign.orangeGlyphBackground)
-        case .debug: (SettingsDesign.debugOrange, SettingsDesign.peachGlyphBackground)
-        }
-    }
-}
-
 struct SettingsIconTile: View {
     let systemImage: String
     let foreground: Color

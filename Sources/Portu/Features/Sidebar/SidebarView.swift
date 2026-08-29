@@ -100,8 +100,7 @@ struct SidebarView: View {
                         ForEach(filteredSections) { section in
                             SidebarNavigationSection(
                                 section: section,
-                                selectedSection: store.sidebarSelection,
-                                isSettingsSelected: false) { item in
+                                selectedSection: store.sidebarSelection) { item in
                                     select(item)
                                 }
                         }
@@ -113,8 +112,7 @@ struct SidebarView: View {
             }
 
             SidebarFooter(
-                items: SidebarLayout.footerItems,
-                isSettingsSelected: false) {
+                items: SidebarLayout.footerItems) {
                     openSettings()
                 }
         }
@@ -171,9 +169,7 @@ private struct SidebarPortfolioHeader: View {
 private struct SidebarNavigationSection: View {
     let section: SidebarLayoutSection
     let selectedSection: SidebarSection?
-    let isSettingsSelected: Bool
     let select: (SidebarItem) -> Void
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let title = section.title {
@@ -201,10 +197,8 @@ private struct SidebarNavigationSection: View {
     private func isSelected(_ item: SidebarItem) -> Bool {
         switch item {
         case let .section(section):
-            selectedSection == section && !isSettingsSelected
-        case .settings:
-            isSettingsSelected
-        case .strategies:
+            selectedSection == section
+        case .settings, .strategies:
             false
         }
     }
@@ -257,7 +251,6 @@ private struct SidebarNavigationRow: View {
 
 private struct SidebarFooter: View {
     let items: [SidebarItem]
-    let isSettingsSelected: Bool
     let settingsAction: () -> Void
 
     var body: some View {
@@ -274,7 +267,7 @@ private struct SidebarFooter: View {
                     } label: {
                         SidebarNavigationRow(
                             item: item,
-                            isSelected: isSettingsSelected,
+                            isSelected: false,
                             isDisabled: false)
                     }
                     .buttonStyle(.plain)

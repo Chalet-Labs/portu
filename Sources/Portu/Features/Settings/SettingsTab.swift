@@ -101,7 +101,9 @@ enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
 
 enum SettingsMetrics {
     static let minimumWidth: CGFloat = 860
+    static let idealWidth: CGFloat = 980
     static let minimumHeight: CGFloat = 580
+    static let idealHeight: CGFloat = 680
     static let sidebarWidth: CGFloat = 215
     static let pageMaxWidth: CGFloat = 960
     static let pageTitleSize: CGFloat = 22
