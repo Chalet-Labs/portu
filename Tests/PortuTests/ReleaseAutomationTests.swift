@@ -56,6 +56,16 @@ struct ReleaseAutomationTests {
         #expect(exec["publishCmd"] as? String == "scripts/record_released_version.sh ${nextRelease.version} dist/Portu-${nextRelease.version}.dmg")
     }
 
+    @Test func `readme documents authenticated in-app updates and manual bootstrap requirement`() throws {
+        let readme = try string("README.md")
+
+        #expect(readme.localizedCaseInsensitiveContains("manual bootstrap"))
+        #expect(readme.localizedCaseInsensitiveContains("in-app updates"))
+        #expect(readme.localizedCaseInsensitiveContains("Sparkle"))
+        #expect(readme.localizedCaseInsensitiveContains("Ed25519"))
+        #expect(readme.localizedCaseInsensitiveContains("Stable") && readme.localizedCaseInsensitiveContains("Alpha"))
+    }
+
     @Test func `package manifest installs semantic release tooling only for development`() throws {
         let manifest = try jsonObject("package.json")
 

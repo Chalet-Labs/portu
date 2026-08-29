@@ -20,6 +20,7 @@ Portu is local-first. Portfolio data stays on your Mac, provider credentials are
 - Individual Zerion-wallet history and FIFO P&L analytics behind a local release gate.
 - Token settings for CoinGecko ID overrides, pricing overrides, hidden dust, and unpriced assets.
 - Custom RPC settings and configurable provider sync intervals.
+- Authenticated in-app updates with Sparkle: privacy-preserving Ed25519 signature verification, Stable and Alpha release channels, and no background telemetry.
 
 ## Downloads
 
@@ -29,6 +30,14 @@ The easiest way to try Portu is from GitHub Releases:
 - [All releases](https://github.com/Chalet-Labs/portu/releases)
 
 Release builds publish a `Portu-<version>.dmg` plus a SHA-256 checksum. The release workflow is driven by semantic-release from the `master` and `alpha` branches.
+
+## Updates
+
+Portu includes authenticated, privacy-preserving in-app updates powered by Sparkle with Ed25519 signature verification:
+
+- **Channels**: Choose between **Stable** (default) and **Alpha** release channels in `Settings > General`.
+- **Privacy & Control**: Update checks send no analytics or system profiling, require explicit consent, and never download or restart automatically.
+- **Manual Bootstrap Note**: Existing installations on pre-updater builds must download and install this release manually once from [GitHub Releases](https://github.com/Chalet-Labs/portu/releases/latest). All subsequent compatible releases update seamlessly within the app.
 
 ## API Keys
 
