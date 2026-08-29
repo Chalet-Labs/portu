@@ -56,19 +56,19 @@ extension ReleaseAutomationTests {
     @Test func `production release builds embed the maintainer public key`() throws {
         let project = try string("project.yml")
 
-        let releaseMarker = try #require(project.range(of: "        Release:"))
         let debugMarker = try #require(project.range(of: "        Debug:"))
+        let releaseMarker = try #require(project.range(of: "        Release:"))
+        #expect(debugMarker.upperBound < releaseMarker.lowerBound)
+
+        let debugBlock = project[debugMarker.upperBound ..< releaseMarker.lowerBound]
+        #expect(debugBlock.range(
+            of: "PORTU_UPDATE_PUBLIC_KEY: \"bwdTmUzcenVsxzIQb737hznwxvpJr7uveKIzVkxVd00=\"") != nil)
 
         let releaseBlock = project[releaseMarker.upperBound...]
         #expect(releaseBlock.range(
             of: "PORTU_UPDATE_PUBLIC_KEY: \"\(Self.productionPublicKey)\"") != nil)
         // The empty placeholder that shipped unverified release builds is gone.
         #expect(releaseBlock.range(of: "PORTU_UPDATE_PUBLIC_KEY: \"\"") == nil)
-
-        let debugBlock = project[debugMarker.upperBound...]
-        #expect(debugBlock.range(
-            of: "PORTU_UPDATE_PUBLIC_KEY: \"bwdTmUzcenVsxzIQb737hznwxvpJr7uveKIzVkxVd00=\"") != nil)
-
         // Production and development must not share an update trust anchor.
         #expect(Self.productionPublicKey != "bwdTmUzcenVsxzIQb737hznwxvpJr7uveKIzVkxVd00=")
     }
