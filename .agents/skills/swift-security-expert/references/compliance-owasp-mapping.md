@@ -115,7 +115,7 @@ func storeCredential(account: String, secret: Data, service: String) throws {
 UserDefaults.standard.set(apiToken, forKey: "auth_token")
 
 // ❌ WRONG — Hardcoded API key in source (found in 71% of iOS apps)
-let stripeKey = "sk_live_EXAMPLE_DO_NOT_HARDCODE"
+let stripeKey = "sk_live_example_key_placeholder"
 
 // ❌ WRONG — Secret in Info.plist (plaintext in IPA archive)
 // <key>API_SECRET</key><string>my-secret-key-12345</string>
