@@ -217,7 +217,9 @@ enum HistoricalBackfillCandidateResolver {
                 identities: &identities)
         }
         return identities.sorted {
-            if $0.chain.rawValue != $1.chain.rawValue { return $0.chain.rawValue < $1.chain.rawValue }
+            if $0.chain.rawValue != $1.chain.rawValue {
+                return $0.chain.rawValue < $1.chain.rawValue
+            }
             return $0.contractAddress < $1.contractAddress
         }
     }
@@ -264,7 +266,9 @@ enum HistoricalBackfillCandidateResolver {
         guard token.amount > 0 else { return false }
         guard token.role.isPositive || token.role.isBorrow else { return false }
         guard override?.isIgnored != true else { return false }
-        if override?.alwaysShow == true { return true }
+        if override?.alwaysShow == true {
+            return true
+        }
 
         let value = TokenSettingsFeature.resolvedValue(
             token: token,
@@ -286,7 +290,9 @@ enum HistoricalBackfillCandidateResolver {
         let netAmount = snapshot.amount - snapshot.borrowAmount
         guard netAmount != 0 else { return false }
         guard override?.isIgnored != true else { return false }
-        if override?.alwaysShow == true { return true }
+        if override?.alwaysShow == true {
+            return true
+        }
 
         let netValue = snapshotValue(snapshot, override: override)
         if netValue == 0 {

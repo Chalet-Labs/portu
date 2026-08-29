@@ -90,22 +90,22 @@ struct SettingsView: View {
     private func selectedContent(for tab: SettingsTab) -> some View {
         switch tab {
         case .general:
-            GeneralSettingsTab(store: store)
+            GeneralSettingsView(store: store)
         case .updates:
-            UpdatesSettingsTab(store: store)
+            UpdatesSettingsView(store: store)
         case .livePricesAndSync:
-            LivePricesAndSyncSettingsTab(store: store)
+            LivePricesAndSyncSettingsView(store: store)
         case .historicalData:
-            HistoricalDataSettingsTab(store: store)
+            HistoricalDataSettingsView(store: store)
         case .tokens:
-            TokenSettingsTab()
+            TokenSettingsView()
         case .categories:
-            CategorySettingsTab()
+            CategorySettingsView()
         case .apiKeys:
-            APIKeysSettingsTab(secretStore: secretStore)
+            APIKeysSettingsView(secretStore: secretStore)
         case .debug:
             #if DEBUG
-                DebugSettingsTab()
+                DebugSettingsView()
             #else
                 SettingsPage(tab: .debug) {
                     SettingsSectionCard(

@@ -1,7 +1,7 @@
 import ComposableArchitecture
 import SwiftUI
 
-struct UpdatesSettingsTab: View {
+struct UpdatesSettingsView: View {
     let store: StoreOf<AppFeature>
 
     var body: some View {

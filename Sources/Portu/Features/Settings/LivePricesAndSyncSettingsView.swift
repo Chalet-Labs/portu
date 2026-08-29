@@ -1,7 +1,7 @@
 import ComposableArchitecture
 import SwiftUI
 
-struct LivePricesAndSyncSettingsTab: View {
+struct LivePricesAndSyncSettingsView: View {
     let store: StoreOf<AppFeature>
 
     @AppStorage(PricePollingSettings.refreshIntervalKey)

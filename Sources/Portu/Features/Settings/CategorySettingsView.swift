@@ -7,7 +7,7 @@ private let categorySettingsLogger = Logger(
     subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app",
     category: "CategorySettings")
 
-struct CategorySettingsTab: View {
+struct CategorySettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var categories: [PortfolioCategory]
@@ -67,7 +67,11 @@ struct CategorySettingsTab: View {
         }
         .alert("Could Not Save Category Change", isPresented: Binding(
             get: { saveError != nil },
-            set: { if !$0 { saveError = nil } })) {
+            set: {
+                if !$0 {
+                    saveError = nil
+                }
+            })) {
                 Button("OK") { saveError = nil }
         } message: {
             Text(saveError ?? "")

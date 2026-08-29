@@ -7,7 +7,7 @@ private let tokenSettingsLogger = Logger(
     subsystem: Bundle.main.bundleIdentifier ?? "com.portu.app",
     category: "TokenSettings")
 
-struct TokenSettingsTab: View {
+struct TokenSettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
     @Query private var positionTokens: [PositionToken]
@@ -122,7 +122,7 @@ struct TokenSettingsTab: View {
                     TextField(
                         "Minimum value",
                         value: $minimumDashboardValue,
-                        format: .number.precision(.fractionLength(0 ... 2)))
+                        format: .number.precision(.fractionLength(0 ... 4)))
                         .textFieldStyle(.plain)
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(SettingsDesign.primaryText)

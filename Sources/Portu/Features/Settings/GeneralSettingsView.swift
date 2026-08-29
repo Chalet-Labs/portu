@@ -2,7 +2,7 @@ import ComposableArchitecture
 import PortuCore
 import SwiftUI
 
-struct GeneralSettingsTab: View {
+struct GeneralSettingsView: View {
     let store: StoreOf<AppFeature>
 
     var body: some View {

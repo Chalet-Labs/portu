@@ -1,7 +1,7 @@
 import ComposableArchitecture
 import SwiftUI
 
-struct HistoricalDataSettingsTab: View {
+struct HistoricalDataSettingsView: View {
     let store: StoreOf<AppFeature>
 
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
