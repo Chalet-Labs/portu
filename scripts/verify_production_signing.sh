@@ -101,7 +101,10 @@ if ! EXPECTED_DECODED_LEN="$({ printf '%s' "$EXPECTED_PUBLIC_KEY" | /usr/bin/bas
 fi
 
 # 3. The signing key must pair with the key clients trust.
-DERIVED_PUBLIC_KEY="$(printf '%s\n' "$PRIVATE_SEED" | "$ROOT_DIR/scripts/derive_sparkle_public_key.swift")"
+if ! DERIVED_PUBLIC_KEY="$(printf '%s\n' "$PRIVATE_SEED" | "$ROOT_DIR/scripts/derive_sparkle_public_key.swift")"; then
+  echo "error: could not derive the public key from the production signing key; refusing to publish" >&2
+  exit 2
+fi
 
 if [[ "$DERIVED_PUBLIC_KEY" != "$EXPECTED_PUBLIC_KEY" ]]; then
   echo "error: production signing key does not match the public key embedded in release builds; refusing to publish" >&2
