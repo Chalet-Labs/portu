@@ -295,12 +295,12 @@ struct PortuApp: App {
                 }
                 .disabled(!store.updaterStatus.canCheckForUpdates)
             }
-            CommandGroup(replacing: .appSettings) {
-                Button("Settings...") {
-                    store.send(.settingsSelected)
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
+        }
+
+        Settings {
+            SettingsView(store: store, secretStore: secretStore)
+                .environment(appState)
+                .modelContainer(container)
         }
     }
 

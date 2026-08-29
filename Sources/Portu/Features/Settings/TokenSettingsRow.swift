@@ -26,6 +26,7 @@ struct TokenSettingsRowView: View {
     @State private var manualPriceText: String
     @State private var coinGeckoIdText: String
     @State private var notes: String
+    @State private var isExpanded: Bool
 
     init(
         row: TokenSettingsRow,
@@ -46,30 +47,47 @@ struct TokenSettingsRowView: View {
         _manualPriceText = State(initialValue: draft.manualPriceText)
         _coinGeckoIdText = State(initialValue: draft.coinGeckoIdText)
         _notes = State(initialValue: draft.notes)
+        _isExpanded = State(initialValue: row.override != nil)
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            tokenIdentity
-                .frame(width: 170, alignment: .leading)
+        VStack(alignment: .leading, spacing: 8) {
+            // Tier 1: Identity <---> Value / Amount + Pricing Source + Expand
+            HStack(alignment: .center, spacing: 10) {
+                tokenIdentity
 
-            valueSummary
-                .frame(width: 104, alignment: .leading)
+                Spacer(minLength: 12)
 
-            pricingSummary
-                .frame(width: 118, alignment: .leading)
+                valueSummary
 
-            overrideControls
-                .frame(maxWidth: .infinity, alignment: .leading)
+                pricingBadge
+
+                expandButton
+            }
+
+            // Tier 2: Category Selector <---> Visibility Toggles
+            HStack(alignment: .center, spacing: 12) {
+                categoryPicker
+
+                Spacer(minLength: 12)
+
+                visibilityToggles
+            }
+
+            // Tier 3: Expandable Overrides Drawer
+            if isExpanded {
+                SettingsDivider()
+                expandedOverrideForm
+            }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
                 .fill(SettingsDesign.subtleCardBackground))
         .overlay(
             RoundedRectangle(cornerRadius: SettingsDesign.panelCornerRadius, style: .continuous)
-                .stroke(SettingsDesign.cardStroke, lineWidth: 1))
+                .stroke(isExpanded ? SettingsDesign.accentPrimary.opacity(0.40) : SettingsDesign.cardStroke, lineWidth: 1))
         .onChange(of: row.override) { _, override in
             let draft = TokenSettingsOverrideDraft(override: override)
             manualPriceText = draft.manualPriceText
@@ -82,42 +100,12 @@ struct TokenSettingsRowView: View {
         HStack(spacing: 10) {
             TokenSettingsLogo(row: row)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(row.symbol)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(SettingsDesign.primaryText)
                     .lineLimit(1)
                 Text(row.name)
-                    .font(.caption)
-                    .foregroundStyle(SettingsDesign.secondaryText)
-                    .lineLimit(1)
-            }
-        }
-    }
-
-    private var valueSummary: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(TokenSettingsFormat.currency(row.value, currency: row.currency))
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(SettingsDesign.primaryText)
-                .lineLimit(1)
-            Text(TokenSettingsFormat.decimal(row.amount))
-                .font(.caption)
-                .foregroundStyle(SettingsDesign.secondaryText)
-                .lineLimit(1)
-        }
-    }
-
-    private var pricingSummary: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(row.pricingSource.rawValue)
-                .font(.caption.weight(.bold))
-                .foregroundStyle(sourceColor)
-            Text(row.visibilityStatus.rawValue)
-                .font(.caption)
-                .foregroundStyle(SettingsDesign.secondaryText)
-            if let coinGeckoId = row.coinGeckoId {
-                Text(coinGeckoId)
                     .font(.caption2)
                     .foregroundStyle(SettingsDesign.secondaryText)
                     .lineLimit(1)
@@ -125,69 +113,155 @@ struct TokenSettingsRowView: View {
         }
     }
 
-    private var overrideControls: some View {
+    private var valueSummary: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text(TokenSettingsFormat.currency(row.value, currency: row.currency))
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(SettingsDesign.primaryText)
+                .lineLimit(1)
+            Text(TokenSettingsFormat.decimal(row.amount))
+                .font(.caption2)
+                .foregroundStyle(SettingsDesign.secondaryText)
+                .lineLimit(1)
+        }
+    }
+
+    private var pricingBadge: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text(row.pricingSource.rawValue)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(sourceColor)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill(sourceColor.opacity(0.15)))
+
+            if let coinGeckoId = row.coinGeckoId {
+                Text(coinGeckoId)
+                    .font(.system(size: 9))
+                    .foregroundStyle(SettingsDesign.secondaryText)
+                    .lineLimit(1)
+            }
+        }
+        .frame(minWidth: 80, alignment: .trailing)
+    }
+
+    private var visibilityToggles: some View {
+        HStack(spacing: 10) {
+            Toggle("Ignore", isOn: Binding(
+                get: { row.override?.isIgnored ?? false },
+                set: { setIgnored(row.assetId, $0) }))
+                .settingsSwitchToggle()
+                .help("Hide this token from dashboard exposure and totals")
+
+            Toggle("Always show", isOn: Binding(
+                get: { row.override?.alwaysShow ?? false },
+                set: { setAlwaysShow(row.assetId, $0) }))
+                .settingsSwitchToggle()
+                .help("Always show this token regardless of minimum value thresholds")
+        }
+    }
+
+    private var expandButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                if row.override != nil {
+                    Circle()
+                        .fill(SettingsDesign.accentPrimary)
+                        .frame(width: 6, height: 6)
+                }
+                Image(systemName: isExpanded ? "chevron.up" : "slider.horizontal.3")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundStyle(isExpanded ? SettingsDesign.accentPrimary : SettingsDesign.secondaryText)
+            .padding(.horizontal, 8)
+            .frame(height: 26)
+            .background(
+                RoundedRectangle(cornerRadius: SettingsDesign.controlCornerRadius, style: .continuous)
+                    .fill(isExpanded ? SettingsDesign.sidebarSelection : SettingsDesign.cardBackground))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isExpanded ? "Collapse override options" : "Expand override options")
+    }
+
+    private var expandedOverrideForm: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                categoryPicker
-                Toggle("Ignore", isOn: Binding(
-                    get: { row.override?.isIgnored ?? false },
-                    set: { setIgnored(row.assetId, $0) }))
-                    .settingsSwitchToggle()
-                Toggle("Always show", isOn: Binding(
-                    get: { row.override?.alwaysShow ?? false },
-                    set: { setAlwaysShow(row.assetId, $0) }))
-                    .settingsSwitchToggle()
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Manual Price ($ USD)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(SettingsDesign.secondaryText)
+                    TextField("0.00", text: $manualPriceText)
+                        .textFieldStyle(.plain)
+                        .settingsInputFrame(height: 30)
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("CoinGecko ID Override")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(SettingsDesign.secondaryText)
+                    TextField("e.g. ethereum", text: $coinGeckoIdText)
+                        .textFieldStyle(.plain)
+                        .settingsInputFrame(height: 30)
+                }
+                .frame(maxWidth: .infinity)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Notes")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(SettingsDesign.secondaryText)
+                    TextField("Optional notes...", text: $notes)
+                        .textFieldStyle(.plain)
+                        .settingsInputFrame(height: 30)
+                }
+                .frame(maxWidth: .infinity)
             }
 
-            HStack(spacing: 8) {
-                TextField("Manual price", text: $manualPriceText)
-                    .textFieldStyle(.plain)
-                    .settingsInputFrame(height: 32)
-                TextField("CoinGecko ID", text: $coinGeckoIdText)
-                    .textFieldStyle(.plain)
-                    .settingsInputFrame(height: 32)
-            }
+            HStack {
+                Spacer()
 
-            HStack(spacing: 8) {
-                TextField("Notes", text: $notes)
-                    .textFieldStyle(.plain)
-                    .settingsInputFrame(height: 32)
+                if row.override != nil {
+                    Button("Reset Overrides") {
+                        if resetOverride(row.assetId) {
+                            manualPriceText = ""
+                            coinGeckoIdText = ""
+                            notes = ""
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .settingsSecondaryButton(isDisabled: false)
+                    .help("Reset all custom overrides for this token")
+                }
 
-                Button("Save") {
+                Button("Save Override") {
                     saveOverride(row.assetId, manualPriceText, coinGeckoIdText, notes)
                 }
                 .buttonStyle(.plain)
                 .settingsPrimaryButton(isDisabled: false)
-
-                Button("Reset") {
-                    if resetOverride(row.assetId) {
-                        manualPriceText = ""
-                        coinGeckoIdText = ""
-                        notes = ""
-                    } else {
-                        manualPriceText = TokenSettingsFormat.optionalNumber(row.override?.manualPriceUSD)
-                        coinGeckoIdText = row.override?.coinGeckoIdOverride ?? ""
-                        notes = row.override?.notes ?? ""
-                    }
-                }
-                .buttonStyle(.plain)
-                .settingsIconButton(color: SettingsDesign.warningOrange)
             }
         }
+        .padding(.top, 4)
     }
 
     @ViewBuilder
     private var categoryPicker: some View {
         if categories.isEmpty {
             Text(row.portfolioCategory.name)
-                .font(.caption.weight(.semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(SettingsDesign.secondaryText)
-                .frame(width: 160, alignment: .leading)
+                .lineLimit(1)
         } else {
             HStack(spacing: 6) {
-                Text("Category")
-                    .font(.caption.weight(.semibold))
+                Text("Category:")
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(SettingsDesign.secondaryText)
+
                 Picker("Category", selection: Binding(
                     get: { row.portfolioCategory.id },
                     set: { assignCategory(row.symbol, $0) })) {
@@ -196,7 +270,8 @@ struct TokenSettingsRowView: View {
                         }
                     }
                     .labelsHidden()
-                    .frame(width: 128)
+                    .font(.caption)
+                    .frame(width: 130)
             }
         }
     }
@@ -228,7 +303,7 @@ private struct TokenSettingsLogo: View {
                 fallback
             }
         }
-        .frame(width: 30, height: 30)
+        .frame(width: 28, height: 28)
         .background(
             Circle()
                 .fill(SettingsDesign.tokenGlyphBackground))
@@ -248,7 +323,9 @@ enum ManualPriceInput {
     case valid(Decimal)
 
     var value: Decimal? {
-        if case let .valid(value) = self { return value }
+        if case let .valid(value) = self {
+            return value
+        }
         return nil
     }
 }
@@ -286,7 +363,9 @@ enum TokenSettingsFormat {
 
     static func parseManualPrice(_ text: String) -> ManualPriceInput {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if normalized.isEmpty { return .empty }
+        if normalized.isEmpty {
+            return .empty
+        }
         guard let value = Decimal(string: normalized, locale: locale), value > 0 else {
             return .invalid(normalized)
         }
@@ -294,9 +373,15 @@ enum TokenSettingsFormat {
     }
 
     private static func maximumFractionDigits(for absoluteValue: Double) -> Int {
-        if absoluteValue >= 1000 { return 0 }
-        if absoluteValue >= 1 { return 4 }
-        if absoluteValue >= 0.0001 { return 6 }
+        if absoluteValue >= 1000 {
+            return 0
+        }
+        if absoluteValue >= 1 {
+            return 4
+        }
+        if absoluteValue >= 0.0001 {
+            return 6
+        }
         return 8
     }
 }

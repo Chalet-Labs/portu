@@ -8,6 +8,7 @@ struct SidebarView: View {
     let store: StoreOf<AppFeature>
 
     @Environment(AppState.self) private var appState
+    @Environment(\.openSettings) private var openSettings
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var positions: [Position]
@@ -100,7 +101,7 @@ struct SidebarView: View {
                             SidebarNavigationSection(
                                 section: section,
                                 selectedSection: store.sidebarSelection,
-                                isSettingsSelected: store.isSettingsPresented) { item in
+                                isSettingsSelected: false) { item in
                                     select(item)
                                 }
                         }
@@ -113,8 +114,8 @@ struct SidebarView: View {
 
             SidebarFooter(
                 items: SidebarLayout.footerItems,
-                isSettingsSelected: store.isSettingsPresented) {
-                    store.send(.settingsSelected)
+                isSettingsSelected: false) {
+                    openSettings()
                 }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -126,7 +127,7 @@ struct SidebarView: View {
         case let .section(section):
             store.send(.sectionSelected(section))
         case .settings:
-            store.send(.settingsSelected)
+            openSettings()
         case .strategies:
             break
         }
@@ -240,12 +241,16 @@ private struct SidebarNavigationRow: View {
     }
 
     private var iconColor: Color {
-        if isDisabled { return PortuTheme.dashboardTertiaryText }
+        if isDisabled {
+            return PortuTheme.dashboardTertiaryText
+        }
         return isSelected ? PortuTheme.dashboardGold : PortuTheme.dashboardSecondaryText
     }
 
     private var textColor: Color {
-        if isDisabled { return PortuTheme.dashboardTertiaryText }
+        if isDisabled {
+            return PortuTheme.dashboardTertiaryText
+        }
         return isSelected ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText
     }
 }

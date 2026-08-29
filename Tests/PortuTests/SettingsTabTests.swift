@@ -8,8 +8,26 @@ struct SettingsTabTests {
     @Test func `default visible tabs match settings sidebar order`() {
         let tabs = SettingsTab.visibleTabs(debugEnabled: true)
 
-        #expect(tabs.map(\.title) == ["General", "Tokens", "Categories", "API Keys", "Debug"])
-        #expect(tabs.map { SettingsIconography.sidebarSystemImage(for: $0) } == ["gearshape", "eye", "tag", "key", "wrench.and.screwdriver"])
+        #expect(tabs.map(\.title) == [
+            "General",
+            "Updates",
+            "Live Prices & Sync",
+            "Historical Data",
+            "Tokens",
+            "Categories",
+            "API Keys",
+            "Debug"
+        ])
+        #expect(tabs.map { SettingsIconography.sidebarSystemImage(for: $0) } == [
+            "gearshape",
+            "arrow.down.circle",
+            "arrow.triangle.2.circlepath",
+            "chart.line.uptrend.xyaxis",
+            "eye",
+            "tag",
+            "key",
+            "wrench.and.screwdriver"
+        ])
     }
 
     @Test func `settings mockup iconography uses semantic system symbols`() {
@@ -35,9 +53,10 @@ struct SettingsTabTests {
         #expect(SettingsTab.filter(tabs, query: "pricing") == [.tokens])
         #expect(SettingsTab.filter(tabs, query: "category") == [.categories])
         #expect(SettingsTab.filter(tabs, query: "server") == [.debug])
-        #expect(SettingsTab.filter(tabs, query: "price") == [.general])
-        #expect(SettingsTab.filter(tabs, query: "update") == [.general])
+        #expect(SettingsTab.filter(tabs, query: "price") == [.general, .livePricesAndSync, .historicalData])
+        #expect(SettingsTab.filter(tabs, query: "update") == [.updates])
         #expect(SettingsTab.filter(tabs, query: "currency") == [.general])
+        #expect(SettingsTab.filter(tabs, query: "backfill") == [.historicalData])
         #expect(SettingsTab.filter(tabs, query: " ") == tabs)
     }
 

@@ -61,13 +61,7 @@ enum SettingsIconography {
     static let apiKeyFieldSystemImage = "key"
 
     static func sidebarSystemImage(for tab: SettingsTab) -> String {
-        switch tab {
-        case .general: "gearshape"
-        case .tokens: "eye"
-        case .categories: "tag"
-        case .apiKeys: "key"
-        case .debug: "wrench.and.screwdriver"
-        }
+        tab.systemImage
     }
 
     static func visibilityToggleActionSystemImage(isCurrentlyVisible: Bool) -> String {

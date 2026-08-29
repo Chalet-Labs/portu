@@ -9,8 +9,8 @@ struct UpdaterSettingsUITests {
             .deletingLastPathComponent()
     }
 
-    @Test func `general settings tab renders update preferences section with automatic check toggle and channel picker`() throws {
-        let settings = try string("Sources/Portu/Features/Settings/SettingsView.swift")
+    @Test func `updates settings tab renders update preferences section with automatic check toggle and channel picker`() throws {
+        let settings = try string("Sources/Portu/Features/Settings/UpdatesSettingsTab.swift")
         let channelPicker = try string(
             "Sources/Portu/Features/Settings/SettingsUpdateChannelPicker.swift")
 
@@ -38,7 +38,7 @@ struct UpdaterSettingsUITests {
     }
 
     @Test func `automatic check subtitle reports checking while updater status is resolving`() throws {
-        let settings = try string("Sources/Portu/Features/Settings/SettingsView.swift")
+        let settings = try string("Sources/Portu/Features/Settings/UpdatesSettingsTab.swift")
         let notice = try string("Sources/Portu/Features/Settings/SettingsUpdateStatusNotice.swift")
         #expect(settings.contains("store.updaterStatus.updateSettingsSubtitle"))
         #expect(notice.contains("var updateSettingsSubtitle"))
@@ -47,17 +47,17 @@ struct UpdaterSettingsUITests {
     }
 
     @Test func `updates controls remain disabled until updater availability resolves`() throws {
-        let settings = try string("Sources/Portu/Features/Settings/SettingsView.swift")
+        let settings = try string("Sources/Portu/Features/Settings/UpdatesSettingsTab.swift")
         #expect(
             settings.contains(".disabled(!store.updaterStatus.isUpdaterEligible)"),
             "Controls must stay disabled while resolving because isUpdaterEligible is false for .resolving")
     }
 
-    @Test func `settings general tab includes SettingsUpdateStatusNotice`() throws {
-        let settings = try string("Sources/Portu/Features/Settings/SettingsView.swift")
+    @Test func `updates settings tab includes SettingsUpdateStatusNotice`() throws {
+        let settings = try string("Sources/Portu/Features/Settings/UpdatesSettingsTab.swift")
         #expect(
             settings.contains("SettingsUpdateStatusNotice"),
-            "The general settings tab must embed the update status notice view")
+            "The updates settings tab must embed the update status notice view")
     }
 
     @Test func `settings update status notice exists as a separate view source file`() throws {
