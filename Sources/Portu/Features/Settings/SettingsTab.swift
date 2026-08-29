@@ -109,7 +109,6 @@ enum SettingsMetrics {
     static let pageTitleSize: CGFloat = 22
     static let sectionTitleSize: CGFloat = 15
     static let rowTitleSize: CGFloat = 14
-    static let sidebarRowTitleSize: CGFloat = 13
     static let sidebarHeaderTitle = "Settings"
     static let sidebarHeaderTitleSize: CGFloat = 28
     static let compactControlHeight: CGFloat = 32
