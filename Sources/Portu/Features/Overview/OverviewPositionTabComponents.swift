@@ -3,16 +3,96 @@ import PortuCore
 import PortuUI
 import SwiftUI
 
-struct OverviewPositionGroupData: Identifiable {
+/// Position-level presentation data, projected from a `Position` once per render pass.
+///
+/// Holds no SwiftData references. A sync can delete and reinsert the underlying
+/// `Position` while SwiftUI is still evaluating a body; reading a deleted model's
+/// properties trips a SwiftData assertion and terminates the process, so views
+/// downstream of this projection must never see a `@Model` instance.
+struct OverviewPositionMeta: Identifiable, Equatable {
     let id: UUID
-    let position: Position
-    let tokens: [PositionToken]
+    let title: String
+    let positionType: PositionType
+    let chain: Chain?
+
+    var iconName: String {
+        switch positionType {
+        case .idle: "wallet.pass"
+        case .lending: "building.columns"
+        case .staking: "diamond"
+        case .farming, .liquidityPool: "leaf"
+        case .vesting: "clock"
+        case .other: "square.grid.2x2"
+        }
+    }
+
+    /// Row prefix describing how the asset is deployed, e.g. "Staked on".
+    var contextLabel: String {
+        switch positionType {
+        case .idle: "Idle on"
+        case .lending: "Lending on"
+        case .staking: "Staked on"
+        case .farming, .liquidityPool: "Yield on"
+        case .vesting: "Vesting on"
+        case .other: "Position on"
+        }
+    }
 }
 
-struct TokenChangeCandidate {
-    let token: PositionToken
-    let position: Position
-    let change: Decimal
+/// Token-level presentation data with pricing already resolved.
+///
+/// Pricing is resolved by `OverviewPositionProjection` rather than re-derived per row
+/// by view closures. Both the crash safety and the cost saving come from the same
+/// property: nothing here needs to be recomputed while a body is being evaluated.
+struct OverviewPositionTokenData: Identifiable, Equatable {
+    let id: UUID
+    let entry: TokenEntry
+    let price: Decimal
+    let value: Decimal
+    let change24h: Decimal
+
+    var role: TokenRole {
+        entry.role
+    }
+
+    var symbol: String {
+        entry.symbol
+    }
+
+    var logoURL: String? {
+        entry.logoURL
+    }
+
+    var amount: Decimal {
+        entry.amount
+    }
+
+    /// Borrowed tokens are liabilities, so they subtract from position totals.
+    var signedValue: Decimal {
+        role.isBorrow ? -value : value
+    }
+
+    var signedChange24h: Decimal {
+        role.isBorrow ? -change24h : change24h
+    }
+}
+
+/// A position and its qualifying tokens, ready to render.
+struct OverviewPositionGroupData: Identifiable, Equatable {
+    let position: OverviewPositionMeta
+    let tokens: [OverviewPositionTokenData]
+
+    var id: UUID {
+        position.id
+    }
+
+    var value: Decimal {
+        tokens.reduce(.zero) { $0 + $1.signedValue }
+    }
+
+    var change24h: Decimal {
+        tokens.reduce(.zero) { $0 + $1.signedChange24h }
+    }
 }
 
 enum OverviewPositionVisibility {
@@ -34,23 +114,6 @@ enum OverviewPositionVisibility {
 struct OverviewPositionGroupCard: View {
     let group: OverviewPositionGroupData
     let currencyCode: String
-    let price: (PositionToken) -> Decimal
-    let tokenValue: (PositionToken) -> Decimal
-    let tokenChange24h: (PositionToken) -> Decimal
-
-    private var groupValue: Decimal {
-        group.tokens.reduce(Decimal.zero) { partial, token in
-            let value = tokenValue(token)
-            return token.role.isBorrow ? partial - value : partial + value
-        }
-    }
-
-    private var groupChange: Decimal {
-        group.tokens.reduce(Decimal.zero) { partial, token in
-            let change = tokenChange24h(token)
-            return token.role.isBorrow ? partial - change : partial + change
-        }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -59,14 +122,11 @@ struct OverviewPositionGroupCard: View {
             VStack(spacing: 0) {
                 columnHeader
 
-                ForEach(group.tokens, id: \.id) { token in
+                ForEach(group.tokens) { token in
                     OverviewPositionTokenRow(
                         token: token,
                         position: group.position,
-                        currencyCode: currencyCode,
-                        price: price(token),
-                        value: tokenValue(token),
-                        change24h: tokenChange24h(token))
+                        currencyCode: currencyCode)
                 }
             }
             .padding(.horizontal, 12)
@@ -79,26 +139,26 @@ struct OverviewPositionGroupCard: View {
 
     private var groupHeader: some View {
         HStack(spacing: 10) {
-            Image(systemName: iconName)
+            Image(systemName: group.position.iconName)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(PortuTheme.dashboardGold)
                 .frame(width: 18)
 
-            Text(groupTitle)
+            Text(group.position.title)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
 
             Spacer(minLength: 10)
 
-            Text(OverviewPriceDisplay.currency(groupValue, currencyCode: currencyCode))
+            Text(OverviewPriceDisplay.currency(group.value, currencyCode: currencyCode))
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
 
-            Text(OverviewPriceDisplay.currency(groupChange, currencyCode: currencyCode))
+            Text(OverviewPriceDisplay.currency(group.change24h, currencyCode: currencyCode))
                 .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(groupChange >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
+                .foregroundStyle(group.change24h >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
                 .lineLimit(1)
         }
         .padding(.bottom, 8)
@@ -120,30 +180,12 @@ struct OverviewPositionGroupCard: View {
         .lineLimit(1)
         .padding(.bottom, 8)
     }
-
-    private var groupTitle: String {
-        group.position.protocolName ?? group.position.account?.name ?? "Wallet"
-    }
-
-    private var iconName: String {
-        switch group.position.positionType {
-        case .idle: "wallet.pass"
-        case .lending: "building.columns"
-        case .staking: "diamond"
-        case .farming, .liquidityPool: "leaf"
-        case .vesting: "clock"
-        case .other: "square.grid.2x2"
-        }
-    }
 }
 
 private struct OverviewPositionTokenRow: View {
-    let token: PositionToken
-    let position: Position
+    let token: OverviewPositionTokenData
+    let position: OverviewPositionMeta
     let currencyCode: String
-    let price: Decimal
-    let value: Decimal
-    let change24h: Decimal
 
     var body: some View {
         HStack(spacing: 12) {
@@ -151,9 +193,9 @@ private struct OverviewPositionTokenRow: View {
                 .frame(width: 250, alignment: .leading)
 
             HStack(spacing: 7) {
-                AssetLogoView(symbol: token.asset?.symbol ?? "?", logoURL: token.asset?.logoURL)
+                AssetLogoView(symbol: token.symbol, logoURL: token.logoURL)
                     .frame(width: 16, height: 16)
-                Text(token.asset?.symbol ?? "???")
+                Text(token.symbol)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
@@ -161,16 +203,16 @@ private struct OverviewPositionTokenRow: View {
             .frame(width: 90, alignment: .leading)
 
             HStack(spacing: 8) {
-                Text(OverviewPriceDisplay.compactPrice(price, currencyCode: currencyCode))
+                Text(OverviewPriceDisplay.compactPrice(token.price, currencyCode: currencyCode))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .allowsTightening(true)
                     .minimumScaleFactor(0.8)
 
-                Text(OverviewPriceDisplay.currency(change24h, currencyCode: currencyCode))
+                Text(OverviewPriceDisplay.currency(token.change24h, currencyCode: currencyCode))
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(OverviewPositionChangeTone.tone(for: token.role, change: change24h).color)
+                    .foregroundStyle(OverviewPositionChangeTone.tone(for: token.role, change: token.change24h).color)
                     .lineLimit(1)
                     .allowsTightening(true)
                     .minimumScaleFactor(0.8)
@@ -205,7 +247,7 @@ private struct OverviewPositionTokenRow: View {
 
     private var positionContext: some View {
         HStack(spacing: 8) {
-            Text(positionLabel)
+            Text(position.contextLabel)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(roleColor)
                 .lineLimit(1)
@@ -230,17 +272,6 @@ private struct OverviewPositionTokenRow: View {
                 .background(
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(PortuTheme.dashboardGoldMuted.opacity(0.35)))
-        }
-    }
-
-    private var positionLabel: String {
-        switch position.positionType {
-        case .idle: "Idle on"
-        case .lending: "Lending on"
-        case .staking: "Staked on"
-        case .farming, .liquidityPool: "Yield on"
-        case .vesting: "Vesting on"
-        case .other: "Position on"
         }
     }
 
