@@ -1,0 +1,23 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Portu</title>
+        <item>
+            <title>1.8.0</title>
+            <pubDate>Sat, 29 Aug 2026 09:35:18 +0000</pubDate>
+            <link>https://github.com/Chalet-Labs/portu</link>
+            <sparkle:version>22</sparkle:version>
+            <sparkle:shortVersionString>1.8.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[# [1.8.0](https://github.com/Chalet-Labs/portu/compare/v1.7.0...v1.8.0) (2026-08-29)
+
+
+### Features
+
+* document in-app updates and manual bootstrap requirement ([#93](https://github.com/Chalet-Labs/portu/issues/93)) ([09fff3b](https://github.com/Chalet-Labs/portu/commit/09fff3bbee8bae0106dea8b66df1f9ebd1b32fec))
+
+]]></description>
+            <enclosure url="https://github.com/Chalet-Labs/portu/releases/download/v1.8.0/Portu-1.8.0.dmg" length="12807080" type="application/octet-stream" sparkle:edSignature="BZO6Fx6VHpgQevHOGme6HI14SJKWpIDgruce5l6WPCt7oSzMEjALwiu2Vd1OFubbbtU7v3eqrYNGzdpkA7guAg=="/>
+        </item>
+    </channel>
+</rss>
