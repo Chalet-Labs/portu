@@ -59,11 +59,12 @@ struct ReleaseAutomationTests {
     @Test func `readme documents authenticated in-app updates and manual bootstrap requirement`() throws {
         let readme = try string("README.md")
 
-        #expect(readme.localizedCaseInsensitiveContains("manual bootstrap"))
-        #expect(readme.localizedCaseInsensitiveContains("in-app updates"))
-        #expect(readme.localizedCaseInsensitiveContains("Sparkle"))
-        #expect(readme.localizedCaseInsensitiveContains("Ed25519"))
-        #expect(readme.localizedCaseInsensitiveContains("Stable") && readme.localizedCaseInsensitiveContains("Alpha"))
+        #expect(readme.range(of: "manual bootstrap", options: .caseInsensitive) != nil)
+        #expect(readme.range(of: "in-app updates", options: .caseInsensitive) != nil)
+        #expect(readme.range(of: "Sparkle", options: .caseInsensitive) != nil)
+        #expect(readme.range(of: "Ed25519", options: .caseInsensitive) != nil)
+        #expect(readme.range(of: "Stable", options: .caseInsensitive) != nil)
+        #expect(readme.range(of: "Alpha", options: .caseInsensitive) != nil)
     }
 
     @Test func `package manifest installs semantic release tooling only for development`() throws {

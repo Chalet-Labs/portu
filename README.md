@@ -37,7 +37,7 @@ Portu includes authenticated, privacy-preserving in-app updates powered by Spark
 
 - **Channels**: Choose between **Stable** (default) and **Alpha** release channels in `Settings > General`.
 - **Privacy & Control**: Update checks send no analytics or system profiling, require explicit consent, and never download or restart automatically.
-- **Manual Bootstrap Note**: Existing installations on pre-updater builds must download and install this release manually once from [GitHub Releases](https://github.com/Chalet-Labs/portu/releases/latest). All subsequent compatible releases update seamlessly within the app.
+- **Manual Bootstrap**: Existing installations on legacy pre-updater builds must perform a one-time manual install from [GitHub Releases](https://github.com/Chalet-Labs/portu/releases/latest) to bootstrap in-app updates. All subsequent compatible releases update seamlessly within the app.
 
 ## API Keys
 
