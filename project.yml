@@ -63,7 +63,7 @@ targets:
           PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION: YES
         Release:
           PORTU_UPDATE_FEED_URL: "https://raw.githubusercontent.com/Chalet-Labs/portu/updates/appcast.xml"
-          PORTU_UPDATE_PUBLIC_KEY: ""
+          PORTU_UPDATE_PUBLIC_KEY: "cOsrWIKHer18euTD1qZi2KJ0Anxc+tW8UPl6da9Pmx4="
           PORTU_UPDATE_OWNER: directGitHub
           PORTU_VERIFY_UPDATE_BEFORE_EXTRACTION: YES
     entitlements:

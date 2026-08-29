@@ -28,10 +28,7 @@ extension ReleaseAutomationTests {
 
         let exec = try #require(pluginConfig("@semantic-release/exec", in: plugins))
         #expect(exec["prepareCmd"] as? String == "scripts/package_release_dmg.sh ${nextRelease.version}")
-        let publishCmd = try #require(exec["publishCmd"] as? String)
-        #expect(publishCmd.contains("scripts/publish_sparkle_appcast.sh"))
-        #expect(publishCmd.contains("--version ${nextRelease.version}"))
-        #expect(publishCmd.contains("--dmg dist/Portu-${nextRelease.version}.dmg"))
+        #expect(exec["publishCmd"] as? String == "scripts/record_released_version.sh ${nextRelease.version} dist/Portu-${nextRelease.version}.dmg")
     }
 
     @Test func `release workflow shares one global non-cancelling concurrency group across release channels`() throws {
@@ -43,12 +40,13 @@ extension ReleaseAutomationTests {
         #expect(!workflow.contains("release-${{ github.ref }}"))
         #expect(workflow.contains("group: release") || workflow.contains("group: release-publication") || workflow.contains("group: release-global"))
 
-        // Must support workflow_dispatch for manual appcast publication retry
+        // Must support workflow_dispatch for manual appcast publication retry,
+        // routed through the gated signing job.
         #expect(workflow.contains("workflow_dispatch:"))
         #expect(workflow.contains("retry_version"))
-        #expect(workflow.contains("Retry Appcast Publication"))
         #expect(workflow.contains("RETRY_VERSION: ${{ inputs.retry_version }}"))
-        #expect(workflow.contains("publish_sparkle_appcast.sh --version \"$RETRY_VERSION\""))
+        #expect(workflow.contains("publish_sparkle_appcast.sh \\"))
+        #expect(workflow.contains("--version \"$VERSION\""))
     }
 
     @Test func `pull request workflows cannot publish feed or receive signing credentials`() throws {

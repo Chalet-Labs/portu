@@ -9,6 +9,7 @@ RELEASE_NOTES_PATH=""
 CHANNEL=""
 ED_KEY_FILE=""
 SIGN_FEED="NO"
+EXPECTED_PUBLIC_KEY=""
 UPDATES_BRANCH="updates"
 REPO_URL=""
 REMOTE_NAME="origin"
@@ -16,7 +17,7 @@ SKIP_REACHABILITY_CHECK="NO"
 NO_PUSH="NO"
 
 usage() {
-  echo "usage: $0 --version <semver> --dmg <path> [--build-number <int>] [--download-url-prefix <url>] [--release-notes <path>] [--channel <name>] [--ed-key-file <file>] [--sign-feed] [--updates-branch <branch>] [--repo-url <url>] [--remote-name <name>] [--skip-reachability-check] [--no-push]" >&2
+  echo "usage: $0 --version <semver> --dmg <path> [--build-number <int>] [--download-url-prefix <url>] [--release-notes <path>] [--channel <name>] [--ed-key-file <file>] [--expected-public-key <base64>] [--sign-feed] [--updates-branch <branch>] [--repo-url <url>] [--remote-name <name>] [--skip-reachability-check] [--no-push]" >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -47,6 +48,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ed-key-file)
       ED_KEY_FILE="${2:-}"
+      shift 2
+      ;;
+    --expected-public-key)
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "error: --expected-public-key requires a value" >&2
+        usage
+        exit 2
+      fi
+      EXPECTED_PUBLIC_KEY="$2"
       shift 2
       ;;
     --sign-feed)
@@ -151,10 +161,6 @@ if [[ -n "$ED_KEY_FILE" && "$ED_KEY_FILE" != "-" ]]; then
   PRIVATE_SEED="$(<"$ED_KEY_FILE")"
 elif [[ -n "${PORTU_SPARKLE_PRIVATE_KEY:-}" ]]; then
   PRIVATE_SEED="$PORTU_SPARKLE_PRIVATE_KEY"
-elif [[ -n "${PORTU_SPARKLE_PRIVATE_SEED:-}" ]]; then
-  PRIVATE_SEED="$PORTU_SPARKLE_PRIVATE_SEED"
-elif [[ -n "${SPARKLE_PRIVATE_KEY:-}" ]]; then
-  PRIVATE_SEED="$SPARKLE_PRIVATE_KEY"
 elif [[ -n "${ED_KEY_FILE:-}" && "$ED_KEY_FILE" == "-" ]]; then
   if [[ -t 0 ]]; then
     echo "error: stdin is a TTY; private key must be piped when using '--ed-key-file -'" >&2
@@ -263,6 +269,10 @@ fi
 
 if [[ "$SIGN_FEED" == "YES" ]]; then
   GEN_ARGS+=(--sign-feed)
+fi
+
+if [[ -n "$EXPECTED_PUBLIC_KEY" ]]; then
+  GEN_ARGS+=(--expected-public-key "$EXPECTED_PUBLIC_KEY")
 fi
 
 printf '%s\n' "$PRIVATE_SEED" | "$GENERATE_SCRIPT" "${GEN_ARGS[@]}"

@@ -11,9 +11,10 @@ CHANNEL=""
 LINK="https://github.com/Chalet-Labs/portu"
 ED_KEY_FILE=""
 SIGN_FEED="NO"
+EXPECTED_PUBLIC_KEY=""
 
 usage() {
-  echo "usage: $0 --version <semver> --build-number <int> --dmg <path> --appcast <path> --download-url-prefix <url> [--release-notes <path>] [--channel <name>] [--link <url>] [--ed-key-file <file>] [--sign-feed]" >&2
+  echo "usage: $0 --version <semver> --build-number <int> --dmg <path> --appcast <path> --download-url-prefix <url> [--release-notes <path>] [--channel <name>] [--link <url>] [--ed-key-file <file>] [--expected-public-key <base64>] [--sign-feed]" >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -52,6 +53,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ed-key-file)
       ED_KEY_FILE="${2:-}"
+      shift 2
+      ;;
+    --expected-public-key)
+      if [[ $# -lt 2 || -z "${2:-}" ]]; then
+        echo "error: --expected-public-key requires a value" >&2
+        usage
+        exit 2
+      fi
+      EXPECTED_PUBLIC_KEY="$2"
       shift 2
       ;;
     --sign-feed)
@@ -147,6 +157,14 @@ trap 'unset PRIVATE_SEED' EXIT
 if ! DECODED_LEN="$({ printf '%s' "$PRIVATE_SEED" | /usr/bin/base64 -D | /usr/bin/wc -c | /usr/bin/tr -d '[:space:]'; } 2>/dev/null)" || [[ "$DECODED_LEN" != "32" ]]; then
   echo "error: private key seed must be valid base64 for a 32-byte Ed25519 key" >&2
   exit 2
+fi
+
+# Fail closed when an expected public key is supplied but malformed.
+if [[ -n "$EXPECTED_PUBLIC_KEY" ]]; then
+  if ! EXPECTED_DECODED_LEN="$({ printf '%s' "$EXPECTED_PUBLIC_KEY" | /usr/bin/base64 -D | /usr/bin/wc -c | /usr/bin/tr -d '[:space:]'; } 2>/dev/null)" || [[ "$EXPECTED_DECODED_LEN" != "32" ]]; then
+    echo "error: expected public key must be a base64-encoded 32-byte Ed25519 key" >&2
+    exit 2
+  fi
 fi
 
 # 3. Locate Sparkle official tools
@@ -276,6 +294,15 @@ fi
 if ! printf '%s\n' "$PRIVATE_SEED" | "$SIGN_UPDATE" --verify --ed-key-file - "$DMG_PATH" "$ENCLOSURE_SIGNATURE" >/dev/null 2>&1; then
   echo "error: generated Ed25519 enclosure signature failed verification against DMG" >&2
   exit 1
+fi
+
+# Verify the archive signature against the expected PUBLIC key so a feed can
+# only be generated when clients' embedded trust anchor accepts it.
+if [[ -n "$EXPECTED_PUBLIC_KEY" ]]; then
+  if ! "$ROOT_DIR/scripts/verify_sparkle_signature.swift" "$EXPECTED_PUBLIC_KEY" "$DMG_PATH" "$ENCLOSURE_SIGNATURE"; then
+    echo "error: generated archive signature does not verify against the expected public key" >&2
+    exit 1
+  fi
 fi
 
 # 8. Optionally sign feed if --sign-feed was specified
