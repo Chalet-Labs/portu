@@ -15,7 +15,7 @@ Use this reference when the user asks for an architecture recommendation.
 | UIKit fit | Good | Good | Good | Good | Excellent | Good | Excellent | Excellent |
 | Team learning curve | Low | Medium | High | Medium | Medium–High | Medium | Low | Low |
 | Async/effect orchestration | Manual | Structured | Built-in | Manual | Manual | Operator-driven | Manual | N/A |
-| Framework dependency | None | None | swift-composable-architecture | None | None | Combine or RxSwift | None | None |
+| Framework dependency | None | None | swift-composable-architecture | None | None | Combine or RxSwift; optional test scheduler | None | None |
 
 ## UI Stack Nuance by Architecture
 
@@ -28,11 +28,36 @@ Use this reference when the user asks for an architecture recommendation.
 - **MVP**: UIKit-native fit; Presenter drives passive View via protocol commands; SwiftUI uses an observable adapter.
 - **Coordinator**: Works with both stacks; UIKit uses `UINavigationController` wrapper; SwiftUI models navigation as value-type state bound to `NavigationStack`.
 
+## Observation Model (`@Observable` vs `ObservableObject`)
+
+The deployment target determines which observation mechanism to use. This affects SwiftUI wiring in every architecture:
+
+| Factor | `@Observable` (iOS 17+) | `ObservableObject` (iOS 14–16) |
+|--------|--------------------------|-------------------------------|
+| Import | `import Observation` (or none — built-in) | `import Combine` |
+| Property tracking | Fine-grained (per-property) | Coarse (any `@Published` change re-renders) |
+| View ownership | `@State` | `@StateObject` |
+| Binding access | `@Bindable` | `@ObservedObject` / `$property` |
+| Combine interop | Manual (wrap with `Publisher`) | Native (`$property` is a publisher) |
+| UIKit integration | Observe with `withObservationTracking` or use KVO bridge | Subscribe to `objectWillChange` or `@Published` publishers |
+| TCA | Uses `@ObservableState` macro (built on Observation) | Older `ViewStore`-based API |
+
+**When to use `@Observable`:**
+- iOS 17+ deployment target
+- SwiftUI-first features where fine-grained re-rendering matters
+- New code without existing Combine subscriber chains
+
+**When to keep `ObservableObject`:**
+- iOS 16 or earlier deployment target
+- Existing UIKit code subscribing to `@Published` properties via Combine
+- Shared models that expose publishers to multiple consumers
+- Gradual migration: keep `ObservableObject` on existing types, use `@Observable` on new types
+
 ## Quick Decision Flow
 
 ```text
 1. Is the feature stream-heavy (search, live feeds, real-time updates)?
-   YES -> Consider Reactive (references/reactive.md). If strict reducer/state-machine flow is also required, continue to step 2 and likely combine patterns.
+   YES -> Mark Reactive (references/reactive.md) as a stream concern. Continue to choose the owning presentation/layering pattern below unless the task is only about stream composition.
    NO  -> Continue
 
 2. Is strict unidirectional data flow and state-machine modeling required?
@@ -50,7 +75,7 @@ Use this reference when the user asks for an architecture recommendation.
    NO  -> Continue
 
 5. Is the primary goal decoupling navigation from screens (deep linking, reusable flows)?
-   YES -> Coordinator (references/coordinator.md) — pair with a presentation pattern below
+   YES -> Mark Coordinator (references/coordinator.md) as the flow concern. If screens also need state/presentation guidance, pair it with MVVM, MVP, TCA, or MVI below.
    NO  -> Continue
 
 6. Is UIKit the primary stack and a fully passive View with zero logic desired?
@@ -105,6 +130,7 @@ When the user pre-selects an architecture, validate it before finalizing:
 
 1. Check fit across:
    - UI stack (SwiftUI/UIKit/mixed)
+   - minimum deployment target (determines `@Observable` vs `ObservableObject` wiring)
    - feature complexity and state model needs
    - effect orchestration requirements
    - team familiarity and dependency tolerance
@@ -127,6 +153,12 @@ Some projects use multiple patterns. Common valid combinations:
 - **MVVM + Coordinator**: MVVM for screen-level state, Coordinator for navigation flows
 - **MVP + Coordinator**: MVP for presentation logic, Coordinator for navigation and routing
 - **Clean Architecture + MVP**: Clean layers for domain/data, MVP for presentation
+
+Combination selection rules:
+- Choose one **primary** pattern for the user's main boundary: feature state/presentation, domain layering, or navigation flow.
+- Choose a **secondary** pattern only for a distinct concern such as navigation (`Coordinator`) or streams (`Reactive`).
+- Read both playbooks when recommending a combination, then explicitly say which files/modules each pattern owns.
+- Do not recommend multiple full presentation patterns for the same feature boundary unless the task is a migration between them.
 
 When combining, clarify which pattern governs which layer and keep boundaries consistent.
 
