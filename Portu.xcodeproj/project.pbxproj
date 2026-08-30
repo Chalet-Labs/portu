@@ -35,6 +35,7 @@
 		230FDDF90C3B1EB88AF0981C /* APIKeysViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68FADFCF9394107370CEE271 /* APIKeysViewModel.swift */; };
 		2669929F16BEC301F7B3987A /* AllAssetsFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3E823F7D4F67B3ECD15695 /* AllAssetsFeatureTests.swift */; };
 		288195E041046D1915F4C4EF /* NetworkLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B5D6AE56F85E18A9E63B7B /* NetworkLogger.swift */; };
+		29D24A7CD1E11D0F636D2567 /* OverviewPositionProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 091308B10EE348C4FD4D56B3 /* OverviewPositionProjection.swift */; };
 		2A5980FDF680ADDCB39EA59B /* PositionGroupValueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00E51B9CD5D696629A76B9 /* PositionGroupValueTests.swift */; };
 		2E1ECF2FEFF79728EE7CA698 /* InspectorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80D8A6F5E0D27CFE2E0F5446 /* InspectorPanel.swift */; };
 		2E204E462E315636628D90DD /* PortfolioHealthFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBA5184D0631578B50D57760 /* PortfolioHealthFeature.swift */; };
@@ -132,6 +133,7 @@
 		964BC808E4426880CC1648E6 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E9269C644FD2B463E455A1D4 /* Sparkle */; };
 		986DEEF0E48F23FB2637CC46 /* CurrencyConversionContextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79475C02C1D67BEDC8745854 /* CurrencyConversionContextTests.swift */; };
 		989FF781B777ECC77152A454 /* TokenIdentityMappingFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4CF024449593948154682D9 /* TokenIdentityMappingFeature.swift */; };
+		99AC831CEC8B8A26CBE9AEB5 /* OverviewPositionValueDataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E759B543F0C697D897CA98CC /* OverviewPositionValueDataTests.swift */; };
 		99D245FB485CF745B2AD184A /* CurrencyConversionRateCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDC5E862B844B2988DA6FB79 /* CurrencyConversionRateCacheTests.swift */; };
 		9B6EF7B079ECBD17B2E9CF6E /* HistoricalDataSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2408E3A99EF947F4273A6EC6 /* HistoricalDataSettingsView.swift */; };
 		9BFE9894A7FE31653D725FFC /* LegacyEnumHistoricalPrice.store in Resources */ = {isa = PBXBuildFile; fileRef = 0EAC58974A38F9BBB88E00AE /* LegacyEnumHistoricalPrice.store */; };
@@ -232,6 +234,7 @@
 /* Begin PBXFileReference section */
 		032C6036352F4AD17F90B9DF /* HistoricalPriceBackfillSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillSettings.swift; sourceTree = "<group>"; };
 		06025CA3BF194094E297EC73 /* AssetsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetsTab.swift; sourceTree = "<group>"; };
+		091308B10EE348C4FD4D56B3 /* OverviewPositionProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPositionProjection.swift; sourceTree = "<group>"; };
 		09AADF0E39477940311384C3 /* AllPositionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllPositionsView.swift; sourceTree = "<group>"; };
 		09FAC79936969B0BBA1C5A51 /* HistoricalPriceBackfillRequestTimingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillRequestTimingTests.swift; sourceTree = "<group>"; };
 		0AF7B3690D6CF6C34EF93FAC /* AssetPriceChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetPriceChart.swift; sourceTree = "<group>"; };
@@ -414,6 +417,7 @@
 		E5FAE2D0D7AF5890BFF3111C /* CategorySymbolRuleWriterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategorySymbolRuleWriterTests.swift; sourceTree = "<group>"; };
 		E60FC797AEDAEE0B5D45B7D7 /* PortfolioCategoryWriterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioCategoryWriterTests.swift; sourceTree = "<group>"; };
 		E72F0D537E08E9AFCE7549E3 /* AccountsFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsFeature.swift; sourceTree = "<group>"; };
+		E759B543F0C697D897CA98CC /* OverviewPositionValueDataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPositionValueDataTests.swift; sourceTree = "<group>"; };
 		E88FBF7A049DAA6EFDB8C394 /* UpdaterStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterStatus.swift; sourceTree = "<group>"; };
 		E8A9E39F1B681F29832603FE /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		E94809A29D35ED92B6A354DA /* NetworkLogBufferTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkLogBufferTests.swift; sourceTree = "<group>"; };
@@ -639,6 +643,7 @@
 				80D8A6F5E0D27CFE2E0F5446 /* InspectorPanel.swift */,
 				7514F4EF1D675DEFD3D00B80 /* OverviewFeature.swift */,
 				C375F4CE08E3AAE9016A076E /* OverviewPositionHelpers.swift */,
+				091308B10EE348C4FD4D56B3 /* OverviewPositionProjection.swift */,
 				33C7EC8BA3C811AEF2E2D2DB /* OverviewPositionTabComponents.swift */,
 				BEA37039B203CA0B14A05EFD /* OverviewPositionTabs.swift */,
 				16CCD222A9A7CFBEFD51B77C /* OverviewPriceDisplay.swift */,
@@ -747,6 +752,7 @@
 				1E714A3E651A52EC4CAA306C /* NetworkLoggerTests.swift */,
 				6405DEF0896EB32AFFCA3D9B /* OverviewFeatureTests.swift */,
 				6935F5F9A743434D65A06333 /* OverviewHistoricalPriceChangeTests.swift */,
+				E759B543F0C697D897CA98CC /* OverviewPositionValueDataTests.swift */,
 				AEBF7569CFA70F275E8F1EA6 /* OverviewReviewFollowUpTests.swift */,
 				583795FC83FFEAAE83E1BEAE /* PerformanceFeatureTests.swift */,
 				A5F4BE776CC6D1B2E9953432 /* PerformanceHistoricalPriceChangeTests.swift */,
@@ -1003,6 +1009,7 @@
 				85E47194B92F2AD0CD67CBE9 /* NetworksTab.swift in Sources */,
 				B0C7EF78282E58C9FF84D11B /* OverviewFeature.swift in Sources */,
 				89921F97BBE4171B786506B5 /* OverviewPositionHelpers.swift in Sources */,
+				29D24A7CD1E11D0F636D2567 /* OverviewPositionProjection.swift in Sources */,
 				45923BC0EE5B78DE49CDCF66 /* OverviewPositionTabComponents.swift in Sources */,
 				4A30BC9910FD2DCB92E946B4 /* OverviewPositionTabs.swift in Sources */,
 				9101CA3661EBA99C68B3E318 /* OverviewPriceDisplay.swift in Sources */,
@@ -1114,6 +1121,7 @@
 				DA771FE24F4BB705EE9482D6 /* NetworkLoggerTests.swift in Sources */,
 				75702B6E850A28368DCA84F6 /* OverviewFeatureTests.swift in Sources */,
 				8F8230FDECE6D8BCD873413E /* OverviewHistoricalPriceChangeTests.swift in Sources */,
+				99AC831CEC8B8A26CBE9AEB5 /* OverviewPositionValueDataTests.swift in Sources */,
 				E87EA2D6D65585025514F9F7 /* OverviewReviewFollowUpTests.swift in Sources */,
 				BE723A5DBE6D264C8F502534 /* PerformanceFeatureTests.swift in Sources */,
 				44652004FEA936D651446318 /* PerformanceHistoricalPriceChangeTests.swift in Sources */,

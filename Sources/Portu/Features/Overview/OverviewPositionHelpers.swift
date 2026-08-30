@@ -60,15 +60,29 @@ enum OverviewPriceChangeFeature {
                 return OverviewTokenChange(token: token, change: change)
             }
             .sorted {
-                let lhs = abs($0.change)
-                let rhs = abs($1.change)
-                if lhs == rhs {
-                    return $0.token.symbol < $1.token.symbol
-                }
-                return lhs > rhs
+                isOrderedByChangeMagnitude(
+                    lhsChange: $0.change,
+                    lhsSymbol: $0.token.symbol,
+                    rhsChange: $1.change,
+                    rhsSymbol: $1.token.symbol)
             }
             .prefix(max(limit, 0))
             .map(\.self)
+    }
+
+    /// Ordering rule for "biggest mover" lists: largest absolute change first, ties
+    /// broken alphabetically by symbol. Shared so every mover list orders alike.
+    static func isOrderedByChangeMagnitude(
+        lhsChange: Decimal,
+        lhsSymbol: String,
+        rhsChange: Decimal,
+        rhsSymbol: String) -> Bool {
+        let lhs = abs(lhsChange)
+        let rhs = abs(rhsChange)
+        if lhs == rhs {
+            return lhsSymbol < rhsSymbol
+        }
+        return lhs > rhs
     }
 
     static func signedChange24h(
@@ -99,7 +113,9 @@ enum OverviewPriceChangeFeature {
         guard token.amount > 0 else { return false }
         guard token.role.isPositive || token.role.isBorrow else { return false }
         guard override?.isIgnored != true else { return false }
-        if override?.alwaysShow == true { return true }
+        if override?.alwaysShow == true {
+            return true
+        }
 
         let value = OverviewPositionPricing.changeReferenceValue(
             token: token,
