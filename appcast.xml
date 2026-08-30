@@ -3,6 +3,23 @@
     <channel>
         <title>Portu</title>
         <item>
+            <title>1.9.1</title>
+            <pubDate>Sun, 30 Aug 2026 10:43:03 +0000</pubDate>
+            <link>https://github.com/Chalet-Labs/portu</link>
+            <sparkle:version>25</sparkle:version>
+            <sparkle:shortVersionString>1.9.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## [1.9.1](https://github.com/Chalet-Labs/portu/compare/v1.9.0...v1.9.1) (2026-08-30)
+
+
+### Bug Fixes
+
+* decouple Overview position views from SwiftData models ([#105](https://github.com/Chalet-Labs/portu/issues/105)) ([0a61275](https://github.com/Chalet-Labs/portu/commit/0a612759a48e0376adbcb4364f10e52e7f49b0c9))
+
+]]></description>
+            <enclosure url="https://github.com/Chalet-Labs/portu/releases/download/v1.9.1/Portu-1.9.1.dmg" length="12828019" type="application/octet-stream" sparkle:edSignature="hZCdF6i3SOv0ea/u6vc/H1ZyPOZrX96ORol4rCrTJq/+RvPmIu8tI7PKGP+wQYGqBBkCpUZOIEixmTzXUdagDg=="/>
+        </item>
+        <item>
             <title>1.9.0</title>
             <pubDate>Sat, 29 Aug 2026 14:31:50 +0000</pubDate>
             <link>https://github.com/Chalet-Labs/portu</link>
