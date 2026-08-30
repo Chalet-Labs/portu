@@ -11,6 +11,7 @@ import Testing
 /// after those models are deleted. `SyncEngine` deletes and reinserts positions on the
 /// main actor while SwiftUI may still be evaluating a body, and reading a deleted
 /// model's property trips a SwiftData assertion that terminates the process.
+@Suite(.serialized)
 @MainActor
 struct OverviewPositionValueDataTests {
     private static let maxRetainedWindows = 8

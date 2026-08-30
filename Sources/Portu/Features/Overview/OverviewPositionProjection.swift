@@ -138,6 +138,8 @@ enum OverviewPositionProjection {
 
     // MARK: - Tabs
 
+    /// The biggest movers: change-visible positive tokens ranked by absolute 24h
+    /// change, capped at `keyChangeLimit` and grouped by position.
     private static func keyChangeGroups(
         positions: [Position],
         context: OverviewPositionContext) -> [OverviewPositionGroupData] {
@@ -164,6 +166,8 @@ enum OverviewPositionProjection {
         return groups(from: Array(ranked), context: context)
     }
 
+    /// Idle tokens the dashboard shows and whose resolved category satisfies
+    /// `predicate` — stablecoins for Idle Stables, majors for Idle BTC / ETH / SOL.
     private static func idleGroups(
         positions: [Position],
         context: OverviewPositionContext,
@@ -181,6 +185,7 @@ enum OverviewPositionProjection {
         return groups(from: idle, context: context)
     }
 
+    /// Borrowed, dashboard-visible tokens grouped by the position that owes them.
     private static func borrowingGroups(
         positions: [Position],
         context: OverviewPositionContext) -> [OverviewPositionGroupData] {
@@ -222,6 +227,7 @@ enum OverviewPositionProjection {
 
     // MARK: - Visibility and pricing
 
+    /// Whether the token passes the dashboard's value and dust thresholds.
     private static func isVisible(_ entry: TokenEntry, context: OverviewPositionContext) -> Bool {
         OverviewPositionVisibility.isVisible(
             token: entry,
@@ -231,6 +237,10 @@ enum OverviewPositionProjection {
             usdToDisplayRate: context.fallbackUSDToDisplayRate)
     }
 
+    /// The visibility rule used when ranking 24h changes. Same thresholds as
+    /// `isVisible`, but measured against the change reference value rather than the
+    /// display value, so a token's eligibility for the movers list is judged by the
+    /// value its 24h change was derived from.
     private static func isChangeVisible(_ entry: TokenEntry, context: OverviewPositionContext) -> Bool {
         OverviewPriceChangeFeature.isDashboardEligibleForChange(
             token: entry,
@@ -241,6 +251,7 @@ enum OverviewPositionProjection {
             usdToDisplayRate: context.fallbackUSDToDisplayRate)
     }
 
+    /// Display-currency price, manual override applied.
     private static func price(_ entry: TokenEntry, context: OverviewPositionContext) -> Decimal {
         OverviewPositionPricing.price(
             token: entry,
@@ -268,6 +279,7 @@ enum OverviewPositionProjection {
             fallbackUSDToDisplayRate: context.fallbackUSDToDisplayRate)
     }
 
+    /// Display-currency 24h change, manual override applied.
     private static func change24h(_ entry: TokenEntry, context: OverviewPositionContext) -> Decimal {
         OverviewPositionPricing.change24h(
             token: entry,
