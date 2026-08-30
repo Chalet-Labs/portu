@@ -169,7 +169,11 @@ struct PortfolioValueChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // Single evaluation of the stamp: the `.task(id:)` argument and the
+        // reload argument share one mapped copy instead of mapping the
+        // price/rate windows twice per refresh.
+        let inputs = estimateInputs
+        return VStack(alignment: .leading, spacing: 0) {
             let snapshots = convertedSnapshots
             if snapshots.isEmpty {
                 ContentUnavailableView(
@@ -236,6 +240,6 @@ struct PortfolioValueChart: View {
                 }
             }
         }
-        .task(id: estimateInputs) { await reloadEstimatedPoints(estimateInputs) }
+        .task(id: inputs) { await reloadEstimatedPoints(inputs) }
     }
 }

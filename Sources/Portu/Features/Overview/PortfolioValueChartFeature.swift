@@ -53,9 +53,10 @@ actor PortfolioValueChartEstimateFetcher {
 
         // 3. Dedup: keep only the earliest row per (accountId, assetId) key.
         //    dayRows is sorted ascending by timestamp, so the first occurrence per key is earliest.
-        var seenKeys = Set<String>()
+        var seenKeys = Set<AssetSnapshotKey>()
         var winners: [AssetSnapshot] = []
-        for row in dayRows where seenKeys.insert("\(row.accountId.uuidString):\(row.assetId.uuidString)").inserted {
+        for row in dayRows
+            where seenKeys.insert(AssetSnapshotKey(accountId: row.accountId, assetId: row.assetId)).inserted {
             winners.append(row)
         }
 
@@ -92,6 +93,13 @@ actor PortfolioValueChartEstimateFetcher {
             firstRealSnapshotDate: earliest.timestamp,
             firstDayEntries: entries)
     }
+}
+
+/// Flat dedup key for the first-day winner scan — same shape as
+/// `PerformanceFeature.earliestEstimateSnapshots`'s `SnapshotKey`.
+private struct AssetSnapshotKey: Hashable {
+    let accountId: UUID
+    let assetId: UUID
 }
 
 enum PortfolioValueChartFeature {
