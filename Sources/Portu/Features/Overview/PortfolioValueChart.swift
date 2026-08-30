@@ -137,18 +137,19 @@ struct PortfolioValueChart: View {
     }
 
     @MainActor
-    private func reloadEstimatedPoints(_ inputs: EstimateInputs) {
+    private func reloadEstimatedPoints(_ inputs: EstimateInputs) async {
         guard inputs.backfillEnabled else {
             estimatedPoints = []
             return
         }
 
         let chartStartDate = ChartTimeRange.oneMonth.startDate
-        let source = PortfolioValueChartFeature.estimateSource(
-            modelContext: modelContext,
-            overrides: inputs.overrideSnapshots,
-            chartStartDate: chartStartDate)
-        guard let source else {
+        let fetcher = PortfolioValueChartEstimateFetcher(modelContainer: modelContext.container)
+        guard
+            let source = await fetcher.estimateSource(
+                overrides: inputs.overrideSnapshots,
+                chartStartDate: chartStartDate)
+        else {
             estimatedPoints = []
             return
         }
@@ -229,6 +230,6 @@ struct PortfolioValueChart: View {
                 }
             }
         }
-        .task(id: estimateInputs) { reloadEstimatedPoints(estimateInputs) }
+        .task(id: estimateInputs) { await reloadEstimatedPoints(estimateInputs) }
     }
 }

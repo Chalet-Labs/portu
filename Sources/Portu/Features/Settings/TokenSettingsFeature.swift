@@ -33,7 +33,7 @@ struct TokenDashboardSettings: Equatable {
     }
 }
 
-struct TokenPricingOverrideSnapshot: Equatable, Identifiable {
+struct TokenPricingOverrideSnapshot: Equatable, Identifiable, Sendable {
     var id: UUID
     var assetId: UUID
     var manualPriceUSD: Decimal?

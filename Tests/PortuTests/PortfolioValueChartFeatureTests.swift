@@ -110,17 +110,14 @@ struct PortfolioValueChartFeatureTests {
 
     // MARK: - estimateSource
 
-    @Test func `estimateSource returns nil on empty store`() throws {
+    @Test func `estimateSource returns nil on empty store`() async throws {
         let container = try makeContainer()
-        let context = container.mainContext
-        let result = PortfolioValueChartFeature.estimateSource(
-            modelContext: context,
-            overrides: [],
-            chartStartDate: utcDate(2024, 1, 1))
+        let fetcher = PortfolioValueChartEstimateFetcher(modelContainer: container)
+        let result = await fetcher.estimateSource(overrides: [], chartStartDate: utcDate(2024, 1, 1))
         #expect(result == nil)
     }
 
-    @Test func `estimateSource returns nil when earliest snapshot predates chart start`() throws {
+    @Test func `estimateSource returns nil when earliest snapshot predates chart start`() async throws {
         let container = try makeContainer()
         let context = container.mainContext
 
@@ -136,34 +133,31 @@ struct PortfolioValueChartFeatureTests {
             usdValue: 40000))
         try context.save()
 
-        let result = PortfolioValueChartFeature.estimateSource(
-            modelContext: context,
-            overrides: [],
-            chartStartDate: utcDate(2024, 1, 5))
+        let fetcher = PortfolioValueChartEstimateFetcher(modelContainer: container)
+        let result = await fetcher.estimateSource(overrides: [], chartStartDate: utcDate(2024, 1, 5))
         #expect(result == nil)
     }
 
-    @Test func `estimateSource reports earliest timestamp and only first day entries`() throws {
+    @Test func `estimateSource reports earliest timestamp and only first day entries`() async throws {
         let container = try makeContainer()
         let context = container.mainContext
         let chartStart = utcDate(2024, 1, 1)
         let fixture = try seedFirstDayFixture(in: context)
 
+        let fetcher = PortfolioValueChartEstimateFetcher(modelContainer: container)
         let source = try #require(
-            PortfolioValueChartFeature.estimateSource(
-                modelContext: context,
-                overrides: [],
-                chartStartDate: chartStart))
+            await fetcher.estimateSource(overrides: [], chartStartDate: chartStart))
 
         #expect(source.firstRealSnapshotDate == fixture.t1)
-        #expect(source.firstDayEntries.count == 4)
+        // t2 is deduped away (same account/asset A as t1, t1 is earlier); 3 winners remain.
+        #expect(source.firstDayEntries.count == 3)
 
         let timestamps = Set(source.firstDayEntries.map(\.timestamp))
-        #expect(timestamps == [fixture.t1, fixture.t2, fixture.t3, fixture.t4])
+        #expect(timestamps == [fixture.t1, fixture.t3, fixture.t4])
         #expect(timestamps.contains(fixture.laterTimestamp) == false)
 
-        // Asset A coinGeckoId projected correctly.
-        let btcEntry = source.firstDayEntries.first { $0.assetId == uuid(1) && $0.timestamp == fixture.t1 }
+        // Asset A coinGeckoId projected correctly (dedup winner for asset A is t1).
+        let btcEntry = source.firstDayEntries.first { $0.assetId == uuid(1) }
         #expect(btcEntry?.coinGeckoId == "bitcoin")
 
         // Asset B onchain identity projected correctly.
@@ -176,17 +170,15 @@ struct PortfolioValueChartFeatureTests {
         #expect(missingEntry?.onchainIdentity == nil)
     }
 
-    @Test func `estimateSource parity earliest holdings equal using all entries vs first day only`() throws {
+    @Test func `estimateSource parity earliest holdings equal using all entries vs first day only`() async throws {
         let container = try makeContainer()
         let context = container.mainContext
         let chartStart = utcDate(2024, 1, 1)
         let fixture = try seedParityFixture(in: context)
 
+        let fetcher = PortfolioValueChartEstimateFetcher(modelContainer: container)
         let source = try #require(
-            PortfolioValueChartFeature.estimateSource(
-                modelContext: context,
-                overrides: [],
-                chartStartDate: chartStart))
+            await fetcher.estimateSource(overrides: [], chartStartDate: chartStart))
 
         // Manually project all rows using the same field mapping as estimateSource:
         //   coinGeckoId from asset lookup, netUSDValue = usdValue - borrowUsdValue.

@@ -51,7 +51,7 @@ struct AssetPricePeriodChange: Identifiable, Equatable {
 /// Per-(account, asset) snapshot used to derive earliest holdings and to feed
 /// the pre-snapshot value estimator that backfills chart data before the first
 /// real local snapshot.
-struct HistoricalEstimateSnapshotEntry: Equatable {
+struct HistoricalEstimateSnapshotEntry: Equatable, Sendable {
     let accountId: UUID
     let assetId: UUID
     let timestamp: Date
@@ -229,7 +229,9 @@ struct PerformanceFeature {
         for (date, value) in values {
             let day = utcStartOfDay(for: date)
             if let existing = byDay[day] {
-                if date > existing.0 { byDay[day] = (date, value) }
+                if date > existing.0 {
+                    byDay[day] = (date, value)
+                }
             } else {
                 byDay[day] = (date, value)
             }
@@ -264,9 +266,13 @@ struct PerformanceFeature {
             }
         }
         .sorted {
-            if $0.date != $1.date { return $0.date < $1.date }
+            if $0.date != $1.date {
+                return $0.date < $1.date
+            }
             let nameOrder = $0.categoryName.localizedStandardCompare($1.categoryName)
-            if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+            if nameOrder != .orderedSame {
+                return nameOrder == .orderedAscending
+            }
             return $0.categoryID < $1.categoryID
         }
     }
@@ -439,7 +445,9 @@ struct PerformanceFeature {
         }
 
         return earliestByKey.values.sorted {
-            if $0.accountId != $1.accountId { return $0.accountId.uuidString < $1.accountId.uuidString }
+            if $0.accountId != $1.accountId {
+                return $0.accountId.uuidString < $1.accountId.uuidString
+            }
             return $0.assetId.uuidString < $1.assetId.uuidString
         }
     }

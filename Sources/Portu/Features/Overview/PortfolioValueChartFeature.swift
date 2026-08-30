@@ -5,25 +5,28 @@ import SwiftData
 
 /// Source data for the estimated pre-snapshot segment of the portfolio value chart.
 /// Fetched from SwiftData at the model boundary so no live models escape into body.
-struct PortfolioValueChartEstimateSource: Equatable {
+struct PortfolioValueChartEstimateSource: Equatable, Sendable {
     /// Timestamp of the globally-earliest AssetSnapshot row.
     let firstRealSnapshotDate: Date
-    /// Value-type projections of every AssetSnapshot whose UTC day matches `firstRealSnapshotDate`.
+    /// Deduped value-type projections of the first-day AssetSnapshot rows —
+    /// earliest per (accountId, assetId) key, matching `earliestEstimateHoldings` dedup.
     let firstDayEntries: [HistoricalEstimateSnapshotEntry]
 }
 
-enum PortfolioValueChartFeature {
-    /// Fetches the minimum AssetSnapshot rows required to back-fill the chart's estimated segment.
+/// Fetches the minimum `AssetSnapshot` rows required to back-fill the chart's estimated segment.
+///
+/// Running on a background `@ModelActor` keeps all row materialisation off the main thread.
+/// A single sync day at the ~12k rows/day rate (#97 arithmetic: ~500 assets × 24 syncs/day)
+/// can fill the entire table, so materialising the first-day fetch on the main thread causes a
+/// Hang. Main receives only the small deduped value-type result.
+@ModelActor
+actor PortfolioValueChartEstimateFetcher {
+    /// Returns the estimate source, or `nil` when no backfill is possible.
     ///
-    /// Only rows on the earliest UTC day matter; later rows cannot affect the estimate because
-    /// `PerformanceFeature.earliestEstimateHoldings` deduplicates by (accountId, assetId) key
-    /// using only the day that matches `firstRealSnapshotDate`.
-    ///
-    /// Returns `nil` when the store is empty, or when the earliest snapshot precedes
-    /// `chartStartDate` (parity guard: the old full-table path produced an empty estimate in
-    /// that case because the price-window filter `[chartStartDay, firstRealDay)` would be empty).
-    static func estimateSource(
-        modelContext: ModelContext,
+    /// Steps: (1) limit-1 earliest row probe; (2) parity guard; (3) single UTC-day fetch;
+    /// (4) dedup by (accountId, assetId), keeping the earliest row per key; (5) targeted Asset
+    /// fetch from winner ids only; (6) project to value types. `try?` on any fetch → nil.
+    func estimateSource(
         overrides: [TokenPricingOverrideSnapshot],
         chartStartDate: Date) -> PortfolioValueChartEstimateSource? {
         // 1. Globally-earliest AssetSnapshot — limit-1 fetch, no full table scan.
@@ -33,7 +36,7 @@ enum PortfolioValueChartFeature {
         guard let earliest = (try? modelContext.fetch(earliestDescriptor))?.first else { return nil }
 
         // Parity guard: when earliest < chartStart, the price window [chartStartDay, firstRealDay)
-        // is empty (firstRealDay ≤ chartStart ≤ chartStartDay), so the estimator returns [].
+        // is empty (firstRealDay ≤ chartStart), so the estimator returns [].
         if earliest.timestamp < chartStartDate {
             return nil
         }
@@ -48,8 +51,16 @@ enum PortfolioValueChartFeature {
             sortBy: [SortDescriptor(\.timestamp, order: .forward)])
         guard let dayRows = try? modelContext.fetch(dayDescriptor) else { return nil }
 
-        // 3. Only the Asset rows referenced by the day rows — never the full Asset table.
-        let assetIDs = Array(Set(dayRows.map(\.assetId)))
+        // 3. Dedup: keep only the earliest row per (accountId, assetId) key.
+        //    dayRows is sorted ascending by timestamp, so the first occurrence per key is earliest.
+        var seenKeys = Set<String>()
+        var winners: [AssetSnapshot] = []
+        for row in dayRows where seenKeys.insert("\(row.accountId.uuidString):\(row.assetId.uuidString)").inserted {
+            winners.append(row)
+        }
+
+        // 4. Only the Asset rows referenced by the winners — never the full Asset table.
+        let assetIDs = Array(Set(winners.map(\.assetId)))
         var assetsById: [UUID: Asset] = [:]
         if !assetIDs.isEmpty {
             let assetDescriptor = FetchDescriptor<Asset>(
@@ -59,9 +70,9 @@ enum PortfolioValueChartFeature {
             }
         }
 
-        // 4. Project to value types with the same field mapping as the former view property.
+        // 5. Project winners to value types.
         let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(overrides)
-        let entries: [HistoricalEstimateSnapshotEntry] = dayRows.map { snapshot in
+        let entries: [HistoricalEstimateSnapshotEntry] = winners.map { snapshot in
             let asset = assetsById[snapshot.assetId]
             return HistoricalEstimateSnapshotEntry(
                 accountId: snapshot.accountId,
@@ -81,7 +92,9 @@ enum PortfolioValueChartFeature {
             firstRealSnapshotDate: earliest.timestamp,
             firstDayEntries: entries)
     }
+}
 
+enum PortfolioValueChartFeature {
     /// Pure estimate computation — no models in the signature; safe to call on the main actor
     /// from a `.task` closure without any blocking.
     ///
