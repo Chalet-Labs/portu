@@ -7,12 +7,10 @@ import SwiftUI
 
 struct PortfolioValueChart: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
 
     @Query(sort: \PortfolioSnapshot.timestamp)
     private var snapshots: [PortfolioSnapshot]
-    @Query(sort: \AssetSnapshot.timestamp)
-    private var assetSnapshots: [AssetSnapshot]
-    @Query private var assets: [Asset]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
     @Query
     private var historicalPrices: [HistoricalPricePoint]
@@ -21,6 +19,10 @@ struct PortfolioValueChart: View {
 
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
     private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
+
+    /// Pre-computed estimated segment, refreshed via `.task(id: estimateInputs)`.
+    /// Body only renders this array — no models touched during evaluation.
+    @State private var estimatedPoints: [HistoricalPortfolioValuePoint] = []
 
     init() {
         let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: ChartTimeRange.oneMonth.startDate)
@@ -48,39 +50,6 @@ struct PortfolioValueChart: View {
         }
     }
 
-    private var estimatedPoints: [HistoricalPortfolioValuePoint] {
-        guard
-            historicalBackfillEnabled,
-            let firstRealSnapshotDate = assetSnapshots.first?.timestamp
-        else { return [] }
-
-        let chartStartDate = ChartTimeRange.oneMonth.startDate
-        let holdings = PerformanceFeature.earliestEstimateHoldings(
-            snapshots: historicalEstimateSnapshotEntries,
-            firstRealSnapshotDate: firstRealSnapshotDate,
-            accountId: nil)
-        guard !holdings.isEmpty else { return [] }
-
-        let chartStartDay = HistoricalPriceCalendar.utcStartOfDay(for: chartStartDate)
-        return HistoricalPortfolioEstimator.estimatedValues(
-            holdings: holdings,
-            prices: historicalPrices.compactMap {
-                guard $0.fiatCurrency == .usd, $0.day >= chartStartDay, $0.day < firstRealSnapshotDate else { return nil }
-                return HistoricalPriceEntry(
-                    coinGeckoId: $0.coinGeckoId,
-                    day: $0.day,
-                    usdPrice: $0.usdPrice)
-            },
-            startDate: chartStartDate,
-            firstRealSnapshotDate: firstRealSnapshotDate,
-            accountId: nil)
-    }
-
-    private var convertedEstimatedPoints: [HistoricalPortfolioValuePoint] {
-        let context = currencyConversionContext
-        return estimatedPoints.map { context.convertUSDPoint($0) }
-    }
-
     private var currencyConversionContext: CurrencyConversionContext {
         CurrencyConversionContext(
             displayCurrency: appState.selectedCurrency,
@@ -92,24 +61,104 @@ struct PortfolioValueChart: View {
         appState.selectedCurrency.displayCode
     }
 
-    private var historicalEstimateSnapshotEntries: [HistoricalEstimateSnapshotEntry] {
-        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(
-            tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
-        let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
-
-        return assetSnapshots.map { snapshot in
-            let asset = assetsById[snapshot.assetId]
-            return HistoricalEstimateSnapshotEntry(
-                accountId: snapshot.accountId,
-                assetId: snapshot.assetId,
-                timestamp: snapshot.timestamp,
-                coinGeckoId: asset?.coinGeckoId,
-                coinGeckoIdOverride: overridesByAssetId[snapshot.assetId]?.coinGeckoIdOverride,
-                onchainIdentity: OnchainTokenIdentity(chain: asset?.upsertChain, contractAddress: asset?.upsertContract),
-                amount: snapshot.amount,
-                borrowAmount: snapshot.borrowAmount,
-                netUSDValue: snapshot.usdValue - snapshot.borrowUsdValue)
+    /// Stamp driving estimate recomputation via `.task(id:)`.
+    ///
+    /// `portfolioSnapshotCount` / `lastPortfolioSnapshotTimestamp`: count-keyed because
+    /// `PortfolioSnapshot` rows are insert/delete-only — SyncEngine creates them once and
+    /// retention prunes; no in-place mutation sites exist. Count is also the proxy for
+    /// same-flow `AssetSnapshot` writes.
+    ///
+    /// `priceEntries` / `rateContent` / `overrideSnapshots`: content-keyed because
+    /// `CurrencyConversionClient.update(rate:fetchedAt:)` mutates rate rows in place and
+    /// `TokenPricingOverrideWriter` upserts override fields in place — count alone would
+    /// miss those mutations.
+    private struct EstimateInputs: Equatable {
+        struct CurrencyRateContent: Equatable {
+            var baseCurrency: FiatCurrency
+            var quoteCurrency: FiatCurrency
+            var day: Date
+            var rate: Decimal
         }
+
+        var portfolioSnapshotCount: Int
+        var lastPortfolioSnapshotTimestamp: Date?
+        var priceEntries: [HistoricalPriceEntry]
+        var rateContent: [CurrencyRateContent]
+        var overrideSnapshots: [TokenPricingOverrideSnapshot]
+        var currencyCode: String
+        var currentUSDToDisplayRate: Decimal
+        var backfillEnabled: Bool
+    }
+
+    private var estimateInputs: EstimateInputs {
+        // With backfill disabled the estimate is definitionally empty (see
+        // PortfolioValueChartFeature.estimatedPoints), so skip the per-body
+        // mapping below entirely — matching master's disabled path, which
+        // guarded before any price work. `backfillEnabled` stays in the stamp
+        // so toggling the setting still triggers recomputation.
+        guard historicalBackfillEnabled else {
+            return EstimateInputs(
+                portfolioSnapshotCount: snapshots.count,
+                lastPortfolioSnapshotTimestamp: snapshots.last?.timestamp,
+                priceEntries: [],
+                rateContent: [],
+                overrideSnapshots: [],
+                currencyCode: appState.selectedCurrency.displayCode,
+                currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
+                backfillEnabled: false)
+        }
+
+        let chartStartDate = ChartTimeRange.oneMonth.startDate
+        let chartStartDay = HistoricalPriceCalendar.utcStartOfDay(for: chartStartDate)
+        // Per-body mapping is bounded by the one-month predicated price/rate window (the
+        // same rows the estimator consumes), a few ms at real-store scale — versus the
+        // ~1.9 s body-time chain this replaces.
+        return EstimateInputs(
+            portfolioSnapshotCount: snapshots.count,
+            lastPortfolioSnapshotTimestamp: snapshots.last?.timestamp,
+            priceEntries: historicalPrices.compactMap { point -> HistoricalPriceEntry? in
+                guard point.fiatCurrency == .usd, point.day >= chartStartDay else { return nil }
+                return HistoricalPriceEntry(
+                    coinGeckoId: point.coinGeckoId,
+                    day: point.day,
+                    usdPrice: point.usdPrice)
+            },
+            rateContent: currencyRates.map {
+                EstimateInputs.CurrencyRateContent(
+                    baseCurrency: $0.baseCurrency,
+                    quoteCurrency: $0.quoteCurrency,
+                    day: $0.day,
+                    rate: $0.rate)
+            },
+            overrideSnapshots: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
+            currencyCode: appState.selectedCurrency.displayCode,
+            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
+            backfillEnabled: true)
+    }
+
+    @MainActor
+    private func reloadEstimatedPoints(_ inputs: EstimateInputs) {
+        guard inputs.backfillEnabled else {
+            estimatedPoints = []
+            return
+        }
+
+        let chartStartDate = ChartTimeRange.oneMonth.startDate
+        let source = PortfolioValueChartFeature.estimateSource(
+            modelContext: modelContext,
+            overrides: inputs.overrideSnapshots,
+            chartStartDate: chartStartDate)
+        guard let source else {
+            estimatedPoints = []
+            return
+        }
+        let context = currencyConversionContext
+        estimatedPoints = PortfolioValueChartFeature.estimatedPoints(
+            source: source,
+            prices: inputs.priceEntries,
+            chartStartDate: chartStartDate,
+            isBackfillEnabled: inputs.backfillEnabled)
+            .map { context.convertUSDPoint($0) }
     }
 
     var body: some View {
@@ -123,7 +172,6 @@ struct PortfolioValueChart: View {
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 172)
             } else {
-                let estimatedPoints = convertedEstimatedPoints
                 Chart {
                     ForEach(estimatedPoints) { point in
                         LineMark(
@@ -181,5 +229,6 @@ struct PortfolioValueChart: View {
                 }
             }
         }
+        .task(id: estimateInputs) { reloadEstimatedPoints(estimateInputs) }
     }
 }
