@@ -138,6 +138,12 @@ struct PortfolioValueChart: View {
 
     @MainActor
     private func reloadEstimatedPoints(_ inputs: EstimateInputs) async {
+        // `.task(id:)` cancels a superseded reload, but cancellation is cooperative:
+        // the fetch still runs to completion. Drop superseded results instead of
+        // writing them, so a stale reload can never overwrite the state a newer
+        // one already produced — checked before any state write, including the
+        // clears below, because the synchronous prefix also runs after cancel.
+        guard !Task.isCancelled else { return }
         guard inputs.backfillEnabled else {
             estimatedPoints = []
             return
@@ -145,11 +151,11 @@ struct PortfolioValueChart: View {
 
         let chartStartDate = ChartTimeRange.oneMonth.startDate
         let fetcher = PortfolioValueChartEstimateFetcher(modelContainer: modelContext.container)
-        guard
-            let source = await fetcher.estimateSource(
-                overrides: inputs.overrideSnapshots,
-                chartStartDate: chartStartDate)
-        else {
+        let source = await fetcher.estimateSource(
+            overrides: inputs.overrideSnapshots,
+            chartStartDate: chartStartDate)
+        guard !Task.isCancelled else { return }
+        guard let source else {
             estimatedPoints = []
             return
         }
