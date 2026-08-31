@@ -104,7 +104,7 @@ struct PerformanceView: View {
             .compactMap { ($0.object as? ModelContext)?.container }
             .filter { $0 === modelContext.container }
             .map { _ in () }
-            .receive(on: DispatchQueue.main)
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .eraseToAnyPublisher()
     }
 

@@ -355,4 +355,72 @@ struct PerformanceDataFetcherTests {
             group.candidates.count == 2,
             "Distinct categories in one day must remain separate toggle candidates")
     }
+
+    // MARK: - Cancellation and duplicate-key resilience
+
+    @Test func `cancelled load exits before querying`() async throws {
+        let container = try makeContainer()
+        let fetcher = await PerformanceDataClient.makeFetcher(modelContainer: container)
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await fetcher.load(PerformanceDataRequest(
+                startDate: utcDate(2024, 1, 1)))
+        }
+
+        await #expect(throws: CancellationError.self) {
+            _ = try await task.value
+        }
+    }
+
+    @Test func `estimate shaping keeps first duplicate asset row`() {
+        let assetId = uuid(10)
+        let rows = [PerformanceSnapshotRow(
+            accountId: uuid(1),
+            assetId: assetId,
+            timestamp: utcDate(2024, 1, 1),
+            symbol: "ETH",
+            category: .major,
+            amount: 1,
+            usdValue: 2000,
+            borrowAmount: 0,
+            borrowUsdValue: 0)]
+        let assets = [
+            PerformanceAssetRow(
+                id: assetId,
+                name: "Ethereum",
+                symbol: "ETH",
+                coinGeckoId: "ethereum",
+                identity: nil),
+            PerformanceAssetRow(
+                id: assetId,
+                name: "Duplicate",
+                symbol: "DUP",
+                coinGeckoId: "duplicate",
+                identity: nil)
+        ]
+
+        let entries = PerformanceDataShaping.estimateEntries(
+            rows: rows,
+            overrides: [],
+            assets: assets)
+
+        #expect(entries.first?.coinGeckoId == "ethereum")
+    }
+
+    @Test func `value shaping keeps first duplicate converted timestamp`() {
+        let timestamp = utcDate(2024, 1, 1)
+        let points = PerformanceDataShaping.valueChartPoints(
+            merged: [PortfolioHistoryPoint(
+                timestamp: timestamp,
+                usdValue: 100,
+                source: .zerion,
+                isReliable: true)],
+            converted: [
+                ConvertedProviderPortfolioValuePoint(timestamp: timestamp, value: 100),
+                ConvertedProviderPortfolioValuePoint(timestamp: timestamp, value: 200)
+            ],
+            conversion: .usd)
+
+        #expect(points.first?.value == 100)
+    }
 }

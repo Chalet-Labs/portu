@@ -32,12 +32,20 @@ actor PerformanceDataFetcher {
     private static let secondsPerDay: TimeInterval = 24 * 60 * 60
 
     func load(_ request: PerformanceDataRequest) throws -> PerformanceDataSnapshot {
+        try Task.checkCancellation()
         let inputs = try loadInputs(request)
-        return try PerformanceDataSnapshot(
+        try Task.checkCancellation()
+        let categoryChartSource = categoryChartSource(inputs)
+        try Task.checkCancellation()
+        let valueChart = try valueChartData(inputs)
+        try Task.checkCancellation()
+        let bottomPanel = bottomPanelData(inputs)
+        try Task.checkCancellation()
+        return PerformanceDataSnapshot(
             categories: inputs.resolver.categories,
-            categoryChartSource: categoryChartSource(inputs),
-            valueChart: valueChartData(inputs),
-            bottomPanel: bottomPanelData(inputs))
+            categoryChartSource: categoryChartSource,
+            valueChart: valueChart,
+            bottomPanel: bottomPanel)
     }
 
     #if DEBUG
@@ -61,6 +69,7 @@ actor PerformanceDataFetcher {
             resolver: resolver,
             overrides: overrides,
             mappings: mappings)
+        try Task.checkCancellation()
 
         // The bottom panel needs snapshot rows only when something is dashboard-visible;
         // the category chart needs them whenever it is the active mode.
@@ -68,6 +77,7 @@ actor PerformanceDataFetcher {
         let snapshotRows = needsSnapshots
             ? try assetSnapshotRows(accountId: request.accountId, from: startDay)
             : []
+        try Task.checkCancellation()
         // The asset table and historical prices only feed backfill-derived output.
         let needsPrices = request.historicalBackfillEnabled
             && (request.chartMode == .value || !visibleAssetIDs.isEmpty)

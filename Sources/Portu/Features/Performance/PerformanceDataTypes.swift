@@ -281,7 +281,9 @@ enum PerformanceDataShaping {
         overrides: [TokenPricingOverrideSnapshot],
         assets: [PerformanceAssetRow]) -> [HistoricalEstimateSnapshotEntry] {
         let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(overrides)
-        let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
+        let assetsById = Dictionary(
+            assets.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first })
 
         return rows.map { row in
             let asset = assetsById[row.assetId]
@@ -305,7 +307,8 @@ enum PerformanceDataShaping {
         converted: [ConvertedProviderPortfolioValuePoint],
         conversion: CurrencyConversionContext) -> [PerformanceValueChartPoint] {
         let convertedByTimestamp = Dictionary(
-            uniqueKeysWithValues: converted.map { ($0.timestamp, $0.value) })
+            converted.map { ($0.timestamp, $0.value) },
+            uniquingKeysWith: { first, _ in first })
         return merged.compactMap { point in
             switch point.source {
             case .local:
