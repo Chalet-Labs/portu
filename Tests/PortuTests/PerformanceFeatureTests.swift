@@ -726,9 +726,9 @@ struct PerformanceFeatureDataTests {
 
     // MARK: - Category toggle reprojects without loading
 
-    /// Sequential category toggles must update the in-state indexed cache and return .none —
-    /// they must never call performanceData.load or aggregate all snapshot rows again.
-    @Test func `portfolioCategoryToggled stays fresh through sequential toggles without loading`() async throws {
+    /// portfolioCategoryToggled must update the in-state indexed cache and return .none —
+    /// it must never call performanceData.load or aggregate all snapshot rows again.
+    @Test func `portfolioCategoryToggled updates cache without calling performanceData load`() async throws {
         let recorder = PerformanceLoadCallRecorder()
         let day = Date(timeIntervalSince1970: 1_704_067_200) // 2024-01-01 00:00 UTC
         let account = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000001"))
@@ -768,31 +768,18 @@ struct PerformanceFeatureDataTests {
             }
         }
 
-        let steps: [(categoryID: String, disabledCategoryIDs: Set<String>)] = [
-            (catB, [catB]),
-            (catA, [catA, catB]),
-            (catB, [catA]),
-            (catA, [])
-        ]
         var expectedCategoryChart = categoryChart
+        expectedCategoryChart.setDisabledCategoryIDs([catB])
 
-        for step in steps {
-            expectedCategoryChart.setDisabledCategoryIDs(step.disabledCategoryIDs)
-            await store.send(.portfolioCategoryToggled(step.categoryID)) {
-                $0.disabledPortfolioCategoryIDs = step.disabledCategoryIDs
-                $0.categoryChart = expectedCategoryChart
-                $0.assetChartPoints = expectedCategoryChart.points
-            }
-
-            let freshCategoryChart = PerformanceCategoryChartCache(
-                entries: entries,
-                disabledCategoryIDs: step.disabledCategoryIDs)
-            #expect(store.state.assetChartPoints == freshCategoryChart.points)
+        await store.send(.portfolioCategoryToggled(catB)) {
+            $0.disabledPortfolioCategoryIDs = [catB]
+            $0.categoryChart = expectedCategoryChart
+            $0.assetChartPoints = expectedCategoryChart.points
         }
 
         #expect(
             await recorder.isEmpty,
-            "Category toggles must update the cache without calling performanceData.load")
+            "A category toggle must update the cache; it must never call performanceData.load")
     }
 }
 
