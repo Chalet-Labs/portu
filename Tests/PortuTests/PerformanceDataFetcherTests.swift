@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 @testable import Portu
 import PortuCore
@@ -52,6 +53,31 @@ struct PerformanceDataFetcherTests {
         let fetcher = await PerformanceDataClient.makeFetcher(modelContainer: container)
 
         #expect(await fetcher.isExecutingOnMainThread() == false)
+    }
+
+    @Test func `default live client reports a missing container instead of trapping`() async {
+        await #expect(throws: PerformanceDataClientError(
+            message: "PerformanceDataClient.liveValue must be overridden at Store creation")) {
+            _ = try await PerformanceDataClient.liveValue.load(PerformanceDataRequest(
+                startDate: utcDate(2024, 1, 1)))
+        }
+    }
+
+    @Test func `save observer keeps pending debounce when rebound to same container`() async throws {
+        let container = try makeContainer()
+        let observer = PerformanceContainerSaveObserver()
+
+        try await confirmation("Debounced container save", expectedCount: 1) { confirm in
+            let subscription = observer.didSave.sink { confirm() }
+            observer.observe(container: container)
+
+            container.mainContext.insert(PortfolioCategory(name: "Custom", sortOrder: 0))
+            try container.mainContext.save()
+            observer.observe(container: container)
+
+            try await Task.sleep(for: .milliseconds(500))
+            withExtendedLifetime(subscription) {}
+        }
     }
 
     // MARK: - Account predicate scope (chartMode: .assets)

@@ -12,6 +12,7 @@ struct PerformanceView: View {
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
 
     @Query private var accounts: [Account]
+    @StateObject private var containerSaveObserver = PerformanceContainerSaveObserver()
 
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
@@ -87,25 +88,21 @@ struct PerformanceView: View {
         }
         // One model-boundary hook covers every writer: sync snapshots, retention prunes,
         // analytics/price/FX caches, category-rule and override edits from the separate
-        // Settings scene, and manual position saves.
-        .onReceive(containerDidSave) {
+        // Settings scene, and manual position saves. The observer owns the debounced
+        // subscription so body recomputation cannot reset an in-flight debounce.
+        .onAppear {
+            containerSaveObserver.observe(container: modelContext.container)
+        }
+        .onChange(of: ObjectIdentifier(modelContext.container)) { _, _ in
+            containerSaveObserver.observe(container: modelContext.container)
+        }
+        .onReceive(containerSaveObserver.didSave) {
             store.send(.performance(.dataInvalidated))
         }
         .onDisappear {
             store.send(.performance(.screenExited))
             store.send(.performance(.analytics(.featureExited)))
         }
-    }
-
-    /// Observe every context attached to this container. Scene environments and
-    /// service writers are not required to share the same `ModelContext` instance.
-    private var containerDidSave: AnyPublisher<Void, Never> {
-        NotificationCenter.default.publisher(for: ModelContext.didSave)
-            .compactMap { ($0.object as? ModelContext)?.container }
-            .filter { $0 === modelContext.container }
-            .map { _ in () }
-            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
-            .eraseToAnyPublisher()
     }
 
     private var controlStrip: some View {
@@ -294,5 +291,23 @@ struct PerformanceView: View {
             chartRange: store.performance.selectedRange,
             currency: store.selectedCurrency,
             asOf: asOf)
+    }
+}
+
+final class PerformanceContainerSaveObserver: ObservableObject {
+    let didSave = PassthroughSubject<Void, Never>()
+
+    private var observedContainer: ModelContainer?
+    private var subscription: AnyCancellable?
+
+    func observe(container: ModelContainer) {
+        guard observedContainer !== container else { return }
+        observedContainer = container
+        subscription = NotificationCenter.default.publisher(for: ModelContext.didSave)
+            .compactMap { ($0.object as? ModelContext)?.container }
+            .filter { $0 === container }
+            .map { _ in () }
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [didSave] in didSave.send() }
     }
 }

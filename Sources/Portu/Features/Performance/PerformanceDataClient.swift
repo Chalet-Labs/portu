@@ -16,9 +16,13 @@ struct PerformanceDataClient {
 }
 
 extension PerformanceDataClient: DependencyKey {
+    /// `PortuApp` replaces this with `.live(modelContainer:)` at Store creation; the
+    /// bare dependency has no container to bind to. A missed override throws so the
+    /// reducer can surface it as a data-load error instead of trapping the app.
     static let liveValue = Self(
         load: { _ in
-            fatalError("PerformanceDataClient.liveValue must be overridden at Store creation")
+            throw PerformanceDataClientError(
+                message: "PerformanceDataClient.liveValue must be overridden at Store creation")
         })
 
     static let testValue = Self(load: { _ in .empty })
@@ -59,7 +63,9 @@ extension PerformanceDataClient {
                     let fetcher = await fetcherTask.value
                     return try await fetcher.load(request)
                 } catch {
-                    throw PerformanceDataClientError(message: error.localizedDescription)
+                    // `localizedDescription` flattens a plain Swift error into "The
+                    // operation couldn't be completed"; keep the error's own text.
+                    throw PerformanceDataClientError(message: String(describing: error))
                 }
             })
     }
