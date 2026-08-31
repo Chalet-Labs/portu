@@ -56,9 +56,9 @@ struct PerformanceDataFetcherTests {
 
     // MARK: - Account predicate scope (chartMode: .assets)
 
-    /// Snapshots for two accounts with chartMode .assets: source groups must contain
-    /// only the requested account's rows.
-    @Test func `account predicate scopes category source groups to selected account`() async throws {
+    /// Snapshots for two accounts with chartMode .assets: aggregated points must include
+    /// only the requested account's value.
+    @Test func `account predicate scopes category points to selected account`() async throws {
         let container = try makeContainer()
         let ctx = container.mainContext
         let accountA = uuid(1)
@@ -77,7 +77,7 @@ struct PerformanceDataFetcherTests {
         try ctx.save()
 
         let fetcher = await PerformanceDataClient.makeFetcher(modelContainer: container)
-        // chartMode: .assets is required for categoryChartSource to be populated.
+        // chartMode: .assets is required for category points to be populated.
         let request = PerformanceDataRequest(
             accountId: accountA,
             startDate: utcDate(2024, 1, 1),
@@ -85,19 +85,16 @@ struct PerformanceDataFetcherTests {
 
         let snapshot = try await fetcher.load(request)
 
-        let groupAccountIds = Set(snapshot.categoryChartSource.map(\.accountId))
+        #expect(snapshot.categoryChart.points.map(\.value) == [2000])
         #expect(
-            groupAccountIds == [accountA],
-            "Source groups must contain only the requested account's rows")
-        #expect(
-            !groupAccountIds.contains(accountB),
-            "The other account's snapshots must be absent from source groups")
+            !snapshot.categoryChart.points.map(\.value).contains(10000),
+            "The other account's value must be absent from category points")
     }
 
     // MARK: - Date lower bound (startDay predicate)
 
-    /// Snapshot timestamped before utcStartOfDay(startDate) must not appear in source groups.
-    @Test func `snapshot before startDay boundary is excluded from category source groups`() async throws {
+    /// Snapshot timestamped before utcStartOfDay(startDate) must not appear in category points.
+    @Test func `snapshot before startDay boundary is excluded from category points`() async throws {
         let container = try makeContainer()
         let ctx = container.mainContext
         let account = uuid(1)
@@ -119,13 +116,13 @@ struct PerformanceDataFetcherTests {
 
         let snapshot = try await fetcher.load(request)
         #expect(
-            snapshot.categoryChartSource.isEmpty,
-            "Snapshots before utcStartOfDay(startDate) must not reach source groups")
+            snapshot.categoryChart.points.isEmpty,
+            "Snapshots before utcStartOfDay(startDate) must not reach category points")
     }
 
-    /// The shared SQL fetch starts at utcStartOfDay(startDate), but category chart source
-    /// preserves the legacy raw startDate boundary after materialization.
-    @Test func `snapshot between startDay and startDate is excluded from category source`() async throws {
+    /// The shared SQL fetch starts at utcStartOfDay(startDate), but category chart points
+    /// preserve the legacy raw startDate boundary after materialization.
+    @Test func `snapshot between startDay and startDate is excluded from category points`() async throws {
         let container = try makeContainer()
         let ctx = container.mainContext
         let account = uuid(1)
@@ -147,7 +144,7 @@ struct PerformanceDataFetcherTests {
 
         let snapshot = try await fetcher.load(request)
         #expect(
-            snapshot.categoryChartSource.isEmpty,
+            snapshot.categoryChart.points.isEmpty,
             "Category chart rows must still satisfy the exact startDate boundary")
     }
 
@@ -217,8 +214,8 @@ struct PerformanceDataFetcherTests {
 
     // MARK: - chartMode gating
 
-    /// With chartMode .value, the category chart source must be [] even when snapshots exist.
-    @Test func `categoryChartSource is empty when chartMode is not assets`() async throws {
+    /// With chartMode .value, the category chart cache must be empty even when snapshots exist.
+    @Test func `category chart is empty when chartMode is not assets`() async throws {
         let container = try makeContainer()
         let ctx = container.mainContext
         let account = uuid(1)
@@ -238,8 +235,8 @@ struct PerformanceDataFetcherTests {
 
         let snapshot = try await fetcher.load(request)
         #expect(
-            snapshot.categoryChartSource.isEmpty,
-            "categoryChartSource must be [] when chartMode != .assets; fetching it would be wasted work")
+            snapshot.categoryChart.points.isEmpty,
+            "Category points must be [] when chartMode != .assets; shaping them would be wasted work")
     }
 
     /// With chartMode .assets, the value chart must be .empty even when provider points exist.
@@ -313,12 +310,11 @@ struct PerformanceDataFetcherTests {
             "Default BTC bucket must appear in the fallback category list")
     }
 
-    // MARK: - Source group structure
+    // MARK: - Category chart cache
 
-    /// Two AssetSnapshot rows for the same (UTC day, account, asset) with different
-    /// categories must produce one source group with two distinct candidates — not a
-    /// single dedup winner — so that category toggles can reprojected off the main actor.
-    @Test func `mid-day category change produces one source group with two candidates`() async throws {
+    /// A mid-day category change retains the earlier alternate so disabling the latest
+    /// winner can promote it without loading or aggregating every snapshot again.
+    @Test func `mid-day category change cache promotes earlier candidate`() async throws {
         let container = try makeContainer()
         let ctx = container.mainContext
         let account = uuid(1)
@@ -346,14 +342,18 @@ struct PerformanceDataFetcherTests {
             chartMode: .assets)
 
         let snapshot = try await fetcher.load(request)
+        var categoryChart = snapshot.categoryChart
 
-        let group = try #require(
-            snapshot.categoryChartSource.first { $0.assetId == assetId },
-            "One source group must exist for the asset")
-        #expect(group.accountId == account)
-        #expect(
-            group.candidates.count == 2,
-            "Distinct categories in one day must remain separate toggle candidates")
+        #expect(categoryChart.points.map(\.categoryID) == [
+            PortfolioCategoryDefaults.stablecoinsCategoryID.uuidString
+        ])
+
+        categoryChart.setDisabledCategoryIDs([
+            PortfolioCategoryDefaults.stablecoinsCategoryID.uuidString
+        ])
+        #expect(categoryChart.points.map(\.categoryID) == [
+            PortfolioCategoryDefaults.ethCategoryID.uuidString
+        ])
     }
 
     // MARK: - Cancellation and duplicate-key resilience

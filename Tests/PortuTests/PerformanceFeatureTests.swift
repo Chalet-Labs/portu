@@ -726,39 +726,38 @@ struct PerformanceFeatureDataTests {
 
     // MARK: - Category toggle reprojects without loading
 
-    /// portfolioCategoryToggled must reproject assetChartPoints from the in-state
-    /// categoryChartSource and return .none — it must never call performanceData.load.
-    @Test func `portfolioCategoryToggled reprojects without calling performanceData load`() async throws {
+    /// portfolioCategoryToggled must update the in-state indexed cache and return .none —
+    /// it must never call performanceData.load or aggregate all snapshot rows again.
+    @Test func `portfolioCategoryToggled updates cache without calling performanceData load`() async throws {
         let recorder = PerformanceLoadCallRecorder()
         let day = Date(timeIntervalSince1970: 1_704_067_200) // 2024-01-01 00:00 UTC
         let account = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000001"))
         let assetId = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000010"))
         let catA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
         let catB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
-
-        let source: [PerformanceCategoryChartSourceGroup] = [
-            PerformanceCategoryChartSourceGroup(
-                day: day,
+        let entries = [
+            CategorySnapshotEntry(
                 accountId: account,
                 assetId: assetId,
-                candidates: [
-                    PerformanceCategoryChartCandidate(
-                        timestamp: day.addingTimeInterval(8 * 3600),
-                        categoryID: catA,
-                        categoryName: "Category A",
-                        convertedValue: 1000),
-                    PerformanceCategoryChartCandidate(
-                        timestamp: day.addingTimeInterval(20 * 3600),
-                        categoryID: catB,
-                        categoryName: "Category B",
-                        convertedValue: 1200)
-                ])
+                timestamp: day.addingTimeInterval(8 * 3600),
+                category: .other,
+                categoryID: catA,
+                categoryName: "Category A",
+                usdValue: 1000),
+            CategorySnapshotEntry(
+                accountId: account,
+                assetId: assetId,
+                timestamp: day.addingTimeInterval(20 * 3600),
+                category: .other,
+                categoryID: catB,
+                categoryName: "Category B",
+                usdValue: 1200)
         ]
+        let categoryChart = PerformanceCategoryChartCache(entries: entries)
 
         var initial = PerformanceFeature.State()
-        initial.categoryChartSource = source
-        initial.assetChartPoints = PerformanceCategoryChartProjection.points(
-            source: source, disabledCategoryIDs: [])
+        initial.categoryChart = categoryChart
+        initial.assetChartPoints = categoryChart.points
 
         let store = TestStore(initialState: initial) {
             PerformanceFeature()
@@ -769,18 +768,18 @@ struct PerformanceFeatureDataTests {
             }
         }
 
-        // Disabling catB must demote it; the only remaining enabled candidate is catA.
-        let expectedPoints = PerformanceCategoryChartProjection.points(
-            source: source, disabledCategoryIDs: [catB])
+        var expectedCategoryChart = categoryChart
+        expectedCategoryChart.setDisabledCategoryIDs([catB])
 
         await store.send(.portfolioCategoryToggled(catB)) {
             $0.disabledPortfolioCategoryIDs = [catB]
-            $0.assetChartPoints = expectedPoints
+            $0.categoryChart = expectedCategoryChart
+            $0.assetChartPoints = expectedCategoryChart.points
         }
 
         #expect(
             await recorder.isEmpty,
-            "A category toggle must reproject from categoryChartSource; it must never call performanceData.load")
+            "A category toggle must update the cache; it must never call performanceData.load")
     }
 }
 
@@ -796,16 +795,13 @@ private actor PerformanceLoadCallRecorder {
     }
 }
 
-// MARK: - Category Chart Projection Parity Tests
+// MARK: - Category Chart Cache Parity Tests
 
+// Asserts that PerformanceCategoryChartCache produces a result byte-for-byte identical to
+// the independent legacy oracle for resolver-shaped inputs, where each category ID has one
+// canonical name. Conflicting-name sequence stability is covered separately below.
 //
-// Asserts that PerformanceCategoryChartProjection.points(source:disabledCategoryIDs:) produces
-// a result byte-for-byte identical to the independent legacy oracle
-// PerformanceFeature.aggregateCategorySnapshots(entries: entries.filter { enabled }).
-//
-// Independence is preserved because the oracle never touches the new code path.
-// Source groups are built via PerformanceCategoryChartProjection.source(entries:) — the same
-// function the fetcher calls — rather than hand-rolling the retention rule in tests.
+// Independence is preserved because the oracle never touches the indexed cache path.
 //
 // Tie-break contract: for equal timestamps within a (utcDay, account, asset) group,
 // the entry appearing earlier in the input array wins — identical to legacy dedup's
@@ -831,24 +827,23 @@ struct PerformanceCategoryChartParityTests {
         entries: [CategorySnapshotEntry],
         disabledCategoryIDs: Set<String>,
         sourceContext: String = #function) {
-        let sourceGroups = PerformanceCategoryChartProjection.source(entries: entries)
-        let newPoints = PerformanceCategoryChartProjection.points(
-            source: sourceGroups,
-            disabledCategoryIDs: disabledCategoryIDs)
+        var cache = PerformanceCategoryChartCache(entries: entries)
+        cache.setDisabledCategoryIDs(disabledCategoryIDs)
+        let newPoints = cache.points
         let enabledEntries = entries.filter { !disabledCategoryIDs.contains($0.categoryID) }
         let legacyPoints = PerformanceFeature.aggregateCategorySnapshots(entries: enabledEntries)
 
         // Both functions use the same sort comparator (date asc, categoryName, categoryID).
         #expect(
             newPoints == legacyPoints,
-            "New projection must be byte-for-byte equal to legacy filter-then-aggregate (\(sourceContext), disabled: \(disabledCategoryIDs))")
+            "Indexed cache must be byte-for-byte equal to legacy filter-then-aggregate (\(sourceContext), disabled: \(disabledCategoryIDs))")
     }
 
     // MARK: - Round-trip: no disabled categories
 
     /// Baseline: with no disabled categories and simple multi-day multi-asset data
-    /// the new projection must exactly match the legacy pipeline.
-    @Test func `no disabled categories round-trips source through projection identically to legacy`() {
+    /// the indexed cache must exactly match the legacy pipeline.
+    @Test func `no disabled categories produce cache points identical to legacy`() {
         let account = uuid(1)
         let assetA = uuid(10)
         let assetB = uuid(11)
@@ -1020,5 +1015,104 @@ struct PerformanceCategoryChartParityTests {
 
         // All enabled: both pipelines apply the same first-encountered tie-break → same winner (catD).
         assertParity(entries: entries, disabledCategoryIDs: [])
+    }
+
+    @Test func `incremental disable and enable transitions preserve zero-valued points`() {
+        let account = uuid(1)
+        let assetA = uuid(20)
+        let assetB = uuid(21)
+        let catA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        let catB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        let morning = utcDate(2024, 1, 1, hour: 8)
+        let noon = utcDate(2024, 1, 1, hour: 12)
+        let evening = utcDate(2024, 1, 1, hour: 20)
+        let entries = [
+            CategorySnapshotEntry(
+                accountId: account,
+                assetId: assetA,
+                timestamp: morning,
+                category: .other,
+                categoryID: catA,
+                categoryName: "Alpha",
+                usdValue: 100),
+            CategorySnapshotEntry(
+                accountId: account,
+                assetId: assetA,
+                timestamp: evening,
+                category: .other,
+                categoryID: catB,
+                categoryName: "Beta",
+                usdValue: 200),
+            CategorySnapshotEntry(
+                accountId: account,
+                assetId: assetB,
+                timestamp: noon,
+                category: .other,
+                categoryID: catA,
+                categoryName: "Alpha",
+                usdValue: -100)
+        ]
+        var cache = PerformanceCategoryChartCache(entries: entries)
+
+        #expect(cache.points.first { $0.categoryID == catA }?.value == -100)
+        #expect(cache.points.first { $0.categoryID == catB }?.value == 200)
+
+        cache.setDisabledCategoryIDs([catB])
+        #expect(cache.points.count == 1)
+        #expect(cache.points.first?.categoryID == catA)
+        #expect(cache.points.first?.value == 0)
+
+        cache.setDisabledCategoryIDs([catA, catB])
+        #expect(cache.points.isEmpty)
+
+        cache.setDisabledCategoryIDs([catA])
+        #expect(cache.points.count == 1)
+        #expect(cache.points.first?.categoryID == catB)
+        #expect(cache.points.first?.value == 200)
+
+        cache.setDisabledCategoryIDs([])
+        #expect(cache.points.first { $0.categoryID == catA }?.value == -100)
+        #expect(cache.points.first { $0.categoryID == catB }?.value == 200)
+    }
+
+    @Test func `incremental transitions equal fresh cache when category labels conflict`() {
+        let account = uuid(1)
+        let catA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        let catB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+        let entries = [
+            CategorySnapshotEntry(
+                accountId: account,
+                assetId: uuid(30),
+                timestamp: utcDate(2024, 1, 1, hour: 10),
+                category: .other,
+                categoryID: catB,
+                categoryName: "Beta",
+                usdValue: 2),
+            CategorySnapshotEntry(
+                accountId: account,
+                assetId: uuid(30),
+                timestamp: utcDate(2024, 1, 1, hour: 8),
+                category: .other,
+                categoryID: catA,
+                categoryName: "Alpha first",
+                usdValue: 1),
+            CategorySnapshotEntry(
+                accountId: account,
+                assetId: uuid(31),
+                timestamp: utcDate(2024, 1, 1, hour: 9),
+                category: .other,
+                categoryID: catA,
+                categoryName: "Alpha second",
+                usdValue: 1)
+        ]
+        var cache = PerformanceCategoryChartCache(entries: entries)
+
+        for disabledCategoryIDs: Set<String> in [[catB], [catA, catB], [catA], []] {
+            cache.setDisabledCategoryIDs(disabledCategoryIDs)
+            let freshCache = PerformanceCategoryChartCache(
+                entries: entries,
+                disabledCategoryIDs: disabledCategoryIDs)
+            #expect(cache.points == freshCache.points)
+        }
     }
 }

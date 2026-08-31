@@ -67,40 +67,125 @@ struct PerformanceBottomPanelData: Equatable, Sendable {
     static let empty = Self()
 }
 
-// MARK: - Category chart source
+// MARK: - Category chart cache
 
-/// One category candidate for a single (UTC day, account, asset) group. `convertedValue`
-/// is pre-converted into the display currency using the candidate's own timestamp.
-struct PerformanceCategoryChartCandidate: Equatable, Sendable {
-    var timestamp: Date
-    var categoryID: String
-    var categoryName: String
-    var convertedValue: Decimal
-}
+/// Keeps the alternate per-asset candidates needed by filter-before-dedup semantics while
+/// updating only groups affected by a category toggle. Category names are canonicalized by
+/// first encounter; production entries guarantee one name per category ID through the resolver.
+struct PerformanceCategoryChartCache: Equatable, Sendable {
+    private struct Candidate: Equatable, Sendable {
+        var timestamp: Date
+        var categoryID: String
+        var categoryName: String
+        var convertedValue: Decimal
+    }
 
-/// Compact stand-in for the raw `AssetSnapshot` rows of one dedup group. Holding the latest
-/// candidate per category — rather than the single overall latest — is what lets a category
-/// toggle be reprojected without touching SwiftData: disabling the winning category must
-/// promote the next-latest surviving candidate, exactly as the legacy filter-then-dedup did.
-///
-/// `candidates` is ordered by the encounter index of each category's retained row, which is
-/// what reproduces the legacy equal-timestamp "first row wins" tie-break.
-struct PerformanceCategoryChartSourceGroup: Equatable, Sendable {
-    var day: Date
-    var accountId: UUID
-    var assetId: UUID
-    var candidates: [PerformanceCategoryChartCandidate]
-}
+    private struct SourceGroup: Equatable, Sendable {
+        var day: Date
+        var candidates: [Candidate]
+    }
 
-enum PerformanceCategoryChartProjection {
-    /// Convert raw snapshot entries into the compact per-group source.
-    ///
-    /// Retention rule per (group, category): highest timestamp wins; on equal timestamps the
-    /// earlier entry wins — identical to `deduplicateByDayAndAsset`'s
-    /// `existing.timestamp >= entry.timestamp { continue }`.
-    static func source(
+    private struct PointKey: Hashable, Sendable {
+        var date: Date
+        var categoryID: String
+    }
+
+    private struct Total: Equatable, Sendable {
+        var value: Decimal
+        var contributionCount: Int
+    }
+
+    private var groups: [SourceGroup]
+    private var groupIndicesByCategoryID: [String: [Int]]
+    private var categoryNamesByID: [String: String]
+    private var pointOrder: [PointKey]
+    private var winnersByGroupIndex: [Int: Candidate]
+    private var totals: [PointKey: Total]
+    private var effectiveDisabledCategoryIDs: Set<String>
+    private(set) var points: [CategoryChartPoint]
+
+    static let empty = Self(entries: [])
+
+    init(
         entries: [CategorySnapshotEntry],
-        conversionContext: CurrencyConversionContext = .usd) -> [PerformanceCategoryChartSourceGroup] {
+        conversionContext: CurrencyConversionContext = .usd,
+        disabledCategoryIDs: Set<String> = []) {
+        self.groups = Self.makeSource(entries: entries, conversionContext: conversionContext)
+        self.groupIndicesByCategoryID = [:]
+        self.categoryNamesByID = [:]
+        self.pointOrder = []
+        self.winnersByGroupIndex = [:]
+        self.totals = [:]
+        self.effectiveDisabledCategoryIDs = []
+        self.points = []
+
+        var pointKeys: Set<PointKey> = []
+        for (groupIndex, group) in groups.enumerated() {
+            for candidate in group.candidates {
+                if categoryNamesByID[candidate.categoryID] == nil {
+                    categoryNamesByID[candidate.categoryID] = candidate.categoryName
+                }
+                groupIndicesByCategoryID[candidate.categoryID, default: []].append(groupIndex)
+                pointKeys.insert(PointKey(date: group.day, categoryID: candidate.categoryID))
+            }
+            if let winner = Self.winner(in: group, disabledCategoryIDs: disabledCategoryIDs) {
+                winnersByGroupIndex[groupIndex] = winner
+                add(winner, on: group.day)
+            }
+        }
+        self.pointOrder = pointKeys.sorted {
+            if $0.date != $1.date {
+                return $0.date < $1.date
+            }
+            let lhsName = categoryNamesByID[$0.categoryID, default: ""]
+            let rhsName = categoryNamesByID[$1.categoryID, default: ""]
+            let nameOrder = lhsName.localizedStandardCompare(rhsName)
+            if nameOrder != .orderedSame {
+                return nameOrder == .orderedAscending
+            }
+            return $0.categoryID < $1.categoryID
+        }
+        self.effectiveDisabledCategoryIDs = Set(disabledCategoryIDs.filter {
+            groupIndicesByCategoryID[$0] != nil
+        })
+        self.points = renderedPoints()
+    }
+
+    /// Recompute winners only for groups containing a category whose enabled state changed,
+    /// then render totals in the point order prepared off-main during initialization.
+    mutating func setDisabledCategoryIDs(_ newValue: Set<String>) {
+        let relevantNewValue = Set(newValue.filter {
+            groupIndicesByCategoryID[$0] != nil
+        })
+        let changedCategoryIDs = effectiveDisabledCategoryIDs.symmetricDifference(relevantNewValue)
+        guard !changedCategoryIDs.isEmpty else { return }
+        effectiveDisabledCategoryIDs = relevantNewValue
+
+        let affectedGroupIndices = Set(changedCategoryIDs.flatMap {
+            groupIndicesByCategoryID[$0, default: []]
+        })
+        for groupIndex in affectedGroupIndices.sorted() {
+            let group = groups[groupIndex]
+            let oldWinner = winnersByGroupIndex[groupIndex]
+            let newWinner = Self.winner(in: group, disabledCategoryIDs: relevantNewValue)
+            guard oldWinner != newWinner else { continue }
+
+            if let oldWinner {
+                remove(oldWinner, on: group.day)
+            }
+            if let newWinner {
+                winnersByGroupIndex[groupIndex] = newWinner
+                add(newWinner, on: group.day)
+            } else {
+                winnersByGroupIndex.removeValue(forKey: groupIndex)
+            }
+        }
+        points = renderedPoints()
+    }
+
+    private static func makeSource(
+        entries: [CategorySnapshotEntry],
+        conversionContext: CurrencyConversionContext) -> [SourceGroup] {
         struct GroupKey: Hashable {
             let day: Date
             let accountId: UUID
@@ -108,12 +193,11 @@ enum PerformanceCategoryChartProjection {
         }
         struct Retained {
             var index: Int
-            var candidate: PerformanceCategoryChartCandidate
+            var candidate: Candidate
         }
 
         var order: [GroupKey] = []
         var retained: [GroupKey: [String: Retained]] = [:]
-
         for (index, entry) in entries.enumerated() {
             let key = GroupKey(
                 day: HistoricalPriceCalendar.utcStartOfDay(for: entry.timestamp),
@@ -123,71 +207,77 @@ enum PerformanceCategoryChartProjection {
                 order.append(key)
                 retained[key] = [:]
             }
-            if let existing = retained[key]?[entry.categoryID], existing.candidate.timestamp >= entry.timestamp {
+            if
+                let existing = retained[key]?[entry.categoryID],
+                existing.candidate.timestamp >= entry.timestamp {
                 continue
             }
             retained[key]?[entry.categoryID] = Retained(
                 index: index,
-                candidate: PerformanceCategoryChartCandidate(
+                candidate: Candidate(
                     timestamp: entry.timestamp,
                     categoryID: entry.categoryID,
                     categoryName: entry.categoryName,
-                    convertedValue: conversionContext.convertUSDValue(entry.usdValue, on: entry.timestamp)))
+                    convertedValue: conversionContext.convertUSDValue(
+                        entry.usdValue,
+                        on: entry.timestamp)))
         }
 
         return order.map { key in
-            PerformanceCategoryChartSourceGroup(
+            SourceGroup(
                 day: key.day,
-                accountId: key.accountId,
-                assetId: key.assetId,
                 candidates: retained[key, default: [:]].values
                     .sorted { $0.index < $1.index }
                     .map(\.candidate))
         }
     }
 
-    /// Select the latest enabled candidate per group and aggregate per (day, category).
-    ///
-    /// Output equals the legacy `aggregateCategorySnapshots(entries: entries.filter { enabled })`
-    /// for every disabled set: the winner scan mirrors the legacy dedup tie-break, and the
-    /// sort is the legacy comparator.
-    static func points(
-        source: [PerformanceCategoryChartSourceGroup],
-        disabledCategoryIDs: Set<String>) -> [CategoryChartPoint] {
-        var grouped: [Date: [String: (name: String, value: Decimal)]] = [:]
-
-        for group in source {
-            var winner: PerformanceCategoryChartCandidate?
-            for candidate in group.candidates where !disabledCategoryIDs.contains(candidate.categoryID) {
-                if let current = winner, current.timestamp >= candidate.timestamp {
-                    continue
-                }
-                winner = candidate
+    private static func winner(
+        in group: SourceGroup,
+        disabledCategoryIDs: Set<String>) -> Candidate? {
+        var winner: Candidate?
+        for candidate in group.candidates where !disabledCategoryIDs.contains(candidate.categoryID) {
+            if let current = winner, current.timestamp >= candidate.timestamp {
+                continue
             }
-            guard let winner else { continue }
-            var category = grouped[group.day, default: [:]][winner.categoryID] ?? (winner.categoryName, 0)
-            category.value += winner.convertedValue
-            grouped[group.day, default: [:]][winner.categoryID] = category
+            winner = candidate
         }
+        return winner
+    }
 
-        return grouped.flatMap { date, categories in
-            categories.map {
-                CategoryChartPoint(
-                    date: date,
-                    categoryID: $0.key,
-                    categoryName: $0.value.name,
-                    value: $0.value.value)
-            }
+    private mutating func add(_ candidate: Candidate, on day: Date) {
+        let key = PointKey(date: day, categoryID: candidate.categoryID)
+        var total = totals[key] ?? Total(value: 0, contributionCount: 0)
+        total.value += candidate.convertedValue
+        total.contributionCount += 1
+        totals[key] = total
+    }
+
+    private mutating func remove(_ candidate: Candidate, on day: Date) {
+        let key = PointKey(date: day, categoryID: candidate.categoryID)
+        guard var total = totals[key] else {
+            preconditionFailure("Missing category chart total for an active winner")
         }
-        .sorted {
-            if $0.date != $1.date {
-                return $0.date < $1.date
+        if total.contributionCount == 1 {
+            totals.removeValue(forKey: key)
+        } else {
+            total.value -= candidate.convertedValue
+            total.contributionCount -= 1
+            totals[key] = total
+        }
+    }
+
+    private func renderedPoints() -> [CategoryChartPoint] {
+        pointOrder.compactMap { key in
+            guard let total = totals[key] else { return nil }
+            guard let categoryName = categoryNamesByID[key.categoryID] else {
+                preconditionFailure("Missing category name for a category chart total")
             }
-            let nameOrder = $0.categoryName.localizedStandardCompare($1.categoryName)
-            if nameOrder != .orderedSame {
-                return nameOrder == .orderedAscending
-            }
-            return $0.categoryID < $1.categoryID
+            return CategoryChartPoint(
+                date: key.date,
+                categoryID: key.categoryID,
+                categoryName: categoryName,
+                value: total.value)
         }
     }
 }
@@ -199,7 +289,7 @@ struct PerformanceDataSnapshot: Equatable, Sendable {
     /// Full ordered category list (resolver order), including categories with no data, so the
     /// toggle buttons stay stable and the `.defaults` fallback still renders.
     var categories: [PortfolioCategorySnapshot] = []
-    var categoryChartSource: [PerformanceCategoryChartSourceGroup] = []
+    var categoryChart: PerformanceCategoryChartCache = .empty
     var valueChart: PerformanceValueChartData = .empty
     var bottomPanel: PerformanceBottomPanelData = .empty
 

@@ -35,7 +35,7 @@ actor PerformanceDataFetcher {
         try Task.checkCancellation()
         let inputs = try loadInputs(request)
         try Task.checkCancellation()
-        let categoryChartSource = categoryChartSource(inputs)
+        let categoryChart = categoryChartData(inputs)
         try Task.checkCancellation()
         let valueChart = try valueChartData(inputs)
         try Task.checkCancellation()
@@ -43,7 +43,7 @@ actor PerformanceDataFetcher {
         try Task.checkCancellation()
         return PerformanceDataSnapshot(
             categories: inputs.resolver.categories,
-            categoryChartSource: categoryChartSource,
+            categoryChart: categoryChart,
             valueChart: valueChart,
             bottomPanel: bottomPanel)
     }
@@ -230,10 +230,10 @@ actor PerformanceDataFetcher {
 
     // MARK: - Category chart
 
-    private func categoryChartSource(
-        _ inputs: PerformanceLoadInputs) -> [PerformanceCategoryChartSourceGroup] {
-        guard inputs.request.chartMode == .assets else { return [] }
-        return PerformanceCategoryChartProjection.source(
+    private func categoryChartData(
+        _ inputs: PerformanceLoadInputs) -> PerformanceCategoryChartCache {
+        guard inputs.request.chartMode == .assets else { return .empty }
+        return PerformanceCategoryChartCache(
             entries: PerformanceDataShaping.categoryEntries(
                 rows: inputs.snapshotRows,
                 from: inputs.request.startDate,

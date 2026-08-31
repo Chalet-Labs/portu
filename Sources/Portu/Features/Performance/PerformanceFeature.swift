@@ -132,7 +132,7 @@ struct CategorySnapshotEntry: Equatable {
 }
 
 /// Aggregated category chart data point (one per day per category).
-struct CategoryChartPoint: Equatable, Hashable {
+struct CategoryChartPoint: Equatable, Hashable, Sendable {
     let date: Date
     let categoryID: String
     let categoryName: String
@@ -160,7 +160,7 @@ struct PerformanceFeature {
         var isDataLoading = false
         var dataLoadError: String?
         var categories: [PortfolioCategorySnapshot] = []
-        var categoryChartSource: [PerformanceCategoryChartSourceGroup] = []
+        var categoryChart: PerformanceCategoryChartCache = .empty
         var assetChartPoints: [CategoryChartPoint] = []
         var valueChartData: PerformanceValueChartData = .empty
         var bottomPanelData: PerformanceBottomPanelData = .empty
@@ -207,9 +207,8 @@ struct PerformanceFeature {
                 } else {
                     state.disabledPortfolioCategoryIDs.insert(id)
                 }
-                state.assetChartPoints = PerformanceCategoryChartProjection.points(
-                    source: state.categoryChartSource,
-                    disabledCategoryIDs: state.disabledPortfolioCategoryIDs)
+                state.categoryChart.setDisabledCategoryIDs(state.disabledPortfolioCategoryIDs)
+                state.assetChartPoints = state.categoryChart.points
                 return .none
 
             case .showCumulativeToggled:
@@ -274,12 +273,11 @@ struct PerformanceFeature {
         case let .success(snapshot):
             state.dataLoadError = nil
             state.categories = snapshot.categories
-            state.categoryChartSource = snapshot.categoryChartSource
+            state.categoryChart = snapshot.categoryChart
+            state.categoryChart.setDisabledCategoryIDs(state.disabledPortfolioCategoryIDs)
             state.valueChartData = snapshot.valueChart
             state.bottomPanelData = snapshot.bottomPanel
-            state.assetChartPoints = PerformanceCategoryChartProjection.points(
-                source: snapshot.categoryChartSource,
-                disabledCategoryIDs: state.disabledPortfolioCategoryIDs)
+            state.assetChartPoints = state.categoryChart.points
         case let .failure(error):
             state.dataLoadError = error.message
         }
