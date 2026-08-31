@@ -2,75 +2,19 @@ import Charts
 import ComposableArchitecture
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
+/// Passive renderer: every point and category arrives pre-shaped from
+/// `PerformanceFeature.State`, which is filled off the main actor by
+/// `PerformanceDataClient`. No SwiftData query, no aggregation, no environment
+/// state — so no body evaluation can fault models or rebuild a category resolver.
 struct AssetsChartMode: View {
-    let accountId: UUID?
-    let startDate: Date
+    let categories: [PortfolioCategorySnapshot]
+    let chartData: [CategoryChartPoint]
     let store: StoreOf<AppFeature>
 
-    @Environment(AppState.self) private var appState
-
-    @Query(sort: \AssetSnapshot.timestamp)
-    private var snapshots: [AssetSnapshot]
-    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
-    private var portfolioCategories: [PortfolioCategory]
-    @Query(sort: \CategorySymbolRule.normalizedSymbol)
-    private var categoryRules: [CategorySymbolRule]
-    @Query
-    private var currencyRates: [CurrencyConversionRatePoint]
-
-    init(accountId: UUID?, startDate: Date, store: StoreOf<AppFeature>) {
-        self.accountId = accountId
-        self.startDate = startDate
-        self.store = store
-        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
-        _currencyRates = Query(
-            filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
-            sort: \.day)
-    }
-
-    private var categoryResolver: PortfolioCategoryResolver {
-        PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
-    }
-
-    private var filtered: [AssetSnapshot] {
-        snapshots.filter { snap in
-            snap.timestamp >= startDate
-                && (accountId == nil || snap.accountId == accountId)
-        }
-    }
-
-    private struct ChartPoint: Identifiable {
-        let id = UUID()
-        let date: Date
-        let categoryID: String
-        let categoryName: String
-        let value: Decimal
-    }
-
-    private var chartData: [ChartPoint] {
-        let entries: [CategorySnapshotEntry] = filtered.compactMap { snapshot in
-            let entry = CategorySnapshotEntry(snapshot: snapshot, categoryResolver: categoryResolver)
-            guard !store.performance.disabledPortfolioCategoryIDs.contains(entry.categoryID) else { return nil }
-            return entry
-        }
-        return PerformanceFeature.aggregateCategorySnapshots(
-            entries: entries,
-            conversionContext: currencyConversionContext)
-            .map { ChartPoint(date: $0.date, categoryID: $0.categoryID, categoryName: $0.categoryName, value: $0.value) }
-    }
-
-    private var currencyConversionContext: CurrencyConversionContext {
-        CurrencyConversionContext(
-            displayCurrency: appState.selectedCurrency,
-            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
-            historicalRatePoints: currencyRates)
-    }
-
     private var currencyCode: String {
-        appState.selectedCurrency.displayCode
+        store.selectedCurrency.displayCode
     }
 
     var body: some View {
@@ -82,7 +26,9 @@ struct AssetsChartMode: View {
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(height: 320)
             } else {
-                Chart(chartData) { point in
+                // One point per (UTC day, category) upstream, so the value itself is a
+                // stable identity.
+                Chart(chartData, id: \.self) { point in
                     AreaMark(
                         x: .value("Date", point.date),
                         y: .value("Value", point.value),
@@ -96,7 +42,7 @@ struct AssetsChartMode: View {
             }
 
             HStack(spacing: 8) {
-                ForEach(categoryResolver.categories) { cat in
+                ForEach(categories) { cat in
                     Button {
                         store.send(.performance(.portfolioCategoryToggled(cat.id.uuidString)))
                     } label: {

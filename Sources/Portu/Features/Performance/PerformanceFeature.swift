@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import ComposableArchitecture
 import Foundation
 import PortuCore
@@ -130,7 +132,7 @@ struct CategorySnapshotEntry: Equatable {
 }
 
 /// Aggregated category chart data point (one per day per category).
-struct CategoryChartPoint: Equatable {
+struct CategoryChartPoint: Equatable, Hashable {
     let date: Date
     let categoryID: String
     let categoryName: String
@@ -149,6 +151,19 @@ struct PerformanceFeature {
         var disabledPortfolioCategoryIDs: Set<String> = []
         var showCumulative: Bool = false
         var analytics = PortfolioAnalyticsFeature.State()
+
+        // #97: pre-shaped data produced off the main actor by `PerformanceDataClient`.
+        // Views render these value types; no view body touches SwiftData or aggregation.
+        var dataRevision = 0
+        var activeDataRequestID: String?
+        var dataRequestGeneration = 0
+        var isDataLoading = false
+        var dataLoadError: String?
+        var categories: [PortfolioCategorySnapshot] = []
+        var categoryChartSource: [PerformanceCategoryChartSourceGroup] = []
+        var assetChartPoints: [CategoryChartPoint] = []
+        var valueChartData: PerformanceValueChartData = .empty
+        var bottomPanelData: PerformanceBottomPanelData = .empty
     }
 
     enum Action: Equatable {
@@ -157,8 +172,16 @@ struct PerformanceFeature {
         case chartModeChanged(PerformanceChartMode)
         case portfolioCategoryToggled(String)
         case showCumulativeToggled
+        case screenExited
+        case dataInvalidated
+        case dataRequested(PerformanceDataRequest)
+        case dataResponse(String, Result<PerformanceDataSnapshot, PerformanceDataClientError>)
         case analytics(PortfolioAnalyticsFeature.Action)
     }
+
+    @Dependency(\.performanceData) private var performanceData
+
+    private enum CancelID { case dataLoad }
 
     var body: some ReducerOf<Self> {
         Scope(state: \.analytics, action: \.analytics) {
@@ -184,15 +207,81 @@ struct PerformanceFeature {
                 } else {
                     state.disabledPortfolioCategoryIDs.insert(id)
                 }
+                state.assetChartPoints = PerformanceCategoryChartProjection.points(
+                    source: state.categoryChartSource,
+                    disabledCategoryIDs: state.disabledPortfolioCategoryIDs)
                 return .none
 
             case .showCumulativeToggled:
                 state.showCumulative.toggle()
                 return .none
 
+            case .screenExited:
+                // Clearing the active identity lets re-entry reload even when the task
+                // inputs are unchanged, and rejects a response that lands after exit.
+                state.activeDataRequestID = nil
+                state.isDataLoading = false
+                return .cancel(id: CancelID.dataLoad)
+
+            case .dataInvalidated:
+                state.dataRevision += 1
+                return .none
+
+            case let .dataRequested(request):
+                return startLoad(&state, request: request)
+
+            case let .dataResponse(requestID, result):
+                apply(result, requestID: requestID, to: &state)
+                return .none
+
             case .analytics:
                 return .none
             }
+        }
+    }
+
+    // MARK: - Data Loading
+
+    /// One cancel-in-flight load per request, tagged with a monotonic generation so a
+    /// superseded or post-exit response can never overwrite fresher state.
+    private func startLoad(
+        _ state: inout State,
+        request: PerformanceDataRequest) -> Effect<Action> {
+        state.dataRequestGeneration += 1
+        state.isDataLoading = true
+        let requestID = "performance-data|\(state.dataRequestGeneration)"
+        state.activeDataRequestID = requestID
+        return .run { [performanceData] send in
+            do {
+                let snapshot = try await performanceData.load(request)
+                await send(.dataResponse(requestID, .success(snapshot)))
+            } catch {
+                let failure = error as? PerformanceDataClientError
+                    ?? PerformanceDataClientError(message: "\(error)")
+                await send(.dataResponse(requestID, .failure(failure)))
+            }
+        }
+        .cancellable(id: CancelID.dataLoad, cancelInFlight: true)
+    }
+
+    private func apply(
+        _ result: Result<PerformanceDataSnapshot, PerformanceDataClientError>,
+        requestID: String,
+        to state: inout State) {
+        guard state.activeDataRequestID == requestID else { return }
+        state.isDataLoading = false
+        switch result {
+        case let .success(snapshot):
+            state.dataLoadError = nil
+            state.categories = snapshot.categories
+            state.categoryChartSource = snapshot.categoryChartSource
+            state.valueChartData = snapshot.valueChart
+            state.bottomPanelData = snapshot.bottomPanel
+            state.assetChartPoints = PerformanceCategoryChartProjection.points(
+                source: snapshot.categoryChartSource,
+                disabledCategoryIDs: state.disabledPortfolioCategoryIDs)
+        case let .failure(error):
+            state.dataLoadError = error.message
         }
     }
 

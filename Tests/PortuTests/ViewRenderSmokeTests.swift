@@ -459,3 +459,34 @@ struct ViewRenderSmokeTests {
         }
     }
 }
+
+extension ViewRenderSmokeTests {
+    @Test func `performance section renders populated dto state without awaiting task`() throws {
+        let container = try makeContainer()
+        var state = populatedState(section: .performance)
+        let anchor = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        state.performance.valueChartData = PerformanceValueChartData(points: [
+            PerformanceValueChartPoint(
+                date: anchor.addingTimeInterval(-86400),
+                value: 9200,
+                isPartial: false,
+                source: .local),
+            PerformanceValueChartPoint(
+                date: anchor,
+                value: 10000,
+                isPartial: true,
+                source: .local)
+        ])
+        #expect(!state.performance.valueChartData.points.isEmpty)
+
+        let store = makeStore(state: state)
+        let appState = AppState()
+        appState.bridge(from: store)
+        let view = ContentView(store: store)
+            .modelContainer(container)
+            .environment(appState)
+            .frame(width: 1400, height: 900)
+
+        render(view)
+    }
+}
