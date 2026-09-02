@@ -3,6 +3,28 @@
     <channel>
         <title>Portu</title>
         <item>
+            <title>1.9.3</title>
+            <pubDate>Wed, 02 Sep 2026 21:38:40 +0000</pubDate>
+            <link>https://github.com/Chalet-Labs/portu</link>
+            <sparkle:version>29</sparkle:version>
+            <sparkle:shortVersionString>1.9.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## [1.9.3](https://github.com/Chalet-Labs/portu/compare/v1.9.2...v1.9.3) (2026-09-02)
+
+
+### Bug Fixes
+
+* move Performance aggregation off main actor ([#108](https://github.com/Chalet-Labs/portu/issues/108)) ([4c5eca5](https://github.com/Chalet-Labs/portu/commit/4c5eca53791c87f599bb6f017c2f104b4545206e))
+
+
+### Performance Improvements
+
+* isolate sidebar valuation from nav clicks and single-evaluate historical price provider ([#109](https://github.com/Chalet-Labs/portu/issues/109)) ([4924372](https://github.com/Chalet-Labs/portu/commit/49243723d90721d587c209456bc79c66f5e19196)), closes [#98](https://github.com/Chalet-Labs/portu/issues/98)
+
+]]></description>
+            <enclosure url="https://github.com/Chalet-Labs/portu/releases/download/v1.9.3/Portu-1.9.3.dmg" length="13115361" type="application/octet-stream" sparkle:edSignature="uwGGiHZnS6GK/+KHqdBmAy4TmMM1dNF6YN/aKyKip0wcxpamqaQNV7Z2p3rLkHNjfqc7jl3OqYorz59zj1iMBQ=="/>
+        </item>
+        <item>
             <title>1.9.2</title>
             <pubDate>Wed, 02 Sep 2026 20:49:37 +0000</pubDate>
             <link>https://github.com/Chalet-Labs/portu</link>
