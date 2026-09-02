@@ -1,3 +1,4 @@
+import Combine
 import ComposableArchitecture
 import PortuCore
 import PortuUI
@@ -7,27 +8,51 @@ import SwiftUI
 struct PerformanceView: View {
     let store: StoreOf<AppFeature>
 
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+
     @Query private var accounts: [Account]
+    @StateObject private var containerSaveObserver = PerformanceContainerSaveObserver()
+
+    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
+    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
+    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
+    private var hideUnpriced = true
+    @AppStorage(TokenDashboardSettings.hideDustKey)
+    private var hideDust = true
+    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
+    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
 
     var body: some View {
-        ScrollView {
+        // Bound once per body pass: `analyticsAccountInput` walks account positions and
+        // tokens, and previously ran once per derived property (context, fingerprint,
+        // scope options, task ID). Everything below reuses these three values.
+        let accountInput = analyticsAccountInput
+        let analyticsContext = makeAnalyticsContext(account: accountInput, asOf: .now)
+        let scopeFingerprint = analyticsHistoryScopeFingerprint(
+            account: accountInput,
+            context: analyticsContext)
+        let dataTaskID = makeDataTaskID(analyticsScopeFingerprint: scopeFingerprint)
+
+        return ScrollView {
             VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
                 DashboardPageHeader("Performance")
 
                 controlStrip
 
+                dataLoadStatus
+
                 DashboardCard(horizontalPadding: 18, verticalPadding: 16) {
                     switch store.performance.chartMode {
                     case .value:
                         ValueChartMode(
-                            accountId: store.performance.selectedAccountId,
-                            startDate: store.performance.selectedRange.startDate,
-                            analyticsScopeFingerprint: analyticsHistoryScopeFingerprint,
-                            historyStatus: store.performance.analytics.historyStatus)
+                            data: store.performance.valueChartData,
+                            historyStatus: store.performance.analytics.historyStatus,
+                            currencyCode: currencyCode)
                     case .assets:
                         AssetsChartMode(
-                            accountId: store.performance.selectedAccountId,
-                            startDate: store.performance.selectedRange.startDate,
+                            categories: store.performance.categories,
+                            chartData: store.performance.assetChartPoints,
                             store: store)
                     case .valueChange:
                         ValueChangeChartMode(
@@ -38,26 +63,44 @@ struct PerformanceView: View {
                         WalletPnLChartMode(
                             store: store,
                             context: analyticsContext,
-                            scopeOptions: analyticsScopeOptions)
+                            scopeOptions: analyticsScopeOptions(account: accountInput))
                     }
                 }
 
                 PerformanceBottomPanel(
-                    accountId: store.performance.selectedAccountId,
-                    startDate: store.performance.selectedRange.startDate)
+                    data: store.performance.bottomPanelData,
+                    currencyCode: currencyCode,
+                    historicalBackfillEnabled: historicalBackfillEnabled)
                     .dashboardCard(horizontalPadding: 18, verticalPadding: 16)
             }
             .padding(DashboardStyle.pagePadding)
         }
         .dashboardPage()
-        .task(id: analyticsTaskID) {
-            if let context = makeAnalyticsContext(asOf: .now) {
+        .task(id: dataTaskID) {
+            store.send(.performance(.dataRequested(dataTaskID.request(asOf: .now))))
+        }
+        .task(id: analyticsTaskID(account: accountInput)) {
+            if let context = makeAnalyticsContext(account: accountInput, asOf: .now) {
                 store.send(.performance(.analytics(.load(context))))
             } else {
                 store.send(.performance(.analytics(.selectionUnavailable)))
             }
         }
+        // One model-boundary hook covers every writer: sync snapshots, retention prunes,
+        // analytics/price/FX caches, category-rule and override edits from the separate
+        // Settings scene, and manual position saves. The observer owns the debounced
+        // subscription so body recomputation cannot reset an in-flight debounce.
+        .onAppear {
+            containerSaveObserver.observe(container: modelContext.container)
+        }
+        .onChange(of: ObjectIdentifier(modelContext.container)) { _, _ in
+            containerSaveObserver.observe(container: modelContext.container)
+        }
+        .onReceive(containerSaveObserver.didSave) {
+            store.send(.performance(.dataInvalidated))
+        }
         .onDisappear {
+            store.send(.performance(.screenExited))
             store.send(.performance(.analytics(.featureExited)))
         }
     }
@@ -102,19 +145,34 @@ struct PerformanceView: View {
         .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
     }
 
+    @ViewBuilder
+    private var dataLoadStatus: some View {
+        if store.performance.isDataLoading {
+            ProgressView("Loading performance data\u{2026}")
+                .controlSize(.small)
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+        } else if let error = store.performance.dataLoadError {
+            Label(
+                "Performance data unavailable: \(error)",
+                systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(PortuTheme.dashboardWarning)
+        }
+    }
+
     private var availableModes: [PerformanceChartMode] {
         PerformanceChartMode.allCases.filter {
             $0 != .pnl || store.performance.analytics.isAvailable
         }
     }
 
+    private var currencyCode: String {
+        store.selectedCurrency.displayCode
+    }
+
     private var selectedAccount: Account? {
         guard let id = store.performance.selectedAccountId else { return nil }
         return accounts.first { $0.id == id }
-    }
-
-    private var analyticsContext: PortfolioAnalyticsRequestContext? {
-        makeAnalyticsContext(asOf: .now)
     }
 
     private var analyticsAccountInput: PortfolioAnalyticsAccountInput? {
@@ -134,25 +192,81 @@ struct PerformanceView: View {
             implementations: implementations)
     }
 
-    private var analyticsScopeOptions: [PortfolioAnalyticsScopeOption] {
-        analyticsAccountInput.map(PortfolioAnalyticsScopeFactory.scopeOptions) ?? []
+    /// Identity for the off-main-actor load. Deliberately excludes the concrete window
+    /// start: `ChartTimeRange.startDate` is relative to `.now`, so including it would
+    /// make every body pass a fresh identity and relaunch the load forever. The range
+    /// enum plus `dataRevision` capture every real reason to refetch.
+    private struct PerformanceDataTaskID: Equatable {
+        var accountId: UUID?
+        var range: ChartTimeRange
+        var chartMode: PerformanceChartMode
+        var analyticsScopeFingerprint: String?
+        var displayCurrency: FiatCurrency
+        var currentUSDToDisplayRate: Decimal
+        var liveDisplayPrices: [String: Decimal]
+        var historicalDisplayPrices: [String: Decimal]
+        var minimumDashboardValue: Decimal
+        var hideUnpriced: Bool
+        var hideDust: Bool
+        var historicalBackfillEnabled: Bool
+        var dataRevision: Int
+
+        func request(asOf date: Date) -> PerformanceDataRequest {
+            PerformanceDataRequest(
+                accountId: accountId,
+                startDate: range.startDate(at: date),
+                chartMode: chartMode,
+                analyticsScopeFingerprint: analyticsScopeFingerprint,
+                displayCurrency: displayCurrency,
+                currentUSDToDisplayRate: currentUSDToDisplayRate,
+                liveDisplayPrices: liveDisplayPrices,
+                historicalDisplayPrices: historicalDisplayPrices,
+                minimumDashboardValue: minimumDashboardValue,
+                hideUnpriced: hideUnpriced,
+                hideDust: hideDust,
+                historicalBackfillEnabled: historicalBackfillEnabled)
+        }
     }
 
-    private var analyticsHistoryScopeFingerprint: String? {
+    private func makeDataTaskID(analyticsScopeFingerprint: String?) -> PerformanceDataTaskID {
+        PerformanceDataTaskID(
+            accountId: store.performance.selectedAccountId,
+            range: store.performance.selectedRange,
+            chartMode: store.performance.chartMode,
+            analyticsScopeFingerprint: analyticsScopeFingerprint,
+            displayCurrency: store.selectedCurrency,
+            currentUSDToDisplayRate: store.currentUSDToDisplayRate,
+            liveDisplayPrices: store.prices,
+            historicalDisplayPrices: historicalDisplayPrices,
+            minimumDashboardValue: Decimal(minimumDashboardValue),
+            hideUnpriced: hideUnpriced,
+            hideDust: hideDust,
+            historicalBackfillEnabled: historicalBackfillEnabled,
+            dataRevision: store.performance.dataRevision)
+    }
+
+    private func analyticsScopeOptions(
+        account: PortfolioAnalyticsAccountInput?) -> [PortfolioAnalyticsScopeOption] {
+        account.map(PortfolioAnalyticsScopeFactory.scopeOptions) ?? []
+    }
+
+    private func analyticsHistoryScopeFingerprint(
+        account: PortfolioAnalyticsAccountInput?,
+        context: PortfolioAnalyticsRequestContext?) -> String? {
         guard
             store.performance.analytics.isAvailable,
             store.performance.selectedRange != .custom,
-            let input = analyticsAccountInput,
-            let context = analyticsContext,
+            let account,
+            let context,
             PortfolioAnalyticsScopeFactory.scopeCoversEntireAccount(
                 context.scope,
-                account: input) else { return nil }
+                account: account) else { return nil }
         return context.scope.fingerprint
     }
 
-    private var analyticsTaskID: String {
+    private func analyticsTaskID(account: PortfolioAnalyticsAccountInput?) -> String {
         let availability = store.performance.analytics.isAvailable
-        guard let context = makeAnalyticsContext(asOf: .distantPast) else {
+        guard let context = makeAnalyticsContext(account: account, asOf: .distantPast) else {
             return [
                 "none",
                 store.performance.selectedRange.rawValue,
@@ -167,13 +281,33 @@ struct PerformanceView: View {
         ].joined(separator: "|")
     }
 
-    private func makeAnalyticsContext(asOf: Date) -> PortfolioAnalyticsRequestContext? {
-        guard let input = analyticsAccountInput else { return nil }
+    private func makeAnalyticsContext(
+        account: PortfolioAnalyticsAccountInput?,
+        asOf: Date) -> PortfolioAnalyticsRequestContext? {
+        guard let account else { return nil }
         return PortfolioAnalyticsScopeFactory.requestContext(
-            account: input,
+            account: account,
             selectedScopeFingerprint: store.performance.analytics.selectedWalletScopeFingerprint,
             chartRange: store.performance.selectedRange,
             currency: store.selectedCurrency,
             asOf: asOf)
+    }
+}
+
+final class PerformanceContainerSaveObserver: ObservableObject {
+    let didSave = PassthroughSubject<Void, Never>()
+
+    private var observedContainer: ModelContainer?
+    private var subscription: AnyCancellable?
+
+    func observe(container: ModelContainer) {
+        guard observedContainer !== container else { return }
+        observedContainer = container
+        subscription = NotificationCenter.default.publisher(for: ModelContext.didSave)
+            .compactMap { ($0.object as? ModelContext)?.container }
+            .filter { $0 === container }
+            .map { _ in () }
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [didSave] in didSave.send() }
     }
 }

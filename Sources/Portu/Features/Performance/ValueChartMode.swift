@@ -1,251 +1,24 @@
 import Charts
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
+/// Passive renderer: the merged provider/local series, the estimated segment and
+/// every disclosure flag arrive pre-shaped in `PerformanceValueChartData`, built
+/// off the main actor by `PerformanceDataClient`. No SwiftData query, no merge,
+/// no currency conversion happens during body evaluation.
 struct ValueChartMode: View {
-    private static let unscopedProviderQueryAccountID = UUID(
-        uuidString: "00000000-0000-0000-0000-000000000000")!
-
-    let accountId: UUID?
-    let startDate: Date
-    let analyticsScopeFingerprint: String?
+    let data: PerformanceValueChartData
     let historyStatus: PortfolioAnalyticsLoadStatus
-
-    @Environment(AppState.self) private var appState
-
-    @Query(sort: \PortfolioSnapshot.timestamp)
-    private var portfolioSnapshots: [PortfolioSnapshot]
-
-    @Query(sort: \AccountSnapshot.timestamp)
-    private var accountSnapshots: [AccountSnapshot]
-
-    @Query(sort: \AssetSnapshot.timestamp)
-    private var assetSnapshots: [AssetSnapshot]
-
-    @Query private var assets: [Asset]
-
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
-
-    @Query
-    private var historicalPrices: [HistoricalPricePoint]
-
-    @Query
-    private var currencyRates: [CurrencyConversionRatePoint]
-
-    @Query
-    private var providerValuePoints: [ProviderPortfolioValuePoint]
-
-    @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
-    private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
-
-    init(
-        accountId: UUID?,
-        startDate: Date,
-        analyticsScopeFingerprint: String? = nil,
-        historyStatus: PortfolioAnalyticsLoadStatus = .idle) {
-        self.accountId = accountId
-        self.startDate = startDate
-        self.analyticsScopeFingerprint = analyticsScopeFingerprint
-        self.historyStatus = historyStatus
-        let historicalStartDate = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
-        let queryAccountID = Self.providerQueryAccountID(for: accountId)
-        let queryScopeFingerprint = analyticsScopeFingerprint ?? ""
-        _historicalPrices = Query(
-            filter: #Predicate<HistoricalPricePoint> { $0.day >= historicalStartDate },
-            sort: \.day)
-        _currencyRates = Query(
-            filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= historicalStartDate },
-            sort: \.day)
-        _providerValuePoints = Query(
-            filter: #Predicate<ProviderPortfolioValuePoint> {
-                $0.accountID == queryAccountID
-                    && $0.scopeFingerprint == queryScopeFingerprint
-                    && $0.timestamp >= historicalStartDate
-            },
-            sort: \.timestamp)
-    }
-
-    private var localObservations: [LocalPortfolioValueObservation] {
-        if let accountId {
-            accountSnapshots
-                .filter { $0.accountId == accountId }
-                .map {
-                    LocalPortfolioValueObservation(
-                        timestamp: $0.timestamp,
-                        usdValue: $0.totalValue,
-                        isFresh: $0.isFresh)
-                }
-        } else {
-            portfolioSnapshots
-                .map {
-                    LocalPortfolioValueObservation(
-                        timestamp: $0.timestamp,
-                        usdValue: $0.totalValue,
-                        isFresh: !$0.isPartial)
-                }
-        }
-    }
-
-    private var providerDTOs: [ProviderPortfolioValueDTO] {
-        guard let accountId, let analyticsScopeFingerprint else { return [] }
-        return providerValuePoints.compactMap { point in
-            guard
-                point.accountID == accountId,
-                point.scopeFingerprint == analyticsScopeFingerprint,
-                point.timestamp >= startDate
-            else { return nil }
-            return ProviderPortfolioValueDTO(
-                timestamp: point.timestamp,
-                usdValue: point.usdValue,
-                provider: point.provider,
-                coverage: point.coverage)
-        }
-    }
-
-    private var mergedDataPoints: [PortfolioHistoryPoint] {
-        ProviderPortfolioHistory.merge(
-            provider: providerDTOs,
-            local: localObservations,
-            selectedAccountID: accountId,
-            startDate: startDate)
-    }
-
-    private var retainedProviderDTOs: [ProviderPortfolioValueDTO] {
-        ProviderPortfolioHistory.retainedProviderPoints(
-            providerDTOs,
-            local: localObservations,
-            selectedAccountID: accountId,
-            startDate: startDate)
-    }
-
-    private var convertedDataPoints: [(Date, Decimal, Bool, PortfolioHistorySource)] {
-        let context = currencyConversionContext
-        let convertedProviderByTimestamp = Dictionary(
-            uniqueKeysWithValues: convertedProviderHistory.points.map { ($0.timestamp, $0.value) })
-        return mergedDataPoints.compactMap { point in
-            switch point.source {
-            case .local:
-                (
-                    point.timestamp,
-                    context.convertUSDValue(point.usdValue, on: point.timestamp),
-                    !point.isReliable,
-                    point.source)
-            case .zerion:
-                convertedProviderByTimestamp[point.timestamp].map {
-                    (point.timestamp, $0, false, point.source)
-                }
-            }
-        }
-    }
-
-    private var convertedProviderHistory: ProviderHistoryConversionResult {
-        ProviderPortfolioHistory.convertProviderHistory(
-            retainedProviderDTOs,
-            mergeContext: ProviderHistoryMergeContext(
-                local: localObservations,
-                selectedAccountID: accountId,
-                startDate: startDate),
-            currency: appState.selectedCurrency,
-            historicalRatesByDay: currencyConversionContext.historicalUSDToDisplayRatesByDay)
-    }
-
-    private var renderedProviderDTOs: [ProviderPortfolioValueDTO] {
-        ProviderPortfolioHistory.renderedProviderPoints(
-            for: retainedProviderDTOs,
-            renderedTimestamps: Set(convertedProviderHistory.points.map(\.timestamp)))
-    }
-
-    private var scopedAssetSnapshots: [AssetSnapshot] {
-        assetSnapshots.filter { accountId == nil || $0.accountId == accountId }
-    }
-
-    private var estimatedPoints: [HistoricalPortfolioValuePoint] {
-        guard
-            historicalBackfillEnabled,
-            let firstRealSnapshotDate = scopedAssetSnapshots.map(\.timestamp).min()
-        else { return [] }
-
-        let holdings = PerformanceFeature.earliestEstimateHoldings(
-            snapshots: historicalEstimateSnapshotEntries,
-            firstRealSnapshotDate: firstRealSnapshotDate,
-            accountId: accountId)
-        guard !holdings.isEmpty else { return [] }
-
-        let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
-        return HistoricalPortfolioEstimator.estimatedValues(
-            holdings: holdings,
-            prices: historicalPrices.compactMap {
-                guard $0.fiatCurrency == .usd, $0.day >= startDay, $0.day < firstRealSnapshotDate else { return nil }
-                return HistoricalPriceEntry(
-                    coinGeckoId: $0.coinGeckoId,
-                    day: $0.day,
-                    usdPrice: $0.usdPrice)
-            },
-            startDate: startDate,
-            firstRealSnapshotDate: firstRealSnapshotDate,
-            accountId: accountId)
-    }
-
-    private var convertedEstimatedPoints: [HistoricalPortfolioValuePoint] {
-        let context = currencyConversionContext
-        return estimatedPoints.map { context.convertUSDPoint($0) }
-    }
-
-    private var currencyConversionContext: CurrencyConversionContext {
-        CurrencyConversionContext(
-            displayCurrency: appState.selectedCurrency,
-            currentUSDToDisplayRate: appState.currentUSDToDisplayRate,
-            historicalRatePoints: currencyRates)
-    }
-
-    private var currencyCode: String {
-        appState.selectedCurrency.displayCode
-    }
-
-    private var historicalEstimateSnapshotEntries: [HistoricalEstimateSnapshotEntry] {
-        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(
-            tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
-        let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
-
-        return scopedAssetSnapshots.map { snapshot in
-            let asset = assetsById[snapshot.assetId]
-            return HistoricalEstimateSnapshotEntry(
-                accountId: snapshot.accountId,
-                assetId: snapshot.assetId,
-                timestamp: snapshot.timestamp,
-                coinGeckoId: asset?.coinGeckoId,
-                coinGeckoIdOverride: overridesByAssetId[snapshot.assetId]?.coinGeckoIdOverride,
-                onchainIdentity: OnchainTokenIdentity(chain: asset?.upsertChain, contractAddress: asset?.upsertContract),
-                amount: snapshot.amount,
-                borrowAmount: snapshot.borrowAmount,
-                netUSDValue: snapshot.usdValue - snapshot.borrowUsdValue)
-        }
-    }
-
-    static func emptyStateFailure(
-        for points: [ProviderPortfolioValueDTO],
-        status: PortfolioAnalyticsLoadStatus) -> PortfolioAnalyticsFailure? {
-        ProviderPortfolioHistory.refreshFailure(for: points, status: status)
-    }
-
-    static func providerQueryAccountID(for accountId: UUID?) -> UUID {
-        accountId ?? unscopedProviderQueryAccountID
-    }
+    let currencyCode: String
 
     var body: some View {
-        let dataPoints = convertedDataPoints
-        let retainedProviderDates = dataPoints.compactMap { date, _, _, source in
-            source == .zerion ? date : nil
-        }
-        let estimatedPoints = ProviderPortfolioHistory.estimatesOutsideProviderCoverage(
-            convertedEstimatedPoints,
-            providerDates: retainedProviderDates)
-        let historyFailure = Self.emptyStateFailure(
-            for: retainedProviderDTOs,
+        // The failure banner is derived purely from load status, so it is shared by the
+        // empty state and the populated footer.
+        let historyFailure = ProviderPortfolioHistory.refreshFailure(
+            for: [],
             status: historyStatus)
-        if dataPoints.isEmpty, estimatedPoints.isEmpty {
+        if data.points.isEmpty, data.estimatedPoints.isEmpty {
             Group {
                 if let historyFailure {
                     ContentUnavailableView(
@@ -253,9 +26,8 @@ struct ValueChartMode: View {
                         systemImage: "exclamationmark.triangle",
                         description: Text(historyFailure.message))
                 } else if
-                    appState.selectedCurrency != .usd,
-                    retainedProviderDTOs.isEmpty == false,
-                    convertedProviderHistory.points.isEmpty {
+                    data.hasRetainedProviderPoints,
+                    data.hasConvertedProviderPoints == false {
                     ContentUnavailableView(
                         "Historical FX unavailable",
                         systemImage: "exclamationmark.triangle",
@@ -272,7 +44,7 @@ struct ValueChartMode: View {
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Chart {
-                    ForEach(estimatedPoints) { point in
+                    ForEach(data.estimatedPoints) { point in
                         LineMark(
                             x: .value("Date", point.date),
                             y: .value("Value", point.value))
@@ -280,21 +52,25 @@ struct ValueChartMode: View {
                             .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 4]))
                     }
 
-                    ForEach(dataPoints, id: \.0) { date, value, isPartial, source in
-                        if source == .local {
-                            AreaMark(x: .value("Date", date), y: .value("Value", value))
+                    ForEach(data.points, id: \.date) { point in
+                        if point.source == .local {
+                            AreaMark(
+                                x: .value("Date", point.date),
+                                y: .value("Value", point.value))
                                 .foregroundStyle(
                                     .linearGradient(
                                         colors: [PortuTheme.dashboardGold.opacity(0.35), .clear],
                                         startPoint: .top, endPoint: .bottom))
                         }
-                        LineMark(x: .value("Date", date), y: .value("Value", value))
+                        LineMark(
+                            x: .value("Date", point.date),
+                            y: .value("Value", point.value))
                             .foregroundStyle(
-                                source == .zerion
+                                point.source == .zerion
                                     ? PortuTheme.dashboardSecondaryText
                                     : PortuTheme.dashboardGold)
                             .lineStyle(
-                                source == .zerion || isPartial
+                                point.source == .zerion || point.isPartial
                                     ? StrokeStyle(lineWidth: 2, dash: [5, 3])
                                     : StrokeStyle(lineWidth: 2))
                     }
@@ -304,7 +80,7 @@ struct ValueChartMode: View {
                 }
                 .frame(height: 300)
 
-                if let disclosure = ProviderPortfolioHistory.disclosure(for: renderedProviderDTOs) {
+                if let disclosure = data.providerDisclosure {
                     Label(
                         disclosure,
                         systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
@@ -316,16 +92,15 @@ struct ValueChartMode: View {
                         .font(.caption)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 }
-                if let conversionStart = convertedProviderHistory.historicalFXUnavailableBefore {
+                if let conversionStart = data.historicalFXUnavailableBefore {
                     Label(
                         "Historical FX unavailable before \(conversionStart.formatted(date: .abbreviated, time: .omitted))",
                         systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 } else if
-                    appState.selectedCurrency != .usd,
-                    retainedProviderDTOs.isEmpty == false,
-                    convertedProviderHistory.points.isEmpty {
+                    data.hasRetainedProviderPoints,
+                    data.hasConvertedProviderPoints == false {
                     Label(
                         "Historical FX unavailable for Zerion history",
                         systemImage: "exclamationmark.triangle")
