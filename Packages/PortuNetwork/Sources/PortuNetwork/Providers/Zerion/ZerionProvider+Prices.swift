@@ -4,7 +4,9 @@ import PortuCore
 public extension ZerionProvider {
     func fetchPriceUpdate(for identities: [OnchainTokenIdentity]) async throws -> PriceUpdate {
         let unique = Array(Set(identities)).sorted {
-            if $0.chain.rawValue != $1.chain.rawValue { return $0.chain.rawValue < $1.chain.rawValue }
+            if $0.chain.rawValue != $1.chain.rawValue {
+                return $0.chain.rawValue < $1.chain.rawValue
+            }
             return $0.contractAddress < $1.contractAddress
         }
         guard !unique.isEmpty else {

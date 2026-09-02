@@ -70,13 +70,21 @@ struct AccountsView: View {
         .dashboardPage()
         .sheet(item: Binding(
             get: { store.accounts.accountSheetMode },
-            set: { if $0 == nil { store.send(.accounts(.accountSheetDismissed)) } })) { mode in
+            set: {
+                if $0 == nil {
+                    store.send(.accounts(.accountSheetDismissed))
+                }
+            })) { mode in
                 accountSheet(for: mode)
                     .environment(\.colorScheme, .dark)
         }
         .alert("Unable to Update Account", isPresented: Binding(
             get: { accountActionError != nil },
-            set: { if !$0 { accountActionError = nil } })) {
+            set: {
+                if !$0 {
+                    accountActionError = nil
+                }
+            })) {
                 Button("OK") { accountActionError = nil }
         } message: {
             Text(accountActionError ?? "")

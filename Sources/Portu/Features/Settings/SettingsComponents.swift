@@ -420,7 +420,6 @@ enum SettingsDesign {
     static let primaryButtonHorizontalPadding: CGFloat = 16
 
     static let contentBackground = Color(red: 0.045, green: 0.043, blue: 0.039)
-    static let sidebarBackground = Color(red: 0.110, green: 0.095, blue: 0.088)
     static let sidebarSearchBackground = Color(red: 0.105, green: 0.096, blue: 0.084)
     static let sidebarSelection = Color(red: 0.135, green: 0.123, blue: 0.108)
     static let cardBackground = Color(red: 0.072, green: 0.068, blue: 0.060)
@@ -434,7 +433,6 @@ enum SettingsDesign {
     static let tokenTeal = Color(red: 0.260, green: 0.670, blue: 0.620)
     static let warningOrange = Color(red: 0.860, green: 0.330, blue: 0.330)
     static let debugOrange = Color(red: 0.850, green: 0.520, blue: 0.260)
-    static let selectedGlyphBackground = Color(red: 0.360, green: 0.285, blue: 0.175)
     static let primaryGlyphBackground = Color(red: 0.190, green: 0.155, blue: 0.095)
     static let tokenGlyphBackground = Color(red: 0.105, green: 0.185, blue: 0.160)
     static let orangeGlyphBackground = Color(red: 0.220, green: 0.120, blue: 0.090)

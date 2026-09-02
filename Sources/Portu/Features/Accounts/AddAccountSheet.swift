@@ -95,7 +95,11 @@ struct AddAccountSheet: View {
         .environment(\.colorScheme, .dark)
         .alert(alertTitle, isPresented: Binding(
             get: { saveError != nil },
-            set: { if !$0 { saveError = nil } })) {
+            set: {
+                if !$0 {
+                    saveError = nil
+                }
+            })) {
                 Button("OK") { saveError = nil }
         } message: {
             Text(saveError ?? "")

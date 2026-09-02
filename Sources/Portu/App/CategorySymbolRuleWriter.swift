@@ -42,8 +42,12 @@ enum CategorySymbolRuleWriter {
         do {
             try save()
         } catch {
-            if let inserted { modelContext.delete(inserted) }
-            if let existingRule { existingRule.category = previousCategory }
+            if let inserted {
+                modelContext.delete(inserted)
+            }
+            if let existingRule {
+                existingRule.category = previousCategory
+            }
             throw error
         }
     }

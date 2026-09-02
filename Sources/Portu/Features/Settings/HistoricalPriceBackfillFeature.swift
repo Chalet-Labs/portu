@@ -224,40 +224,6 @@ enum HistoricalBackfillCandidateResolver {
         }
     }
 
-    static func assetIDsByOnchainIdentity(
-        tokens: [TokenEntry],
-        snapshots: [HistoricalBackfillSnapshotEntry] = [],
-        overrides: [TokenPricingOverrideSnapshot],
-        prices: [String: Decimal] = [:],
-        dashboardSettings: TokenDashboardSettings = .defaults) -> [OnchainTokenIdentity: Set<UUID>] {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        var result: [OnchainTokenIdentity: Set<UUID>] = [:]
-        for token in tokens where shouldIncludeToken(
-            token,
-            override: overrideMap[token.assetId],
-            prices: prices,
-            dashboardSettings: dashboardSettings) {
-            addUnresolvedAsset(
-                assetId: token.assetId,
-                coinGeckoId: token.coinGeckoId,
-                onchainIdentity: token.onchainIdentity,
-                override: overrideMap[token.assetId],
-                result: &result)
-        }
-        for snapshot in snapshots where shouldIncludeSnapshot(
-            snapshot,
-            override: overrideMap[snapshot.assetId],
-            dashboardSettings: dashboardSettings) {
-            addUnresolvedAsset(
-                assetId: snapshot.assetId,
-                coinGeckoId: snapshot.coinGeckoId,
-                onchainIdentity: snapshot.onchainIdentity,
-                override: overrideMap[snapshot.assetId],
-                result: &result)
-        }
-        return result
-    }
-
     private static func shouldIncludeToken(
         _ token: TokenEntry,
         override: TokenPricingOverrideSnapshot?,
@@ -396,23 +362,6 @@ enum HistoricalBackfillCandidateResolver {
             return
         }
         identities.insert(onchainIdentity)
-    }
-
-    private static func addUnresolvedAsset(
-        assetId: UUID,
-        coinGeckoId: String?,
-        onchainIdentity: OnchainTokenIdentity?,
-        override: TokenPricingOverrideSnapshot?,
-        result: inout [OnchainTokenIdentity: Set<UUID>]) {
-        guard shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity else {
-            return
-        }
-        guard
-            TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil
-        else {
-            return
-        }
-        result[onchainIdentity, default: []].insert(assetId)
     }
 
     private static func shouldResolveOnchain(

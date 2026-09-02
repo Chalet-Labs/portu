@@ -86,9 +86,15 @@ enum OverviewPriceDisplay {
     }
 
     private static func maximumFractionDigits(for absoluteValue: Double) -> Int {
-        if absoluteValue >= 1000 { return 0 }
-        if absoluteValue >= 1 { return 4 }
-        if absoluteValue >= 0.0001 { return 6 }
+        if absoluteValue >= 1000 {
+            return 0
+        }
+        if absoluteValue >= 1 {
+            return 4
+        }
+        if absoluteValue >= 0.0001 {
+            return 6
+        }
         return 8
     }
 

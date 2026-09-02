@@ -125,110 +125,107 @@ struct AssetPriceChart: View {
 
     // MARK: - Price chart (from cached historical prices)
 
+    @ViewBuilder
     private var priceChart: some View {
-        Group {
-            let points = if historicalBackfillEnabled {
-                AssetDetailFeature.historicalPricePoints(
-                    historicalPrices,
-                    startDate: store.assetDetail.selectedRange.startDate,
-                    displayCurrency: appState.selectedCurrency,
-                    conversionContext: currencyConversionContext,
-                    isHistoricalBackfillEnabled: true)
-            } else {
-                [HistoricalAssetPricePoint]()
-            }
-            if points.isEmpty {
-                ContentUnavailableView(
-                    "No Price History",
-                    systemImage: "chart.line.uptrend.xyaxis",
-                    description: Text(AssetDetailFeature.historicalPriceEmptyDescription(
-                        coinGeckoId: coinGeckoId,
-                        isHistoricalBackfillEnabled: historicalBackfillEnabled)))
-                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    .frame(height: 250)
-            } else {
-                Chart(points, id: \.id) { point in
-                    LineMark(
-                        x: .value("Date", point.day),
-                        y: .value("Price", point.price))
-                        .foregroundStyle(PortuTheme.dashboardGold)
-                }
-                .chartYAxis {
-                    AxisMarks(format: .currency(code: currencyCode).precision(.fractionLength(0 ... 4)))
-                }
+        let points = if historicalBackfillEnabled {
+            AssetDetailFeature.historicalPricePoints(
+                historicalPrices,
+                startDate: store.assetDetail.selectedRange.startDate,
+                displayCurrency: appState.selectedCurrency,
+                conversionContext: currencyConversionContext,
+                isHistoricalBackfillEnabled: true)
+        } else {
+            [HistoricalAssetPricePoint]()
+        }
+        if points.isEmpty {
+            ContentUnavailableView(
+                "No Price History",
+                systemImage: "chart.line.uptrend.xyaxis",
+                description: Text(AssetDetailFeature.historicalPriceEmptyDescription(
+                    coinGeckoId: coinGeckoId,
+                    isHistoricalBackfillEnabled: historicalBackfillEnabled)))
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 .frame(height: 250)
+        } else {
+            Chart(points, id: \.id) { point in
+                LineMark(
+                    x: .value("Date", point.day),
+                    y: .value("Price", point.price))
+                    .foregroundStyle(PortuTheme.dashboardGold)
             }
+            .chartYAxis {
+                AxisMarks(format: .currency(code: currencyCode).precision(.fractionLength(0 ... 4)))
+            }
+            .frame(height: 250)
         }
     }
 
     // MARK: - Value chart (net from AssetSnapshot)
 
+    @ViewBuilder
     private var valueChart: some View {
-        Group {
-            let points = convertedAggregated
-            if points.isEmpty {
-                ContentUnavailableView(
-                    "No Value Data", systemImage: "chart.line.uptrend.xyaxis",
-                    description: Text("Sync your accounts to see value history"))
-                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    .frame(height: 250)
-            } else {
-                let isBorrowOnly = points.allSatisfy { $0.grossUSD == 0 && $0.borrowUSD > 0 }
-
-                Chart {
-                    ForEach(points) { point in
-                        let net = point.grossUSD - point.borrowUSD
-                        LineMark(
-                            x: .value("Date", point.date),
-                            y: .value("Value", net))
-                            .foregroundStyle(net < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardGold)
-
-                        AreaMark(
-                            x: .value("Date", point.date),
-                            y: .value("Value", net))
-                            .foregroundStyle(
-                                .linearGradient(
-                                    colors: [
-                                        (net < 0 ? Color.red : Color.accentColor).opacity(0.2),
-                                        .clear
-                                    ],
-                                    startPoint: .top, endPoint: .bottom))
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks(format: .currency(code: currencyCode).precision(.fractionLength(0)))
-                }
+        let points = convertedAggregated
+        if points.isEmpty {
+            ContentUnavailableView(
+                "No Value Data", systemImage: "chart.line.uptrend.xyaxis",
+                description: Text("Sync your accounts to see value history"))
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 .frame(height: 250)
+        } else {
+            let isBorrowOnly = points.allSatisfy { $0.grossUSD == 0 && $0.borrowUSD > 0 }
 
-                if isBorrowOnly {
-                    Text("Debt history — this asset is only borrowed")
-                        .font(.caption)
-                        .foregroundStyle(PortuTheme.dashboardGold)
+            Chart {
+                ForEach(points) { point in
+                    let net = point.grossUSD - point.borrowUSD
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value("Value", net))
+                        .foregroundStyle(net < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardGold)
+
+                    AreaMark(
+                        x: .value("Date", point.date),
+                        y: .value("Value", net))
+                        .foregroundStyle(
+                            .linearGradient(
+                                colors: [
+                                    (net < 0 ? Color.red : Color.accentColor).opacity(0.2),
+                                    .clear
+                                ],
+                                startPoint: .top, endPoint: .bottom))
                 }
+            }
+            .chartYAxis {
+                AxisMarks(format: .currency(code: currencyCode).precision(.fractionLength(0)))
+            }
+            .frame(height: 250)
+
+            if isBorrowOnly {
+                Text("Debt history — this asset is only borrowed")
+                    .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardGold)
             }
         }
     }
 
     // MARK: - Amount chart (net from AssetSnapshot)
 
+    @ViewBuilder
     private var amountChart: some View {
-        Group {
-            if aggregated.isEmpty {
-                ContentUnavailableView(
-                    "No Amount Data", systemImage: "chart.line.uptrend.xyaxis",
-                    description: Text("Sync your accounts to see amount history"))
-                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    .frame(height: 250)
-            } else {
-                Chart {
-                    ForEach(aggregated) { point in
-                        let net = point.grossAmount - point.borrowAmount
-                        LineMark(x: .value("Date", point.date), y: .value("Amount", net))
-                            .foregroundStyle(net < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardGold)
-                    }
-                }
+        if aggregated.isEmpty {
+            ContentUnavailableView(
+                "No Amount Data", systemImage: "chart.line.uptrend.xyaxis",
+                description: Text("Sync your accounts to see amount history"))
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 .frame(height: 250)
+        } else {
+            Chart {
+                ForEach(aggregated) { point in
+                    let net = point.grossAmount - point.borrowAmount
+                    LineMark(x: .value("Date", point.date), y: .value("Amount", net))
+                        .foregroundStyle(net < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardGold)
+                }
             }
+            .frame(height: 250)
         }
     }
 

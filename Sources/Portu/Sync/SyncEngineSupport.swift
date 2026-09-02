@@ -36,6 +36,58 @@ struct AssetSnapshotAccumulator {
     var borrowUsdValue: Decimal = 0
 }
 
+extension SyncEngine {
+    /// Aggregates positions into per-account/asset snapshot rows without touching
+    /// the model context. Accounts with static holdings (manual/zapper) always
+    /// contribute; others only when refreshed in this batch.
+    static func accumulatedAssetSnapshots(
+        batchId: UUID,
+        timestamp: Date,
+        positions: [Position],
+        refreshedSyncableAccountIDs: Set<UUID>) -> [AssetSnapshot] {
+        var accumulators: [String: AssetSnapshotAccumulator] = [:]
+
+        for pos in positions {
+            guard let account = pos.account else { continue }
+            let usesStaticHoldings = account.dataSource == .manual || account.dataSource == .zapper
+            if !usesStaticHoldings, refreshedSyncableAccountIDs.contains(account.id) == false {
+                continue
+            }
+
+            for token in pos.tokens {
+                guard let asset = token.asset else { continue }
+                if token.role.isReward {
+                    continue
+                }
+
+                let key = "\(account.id):\(asset.id)"
+                var accumulator = accumulators[key] ?? AssetSnapshotAccumulator(
+                    accountId: account.id,
+                    assetId: asset.id,
+                    symbol: asset.symbol,
+                    category: asset.category)
+                if token.role.isBorrow {
+                    accumulator.borrowAmount += token.amount
+                    accumulator.borrowUsdValue += token.usdValue
+                } else {
+                    accumulator.grossAmount += token.amount
+                    accumulator.grossUsdValue += token.usdValue
+                }
+                accumulators[key] = accumulator
+            }
+        }
+
+        return accumulators.values.map { acc in
+            AssetSnapshot(
+                syncBatchId: batchId, timestamp: timestamp,
+                accountId: acc.accountId, assetId: acc.assetId,
+                symbol: acc.symbol, category: acc.category,
+                amount: acc.grossAmount, usdValue: acc.grossUsdValue,
+                borrowAmount: acc.borrowAmount, borrowUsdValue: acc.borrowUsdValue)
+        }
+    }
+}
+
 enum SyncError: Error, LocalizedError, Equatable {
     case missingAPIKey(String)
     case noActiveAccounts

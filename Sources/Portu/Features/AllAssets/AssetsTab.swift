@@ -77,7 +77,11 @@ struct AssetsTab: View {
             assetTable
         }
         .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
-        .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+        .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: {
+            if !$0 {
+                exportError = nil
+            }
+        })) {
             Button("OK") { exportError = nil }
         } message: {
             Text(exportError ?? "")
@@ -281,8 +285,12 @@ struct AssetsTab: View {
     }
 
     private func compare(_ lhs: Decimal, _ rhs: Decimal) -> ComparisonResult {
-        if lhs < rhs { return .orderedAscending }
-        if lhs > rhs { return .orderedDescending }
+        if lhs < rhs {
+            return .orderedAscending
+        }
+        if lhs > rhs {
+            return .orderedDescending
+        }
         return .orderedSame
     }
 

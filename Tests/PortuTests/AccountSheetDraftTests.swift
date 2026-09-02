@@ -474,19 +474,25 @@ final class InMemorySecretStore: SecretStore, @unchecked Sendable {
 
     func get(key: KeychainKey) throws(KeychainError) -> String? {
         mainThreadFlags.append(Thread.isMainThread)
-        if throwOnGet || throwOnGetKeys.contains(key) { throw .interactionNotAllowed }
+        if throwOnGet || throwOnGetKeys.contains(key) {
+            throw .interactionNotAllowed
+        }
         return storage[key]
     }
 
     func set(key: KeychainKey, value: String) throws(KeychainError) {
         mainThreadFlags.append(Thread.isMainThread)
-        if throwOnSet || throwOnSetKeys.contains(key) { throw .interactionNotAllowed }
+        if throwOnSet || throwOnSetKeys.contains(key) {
+            throw .interactionNotAllowed
+        }
         storage[key] = value
     }
 
     func delete(key: KeychainKey) throws(KeychainError) {
         mainThreadFlags.append(Thread.isMainThread)
-        if throwOnDeleteKeys.contains(key) { throw .interactionNotAllowed }
+        if throwOnDeleteKeys.contains(key) {
+            throw .interactionNotAllowed
+        }
         storage[key] = nil
     }
 }

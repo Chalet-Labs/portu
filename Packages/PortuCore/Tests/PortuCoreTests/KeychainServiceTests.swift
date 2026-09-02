@@ -411,8 +411,12 @@ private final class MigrationTestSecretStore: SecretStore, @unchecked Sendable {
     }
 
     func set(key: KeychainKey, value: String) throws(KeychainError) {
-        if let error = setErrors[key.rawKey] { throw error }
-        if let setError { throw setError }
+        if let error = setErrors[key.rawKey] {
+            throw error
+        }
+        if let setError {
+            throw setError
+        }
         lock.withLock { storage[key.rawKey] = value }
     }
 

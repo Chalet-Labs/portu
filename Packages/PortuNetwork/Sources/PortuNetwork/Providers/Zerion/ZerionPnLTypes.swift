@@ -74,7 +74,7 @@ extension ProviderPnLRange {
         calendar: Calendar = .current) -> String? {
         guard self != .allTime else { return nil }
         var utcCalendar = Calendar(identifier: .gregorian)
-        utcCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        utcCalendar.timeZone = TimeZone.gmt
         let since: Date? = switch self {
         case .allTime:
             nil

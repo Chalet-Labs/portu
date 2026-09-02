@@ -469,7 +469,9 @@ private actor AnalyticsCancellationGate {
     private var releaseContinuation: CheckedContinuation<Void, Never>?
 
     func waitUntilStarted() async {
-        if didStart { return }
+        if didStart {
+            return
+        }
         await withCheckedContinuation { continuation in
             startContinuation = continuation
         }

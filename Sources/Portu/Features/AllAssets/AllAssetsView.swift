@@ -1,4 +1,3 @@
-// Sources/Portu/Features/AllAssets/AllAssetsView.swift
 import ComposableArchitecture
 import PortuUI
 import SwiftUI

@@ -169,7 +169,9 @@ struct AllAssetsFeature {
         var assetTokens: [UUID: AssetAccumulator] = [:]
 
         for token in tokens {
-            if token.role.isReward { continue }
+            if token.role.isReward {
+                continue
+            }
 
             var entry = assetTokens[token.assetId] ?? AssetAccumulator(
                 symbol: token.symbol, name: token.name, category: token.category,

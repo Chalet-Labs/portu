@@ -9,8 +9,6 @@ enum AssetValueFormatter {
         case syncFallback
     }
 
-    private static let hundred = Decimal(100)
-
     static func priceSource(
         for token: PositionToken,
         livePrices: [String: Decimal]) -> PriceSource? {
@@ -74,26 +72,6 @@ enum AssetValueFormatter {
         case .borrow: -absoluteValue
         case .reward: Decimal.zero
         case .balance, .supply, .stake, .lpToken: absoluteValue
-        }
-    }
-
-    /// 24h change contribution from this token, accounting for role sign.
-    static func changeContribution24h(
-        for token: PositionToken,
-        livePrices: [String: Decimal],
-        changes24h: [String: Decimal]) -> Decimal {
-        guard
-            let coinGeckoId = token.asset?.coinGeckoId,
-            let livePrice = livePrices[coinGeckoId],
-            let changePercent = changes24h[coinGeckoId]
-        else {
-            return .zero
-        }
-        let absoluteChange = token.amount * livePrice * (changePercent / hundred)
-        return switch token.role {
-        case .borrow: -absoluteChange
-        case .reward: Decimal.zero
-        case .balance, .supply, .stake, .lpToken: absoluteChange
         }
     }
 }

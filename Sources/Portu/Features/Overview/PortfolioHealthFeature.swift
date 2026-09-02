@@ -122,8 +122,12 @@ struct PortfolioHealthFeature {
     }
 
     static func classifyRiskLevel(metrics: DiversificationMetrics) -> RiskLevel {
-        if metrics.herfindahlIndex > Decimal(string: "0.5")! { return .high }
-        if metrics.herfindahlIndex > Decimal(string: "0.25")! { return .medium }
+        if metrics.herfindahlIndex > 0.5 {
+            return .high
+        }
+        if metrics.herfindahlIndex > 0.25 {
+            return .medium
+        }
         return .low
     }
 
