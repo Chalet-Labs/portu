@@ -3,7 +3,6 @@ import Foundation
 import os
 import PortuCore
 import PortuNetwork
-import PortuUI
 import SwiftData
 import SwiftUI
 

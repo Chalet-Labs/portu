@@ -57,7 +57,9 @@ actor NetworkLogBuffer {
         for i in 0 ..< filled {
             let index = (start + i) % capacity
             if let entry = buffer[index] {
-                if let since, entry.timestamp < since { continue }
+                if let since, entry.timestamp < since {
+                    continue
+                }
                 result.append(entry)
             }
         }

@@ -44,9 +44,13 @@ enum OverviewSummaryLabels {
         let title = categories
             .filter { PortfolioCategoryDefaults.majorCategoryIDs.contains($0.id) }
             .sorted {
-                if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+                if $0.sortOrder != $1.sortOrder {
+                    return $0.sortOrder < $1.sortOrder
+                }
                 let nameOrder = $0.name.localizedStandardCompare($1.name)
-                if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
                 return $0.id.uuidString < $1.id.uuidString
             }
             .map(\.name)
@@ -235,12 +239,16 @@ enum OverviewFeature {
         let sortedValues = values
             .filter { $0.value > 0 }
             .sorted {
-                if $0.value != $1.value { return $0.value > $1.value }
+                if $0.value != $1.value {
+                    return $0.value > $1.value
+                }
                 if $0.key.sortOrder != $1.key.sortOrder {
                     return $0.key.sortOrder < $1.key.sortOrder
                 }
                 let nameOrder = $0.key.name.localizedStandardCompare($1.key.name)
-                if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
                 return $0.key.id.uuidString < $1.key.id.uuidString
             }
 
@@ -681,6 +689,6 @@ enum OverviewFeature {
     }
 
     private static func normalizedThreshold(_ value: Decimal) -> Decimal {
-        value < 0 ? 0 : value
+        max(0, value)
     }
 }

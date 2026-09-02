@@ -13,7 +13,7 @@ enum PortfolioAnalyticsCacheWriter {
 
     static func retentionCutoff(asOf date: Date) -> Date {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        calendar.timeZone = TimeZone.gmt
         let day = HistoricalPriceCalendar.utcStartOfDay(for: date)
         return calendar.date(byAdding: .day, value: -(retainedDayCount - 1), to: day)!
     }

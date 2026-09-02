@@ -1,4 +1,3 @@
-// Sources/Portu/Features/Positions/AllPositionsView.swift
 import PortuCore
 import PortuUI
 import SwiftData
@@ -18,8 +17,12 @@ struct AllPositionsView: View {
 
     private var filteredPositions: [Position] {
         positions.filter { pos in
-            if let ft = filterType, pos.positionType != ft { return false }
-            if !filterProtocol.matches(pos.protocolId) { return false }
+            if let ft = filterType, pos.positionType != ft {
+                return false
+            }
+            if !filterProtocol.matches(pos.protocolId) {
+                return false
+            }
             return true
         }
     }

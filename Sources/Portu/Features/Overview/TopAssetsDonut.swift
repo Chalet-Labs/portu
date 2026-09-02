@@ -1,4 +1,3 @@
-// Sources/Portu/Features/Overview/TopAssetsDonut.swift
 import Charts
 import ComposableArchitecture
 import PortuCore

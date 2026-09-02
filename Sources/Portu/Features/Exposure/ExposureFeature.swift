@@ -118,7 +118,9 @@ enum ExposureFeature {
         var buckets: [PortfolioCategorySnapshot: (assets: Decimal, borrows: Decimal)] = [:]
 
         for token in tokens {
-            if token.role.isReward { continue }
+            if token.role.isReward {
+                continue
+            }
             let value = resolveTokenDisplayValue(
                 amount: token.amount,
                 priceID: TokenSettingsFeature.resolvedPriceID(token: token, override: nil),
@@ -165,7 +167,9 @@ enum ExposureFeature {
         var assetMap: [UUID: AssetAggregate] = [:]
 
         for token in tokens {
-            if token.role.isReward { continue }
+            if token.role.isReward {
+                continue
+            }
             let value = resolveTokenDisplayValue(
                 amount: token.amount,
                 priceID: TokenSettingsFeature.resolvedPriceID(token: token, override: nil),

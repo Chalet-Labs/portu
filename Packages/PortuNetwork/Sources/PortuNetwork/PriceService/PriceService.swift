@@ -220,7 +220,9 @@ public actor PriceService {
     private static func sortIdentities(
         _ lhs: OnchainTokenIdentity,
         _ rhs: OnchainTokenIdentity) -> Bool {
-        if lhs.chain.rawValue != rhs.chain.rawValue { return lhs.chain.rawValue < rhs.chain.rawValue }
+        if lhs.chain.rawValue != rhs.chain.rawValue {
+            return lhs.chain.rawValue < rhs.chain.rawValue
+        }
         return lhs.contractAddress < rhs.contractAddress
     }
 
@@ -322,7 +324,9 @@ public actor PriceService {
                 platformID: platformID,
                 identities: Array(identities[..<midpoint]),
                 currency: currency)
-            if left.didHitRateLimit { return left }
+            if left.didHitRateLimit {
+                return left
+            }
             let right = try await fetchTokenPriceChunk(
                 platformID: platformID,
                 identities: Array(identities[midpoint...]),
@@ -430,7 +434,11 @@ public actor PriceService {
 
         let trimmedKey = await coinGeckoAPIKey()?.trimmingCharacters(in: .whitespacesAndNewlines)
         let key = trimmedKey?.isEmpty == false ? trimmedKey : nil
-        let plan: Plan = if let key { await detectPlan(key: key) } else { .demo }
+        let plan: Plan = if let key {
+            await detectPlan(key: key)
+        } else {
+            .demo
+        }
 
         var url = plan.baseURL
         for component in pathComponents {
@@ -463,7 +471,9 @@ public actor PriceService {
     }
 
     private func detectPlan(key: String) async -> Plan {
-        if let detectedPlan, detectedPlanKey == key { return detectedPlan }
+        if let detectedPlan, detectedPlanKey == key {
+            return detectedPlan
+        }
         var probe = URLRequest(url: Plan.pro.baseURL.appending(component: "ping"))
         probe.setValue(key, forHTTPHeaderField: Plan.pro.authHeader)
         let response = try? await session.data(for: probe)

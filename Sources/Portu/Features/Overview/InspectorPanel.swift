@@ -1,4 +1,3 @@
-// Sources/Portu/Features/Overview/InspectorPanel.swift
 import ComposableArchitecture
 import PortuUI
 import SwiftUI
@@ -11,6 +10,8 @@ struct InspectorPanel: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 TopAssetsDonut(store: store)
+                inspectorDivider
+                PortfolioHealthPanel(store: store)
                 inspectorDivider
                 PriceWatchlist()
             }

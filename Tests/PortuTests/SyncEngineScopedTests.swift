@@ -461,7 +461,9 @@ private actor GatedScopedSyncStubProvider: PortfolioDataProvider {
     }
 
     func waitUntilFetchBalancesStarted() async {
-        if didStartFetchBalances { return }
+        if didStartFetchBalances {
+            return
+        }
 
         await withCheckedContinuation { continuation in
             startContinuation = continuation

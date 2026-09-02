@@ -310,7 +310,9 @@ struct AssetDetailFeature {
         var selectedByDay: [Date: (priority: Int, point: HistoricalAssetPricePoint)] = [:]
 
         let orderedRows = rows.sorted { lhs, rhs in
-            if lhs.fetchedAt == rhs.fetchedAt { return lhs.id.uuidString < rhs.id.uuidString }
+            if lhs.fetchedAt == rhs.fetchedAt {
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
             return lhs.fetchedAt > rhs.fetchedAt
         }
         for row in orderedRows where row.day >= startDay {

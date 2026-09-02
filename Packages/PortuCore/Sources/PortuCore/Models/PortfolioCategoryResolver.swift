@@ -213,8 +213,12 @@ public struct PortfolioCategoryResolver: Equatable, Sendable {
         categories: [PortfolioCategorySnapshot],
         rules: [CategorySymbolRuleSnapshot]) {
         let sortedCategories = categories.sorted {
-            if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
-            if $0.name != $1.name { return $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            if $0.sortOrder != $1.sortOrder {
+                return $0.sortOrder < $1.sortOrder
+            }
+            if $0.name != $1.name {
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
             return $0.id.uuidString < $1.id.uuidString
         }
         let categoryMap = Dictionary(uniqueKeysWithValues: sortedCategories.map { ($0.id, $0) })

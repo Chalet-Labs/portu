@@ -1,4 +1,3 @@
-// Sources/Portu/Features/Overview/OverviewView.swift
 import ComposableArchitecture
 import PortuCore
 import PortuUI

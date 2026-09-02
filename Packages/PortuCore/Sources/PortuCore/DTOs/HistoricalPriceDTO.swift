@@ -3,7 +3,7 @@ import Foundation
 public enum HistoricalPriceCalendar {
     public static func utcStartOfDay(for date: Date) -> Date {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        calendar.timeZone = TimeZone.gmt
         calendar.locale = Locale(identifier: "en_US_POSIX")
         return calendar.startOfDay(for: date)
     }

@@ -99,7 +99,9 @@ public actor ZerionProvider: PortfolioDataProvider {
             }
         }
         return keys.sorted {
-            if $0.address != $1.address { return $0.address < $1.address }
+            if $0.address != $1.address {
+                return $0.address < $1.address
+            }
             return $0.chainIDs.lexicographicallyPrecedes($1.chainIDs)
         }
     }
@@ -152,7 +154,9 @@ public actor ZerionProvider: PortfolioDataProvider {
                 protocolLogoURL: attributes.applicationMetadata?.icon?.url,
                 healthFactor: nil,
                 tokens: group.tokens.sorted {
-                    if $0.symbol != $1.symbol { return $0.symbol < $1.symbol }
+                    if $0.symbol != $1.symbol {
+                        return $0.symbol < $1.symbol
+                    }
                     return ($0.contractAddress ?? "") < ($1.contractAddress ?? "")
                 })
         }

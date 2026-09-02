@@ -186,7 +186,11 @@ struct APIKeysViewModelTests {
         await viewModel.save()
 
         #expect(store.deletedKeys.contains { key in
-            if case .rpcEndpoint = key { true } else { false }
+            if case .rpcEndpoint = key {
+                true
+            } else {
+                false
+            }
         } == false)
     }
 

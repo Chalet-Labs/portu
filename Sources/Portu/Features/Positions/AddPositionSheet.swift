@@ -1,4 +1,3 @@
-// Sources/Portu/Features/Positions/AddPositionSheet.swift
 import PortuCore
 import SwiftData
 import SwiftUI
@@ -36,7 +35,9 @@ struct AddPositionSheet: View {
     }
 
     private var filteredAssets: [Asset] {
-        if assetSearch.isEmpty { return Array(assets.prefix(20)) }
+        if assetSearch.isEmpty {
+            return Array(assets.prefix(20))
+        }
         return assets.filter {
             $0.symbol.localizedCaseInsensitiveContains(assetSearch) ||
                 $0.name.localizedCaseInsensitiveContains(assetSearch)
@@ -108,7 +109,11 @@ struct AddPositionSheet: View {
             .padding()
         }
         .frame(width: 500, height: 550)
-        .alert("Save Failed", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+        .alert("Save Failed", isPresented: Binding(get: { saveError != nil }, set: {
+            if !$0 {
+                saveError = nil
+            }
+        })) {
             Button("OK") { saveError = nil }
         } message: {
             Text(saveError ?? "")
@@ -182,7 +187,9 @@ enum ManualPositionPricing {
         override: Decimal?,
         displayPrice: Decimal?,
         usdToDisplayRate: Decimal) -> Decimal {
-        if let override { return override }
+        if let override {
+            return override
+        }
         guard let displayPrice, usdToDisplayRate > 0 else { return 0 }
         return amount * (displayPrice / usdToDisplayRate)
     }

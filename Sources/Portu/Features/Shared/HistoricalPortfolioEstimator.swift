@@ -1,4 +1,5 @@
 import Foundation
+import PortuCore
 
 // swiftformat:disable redundantSendable
 
@@ -63,8 +64,8 @@ enum HistoricalPortfolioEstimator {
         }
         guard !scopedHoldings.isEmpty else { return [] }
 
-        let startDay = utcStartOfDay(for: startDate)
-        let firstRealDay = utcStartOfDay(for: firstRealSnapshotDate)
+        let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
+        let firstRealDay = HistoricalPriceCalendar.utcStartOfDay(for: firstRealSnapshotDate)
         var pricesByDay: [Date: [String: Decimal]] = [:]
 
         let normalizedPrices = prices.compactMap { price -> HistoricalPriceEntry? in
@@ -75,7 +76,7 @@ enum HistoricalPortfolioEstimator {
         // HistoricalPriceEntry has no fetchedAt metadata. Sorting by day, id, then price
         // makes duplicate day/id rows deterministic; the highest price wins for exact duplicates.
         for price in normalizedPrices.sorted(by: priceSort) {
-            let day = utcStartOfDay(for: price.day)
+            let day = HistoricalPriceCalendar.utcStartOfDay(for: price.day)
             guard day >= startDay, day < firstRealDay else {
                 continue
             }
@@ -116,7 +117,7 @@ enum HistoricalPortfolioEstimator {
     static func realValues(_ values: [(Date, Decimal)]) -> [HistoricalPortfolioValuePoint] {
         var latestByDay: [Date: (date: Date, value: Decimal)] = [:]
         for (date, value) in values {
-            let day = utcStartOfDay(for: date)
+            let day = HistoricalPriceCalendar.utcStartOfDay(for: date)
             if let existing = latestByDay[day], existing.date > date || (existing.date == date && existing.value >= value) {
                 continue
             }
@@ -129,10 +130,14 @@ enum HistoricalPortfolioEstimator {
     }
 
     private static func priceSort(_ lhs: HistoricalPriceEntry, _ rhs: HistoricalPriceEntry) -> Bool {
-        let lhsDay = utcStartOfDay(for: lhs.day)
-        let rhsDay = utcStartOfDay(for: rhs.day)
-        if lhsDay != rhsDay { return lhsDay < rhsDay }
-        if lhs.coinGeckoId != rhs.coinGeckoId { return lhs.coinGeckoId < rhs.coinGeckoId }
+        let lhsDay = HistoricalPriceCalendar.utcStartOfDay(for: lhs.day)
+        let rhsDay = HistoricalPriceCalendar.utcStartOfDay(for: rhs.day)
+        if lhsDay != rhsDay {
+            return lhsDay < rhsDay
+        }
+        if lhs.coinGeckoId != rhs.coinGeckoId {
+            return lhs.coinGeckoId < rhs.coinGeckoId
+        }
         return lhs.usdPrice < rhs.usdPrice
     }
 
@@ -141,7 +146,7 @@ enum HistoricalPortfolioEstimator {
         firstRealDay: Date) -> [String: Decimal] {
         var latestByID: [String: (day: Date, price: Decimal)] = [:]
         for price in prices {
-            let day = utcStartOfDay(for: price.day)
+            let day = HistoricalPriceCalendar.utcStartOfDay(for: price.day)
             guard day <= firstRealDay, price.usdPrice > 0 else { continue }
             if let existing = latestByID[price.coinGeckoId] {
                 guard day > existing.day || (day == existing.day && price.usdPrice > existing.price) else {
@@ -155,12 +160,5 @@ enum HistoricalPortfolioEstimator {
 
     private static func normalizedID(_ id: String) -> String? {
         TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
-    }
-
-    private static func utcStartOfDay(for date: Date) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
-        calendar.locale = Locale(identifier: "en_US_POSIX")
-        return calendar.startOfDay(for: date)
     }
 }

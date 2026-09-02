@@ -80,7 +80,9 @@ nonisolated struct CoinGeckoMarketChartResponse {
         }
 
         self.prices = latestByDay.values.sorted {
-            if $0.day != $1.day { return $0.day < $1.day }
+            if $0.day != $1.day {
+                return $0.day < $1.day
+            }
             return $0.timestamp < $1.timestamp
         }
     }

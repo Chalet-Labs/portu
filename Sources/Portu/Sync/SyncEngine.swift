@@ -257,12 +257,20 @@ final class SyncEngine: @unchecked Sendable {
         asset.category = dto.category
         asset.logoURL = dto.logoURL ?? asset.logoURL
 
-        if dto.isVerified { asset.isVerified = true }
+        if dto.isVerified {
+            asset.isVerified = true
+        }
 
         // Append-only: fill in missing keys, never overwrite
-        if asset.coinGeckoId == nil, let cgId = normalizedUpsertKey(dto.coinGeckoId) { asset.coinGeckoId = cgId }
-        if asset.sourceKey == nil, let key = normalizedUpsertKey(dto.sourceKey) { asset.sourceKey = key }
-        if asset.upsertChain == nil, let chain = dto.chain { asset.upsertChain = chain }
+        if asset.coinGeckoId == nil, let cgId = normalizedUpsertKey(dto.coinGeckoId) {
+            asset.coinGeckoId = cgId
+        }
+        if asset.sourceKey == nil, let key = normalizedUpsertKey(dto.sourceKey) {
+            asset.sourceKey = key
+        }
+        if asset.upsertChain == nil, let chain = dto.chain {
+            asset.upsertChain = chain
+        }
         if
             asset.upsertContract == nil,
             let contract = normalizedUpsertKey(dto.contractAddress),
@@ -270,7 +278,9 @@ final class SyncEngine: @unchecked Sendable {
             asset.upsertChain == dtoChain {
             asset.upsertContract = contract
         }
-        if asset.debankId == nil, let dbId = normalizedUpsertKey(dto.debankId) { asset.debankId = dbId }
+        if asset.debankId == nil, let dbId = normalizedUpsertKey(dto.debankId) {
+            asset.debankId = dbId
+        }
     }
 
     // MARK: - Phase B: Snapshots
@@ -364,47 +374,11 @@ final class SyncEngine: @unchecked Sendable {
         timestamp: Date,
         positions: [Position],
         refreshedSyncableAccountIDs: Set<UUID>) {
-        var accumulators: [String: AssetSnapshotAccumulator] = [:]
-
-        for pos in positions {
-            guard let account = pos.account else { continue }
-            let usesStaticHoldings = account.dataSource == .manual || account.dataSource == .zapper
-            if !usesStaticHoldings, refreshedSyncableAccountIDs.contains(account.id) == false {
-                continue
-            }
-            let accountId = account.id
-
-            for token in pos.tokens {
-                guard let asset = token.asset else { continue }
-                if token.role.isReward { continue }
-
-                let key = "\(accountId):\(asset.id)"
-
-                if accumulators[key] == nil {
-                    accumulators[key] = AssetSnapshotAccumulator(
-                        accountId: accountId,
-                        assetId: asset.id,
-                        symbol: asset.symbol,
-                        category: asset.category)
-                }
-
-                if token.role.isBorrow {
-                    accumulators[key]!.borrowAmount += token.amount
-                    accumulators[key]!.borrowUsdValue += token.usdValue
-                } else {
-                    accumulators[key]!.grossAmount += token.amount
-                    accumulators[key]!.grossUsdValue += token.usdValue
-                }
-            }
-        }
-
-        for acc in accumulators.values {
-            let snap = AssetSnapshot(
-                syncBatchId: batchId, timestamp: timestamp,
-                accountId: acc.accountId, assetId: acc.assetId,
-                symbol: acc.symbol, category: acc.category,
-                amount: acc.grossAmount, usdValue: acc.grossUsdValue,
-                borrowAmount: acc.borrowAmount, borrowUsdValue: acc.borrowUsdValue)
+        for snap in Self.accumulatedAssetSnapshots(
+            batchId: batchId,
+            timestamp: timestamp,
+            positions: positions,
+            refreshedSyncableAccountIDs: refreshedSyncableAccountIDs) {
             modelContext.insert(snap)
         }
     }

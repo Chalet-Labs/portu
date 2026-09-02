@@ -1,4 +1,3 @@
-// Packages/PortuNetwork/Sources/PortuNetwork/Providers/ProviderCapabilities.swift
 import Foundation
 
 public struct ProviderCapabilities: Sendable {

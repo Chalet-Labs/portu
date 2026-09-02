@@ -21,13 +21,17 @@ actor MockProvider: PortfolioDataProvider {
 
     func fetchBalances(context _: SyncContext) async throws -> [PositionDTO] {
         fetchBalancesCalled = true
-        if let error = shouldThrow { throw error }
+        if let error = shouldThrow {
+            throw error
+        }
         return balancesToReturn
     }
 
     func fetchDeFiPositions(context _: SyncContext) async throws -> [PositionDTO] {
         fetchDeFiCalled = true
-        if let error = shouldThrow { throw error }
+        if let error = shouldThrow {
+            throw error
+        }
         return defiToReturn
     }
 }

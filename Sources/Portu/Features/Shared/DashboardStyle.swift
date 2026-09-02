@@ -4,8 +4,6 @@ import SwiftUI
 enum DashboardStyle {
     static let pagePadding: CGFloat = 16
     static let panelPadding: CGFloat = 14
-    static let compactPadding: CGFloat = 10
-
     static let pageTitleFont = Font.system(size: 18, weight: .semibold)
     static let heroValueFont = Font.system(size: 34, weight: .medium, design: .monospaced)
     static let sectionTitleFont = Font.system(size: 14, weight: .semibold)
@@ -105,26 +103,6 @@ struct DashboardMetricBlock: View {
                     .font(.caption2)
                     .foregroundStyle(PortuTheme.dashboardTertiaryText)
             }
-        }
-    }
-}
-
-struct DashboardSectionHeader<Trailing: View>: View {
-    let title: String
-    let trailing: Trailing
-
-    init(_ title: String, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
-        self.title = title
-        self.trailing = trailing()
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(title)
-                .font(DashboardStyle.sectionTitleFont)
-                .foregroundStyle(PortuTheme.dashboardText)
-            Spacer(minLength: 8)
-            trailing
         }
     }
 }
