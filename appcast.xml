@@ -3,6 +3,23 @@
     <channel>
         <title>Portu</title>
         <item>
+            <title>1.9.2</title>
+            <pubDate>Wed, 02 Sep 2026 20:49:37 +0000</pubDate>
+            <link>https://github.com/Chalet-Labs/portu</link>
+            <sparkle:version>26</sparkle:version>
+            <sparkle:shortVersionString>1.9.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## [1.9.2](https://github.com/Chalet-Labs/portu/compare/v1.9.1...v1.9.2) (2026-08-30)
+
+
+### Performance Improvements
+
+* compute Overview chart estimate outside body with day-scoped snapshot fetches ([#106](https://github.com/Chalet-Labs/portu/issues/106)) ([bbe1696](https://github.com/Chalet-Labs/portu/commit/bbe169635a6a1730d43ec509018be3ed2f74a19e)), closes [#97](https://github.com/Chalet-Labs/portu/issues/97)
+
+]]></description>
+            <enclosure url="https://github.com/Chalet-Labs/portu/releases/download/v1.9.2/Portu-1.9.2.dmg" length="12875573" type="application/octet-stream" sparkle:edSignature="aJuQ5P8kQjd1KQc6aKfguCiGV125qXbZWtN6ptVSU234caxk0jrks0EzSS71R2W5Yn4EcoDD/qk1X3pCMssfBQ=="/>
+        </item>
+        <item>
             <title>1.9.1</title>
             <pubDate>Sun, 30 Aug 2026 10:43:03 +0000</pubDate>
             <link>https://github.com/Chalet-Labs/portu</link>
