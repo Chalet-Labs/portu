@@ -1,4 +1,3 @@
-// Sources/Portu/Features/AllAssets/NetworksTab.swift
 import PortuCore
 import PortuUI
 import SwiftData

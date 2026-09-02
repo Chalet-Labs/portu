@@ -1,4 +1,3 @@
-// Sources/Portu/Features/AllAssets/PlatformsTab.swift
 import PortuCore
 import PortuUI
 import SwiftData

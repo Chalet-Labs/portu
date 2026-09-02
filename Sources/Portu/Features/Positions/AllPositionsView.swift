@@ -1,4 +1,3 @@
-// Sources/Portu/Features/Positions/AllPositionsView.swift
 import PortuCore
 import PortuUI
 import SwiftData

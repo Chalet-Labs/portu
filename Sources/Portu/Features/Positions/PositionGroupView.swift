@@ -1,4 +1,3 @@
-// Sources/Portu/Features/Positions/PositionGroupView.swift
 import PortuCore
 import PortuUI
 import SwiftUI

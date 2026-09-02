@@ -1,4 +1,3 @@
-// Sources/Portu/Features/Overview/PortfolioValueChartFeature.swift
 import Foundation
 import PortuCore
 import SwiftData

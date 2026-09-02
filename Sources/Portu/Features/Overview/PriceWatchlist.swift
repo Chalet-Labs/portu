@@ -1,4 +1,3 @@
-// Sources/Portu/Features/Overview/PriceWatchlist.swift
 import PortuCore
 import PortuUI
 import SwiftData

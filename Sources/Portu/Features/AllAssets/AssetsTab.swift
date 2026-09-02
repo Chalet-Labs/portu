@@ -1,4 +1,3 @@
-// Sources/Portu/Features/AllAssets/AssetsTab.swift
 import AppKit
 import ComposableArchitecture
 import PortuCore

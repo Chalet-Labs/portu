@@ -1,4 +1,3 @@
-// Sources/Portu/Features/Positions/PositionFilterSidebar.swift
 import PortuCore
 import PortuUI
 import SwiftUI
