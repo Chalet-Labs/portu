@@ -33,9 +33,18 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
     }
 
     var body: some View {
-        content
-            .environment(\.historicalPriceChanges24h, historicalBackfillEnabled ? historicalChanges24h : [:])
-            .environment(\.historicalDisplayPrices, historicalBackfillEnabled ? historicalDisplayPrices : [:])
+        let (changes24h, displayPrices): ([String: Decimal], [String: Decimal])
+        if historicalBackfillEnabled {
+            let entries = historicalEntries
+            changes24h = OverviewHistoricalPriceChangeFeature.changes24h(from: entries)
+            displayPrices = OverviewHistoricalPriceChangeFeature.latestPrices(from: entries)
+        } else {
+            changes24h = [:]
+            displayPrices = [:]
+        }
+        return content
+            .environment(\.historicalPriceChanges24h, changes24h)
+            .environment(\.historicalDisplayPrices, displayPrices)
     }
 
     private var historicalEntries: [HistoricalPriceEntry] {
@@ -47,14 +56,6 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
             from: historicalPrices,
             displayCurrency: appState.selectedCurrency,
             context: context)
-    }
-
-    private var historicalChanges24h: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.changes24h(from: historicalEntries)
-    }
-
-    private var historicalDisplayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.latestPrices(from: historicalEntries)
     }
 }
 
@@ -74,7 +75,9 @@ extension OverviewHistoricalPriceChangeFeature {
         var usdFallbackRows: [PriceKey: HistoricalPriceEntry] = [:]
 
         let orderedRows = rows.sorted { lhs, rhs in
-            if lhs.fetchedAt == rhs.fetchedAt { return lhs.id.uuidString < rhs.id.uuidString }
+            if lhs.fetchedAt == rhs.fetchedAt {
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
             return lhs.fetchedAt < rhs.fetchedAt
         }
         for row in orderedRows {
@@ -101,7 +104,9 @@ extension OverviewHistoricalPriceChangeFeature {
             selectedRows[key] == nil ? value : nil
         })
         .sorted {
-            if $0.coinGeckoId != $1.coinGeckoId { return $0.coinGeckoId < $1.coinGeckoId }
+            if $0.coinGeckoId != $1.coinGeckoId {
+                return $0.coinGeckoId < $1.coinGeckoId
+            }
             return $0.day < $1.day
         }
     }

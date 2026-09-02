@@ -104,6 +104,17 @@ struct OverviewPositionTabs: View {
 
     // MARK: - Context
 
+    /// Built fresh on every body evaluation, including tab clicks.
+    ///
+    /// Deliberately not memoized (issue #98 residual, audited 2026-09-02):
+    /// the rebuild — two price-dictionary merges plus small-table maps and
+    /// resolver construction — is dominated by the per-tab `groups()`
+    /// projection that a tab click runs anyway. A staleness-free `@State`
+    /// cache key is buildable today (`PortfolioCategoryResolver` is
+    /// `Equatable`, with snapshot-based stored properties), but building and
+    /// comparing the key on every body would re-pay most of the rebuild it
+    /// avoids. If this ever shows up in Instruments, memoize keyed on those
+    /// resolver snapshots.
     private var positionContext: OverviewPositionContext {
         OverviewPositionContext(
             prices: displayPrices,
