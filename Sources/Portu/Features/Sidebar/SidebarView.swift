@@ -7,8 +7,78 @@ import SwiftUI
 struct SidebarView: View {
     let store: StoreOf<AppFeature>
 
-    @Environment(AppState.self) private var appState
     @Environment(\.openSettings) private var openSettings
+    @State private var searchText = ""
+
+    init(store: StoreOf<AppFeature>) {
+        self.store = store
+    }
+
+    private var filteredSections: [SidebarLayoutSection] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return SidebarLayout.navigationSections }
+
+        return SidebarLayout.navigationSections.compactMap { section in
+            let items = section.items.filter { $0.title.localizedCaseInsensitiveContains(query) }
+            guard !items.isEmpty else { return nil }
+            return SidebarLayoutSection(title: section.title, items: items, isDisabled: section.isDisabled)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    SidebarPortfolioHeader()
+
+                    DashboardSearchField(placeholder: "Search", text: $searchText)
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(filteredSections) { section in
+                            SidebarNavigationSection(
+                                section: section,
+                                selectedSection: store.sidebarSelection) { item in
+                                    select(item)
+                                }
+                        }
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 12)
+                .padding(.bottom, 16)
+            }
+
+            SidebarFooter(
+                items: SidebarLayout.footerItems) {
+                    openSettings()
+                }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(PortuTheme.dashboardSidebarBackground)
+    }
+
+    private func select(_ item: SidebarItem) {
+        switch item {
+        case let .section(section):
+            store.send(.sectionSelected(section))
+        case .settings:
+            openSettings()
+        case .strategies:
+            break
+        }
+    }
+}
+
+// Owns every input the portfolio valuation reads (position, override, and
+// mapping queries; price/currency state; dashboard settings). Parameterless
+// on purpose: when `SidebarView.body` re-evaluates on a navigation click
+// (`store.sidebarSelection`), the unchanged `SidebarPortfolioHeader()` value
+// lets SwiftUI skip this body, so the O(portfolio) valuation no longer runs
+// per click (issue #98, criterion 1). It still re-renders when its own
+// observed inputs change.
+
+private struct SidebarPortfolioHeader: View {
+    @Environment(AppState.self) private var appState
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var positions: [Position]
@@ -21,11 +91,6 @@ struct SidebarView: View {
     private var hideUnpriced = true
     @AppStorage(TokenDashboardSettings.hideDustKey)
     private var hideDust = true
-    @State private var searchText = ""
-
-    init(store: StoreOf<AppFeature>) {
-        self.store = store
-    }
 
     private var activePositions: [Position] {
         positions.filter { $0.account?.isActive == true }
@@ -71,73 +136,11 @@ struct SidebarView: View {
             hideDust: hideDust)
     }
 
-    private var filteredSections: [SidebarLayoutSection] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return SidebarLayout.navigationSections }
-
-        return SidebarLayout.navigationSections.compactMap { section in
-            let items = section.items.filter { $0.title.localizedCaseInsensitiveContains(query) }
-            guard !items.isEmpty else { return nil }
-            return SidebarLayoutSection(title: section.title, items: items, isDisabled: section.isDisabled)
-        }
-    }
-
     var body: some View {
-        let currentTotalValue = totalValue
-        let currentChange24h = change24h
+        let totalValue = totalValue
+        let change24h = change24h
+        let currencyCode = appState.selectedCurrency.displayCode
 
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    SidebarPortfolioHeader(
-                        totalValue: currentTotalValue,
-                        change24h: currentChange24h,
-                        currencyCode: appState.selectedCurrency.displayCode)
-
-                    DashboardSearchField(placeholder: "Search", text: $searchText)
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(filteredSections) { section in
-                            SidebarNavigationSection(
-                                section: section,
-                                selectedSection: store.sidebarSelection) { item in
-                                    select(item)
-                                }
-                        }
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.top, 12)
-                .padding(.bottom, 16)
-            }
-
-            SidebarFooter(
-                items: SidebarLayout.footerItems) {
-                    openSettings()
-                }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(PortuTheme.dashboardSidebarBackground)
-    }
-
-    private func select(_ item: SidebarItem) {
-        switch item {
-        case let .section(section):
-            store.send(.sectionSelected(section))
-        case .settings:
-            openSettings()
-        case .strategies:
-            break
-        }
-    }
-}
-
-private struct SidebarPortfolioHeader: View {
-    let totalValue: Decimal
-    let change24h: Decimal
-    let currencyCode: String
-
-    var body: some View {
         HStack(alignment: .top, spacing: 10) {
             ZStack {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
