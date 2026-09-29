@@ -4,17 +4,21 @@ Use this reference when a Swift codebase needs strict layer boundaries and use-c
 
 ## Contents
 - [Core Dependency Rule](#core-dependency-rule)
+- [Default Path](#default-path)
 - [Canonical Layer Layout](#canonical-layer-layout)
 - [Entities](#entities)
 - [Use Cases](#use-cases)
 - [Repository Boundary](#repository-boundary)
 - [Dependency Injection Pattern](#dependency-injection-pattern)
 - [DTO to Domain Mapping](#dto-to-domain-mapping)
+- [End-to-End Feature Slice](#end-to-end-feature-slice)
 - [Concurrency and Cancellation](#concurrency-and-cancellation)
 - [Presentation Boundary](#presentation-boundary)
+- [Advanced Variants](#advanced-variants)
+- [Migration Notes](#migration-notes)
 - [Anti-Patterns and Fixes](#anti-patterns-and-fixes)
 - [Testing Strategy](#testing-strategy)
-- [When to Prefer Clean Architecture](#when-to-prefer-clean-architecture)
+- [When to Use Clean Architecture](#when-to-use-clean-architecture)
 - [PR Review Checklist](#pr-review-checklist)
 
 ## Core Dependency Rule
@@ -36,14 +40,26 @@ Rules:
 - domain remains pure Swift
 - frameworks are implementation details and replaceable
 
+## Default Path
+
+For one feature, start with one focused use case, one domain repository protocol, one data implementation, and one presentation adapter:
+- `Domain/Entities` + `Domain/UseCases` + repository protocol
+- `Data/Repositories` + mapper from DTO to domain
+- `Presentation` ViewModel/Presenter consuming use-case abstraction
+- `App` assembly wiring concrete dependencies
+
+Keep boundaries strict, but avoid creating extra layers/components until needed.
+
 ## Canonical Layer Layout
 
 ```text
 Domain/
   Entities/
+  Repositories/
   UseCases/
 Data/
   Repositories/
+  Mappers/
   API/
   Persistence/
 Presentation/
@@ -52,8 +68,8 @@ App/
 ```
 
 Guidance:
-- keep entities and use-case protocols in `Domain`
-- keep repository implementations and external adapters in `Data`
+- keep entities, repository protocols, and use-case protocols in `Domain`
+- keep repository implementations, DTO mappers, and external adapters in `Data`
 - keep views/view models/controllers in `Presentation`
 - keep DI composition root and app bootstrap in `App`
 
@@ -175,6 +191,31 @@ Rules:
 - test mappers independently for edge cases and invalid input
 - keep mapping pure and side-effect-free
 
+## End-to-End Feature Slice
+
+```text
+Domain/
+  Entities/User.swift
+  Repositories/UserRepository.swift
+  UseCases/LoadUser.swift
+Data/
+  API/UserDTO.swift
+  Mappers/UserMapper.swift
+  Repositories/LiveUserRepository.swift
+Presentation/
+  Features/Profile/ProfileViewModel.swift
+  Features/Profile/ProfileView.swift
+App/
+  UserFeatureAssembly.swift
+```
+
+End-to-end request path:
+- View triggers `ProfileViewModel.load()`
+- ViewModel calls `LoadUserUseCase.execute(id:)`
+- Use case calls `UserRepository.fetch(id:)`
+- Data repository fetches DTO, maps via `UserMapper`, returns domain `User`
+- ViewModel maps `User` to display state
+
 ## Concurrency and Cancellation
 
 Use structured concurrency in use cases and let cancellation propagate through async calls.
@@ -201,7 +242,7 @@ Rules:
 - prefer `async let` for concurrent independent fetches
 - cancellation propagates automatically through `try await`
 - use `Task.checkCancellation()` before expensive work if needed
-- in presentation, cancel tasks on view disappearance or new request
+- in presentation, cancel tasks on view disappearance or new request (see `references/concurrency.md`)
 
 ## Presentation Boundary
 
@@ -222,6 +263,18 @@ UIKit adaptation:
 - use Presenter/ViewModel objects owned by view controllers
 - convert delegate/target-action events into presenter intents
 - keep controllers responsible for rendering only; business coordination stays in presenter/use case layers
+
+## Advanced Variants
+
+- Multiple composed use cases per feature workflow
+- Separate data sources (remote/local cache) behind one repository abstraction
+- Dedicated domain services for cross-entity policies
+
+## Migration Notes
+
+- From tightly coupled MVC/MVVM: introduce repository protocols in domain first, then move implementations to data.
+- Defer splitting into many use cases until business responsibilities are actually distinct.
+- Keep presentation API stable while moving internals toward layer boundaries.
 
 ## Anti-Patterns and Fixes
 
@@ -247,10 +300,11 @@ UIKit adaptation:
 
 ## Testing Strategy
 
-Prioritize:
-- use-case unit tests with repository stubs
-- mapper tests (DTO <-> domain) in data layer
-- presentation tests with mocked use cases
+### Minimum Bar
+
+- Use-case success + failure tests with repository stubs.
+- Mapper edge-case test for invalid transport input.
+- Presentation test proving it depends on use-case abstraction (not live data classes).
 
 Rules:
 - avoid network in unit tests
@@ -316,22 +370,26 @@ private actor BlockingUserRepository: UserRepository {
 private enum TestError: Error { case notFound }
 ```
 
-## When to Prefer Clean Architecture
+## When to Use Clean Architecture
 
-Prefer when:
+Use Clean Architecture when:
 - app/domain complexity is medium to large
 - multiple teams need stable boundaries
 - long-term maintainability and replaceable infrastructure matter
 
-Prefer lighter layering when:
-- app is small and short-lived
-- strict layering overhead is higher than expected benefit
+Switch or pair when:
+- the app or feature is small and layering overhead exceeds the benefit: use `references/mvvm.md` or `references/mvp.md` alone
+- state orchestration grows inside presentation: pair with `references/mvi.md` or `references/tca.md`
+
+For cross-architecture disqualifiers and migration triggers, see `references/selection-guide.md`.
 
 ## PR Review Checklist
 
 - Dependency direction points inward only.
 - Domain layer is framework-independent.
+- DTOs never cross into presentation/domain APIs.
 - Use cases encapsulate business rules and stay focused.
 - Presentation does not import data implementations.
 - Repository abstractions live at domain boundary.
-- Tests isolate use cases from infrastructure.
+- Composition root owns concrete implementations and environment wiring.
+- Tests isolate use cases from infrastructure and meet the minimum bar in Testing Strategy.

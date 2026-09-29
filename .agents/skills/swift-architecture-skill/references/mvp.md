@@ -4,16 +4,21 @@ Use this reference when you need a passive View that delegates all logic to a Pr
 
 ## Contents
 - [Core Boundaries](#core-boundaries)
+- [Default Path](#default-path)
 - [Feature Structure](#feature-structure)
 - [View Protocol](#view-protocol)
 - [View Data](#view-data)
 - [Presenter Pattern](#presenter-pattern)
 - [UIKit View Implementation](#uikit-view-implementation)
 - [SwiftUI Adapter](#swiftui-adapter)
+- [Advanced Variants](#advanced-variants)
 - [Assembly](#assembly)
+- [Navigation Ownership Rules](#navigation-ownership-rules)
+- [Module Scaling Rules](#module-scaling-rules)
+- [Migration Notes](#migration-notes)
 - [Anti-Patterns and Fixes](#anti-patterns-and-fixes)
 - [Testing Strategy](#testing-strategy)
-- [When to Prefer MVP](#when-to-prefer-mvp)
+- [When to Use MVP](#when-to-use-mvp)
 - [PR Review Checklist](#pr-review-checklist)
 
 ## Core Boundaries
@@ -32,6 +37,16 @@ Presenter -> Repository/Service (via protocols)
 ```
 
 The key difference from MVVM: the View holds no observable state — it passively executes commands dispatched by the Presenter.
+
+## Default Path
+
+Start with one passive view protocol, one presenter, one repository/use-case abstraction, and one assembly function:
+- View protocol with explicit render/error/loading commands
+- Presenter with async task cancellation + request identity guard
+- Passive view implementation (UIKit or adapter)
+- Assembly that wires presenter/view/dependency from outside
+
+Delegate navigation to a Router/Coordinator boundary when transitions extend beyond simple dismissal.
 
 ## Feature Structure
 
@@ -260,6 +275,12 @@ struct ProfileScreen: View {
 }
 ```
 
+## Advanced Variants
+
+- Router/Coordinator-backed navigation for multi-screen flows
+- Shared formatting/mapping helpers for complex display policies
+- SwiftUI adapter wrapper for mixed UIKit/SwiftUI stacks
+
 ## Assembly
 
 Wire dependencies in one place — the assembler or coordinator.
@@ -287,6 +308,23 @@ Rules:
 - inject concrete repositories from the composition root
 - keep the assembly function as the only place that creates the full module
 
+## Navigation Ownership Rules
+
+- Presenter decides **when** navigation should happen.
+- Router/Coordinator decides **how** transitions are executed.
+- View never pushes/presents directly.
+
+## Module Scaling Rules
+
+- Keep one presenter per screen-level feature.
+- Split when a presenter owns unrelated workflows or too many service dependencies.
+- Promote shared business rules to use cases/services instead of cross-presenter calls.
+
+## Migration Notes
+
+- From MVC: move formatting + async orchestration into presenter first, then extract repository abstractions.
+- From MVVM: keep existing domain contracts and replace observable state bindings with presenter command dispatch only when passive-view benefits are clear.
+
 ## Anti-Patterns and Fixes
 
 1. View containing logic:
@@ -311,8 +349,12 @@ Rules:
 
 ## Testing Strategy
 
+### Minimum Bar
+
+- Presenter success, failure, and cancellation-path tests with mocked view.
+- One stale-request guard test proving old responses do not overwrite current view state.
+
 Test the Presenter in isolation with a mock View and stub Repository.
-Verify the Presenter-to-View contract for success, failure, and cancellation paths.
 Keep tests deterministic by controlling async behaviour with stubs, not `sleep`.
 
 ```swift
@@ -399,19 +441,22 @@ final class ProfilePresenterTests: XCTestCase {
 private enum TestError: Error { case notFound }
 ```
 
-## When to Prefer MVP
+## When to Use MVP
 
-Prefer MVP when:
+Use MVP when:
 - UIKit is the primary stack and you want full Presenter testability without observable state objects
 - the View must be completely passive (no `if` logic, no `guard`, no formatting)
-- migrating from MVC and want a minimal step up without pulling in Combine or the `@Observable` macro
-- existing team is familiar with the Presenter + View protocol pattern
+- migrating from MVC as a minimal step up without pulling in Combine or `@Observable`
+- the team is familiar with the Presenter + View protocol pattern
 
-Prefer MVVM when:
-- SwiftUI is the primary stack and `@Observable` / `@Published` state binding reduces wiring overhead
-- you want reactive data flow with less hand-written command dispatch
+Compared with VIPER, MVP omits the Interactor and Router as distinct components, making it lighter for single-screen features.
 
-Compared with VIPER, MVP omits the Interactor and Router as distinct components, making it lighter and simpler for single-screen features.
+Switch or pair when:
+- SwiftUI is the primary stack and state binding reduces wiring: switch to `references/mvvm.md`
+- strict module role separation is needed at larger scale: evolve to `references/viper.md`
+- navigation spans multiple screens: pair with `references/coordinator.md`
+
+For cross-architecture disqualifiers and migration triggers, see `references/selection-guide.md`.
 
 ## PR Review Checklist
 
@@ -419,6 +464,7 @@ Compared with VIPER, MVP omits the Interactor and Router as distinct components,
 - `view` property in Presenter is `weak` and typed as `ProfileView`.
 - Presenter cancels the previous task before starting a new load.
 - All Presenter-to-View calls are guarded by request identity where async.
+- Errors are mapped to user-facing messages, not raw error strings.
 - Repository and service dependencies are injected via protocols, not singletons.
-- Tests cover success, failure, and stale-cancellation paths.
+- Tests meet the minimum bar in Testing Strategy.
 - Assembly function wires the module from the outside — Presenter does not create its own dependencies.
