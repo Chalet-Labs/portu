@@ -4,14 +4,18 @@ Use this reference when strict feature-level separation is needed, especially in
 
 ## Contents
 - [Core Components](#core-components)
+- [Default Path](#default-path)
 - [Canonical Feature Layout](#canonical-feature-layout)
 - [Responsibilities](#responsibilities)
 - [Wiring Pattern](#wiring-pattern)
+- [Advanced Variants](#advanced-variants)
 - [Assembly Guidance](#assembly-guidance)
 - [Concurrency and Cancellation](#concurrency-and-cancellation)
+- [Migration Notes](#migration-notes)
+- [Module Scaling Rules](#module-scaling-rules)
 - [Anti-Patterns and Fixes](#anti-patterns-and-fixes)
 - [Testing Strategy](#testing-strategy)
-- [When to Prefer VIPER](#when-to-prefer-viper)
+- [When to Use VIPER](#when-to-use-viper)
 - [PR Review Checklist](#pr-review-checklist)
 
 ## Core Components
@@ -28,6 +32,22 @@ Expected interaction:
 View -> Presenter -> Interactor -> Repository/Service -> Interactor -> Presenter -> View
 Presenter -> Router (navigation)
 ```
+
+## Default Path
+
+Start with one module with View, Presenter, Interactor, Router, and minimal entity/view-data mapping. Keep module contracts narrow: one interactor input protocol, one view protocol, one routing protocol.
+
+```text
+Profile/
+  ProfileView.swift
+  ProfilePresenter.swift
+  ProfileInteractor.swift
+  ProfileRouter.swift
+  ProfileEntity.swift
+  ProfileModule.swift
+```
+
+Start with this shape before adding extra protocol layers or helper types.
 
 ## Canonical Feature Layout
 
@@ -164,6 +184,12 @@ final class ProfilePresenter {
 
 Keep `view` weak to avoid retain cycles.
 Keep presenter/view updates on the main actor so UI calls are thread-safe.
+
+## Advanced Variants
+
+- SwiftUI adapter layer over unchanged Presenter/Interactor/Router
+- Child module composition through router-managed subflows
+- Shared interactor services for cross-module capabilities
 
 ## Assembly Guidance
 
@@ -348,6 +374,18 @@ Rules:
 - cancel all tasks on module teardown
 - keep presenter intent methods synchronous (`func load()`), and manage async tasks internally
 
+## Migration Notes
+
+- From MVC: move orchestration into Presenter first, then extract business work into Interactor and navigation into Router.
+- From MVP: split service/business responsibilities from Presenter into Interactor only when boundaries become overloaded.
+- Introduce VIPER incrementally on modules with churn; avoid whole-app rewrites.
+
+## Module Scaling Rules
+
+- Keep one VIPER module per feature boundary.
+- Split a module when Presenter or Interactor owns unrelated user journeys.
+- Extract shared policies to domain/use-case services instead of cross-module imports.
+
 ## Anti-Patterns and Fixes
 
 1. Massive Presenter:
@@ -372,15 +410,15 @@ Rules:
 
 ## Testing Strategy
 
-Prioritize isolated tests per component:
-- Presenter tests with mocked View/Interactor/Router
-- Interactor tests with mocked repositories/services
-- Router tests for navigation triggers where feasible
+### Minimum Bar
+
+- Presenter tests for success, failure, and one cancellation-safe path.
+- Interactor tests for business-rule correctness with stub repositories.
+- Router test or spy assertion for core navigation triggers.
 
 Testing rules:
 - assert interactions and outputs, not concrete implementations
 - avoid network in unit tests
-- verify presenter handles success and failure states
 - verify Presenter-to-View error contract (`showError(message:)`) for failure paths
 - test cancellation behavior when a newer load replaces an in-flight request
 - keep async tests deterministic with controlled stubs/clocks (avoid sleeps)
@@ -477,20 +515,21 @@ final class ProfilePresenterTests: XCTestCase {
 private enum TestError: Error { case notFound }
 ```
 
-## When to Prefer VIPER
+## When to Use VIPER
 
-Prefer VIPER when:
+Use VIPER when:
 - multiple teams need independently owned feature modules with explicit boundaries
 - strict role separation reduces architecture drift in long-lived codebases
 - interactor-level business rules must be testable without booting UI screens
-- modular compilation and clear dependency direction are high priorities
-- UIKit-heavy codebase benefits from router-driven assembly/navigation
+- a UIKit-heavy codebase benefits from router-driven assembly/navigation
 
-Prefer lighter patterns when:
-- app is small or prototyping quickly
-- ceremony cost outweighs boundary/testability benefits
+Compared with organized MVVM, VIPER adds more setup but enforces role boundaries more strongly at scale.
 
-Compared with organized MVVM, VIPER usually adds more setup but enforces role boundaries more strongly at scale, especially when teams and modules are decoupled.
+Switch or pair when:
+- the app is small, prototyping, or ceremony outweighs boundary benefits: use `references/mvp.md` (lighter passive view) or `references/mvvm.md`
+- strict domain/data boundaries become primary: pair with `references/clean-architecture.md`
+
+For cross-architecture disqualifiers and migration triggers, see `references/selection-guide.md`.
 
 ## PR Review Checklist
 
@@ -498,6 +537,7 @@ Compared with organized MVVM, VIPER usually adds more setup but enforces role bo
 - Presenter does not own business logic implementation details.
 - Interactor does not navigate.
 - Router handles only navigation and module assembly.
+- Module factories are the only wiring entry point.
 - Boundary protocols avoid concrete coupling.
 - Retain cycles are prevented with weak references where needed.
-- Tests cover presenter orchestration and interactor business rules.
+- Tests meet the minimum bar in Testing Strategy.

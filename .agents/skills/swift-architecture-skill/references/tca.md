@@ -4,15 +4,18 @@ Use this reference for strict unidirectional flow, strong composition, and `Test
 
 ## Contents
 - [Mental Model](#mental-model)
+- [Default Path](#default-path)
 - [Canonical Feature Shape](#canonical-feature-shape)
 - [View Integration](#view-integration)
+- [Advanced Variants](#advanced-variants)
 - [Composition Patterns](#composition-patterns)
 - [Dependency Rules](#dependency-rules)
 - [Effects and Concurrency](#effects-and-concurrency)
 - [Navigation Pattern](#navigation-pattern)
 - [Testing with TestStore](#testing-with-teststore)
 - [Anti-Patterns and Fixes](#anti-patterns-and-fixes)
-- [When to Prefer TCA](#when-to-prefer-tca)
+- [Migration Notes (Non-TCA -> TCA)](#migration-notes-non-tca---tca)
+- [When to Use TCA](#when-to-use-tca)
 - [PR Review Checklist](#pr-review-checklist)
 
 ## Mental Model
@@ -29,6 +32,16 @@ Core expectations:
 - isolated side effects via effects
 - dependency injection through TCA dependencies
 - feature composition with scoped reducers
+
+## Default Path
+
+Start with one `@Reducer` feature using `@ObservableState` and modern view bindings:
+- `State` (equatable, value-based)
+- `Action` (user intents + effect results)
+- One `Reduce` body with explicit success/failure actions
+- One dependency client with `liveValue` + `testValue`
+
+Compose child reducers only when a feature boundary is truly distinct.
 
 ## Canonical Feature Shape
 
@@ -203,6 +216,12 @@ final class CounterViewController: UIViewController {
 }
 ```
 
+## Advanced Variants
+
+- Child composition via `Scope` and collection flows via `forEach`
+- Presentation state with `@Presents` and `.ifLet`
+- Request versioning on top of cancellation for out-of-order responses
+
 ## Composition Patterns
 
 Use `Scope` for parent-child composition.
@@ -279,8 +298,13 @@ Keep navigation decisions in reducers and keep views declarative.
 
 ## Testing with `TestStore`
 
+### Minimum Bar
+
+- One reducer transition test for each core user intent.
+- Async success + failure coverage for each effect path.
+- At least one cancellation test for re-entrant effects.
+
 Use `TestStore` for deterministic action/state assertions.
-Cover success, failure, and cancellation paths in async effects.
 
 ```swift
 import XCTest
@@ -394,26 +418,38 @@ final class CounterFeatureTests: XCTestCase {
 - Smell: overlapping effects overwrite current intent.
 - Fix: use `.cancellable(id:cancelInFlight:)` and request IDs when needed.
 
-## When to Prefer TCA
+## Migration Notes (Non-TCA -> TCA)
 
-Prefer TCA when:
-- app has many stateful workflows
-- test determinism is critical
+- Keep existing repositories/use cases; migrate a single feature boundary to TCA first.
+- Translate view-intent methods into `Action`, then move async coordination into `.run` effects.
+- Keep navigation and side-effect adapters at module edges during migration to limit churn.
+
+## When to Use TCA
+
+Use TCA when:
+- the app has many stateful workflows
+- test determinism and effect cancellation correctness are critical
 - composition and modular scaling are required
-- effect cancellation correctness matters
 
-Prefer MVVM or lighter MVI variants when:
-- app is small and unlikely to grow
-- team is not ready for UDF discipline
-- feature speed and low ceremony are prioritized
+Avoid TCA-first adoption when most of these are true:
+- only simple screen-level state with few async branches
+- no near-term need for reducer composition or strict state replay
+- the team cannot absorb dependency and testing model changes now
+- migration budget is low and delivery speed is critical
+
+Switch or pair when:
+- the cost signals above dominate: start with `references/mvvm.md` or `references/mvi.md` and migrate selective high-complexity flows later
+- system boundaries become primary: pair with `references/clean-architecture.md` for domain/data layering
+
+For cross-architecture disqualifiers and migration triggers, see `references/selection-guide.md`.
 
 ## PR Review Checklist
 
 - State is value-based and equatable.
 - Reducer avoids direct side effects.
-- Dependencies are injected and overrideable in tests.
-- Effects have cancellation strategy where needed.
-- Features compose with `Scope`/`forEach`.
+- Dependencies are injected and overrideable in tests (no hidden singletons).
+- Every effect has explicit error mapping and a cancellation strategy where re-entrant.
+- Features compose with `Scope`/`forEach`, and large features are decomposed before the reducer becomes unreviewable.
 - Navigation is modeled in state.
-- Tests cover success, failure, and cancellation flows.
+- Tests meet the minimum bar in Testing with `TestStore`.
 - Views render and send actions only.

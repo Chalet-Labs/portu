@@ -4,14 +4,18 @@ Use this reference for stream-driven features (search, live updates, real-time f
 
 ## Contents
 - [Core Philosophy](#core-philosophy)
+- [Default Path](#default-path)
+- [Reactive-First vs Async-First](#reactive-first-vs-async-first)
 - [Canonical Combine Pattern](#canonical-combine-pattern)
 - [UI Integration by Stack](#ui-integration-by-stack)
+- [Advanced Variants](#advanced-variants)
 - [Operator Guidance](#operator-guidance)
 - [RxSwift Mapping Notes](#rxswift-mapping-notes)
 - [Error Handling Pattern](#error-handling-pattern)
+- [Migration Notes](#migration-notes)
 - [Anti-Patterns and Fixes](#anti-patterns-and-fixes)
 - [Testing Strategy](#testing-strategy)
-- [When to Prefer Reactive Architecture](#when-to-prefer-reactive-architecture)
+- [When to Use Reactive Architecture](#when-to-use-reactive-architecture)
 - [PR Review Checklist](#pr-review-checklist)
 
 ## Core Philosophy
@@ -23,6 +27,17 @@ Input -> Publisher/Observable chain -> State -> UI
 ```
 
 Keep stream composition in presentation or a dedicated reactive layer, not in views.
+
+## Default Path
+
+Choose one primary reactive model per feature: reactive-first pipeline or async/await-first with reactive edges. Start with one input stream, one transformation chain, one state output, and one lifecycle-owned cancellation container, owned by the ViewModel/Presenter (never the view). Add operators only when needed by behavior.
+
+## Reactive-First vs Async-First
+
+- **Reactive-first**: domain interactions are naturally streams (live feeds, websockets, rapid input pipelines). Use publishers/observables end-to-end in presentation.
+- **Async-first with reactive edges**: request/response is mostly imperative async work, with limited stream points (search input, connectivity, notifications). Keep core logic async/await and bridge only edge signals reactively.
+
+Pick one approach per feature and document it to avoid mixed mental models.
 
 ## Canonical Combine Pattern
 
@@ -72,10 +87,7 @@ final class SearchViewModel {
 }
 ```
 
-Key differences from `ObservableObject`:
-- No `@Published` — the `@Observable` macro synthesizes tracking for stored properties.
-- Views use `@State` for ownership and `@Bindable` for two-way binding (`$viewModel.query`).
-- `didSet` triggers side effects on property mutation — no imperative `queryChanged` method needed.
+`didSet` triggers side effects on property mutation, so no imperative `queryChanged` method is needed. For the general `@Observable` vs `ObservableObject` differences, see `references/observation.md`.
 
 When you need Combine operators (complex merges, `combineLatest`, `switchToLatest`), keep pipelines inside the `@Observable` class and assign results to tracked properties:
 
@@ -207,7 +219,7 @@ final class SearchPresenter<S: Scheduler> where S.SchedulerTimeType == DispatchQ
             .map { value in
                 service.search(value)
                     .map(SearchResultState.loaded)
-                    .catch { Just(.failed($0.localizedDescription)) }
+                    .catch { Just(.failed(userMessage(for: $0))) }
             }
             .switchToLatest()
             .sink { [weak self] in self?.state.send($0) }
@@ -248,6 +260,12 @@ final class SearchViewController: UIViewController, UISearchBarDelegate {
 }
 ```
 
+## Advanced Variants
+
+- Multi-stream composition (`combineLatest`, merged refresh triggers)
+- Shared side-effect streams with `share`/multicast
+- Backpressure/throttling for high-frequency event sources
+
 ## Operator Guidance
 
 - `debounce`: stabilize noisy user input (search fields)
@@ -287,12 +305,18 @@ func searchState(
 ) -> AnyPublisher<SearchResultState, Never> {
     service.search(query)
         .map(SearchResultState.loaded)
-        .catch { Just(.failed($0.localizedDescription)) }
+        .catch { Just(.failed(userMessage(for: $0))) }
         .eraseToAnyPublisher()
 }
 ```
 
 For transient failures, prefer fallback state over terminating the stream.
+
+## Migration Notes
+
+- From callback-heavy code: first centralize input and output streams in Presenter/ViewModel.
+- From async-only MVVM: add reactive edges only where event composition is the real complexity driver.
+- Avoid partial operator chains spread across view and model layers during migration.
 
 ## Anti-Patterns and Fixes
 
@@ -318,12 +342,15 @@ For transient failures, prefer fallback state over terminating the stream.
 
 ## Testing Strategy
 
+### Minimum Bar
+
+- Deterministic success sequence test for one representative input stream.
+- One timing/cancellation test (`debounce`, `switchToLatest`, or equivalent).
+- One error-fallback test that proves stream resilience.
+
 Test stream behavior deterministically:
 - input -> expected output transitions
-- success path emits the expected state sequence
 - debounce/throttle behavior with controlled schedulers
-- cancellation behavior for replaced requests
-- error fallback behavior
 
 Rules:
 - inject schedulers/time providers for tests
@@ -438,21 +465,26 @@ private enum TestError: Error {
 
 The canonical `SearchViewModel` already supports scheduler injection for tests.
 
-## When to Prefer Reactive Architecture
+## When to Use Reactive Architecture
 
-Prefer when:
-- feature is event-heavy and stream-oriented
+Use Reactive architecture when:
+- the feature is event-heavy and stream-oriented
 - real-time updates and transformations are core behavior
-- composable async pipelines provide clarity over imperative callbacks
+- composable async pipelines are clearer than imperative callbacks
 
-Prefer MVI/TCA when:
-- explicit state-machine and strict reducer flow are primary requirements
+Switch or pair when:
+- behavior is mostly request/response: use `references/mvvm.md` with plain async/await state updates
+- strict state machines and reducer determinism become primary: move to `references/mvi.md` or `references/tca.md`
+
+For cross-architecture disqualifiers and migration triggers, see `references/selection-guide.md`.
 
 ## PR Review Checklist
 
 - Streams are composed without nested subscriptions.
-- Cancellation/disposal is lifecycle-safe.
-- UI-bound updates are marshaled to main thread.
+- Cancellation/disposal is tied to screen/module lifetimes.
+- UI-bound updates are marshaled to main thread, and scheduler choices are explicit.
+- Shared pipelines do not duplicate side effects across multiple subscribers (`share`/multicast where needed).
 - Operators match intent (`debounce`, `throttle`, `switchToLatest`, `share`).
 - Views/controllers do not hold business pipeline logic.
 - Error handling keeps UX resilient for transient failures.
+- Tests meet the minimum bar in Testing Strategy.

@@ -4,15 +4,19 @@ Use this reference when navigation logic needs to be decoupled from individual s
 
 ## Contents
 - [Core Concept](#core-concept)
+- [Default Path](#default-path)
 - [Feature Structure](#feature-structure)
 - [Coordinator Protocol](#coordinator-protocol)
 - [UIKit Coordinator](#uikit-coordinator)
+- [Advanced Variants](#advanced-variants)
 - [SwiftUI Coordinator](#swiftui-coordinator)
 - [Child Coordinator Pattern](#child-coordinator-pattern)
 - [Deep Linking](#deep-linking)
+- [Migration Notes](#migration-notes)
+- [SwiftUI Purity Guidance](#swiftui-purity-guidance)
 - [Anti-Patterns and Fixes](#anti-patterns-and-fixes)
 - [Testing Strategy](#testing-strategy)
-- [When to Prefer Coordinator](#when-to-prefer-coordinator)
+- [When to Use Coordinator](#when-to-use-coordinator)
 - [PR Review Checklist](#pr-review-checklist)
 
 ## Core Concept
@@ -31,6 +35,16 @@ Rules:
 - screens emit navigation events; coordinators decide what to do with them
 - screens do not reference coordinators or push/present directly
 - parent coordinators launch child coordinators for nested flows
+
+## Default Path
+
+Start with one coordinator per flow, one navigation state model (`path`, optional sheet), and one start entrypoint:
+- `Coordinator` protocol (`start`, `childCoordinators`)
+- One concrete flow coordinator with injected dependencies
+- ViewModels emitting navigation events via closures
+- Optional deep-link handler mapping links to coordinator destinations
+
+Keep business logic in ViewModels/UseCases; the coordinator owns routing only.
 
 ## Feature Structure
 
@@ -151,6 +165,12 @@ final class ProfileCoordinator: Coordinator {
 }
 ```
 
+## Advanced Variants
+
+- Child coordinators for nested reusable subflows
+- Dedicated deep-link parser/handler layer
+- Platform bridge (UIKit router + SwiftUI path coordinator) in mixed stacks
+
 ## SwiftUI Coordinator
 
 For SwiftUI, model navigation state as a value type and bind it to `NavigationStack`.
@@ -179,6 +199,14 @@ final class AppCoordinator: Coordinator {
 
     func showSettings() {
         sheet = .settings
+    }
+
+    func makeProfileViewModel(userID: UUID) -> ProfileViewModel {
+        ProfileViewModel(
+            userID: userID,
+            repository: userRepository,
+            onEditTapped: { [weak self] in self?.path.append(.editProfile(userID)) }
+        )
     }
 
     func pop() {
@@ -223,7 +251,7 @@ struct AppRootView: View {
             .navigationDestination(for: AppDestination.self) { destination in
                 switch destination {
                 case .profile(let id):
-                    ProfileView(viewModel: makeProfileViewModel(userID: id))
+                    ProfileView(viewModel: coordinator.makeProfileViewModel(userID: id))
                 case .editProfile(let id):
                     EditProfileView(userID: id)
                 }
@@ -237,13 +265,6 @@ struct AppRootView: View {
         }
     }
 
-    private func makeProfileViewModel(userID: UUID) -> ProfileViewModel {
-        ProfileViewModel(
-            userID: userID,
-            repository: coordinator.userRepository,
-            onEditTapped: { coordinator.path.append(.editProfile(userID)) }
-        )
-    }
 }
 ```
 
@@ -326,6 +347,16 @@ final class DeepLinkHandler {
 }
 ```
 
+## Migration Notes
+
+- From VC-driven navigation: move push/present calls into coordinator methods first, then replace direct references with closures/delegates.
+- From ad-hoc SwiftUI navigation state: centralize path/sheet ownership in coordinator for flow reuse and deep-linking.
+
+## SwiftUI Purity Guidance
+
+- Keep destination state as value types (`enum`/`struct`) and mutate only via coordinator methods.
+- Avoid accessing coordinator internals directly from views; expose feature factory methods where needed.
+
 ## Anti-Patterns and Fixes
 
 1. View controller pushes its own next screen:
@@ -349,6 +380,12 @@ final class DeepLinkHandler {
    - Fix: keep Coordinator responsible only for navigation; delegate data work to ViewModels/Repositories.
 
 ## Testing Strategy
+
+### Minimum Bar
+
+- One test that `start()` creates the expected initial route/screen.
+- One child-coordinator retention/removal test for nested flows.
+- One deep-link success and one invalid-link safety test.
 
 Test Coordinators by verifying navigation state changes for success paths (expected destinations appended), failure paths (unknown inputs handled without crashing), and cancellation-safe pop operations.
 Use stub repositories and direct coordinator state inspection to keep tests deterministic.
@@ -456,24 +493,28 @@ struct StubUserRepository: UserRepository {
 
 Note: `showEditProfileForTesting()` exposes the private routing action for test access — annotate with `#if DEBUG` or use `@testable import` and `internal` access level to keep production code clean.
 
-## When to Prefer Coordinator
+## When to Use Coordinator
 
-Prefer Coordinator when:
+Use Coordinator when:
 - navigation logic is complex (conditional flows, deep linking, multi-step wizards)
 - multiple screens need to be reused across different flows
-- you want to test routing logic without instantiating full screens
-- ViewModels and View Controllers should have zero navigation coupling
+- routing must be testable without instantiating full screens
+- `push`/`present` calls scattered across view controllers make flows hard to follow
 
-Pair with MVVM by injecting navigation closures into ViewModels; pair with MVP by having the Presenter call a Router protocol backed by a Coordinator.
+Coordinator is a navigation layer, not a full architecture: pair it with MVVM by injecting navigation closures into ViewModels, or with MVP by having the Presenter call a Router protocol backed by a Coordinator.
 
-The Coordinator pattern is not an architecture on its own — it is a navigation layer that complements presentation patterns. Prefer it when `UINavigationController` push/present calls scattered across view controllers make flows hard to follow or test.
+Switch or pair when:
+- navigation is simple and single-screen: use value-type navigation in `references/mvvm.md`
+- flow plus role-separation complexity grows in UIKit modules: pair with `references/viper.md`
+
+For cross-architecture disqualifiers and migration triggers, see `references/selection-guide.md`.
 
 ## PR Review Checklist
 
-- Each coordinator owns one clearly scoped flow.
+- Each coordinator owns one clearly scoped flow and keeps a small, flow-scoped API.
 - Child coordinators are retained in `childCoordinators` before `start()` is called.
 - Child coordinators are removed when their flow completes.
 - ViewModels and View Controllers receive navigation closures, not coordinator references.
 - Navigation state (SwiftUI path/sheet) is modeled as value types.
-- Deep link handling routes through the coordinator, not directly to view controllers.
-- Tests verify routing state changes without relying on UIKit presentation timing.
+- Deep link handling routes through the coordinator, with parsing isolated and validated, not directly to view controllers.
+- Tests verify routing state changes without relying on UIKit presentation timing, and meet the minimum bar in Testing Strategy.
