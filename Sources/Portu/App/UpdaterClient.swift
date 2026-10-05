@@ -85,6 +85,13 @@ final class UpdaterBroadcaster<Value: Equatable & Sendable>: @unchecked Sendable
         }
     }
 
+    /// Live registrations; lets tests prove a finished stream is removed.
+    var subscriberCount: Int {
+        lock.withLock {
+            subscribers.count
+        }
+    }
+
     func update(_ value: Value) {
         // Deliver only to primed subscribers. A fresh subscriber registered
         // mid-flight misses this update, but its replay yields `latestValue` —
