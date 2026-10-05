@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 enum OverviewPriceDisplay {
     static let assetLabelMaxLength = 6
@@ -108,22 +109,21 @@ enum OverviewPriceDisplay {
     }
 }
 
-final class OverviewDecimalFormatterCache: @unchecked Sendable {
+final class OverviewDecimalFormatterCache: Sendable {
     private let locale: Locale
-    private let lock = NSLock()
-    private var formatters: [Int: NumberFormatter] = [:]
+    private let formatters = Mutex<[Int: NumberFormatter]>([:])
 
     init(locale: Locale) {
         self.locale = locale
     }
 
     func string(from value: Double, maximumFractionDigits: Int) -> String {
-        lock.lock()
-        defer { lock.unlock() }
-
-        let formatter = formatters[maximumFractionDigits] ?? makeFormatter(maximumFractionDigits: maximumFractionDigits)
-        formatters[maximumFractionDigits] = formatter
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+        // Formatting stays inside the lock so a cached formatter is never used by two threads at once.
+        formatters.withLock { formatters in
+            let formatter = formatters[maximumFractionDigits] ?? makeFormatter(maximumFractionDigits: maximumFractionDigits)
+            formatters[maximumFractionDigits] = formatter
+            return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+        }
     }
 
     private func makeFormatter(maximumFractionDigits: Int) -> NumberFormatter {
