@@ -374,16 +374,6 @@ struct PortuApp: App {
             invalidateCache: { await priceService.invalidateCache() })
     }
 
-    nonisolated static func zerionAPIKey(from secretStore: any SecretStore) throws -> String? {
-        let value = try secretStore.get(key: .providerAPIKey(.zerion))?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return value?.isEmpty == false ? value : nil
-    }
-
-    nonisolated static func zerionAPIKeyIfAvailable(from secretStore: any SecretStore) -> String? {
-        readAPIKey(named: "Zerion", from: secretStore, key: .providerAPIKey(.zerion))
-    }
-
     nonisolated static func secretStoreService(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.portu.app") -> String {
