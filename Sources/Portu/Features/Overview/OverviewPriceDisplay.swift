@@ -108,7 +108,7 @@ enum OverviewPriceDisplay {
     }
 }
 
-private final class OverviewDecimalFormatterCache: @unchecked Sendable {
+final class OverviewDecimalFormatterCache: @unchecked Sendable {
     private let locale: Locale
     private let lock = NSLock()
     private var formatters: [Int: NumberFormatter] = [:]

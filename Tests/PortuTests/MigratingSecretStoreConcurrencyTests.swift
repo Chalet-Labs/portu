@@ -70,24 +70,6 @@ struct MigratingSecretStoreConcurrencyTests {
         }
     }
 
-    private final class FailureLog: Sendable {
-        private let entries = Mutex<[String]>([])
-
-        var all: [String] {
-            entries.withLock { $0 }
-        }
-
-        func record(_ message: String) {
-            entries.withLock { $0.append(message) }
-        }
-
-        func check(_ condition: Bool, _ message: @autoclosure () -> String) {
-            if !condition {
-                record(message())
-            }
-        }
-    }
-
     @Test(.timeLimit(.minutes(1)))
     func `concurrent operations never overlap inside the wrapped stores`() async {
         let meter = OverlapMeter()
@@ -139,7 +121,7 @@ struct MigratingSecretStoreConcurrencyTests {
         source: MeteredSecretStore,
         workers: Int,
         rounds: Int) -> [String] {
-        let failures = FailureLog()
+        let failures = ConcurrentFailureLog()
         let workerIDs = (0 ..< workers).map { _ in UUID() }
 
         DispatchQueue.concurrentPerform(iterations: workers) { worker in
