@@ -220,6 +220,7 @@
 		F9B5ED895D5E63A10F140714 /* APIKeysViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F2E020479C2D59A564DAD6A /* APIKeysViewModelTests.swift */; };
 		FB4F5BEA50F1EDE6B9121C82 /* NetworkLogBufferTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94809A29D35ED92B6A354DA /* NetworkLogBufferTests.swift */; };
 		FB5341029C65812E010217B6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C9330A7E8F8102FE57BFE75 /* SettingsView.swift */; };
+		FBD3E0AC146502033AFBCD7A /* MigratingSecretStoreConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A5142ECBCDD19AC6722761A /* MigratingSecretStoreConcurrencyTests.swift */; };
 		FC9E6D44EAC2FB43F1A36D36 /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E0CB6C78BB61C0495E26363 /* GeneralSettingsView.swift */; };
 		FCDAFF6F94E07C9D18CBBDA8 /* NetworkLogEntryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB42CAF65672F19597D348EF /* NetworkLogEntryTests.swift */; };
 		FDDE3D68C93ED50ABB115E73 /* AccountSheetSaveError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20002294759D52134305A0B6 /* AccountSheetSaveError.swift */; };
@@ -294,6 +295,7 @@
 		39320574FA8ED9762F65B1CE /* AssetDetailFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetDetailFeatureTests.swift; sourceTree = "<group>"; };
 		394B6E5490B3F08DC65B0B9E /* AppFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeature.swift; sourceTree = "<group>"; };
 		3A01CB6E84AA5F46CB9019A4 /* AppFeatureAccountSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureAccountSyncTests.swift; sourceTree = "<group>"; };
+		3A5142ECBCDD19AC6722761A /* MigratingSecretStoreConcurrencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigratingSecretStoreConcurrencyTests.swift; sourceTree = "<group>"; };
 		3AAFE42584C56DC967627234 /* PortfolioCategoryWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioCategoryWriter.swift; sourceTree = "<group>"; };
 		3B1C47C3140CABD3A082439E /* CategorySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategorySettingsView.swift; sourceTree = "<group>"; };
 		3BA60071A304587735578219 /* DebugServerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugServerTests.swift; sourceTree = "<group>"; };
@@ -766,6 +768,7 @@
 				726BED9040CC03635619F414 /* HTTPParserTests.swift */,
 				8AAA2334D5B05A6C7B1C84F2 /* MainWindowPlacementTests.swift */,
 				2484DC04A5C1AFF75F895D46 /* ManualPositionPricingTests.swift */,
+				3A5142ECBCDD19AC6722761A /* MigratingSecretStoreConcurrencyTests.swift */,
 				EEF7B2B1D7575D0975A39250 /* MigratingSecretStoreTests.swift */,
 				75DA968F02800DC976D92003 /* ModelContainerFactoryTests.swift */,
 				E94809A29D35ED92B6A354DA /* NetworkLogBufferTests.swift */,
@@ -1143,6 +1146,7 @@
 				010C49B4C2BB4659CAF03E36 /* HistoricalPriceBackfillRequestTimingTests.swift in Sources */,
 				D5C9D5612731410483F544D3 /* MainWindowPlacementTests.swift in Sources */,
 				8B7E055E11C5B50EA1E46E5F /* ManualPositionPricingTests.swift in Sources */,
+				FBD3E0AC146502033AFBCD7A /* MigratingSecretStoreConcurrencyTests.swift in Sources */,
 				7FEABF4DBC27223C15549247 /* MigratingSecretStoreTests.swift in Sources */,
 				B2AC965DB09157C02C4393EF /* ModelContainerFactoryTests.swift in Sources */,
 				FB4F5BEA50F1EDE6B9121C82 /* NetworkLogBufferTests.swift in Sources */,
