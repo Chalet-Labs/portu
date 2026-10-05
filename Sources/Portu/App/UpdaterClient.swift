@@ -1,6 +1,7 @@
 import ComposableArchitecture
 import Foundation
 import Sparkle
+import Synchronization
 
 struct UpdaterConfiguration: Equatable, Sendable {
     let feedURL: URL
@@ -32,27 +33,39 @@ struct UpdaterConfiguration: Equatable, Sendable {
 /// Replay-then-live broadcaster shared by the preference and status streams:
 /// every new subscriber first receives the latest committed value, then each
 /// subsequent update, with strict per-stream ordering.
-final class UpdaterBroadcaster<Value: Equatable & Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var subscribers: [UUID: Subscriber] = [:]
-    private var latestValue: Value
+///
+/// Ordering holds for a single serialized producer; `SparkleUpdaterController`
+/// provides that by calling `update` only from the main actor. A subscriber that
+/// attaches while updates are in flight may skip intermediate values, but it never
+/// sees a stale one after a newer one.
+final class UpdaterBroadcaster<Value: Equatable & Sendable>: Sendable {
+    /// Lock order is always delivery lock, then registry. Nothing is delivered
+    /// while the registry lock is held.
+    private struct Registry {
+        var latestValue: Value
+        var subscribers: [UUID: Entry] = [:]
+    }
+
+    private struct Entry {
+        let subscriber: Subscriber
+        /// Only primed subscribers receive `update`; a fresh one catches up from
+        /// `latestValue` instead. Guarded by the registry lock like the rest of this state.
+        var isPrimed = false
+    }
 
     /// One delivery lock per subscriber so replay + updates for a single stream
     /// are strictly ordered, while independent subscribers never block each other.
-    final class Subscriber {
-        let continuation: AsyncStream<Value>.Continuation
-        // Primed is written under the broadcaster's registry `lock` and read
-        // under the same lock, so access is consistently synchronized.
-        var primed = false
-        let deliveryLock = NSLock()
+    final class Subscriber: Sendable {
+        private let continuation: AsyncStream<Value>.Continuation
+        private let deliveryLock = Mutex<Void>(())
 
         init(continuation: AsyncStream<Value>.Continuation) {
             self.continuation = continuation
         }
 
         func deliver(_ value: Value) {
-            _ = deliveryLock.withLock {
-                continuation.yield(value)
+            deliveryLock.withLock { _ in
+                _ = continuation.yield(value)
             }
         }
 
@@ -62,34 +75,30 @@ final class UpdaterBroadcaster<Value: Equatable & Sendable>: @unchecked Sendable
         /// across the whole sequence means update() (which acquires this same
         /// lock to yield) cannot interleave a newer delivery between the replay
         /// and the catch-up, so per-stream ordering is strict.
-        func replayPrimeAndCatchUp(
-            initial: Value,
-            readLatest: () -> Value) {
-            deliveryLock.lock()
-            defer { deliveryLock.unlock() }
-            continuation.yield(initial)
-            let latest = readLatest()
-            if latest != initial {
-                continuation.yield(latest)
+        func replayPrimeAndCatchUp(initial: Value, readLatest: () -> Value) {
+            deliveryLock.withLock { _ in
+                _ = continuation.yield(initial)
+                let latest = readLatest()
+                if latest != initial {
+                    _ = continuation.yield(latest)
+                }
             }
         }
     }
 
-    init(initialValue: Value) {
-        self.latestValue = initialValue
-    }
+    private let registry: Mutex<Registry>
 
-    func current() -> Value {
-        lock.withLock {
-            latestValue
-        }
+    init(initialValue: Value) {
+        self.registry = Mutex(Registry(latestValue: initialValue))
     }
 
     /// Live registrations; lets tests prove a finished stream is removed.
     var subscriberCount: Int {
-        lock.withLock {
-            subscribers.count
-        }
+        registry.withLock { $0.subscribers.count }
+    }
+
+    func current() -> Value {
+        registry.withLock { $0.latestValue }
     }
 
     func update(_ value: Value) {
@@ -97,11 +106,11 @@ final class UpdaterBroadcaster<Value: Equatable & Sendable>: @unchecked Sendable
         // mid-flight misses this update, but its replay yields `latestValue` —
         // which already contains it — so nothing is lost and per-stream
         // ordering is preserved.
-        let subscribersSnapshot: [Subscriber] = lock.withLock {
-            latestValue = value
-            return subscribers.values.filter(\.primed)
+        let primedSubscribers: [Subscriber] = registry.withLock { registry in
+            registry.latestValue = value
+            return registry.subscribers.values.filter(\.isPrimed).map(\.subscriber)
         }
-        for subscriber in subscribersSnapshot {
+        for subscriber in primedSubscribers {
             subscriber.deliver(value)
         }
     }
@@ -112,29 +121,26 @@ final class UpdaterBroadcaster<Value: Equatable & Sendable>: @unchecked Sendable
             continuation.onTermination = { [weak self, id] _ in
                 self?.removeSubscriber(id: id)
             }
-            let (subscriber, latest): (Subscriber, Value) = lock.withLock {
-                let subscriber = Subscriber(continuation: continuation)
-                subscribers[id] = subscriber
-                return (subscriber, latestValue)
+            let subscriber = Subscriber(continuation: continuation)
+            let latest = registry.withLock { registry in
+                registry.subscribers[id] = Entry(subscriber: subscriber)
+                return registry.latestValue
             }
-            // Replay happens under the subscriber's delivery lock; priming and
-            // the latest-value re-read happen inside readLatest under the
-            // registry lock — the same lock update() uses to record new values
-            // and filter primed subscribers. One synchronization domain for the
-            // flag, and the delivery lock is held across the whole sequence so
-            // nothing can interleave between replay and catch-up.
+            // Replay happens under the subscriber's delivery lock; priming and the
+            // latest-value re-read happen inside readLatest under the registry lock —
+            // the same lock update() uses to record new values and pick primed subscribers.
             subscriber.replayPrimeAndCatchUp(initial: latest) { [self] in
-                lock.withLock {
-                    subscriber.primed = true
-                    return latestValue
+                registry.withLock { registry in
+                    registry.subscribers[id]?.isPrimed = true
+                    return registry.latestValue
                 }
             }
         }
     }
 
     private func removeSubscriber(id: UUID) {
-        lock.withLock {
-            _ = subscribers.removeValue(forKey: id)
+        registry.withLock { registry in
+            _ = registry.subscribers.removeValue(forKey: id)
         }
     }
 }

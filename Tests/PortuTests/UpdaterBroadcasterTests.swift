@@ -252,14 +252,12 @@ struct UpdaterBroadcasterTests {
     private static func deliverDuringReplay() -> (deliveredEarly: Bool, stream: AsyncStream<Int>) {
         let (stream, continuation) = AsyncStream.makeStream(of: Int.self)
         let subscriber = UpdaterBroadcaster<Int>.Subscriber(continuation: continuation)
-        // Subscriber is not Sendable; its delivery lock is what makes the concurrent call safe.
-        nonisolated(unsafe) let concurrentSubscriber = subscriber
         let delivered = DispatchSemaphore(value: 0)
         var deliveredEarly = false
 
         subscriber.replayPrimeAndCatchUp(initial: 1) {
             Thread.detachNewThread {
-                concurrentSubscriber.deliver(3)
+                subscriber.deliver(3)
                 delivered.signal()
             }
             deliveredEarly = delivered.wait(timeout: .now() + .milliseconds(300)) == .success
