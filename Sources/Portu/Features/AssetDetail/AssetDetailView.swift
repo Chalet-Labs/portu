@@ -13,8 +13,21 @@ struct AssetDetailView: View {
     @Query private var assets: [Asset]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
 
+    init(assetId: UUID, store: StoreOf<AppFeature>) {
+        self.assetId = assetId
+        self.store = store
+        _assets = Query(Self.assetDescriptor(id: assetId))
+    }
+
+    /// Fetches only the shown asset instead of every asset in the store.
+    static func assetDescriptor(id: UUID) -> FetchDescriptor<Asset> {
+        var descriptor = FetchDescriptor<Asset>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        return descriptor
+    }
+
     private var asset: Asset? {
-        assets.first { $0.id == assetId }
+        assets.first
     }
 
     private var historicalPriceCoinGeckoId: String? {
