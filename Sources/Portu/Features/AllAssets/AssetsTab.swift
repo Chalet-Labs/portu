@@ -28,7 +28,8 @@ struct AssetsTab: View {
     @State private var sortAscending = false
 
     /// Map @Query tokens to lightweight entries, aggregate with live prices, filter, sort.
-    private var rows: [AssetRowData] {
+    /// Does the full pass every call, so `body` runs it once and hands the result down.
+    private func buildRows() -> [AssetRowData] {
         let entries = TokenEntry.fromActiveTokens(
             allTokens,
             categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
@@ -71,9 +72,10 @@ struct AssetsTab: View {
     // MARK: - Body
 
     var body: some View {
+        let rows = buildRows()
         VStack(spacing: 0) {
-            toolbar
-            assetTable
+            toolbar(rows)
+            assetTable(rows)
         }
         .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
         .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: {
@@ -89,7 +91,7 @@ struct AssetsTab: View {
 
     // MARK: - Toolbar
 
-    private var toolbar: some View {
+    private func toolbar(_ rows: [AssetRowData]) -> some View {
         HStack(spacing: 10) {
             DashboardSearchField(placeholder: "Search assets...", text: Binding(
                 get: { store.allAssets.searchText },
@@ -110,7 +112,7 @@ struct AssetsTab: View {
                 .dashboardControl()
 
             Button {
-                exportCSV()
+                exportCSV(rows)
             } label: {
                 Label("Export CSV", systemImage: "square.and.arrow.up")
             }
@@ -121,7 +123,7 @@ struct AssetsTab: View {
 
     // MARK: - Table
 
-    private var assetTable: some View {
+    private func assetTable(_ rows: [AssetRowData]) -> some View {
         VStack(spacing: 0) {
             assetTableHeader
 
@@ -295,7 +297,7 @@ struct AssetsTab: View {
 
     // MARK: - CSV Export
 
-    private func exportCSV() {
+    private func exportCSV(_ rows: [AssetRowData]) {
         let csv = AllAssetsFeature.generateCSV(from: rows)
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
