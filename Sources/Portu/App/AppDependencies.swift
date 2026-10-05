@@ -167,62 +167,6 @@ extension PriceServiceClient: DependencyKey {
         fetchOnchainHistoricalPrices: { _, _ in [] },
         canFetchOnchainHistoricalPrices: { true },
         invalidateCache: {})
-
-    static func live(service: PriceService, zerionProvider: ZerionProvider? = nil) -> Self {
-        Self(
-            fetchPrices: { coinIds in
-                try await LivePriceUpdateBuilder.fetchPrices(
-                    coinIds: coinIds,
-                    priceService: service) { identities in
-                        guard let zerionProvider, !identities.isEmpty else {
-                            return PricePollingIDResolver.emptyUpdate
-                        }
-                        return try await zerionProvider.fetchPriceUpdate(for: identities)
-                    }
-            },
-            fetchCoinGeckoPrices: { request, currency, usdToDisplayRate in
-                let update = try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
-                    request: request,
-                    priceService: service,
-                    currency: .usd)
-                guard currency != .usd else { return update }
-                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate, preserveChanges24h: true)
-            },
-            fetchOnchainFallbackPrices: { identities, currency, usdToDisplayRate in
-                guard let zerionProvider, !identities.isEmpty else {
-                    return PricePollingIDResolver.emptyUpdate(currency: currency)
-                }
-                let update = try await zerionProvider.fetchPriceUpdate(for: identities)
-                guard currency != .usd else { return update }
-                return update.convertedUSDValues(
-                    to: currency,
-                    rate: usdToDisplayRate,
-                    preserveChanges24h: true)
-            },
-            fetchHistoricalPrices: { coinId, days in
-                try await service.fetchHistoricalPrices(for: coinId, days: days)
-            },
-            fetchHistoricalPricesForCurrency: { coinId, currency, days in
-                try await service.fetchHistoricalPrices(for: coinId, currency: currency, days: days)
-            },
-            fetchCurrentUSDConversionRate: { currency in
-                try await service.fetchCurrentUSDConversionRate(to: currency)
-            },
-            fetchHistoricalUSDConversionRates: { currency, days in
-                try await service.fetchHistoricalUSDConversionRates(to: currency, days: days)
-            },
-            resolveCoinGeckoIDs: { identities in
-                try await service.resolveCoinGeckoIDs(for: identities)
-            },
-            fetchOnchainHistoricalPrices: { identity, days in
-                guard let zerionProvider else {
-                    throw ClientError.onchainProviderUnavailable
-                }
-                return try await zerionProvider.fetchHistoricalPrices(identity: identity, days: days)
-            },
-            canFetchOnchainHistoricalPrices: { zerionProvider != nil },
-            invalidateCache: { await service.invalidateCache() })
-    }
 }
 
 extension DependencyValues {
