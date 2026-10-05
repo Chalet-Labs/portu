@@ -5,11 +5,14 @@ import PortuCore
 import PortuNetwork
 import SwiftData
 import SwiftUI
+import Synchronization
 
-final class MigratingSecretStore: SecretStore, @unchecked Sendable {
+final class MigratingSecretStore: SecretStore {
     private let source: any SecretStore
     private let destination: any SecretStore
-    private let lock = NSRecursiveLock()
+    /// Not re-entrant: the wrapped stores, and anything that observes them, must never
+    /// call back into this store while one of its operations is running.
+    private let lock = Mutex<Void>(())
 
     init(source: any SecretStore, destination: any SecretStore) {
         self.source = source
@@ -76,12 +79,10 @@ final class MigratingSecretStore: SecretStore, @unchecked Sendable {
         }
     }
 
-    private func withLock<T>(
+    private func withLock<T: Sendable>(
         _ operation: () throws -> T) throws(KeychainError) -> T {
-        lock.lock()
-        defer { lock.unlock() }
         do {
-            return try operation()
+            return try lock.withLock { _ in try operation() }
         } catch let error as KeychainError {
             throw error
         } catch {
