@@ -11,11 +11,6 @@ enum SidebarSection: Hashable {
     case accounts
 }
 
-enum AppDetailRoute: Equatable {
-    case section(SidebarSection)
-    case settings
-}
-
 enum ConnectionStatus: Hashable {
     case idle
     case fetching

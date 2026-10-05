@@ -12,15 +12,6 @@ struct AppFeature {
     @ObservableState
     struct State: Equatable {
         var selectedSection: SidebarSection = .overview
-        var isSettingsPresented = false
-        var detailRoute: AppDetailRoute {
-            isSettingsPresented ? .settings : .section(selectedSection)
-        }
-
-        var sidebarSelection: SidebarSection? {
-            isSettingsPresented ? nil : selectedSection
-        }
-
         var syncStatus: SyncStatus = .idle
         var syncingAccountID: UUID?
         var connectionStatus: ConnectionStatus = .idle
@@ -64,7 +55,6 @@ struct AppFeature {
         case setAutomaticChecksEnabled(Bool)
         case setUpdateChannel(UpdateChannel)
         case sectionSelected(SidebarSection)
-        case settingsSelected
         case syncTapped
         case accountSyncTapped(UUID)
         case syncProgressUpdated(Double)
@@ -211,11 +201,6 @@ struct AppFeature {
 
             case let .sectionSelected(section):
                 state.selectedSection = section
-                state.isSettingsPresented = false
-                return .none
-
-            case .settingsSelected:
-                state.isSettingsPresented = true
                 return .none
 
             case .syncTapped:
@@ -780,7 +765,6 @@ extension AppFeature.Action: Equatable {
         case let (.setAutomaticChecksEnabled(l), .setAutomaticChecksEnabled(r)): l == r
         case let (.setUpdateChannel(l), .setUpdateChannel(r)): l == r
         case let (.sectionSelected(l), .sectionSelected(r)): l == r
-        case (.settingsSelected, .settingsSelected): true
         case (.syncTapped, .syncTapped): true
         case let (.accountSyncTapped(l), .accountSyncTapped(r)): l == r
         case let (.syncProgressUpdated(l), .syncProgressUpdated(r)): l == r
