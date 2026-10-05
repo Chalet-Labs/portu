@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import Synchronization
 
 /// Wraps Security.framework keychain APIs. Items are scoped to the kSecAttrService value
 /// (defaults to the host bundle identifier; falls back to "com.portu.app" when none is set).
@@ -9,23 +10,26 @@ import Security
 /// application identifier fall back to the encrypted file-based macOS keychain because
 /// the data protection keychain rejects them with `errSecMissingEntitlement`.
 public struct KeychainService: SecretStore {
-    private enum CachedValue {
+    private enum CachedValue: Sendable {
         case missing
         case value(String)
     }
 
-    private final class ValueCache: @unchecked Sendable {
-        private var values: [String: CachedValue] = [:]
+    private final class ValueCache: Sendable {
+        private let values = Mutex<[String: CachedValue]>([:])
 
         func value(service: String, key: KeychainKey) -> CachedValue? {
-            values[cacheKey(service: service, key: key)]
+            let cacheKey = Self.cacheKey(service: service, key: key)
+            return values.withLock { $0[cacheKey] }
         }
 
         func store(_ value: String?, service: String, key: KeychainKey) {
-            values[cacheKey(service: service, key: key)] = value.map(CachedValue.value) ?? .missing
+            let cacheKey = Self.cacheKey(service: service, key: key)
+            let cached = value.map(CachedValue.value) ?? .missing
+            values.withLock { $0[cacheKey] = cached }
         }
 
-        private func cacheKey(service: String, key: KeychainKey) -> String {
+        private static func cacheKey(service: String, key: KeychainKey) -> String {
             "\(service)\u{0}\(key.rawKey)"
         }
     }
@@ -42,7 +46,9 @@ public struct KeychainService: SecretStore {
     private let delete: Delete
     private let valueCache: ValueCache
     private let useDataProtectionKeychain: Bool
-    private static let operationLock = NSLock()
+    /// Process-wide on purpose: live instances share one value cache, so a miss, the keychain
+    /// read and the cache store must be atomic across instances. Taken before the cache's own lock.
+    private static let operationLock = Mutex<Void>(())
     private static let liveValueCache = ValueCache()
 
     public init(service: String = Bundle.main.bundleIdentifier ?? "com.portu.app") {
@@ -91,73 +97,70 @@ public struct KeychainService: SecretStore {
     }
 
     public func get(key: KeychainKey) throws(KeychainError) -> String? {
-        Self.operationLock.lock()
-        defer { Self.operationLock.unlock() }
-
-        if let cached = valueCache.value(service: service, key: key) {
-            return switch cached {
-            case .missing: nil
-            case let .value(value): value
+        try Self.operationLock.withLock { (_: inout Void) throws(KeychainError) -> String? in
+            if let cached = valueCache.value(service: service, key: key) {
+                return switch cached {
+                case .missing: nil
+                case let .value(value): value
+                }
             }
+
+            let query = baseQuery(for: key).merging([
+                kSecReturnData as String: true,
+                kSecMatchLimit as String: kSecMatchLimitOne
+            ]) { _, new in new }
+
+            let value = try string(matching: query)
+            valueCache.store(value, service: service, key: key)
+            return value
         }
-
-        let query = baseQuery(for: key).merging([
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]) { _, new in new }
-
-        let value = try string(matching: query)
-        valueCache.store(value, service: service, key: key)
-        return value
     }
 
     public func set(key: KeychainKey, value: String) throws(KeychainError) {
-        Self.operationLock.lock()
-        defer { Self.operationLock.unlock() }
+        try Self.operationLock.withLock { (_: inout Void) throws(KeychainError) in
+            guard let data = value.data(using: .utf8) else {
+                throw .encodingFailed
+            }
 
-        guard let data = value.data(using: .utf8) else {
-            throw .encodingFailed
-        }
+            let baseQuery = baseQuery(for: key)
 
-        let baseQuery = baseQuery(for: key)
-
-        let addStatus = add(
-            baseQuery.merging([
-                kSecValueData as String: data,
-                kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            ]) { _, new in new } as CFDictionary,
-            nil)
-
-        switch addStatus {
-        case errSecSuccess:
-            break
-        case errSecDuplicateItem:
-            let updateStatus = update(
-                baseQuery as CFDictionary,
-                [
+            let addStatus = add(
+                baseQuery.merging([
                     kSecValueData as String: data,
                     kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-                ] as CFDictionary)
-            switch updateStatus {
+                ]) { _, new in new } as CFDictionary,
+                nil)
+
+            switch addStatus {
             case errSecSuccess:
                 break
-            case errSecInteractionNotAllowed: throw .interactionNotAllowed
-            default: throw .unexpectedStatus(updateStatus)
+            case errSecDuplicateItem:
+                let updateStatus = update(
+                    baseQuery as CFDictionary,
+                    [
+                        kSecValueData as String: data,
+                        kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                    ] as CFDictionary)
+                switch updateStatus {
+                case errSecSuccess:
+                    break
+                case errSecInteractionNotAllowed: throw .interactionNotAllowed
+                default: throw .unexpectedStatus(updateStatus)
+                }
+            case errSecInteractionNotAllowed:
+                throw .interactionNotAllowed
+            default:
+                throw .unexpectedStatus(addStatus)
             }
-        case errSecInteractionNotAllowed:
-            throw .interactionNotAllowed
-        default:
-            throw .unexpectedStatus(addStatus)
+            valueCache.store(value, service: service, key: key)
         }
-        valueCache.store(value, service: service, key: key)
     }
 
     public func delete(key: KeychainKey) throws(KeychainError) {
-        Self.operationLock.lock()
-        defer { Self.operationLock.unlock() }
-
-        try delete(matching: baseQuery(for: key))
-        valueCache.store(nil, service: service, key: key)
+        try Self.operationLock.withLock { (_: inout Void) throws(KeychainError) in
+            try delete(matching: baseQuery(for: key))
+            valueCache.store(nil, service: service, key: key)
+        }
     }
 
     private func baseQuery(for key: KeychainKey) -> [String: Any] {
