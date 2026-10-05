@@ -3,22 +3,7 @@ import PortuCore
 
 /// Parses CoinGecko /simple/price JSON response via JSONSerialization.
 /// Keys are coin IDs, values contain price in the requested fiat currency.
-nonisolated struct CoinGeckoSimplePriceResponse {
-    let prices: [String: Decimal]
-
-    init(from data: Data, currency: FiatCurrency = .default) throws(PriceServiceError) {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String: NSNumber]] else {
-            throw .decodingFailed
-        }
-        var result: [String: Decimal] = [:]
-        for (coinId, currencies) in json {
-            if let value = currencies[currency.coinGeckoParameter] {
-                result[coinId] = value.decimalValue
-            }
-        }
-        self.prices = result
-    }
-
+nonisolated enum CoinGeckoSimplePriceResponse {
     /// Parse response that includes 24h change data.
     /// Format: `{ "bitcoin": { "eur": 67500.0, "eur_24h_change": -1.5 }, ... }`
     /// The change percentage is divided by 100 to convert from percentage to decimal.
