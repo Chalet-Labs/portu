@@ -98,7 +98,6 @@ struct OverviewSummaryCards: View {
         HStack(alignment: .top, spacing: PortuTheme.dashboardContentSpacing) {
             summaryCard(title: "Idle", items: idleBreakdown)
             summaryCard(title: "Deployed", items: deployedBreakdown)
-            summaryCard(title: "Futures", items: []) // Future work
         }
     }
 
@@ -139,8 +138,8 @@ struct OverviewSummaryCards: View {
 }
 
 enum OverviewSummaryCardText {
-    static func emptyState(for title: String) -> String {
-        title == "Futures" ? "Coming soon" : "No deployed positions"
+    static func emptyState(for _: String) -> String {
+        "No deployed positions"
     }
 }
 

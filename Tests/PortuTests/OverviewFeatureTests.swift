@@ -931,11 +931,6 @@ struct OverviewFeatureTests { // swiftlint:disable:this type_body_length
         #expect(OverviewPositionChangeTone.tone(for: .balance, change: -10) == .unfavorable)
     }
 
-    @Test func `summary card empty text distinguishes futures placeholder`() {
-        #expect(OverviewSummaryCardText.emptyState(for: "Futures") == "Coming soon")
-        #expect(OverviewSummaryCardText.emptyState(for: "Deployed") == "No deployed positions")
-    }
-
     @Test func `overview labels describe merged rows and named layout constants`() {
         #expect(PriceWatchlistText.priceHeaderTitle == "Portfolio + Watchlist")
         #expect(TopAssetsDonutText.seeAllButtonTitle == "See all →")
