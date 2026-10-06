@@ -33,45 +33,6 @@ struct TokenDashboardSettings: Equatable {
     }
 }
 
-struct TokenPricingOverrideSnapshot: Equatable, Identifiable, Sendable {
-    var id: UUID
-    var assetId: UUID
-    var manualPriceUSD: Decimal?
-    var coinGeckoIdOverride: String?
-    var isIgnored: Bool
-    var alwaysShow: Bool
-    var notes: String
-
-    init(
-        id: UUID = UUID(),
-        assetId: UUID,
-        manualPriceUSD: Decimal? = nil,
-        coinGeckoIdOverride: String? = nil,
-        isIgnored: Bool = false,
-        alwaysShow: Bool = false,
-        notes: String = "") {
-        self.id = id
-        self.assetId = assetId
-        self.manualPriceUSD = manualPriceUSD
-        self.coinGeckoIdOverride = coinGeckoIdOverride
-        self.isIgnored = isIgnored
-        self.alwaysShow = alwaysShow
-        self.notes = notes
-    }
-
-    @MainActor
-    init(_ override: TokenPricingOverride) {
-        self.init(
-            id: override.id,
-            assetId: override.assetId,
-            manualPriceUSD: override.manualPriceUSD,
-            coinGeckoIdOverride: override.coinGeckoIdOverride,
-            isIgnored: override.isIgnored,
-            alwaysShow: override.alwaysShow,
-            notes: override.notes)
-    }
-}
-
 enum TokenPricingSource: String, CaseIterable, Equatable {
     case live = "Live"
     case syncTime = "Sync-time"

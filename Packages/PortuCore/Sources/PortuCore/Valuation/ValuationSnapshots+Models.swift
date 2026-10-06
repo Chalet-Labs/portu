@@ -15,3 +15,17 @@ public extension TokenIdentityMappingSnapshot {
         self.zapperId = TokenIdentityMappingFeature.normalizedProviderID(mapping.zapperId)
     }
 }
+
+public extension TokenPricingOverrideSnapshot {
+    @MainActor
+    init(_ override: TokenPricingOverride) {
+        self.init(
+            id: override.id,
+            assetId: override.assetId,
+            manualPriceUSD: override.manualPriceUSD,
+            coinGeckoIdOverride: override.coinGeckoIdOverride,
+            isIgnored: override.isIgnored,
+            alwaysShow: override.alwaysShow,
+            notes: override.notes)
+    }
+}
