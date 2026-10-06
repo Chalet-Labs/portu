@@ -22,10 +22,14 @@ just release
 just test-packages
 just test
 just lint
+just lint-strict
 just lint-fix
 just format
+just format-check
 just clean
 ```
+
+CI runs `just format-check` and `just lint-strict`. Plain `just lint` is not strict, so a local pass can still fail that gate.
 
 ## XcodeBuildMCP
 
