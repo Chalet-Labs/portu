@@ -20,6 +20,33 @@ struct SymbolNormalizationMemoTests {
         }
     }
 
+    /// Normalizes like the real thing, but once attached it re-enters the memo for the same symbol
+    /// during its first call, the way a second thread that missed at the same moment would.
+    private final class RacingNormalizer: Sendable {
+        private struct State {
+            var memo: SymbolNormalizationMemo?
+            var hasRaced = false
+        }
+
+        private let state = Mutex(State())
+
+        func attach(_ memo: SymbolNormalizationMemo) {
+            state.withLock { $0.memo = memo }
+        }
+
+        var normalize: @Sendable (String) -> String {
+            { [self] symbol in
+                let other: SymbolNormalizationMemo? = state.withLock { state in
+                    guard !state.hasRaced, let memo = state.memo else { return nil }
+                    state.hasRaced = true
+                    return memo
+                }
+                _ = other?.normalized(symbol)
+                return PortfolioCategoryDefaults.normalizeSymbol(symbol)
+            }
+        }
+    }
+
     @Test func `a repeated symbol is normalized once`() {
         let counter = CountingNormalizer()
         let memo = SymbolNormalizationMemo(capacity: 100, normalize: counter.normalize)
@@ -68,6 +95,20 @@ struct SymbolNormalizationMemoTests {
 
         #expect(memo.cachedNormalization(for: "a") == "A")
         #expect(memo.cachedNormalization(for: "b") == "B")
+    }
+
+    /// The other thread's insert fills the table first. The finishing insert then overwrites its own
+    /// entry, so it must not count as overflow and flush everything else.
+    @Test func `a concurrent miss on the same symbol does not flush a full table`() {
+        let racer = RacingNormalizer()
+        let memo = SymbolNormalizationMemo(capacity: 2, normalize: racer.normalize)
+        _ = memo.normalized("x")
+        racer.attach(memo)
+
+        _ = memo.normalized("a")
+
+        #expect(memo.cachedNormalization(for: "x") == "X")
+        #expect(memo.cachedNormalization(for: "a") == "A")
     }
 
     /// Concurrent first misses may each compute a value, so this checks results only, never call counts.
