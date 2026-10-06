@@ -22,9 +22,6 @@ struct AllAssetsView: View {
 
             switch store.allAssets.selectedTab {
             case .assets: AssetsTab(store: store)
-            case .nfts:
-                nftPlaceholder
-                    .dashboardCard()
             case .platforms:
                 PlatformsTab()
                     .dashboardCard()
@@ -35,13 +32,5 @@ struct AllAssetsView: View {
         }
         .padding(DashboardStyle.pagePadding)
         .dashboardPage()
-    }
-
-    private var nftPlaceholder: some View {
-        ContentUnavailableView(
-            "NFT Tracking",
-            systemImage: "photo.artframe",
-            description: Text("NFT tracking coming soon"))
-            .foregroundStyle(PortuTheme.dashboardSecondaryText)
     }
 }

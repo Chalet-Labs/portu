@@ -28,14 +28,14 @@ Phase 4.1 of TCA migration. Moves AllAssets UI state from scattered `@State` int
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| selectedTab | AssetTab | .assets | Current tab (assets, nfts, platforms, networks) |
+| selectedTab | AssetTab | .assets | Current tab (assets, platforms, networks) |
 | searchText | String | "" | Filter text for asset search |
 
 ## Types
 
 ```
 enum AssetTab: String, CaseIterable, Equatable
-    assets, nfts, platforms, networks
+    assets, platforms, networks
 ```
 
 ## Actions

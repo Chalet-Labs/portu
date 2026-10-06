@@ -12,6 +12,10 @@ import Testing
 struct AllAssetsFeatureTests {
     // MARK: - Tab Selection
 
+    @Test func `tabs offer only implemented asset views`() {
+        #expect(AssetTab.allCases == [.assets, .platforms, .networks])
+    }
+
     @Test func `tab selection updates state`() async {
         let store = TestStore(initialState: AllAssetsFeature.State()) {
             AllAssetsFeature()

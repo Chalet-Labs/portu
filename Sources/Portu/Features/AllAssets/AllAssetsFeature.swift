@@ -6,7 +6,6 @@ import PortuCore
 
 enum AssetTab: String, CaseIterable, Equatable, Hashable {
     case assets = "Assets"
-    case nfts = "NFTs"
     case platforms = "Platforms"
     case networks = "Networks"
 }
