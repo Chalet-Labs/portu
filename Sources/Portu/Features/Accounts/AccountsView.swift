@@ -120,11 +120,6 @@ struct AccountsView: View {
 
             Spacer()
 
-            Button("Bulk Import") {}
-                .disabled(true)
-                .help("Coming soon")
-                .dashboardControl()
-
             Button("Add Account", systemImage: "plus") {
                 store.send(.accounts(.addAccountTapped))
             }

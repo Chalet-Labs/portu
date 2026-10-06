@@ -12,6 +12,10 @@ import Testing
 struct AllAssetsFeatureTests {
     // MARK: - Tab Selection
 
+    @Test func `tabs offer only implemented asset views`() {
+        #expect(AssetTab.allCases == [.assets, .platforms, .networks])
+    }
+
     @Test func `tab selection updates state`() async {
         let store = TestStore(initialState: AllAssetsFeature.State()) {
             AllAssetsFeature()
@@ -40,24 +44,6 @@ struct AllAssetsFeatureTests {
         }
         await store.send(.searchTextChanged("")) {
             $0.searchText = ""
-        }
-    }
-
-    // MARK: - Grouping Change
-
-    @Test func `grouping change updates state`() async {
-        let store = TestStore(initialState: AllAssetsFeature.State()) {
-            AllAssetsFeature()
-        }
-
-        await store.send(.groupingChanged(.category)) {
-            $0.grouping = .category
-        }
-        await store.send(.groupingChanged(.priceSource)) {
-            $0.grouping = .priceSource
-        }
-        await store.send(.groupingChanged(.none)) {
-            $0.grouping = .none
         }
     }
 }

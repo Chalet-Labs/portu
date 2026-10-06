@@ -54,23 +54,19 @@ struct OverviewPositionTabs: View {
 
     @ViewBuilder
     private var tabContent: some View {
-        if selectedTab.isPlaceholder {
+        let groups = OverviewPositionProjection.groups(
+            for: selectedTab,
+            positions: positions,
+            context: positionContext)
+
+        if groups.isEmpty {
             emptyState(selectedTab.emptyMessage)
         } else {
-            let groups = OverviewPositionProjection.groups(
-                for: selectedTab,
-                positions: positions,
-                context: positionContext)
-
-            if groups.isEmpty {
-                emptyState(selectedTab.emptyMessage)
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(groups) { group in
-                        OverviewPositionGroupCard(
-                            group: group,
-                            currencyCode: appState.selectedCurrency.displayCode)
-                    }
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(groups) { group in
+                    OverviewPositionGroupCard(
+                        group: group,
+                        currencyCode: appState.selectedCurrency.displayCode)
                 }
             }
         }

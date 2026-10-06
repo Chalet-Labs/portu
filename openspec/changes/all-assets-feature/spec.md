@@ -2,7 +2,7 @@
 
 ## What
 
-Migrate AllAssets views to a TCA child feature scoped from AppFeature. The reducer manages tab selection, search filtering, and grouping mode. Row aggregation logic is extracted as a testable pure function.
+Migrate AllAssets views to a TCA child feature scoped from AppFeature. The reducer manages tab selection and search filtering. Row aggregation logic is extracted as a testable pure function.
 
 ## Why
 
@@ -12,7 +12,7 @@ Phase 4.1 of TCA migration. Moves AllAssets UI state from scattered `@State` int
 
 ### Included
 - AllAssetsView tab selection
-- AssetsTab search text and grouping mode
+- AssetsTab search text
 - Row aggregation extracted as a testable pure function
 - Child feature scoping from AppFeature
 
@@ -22,23 +22,20 @@ Phase 4.1 of TCA migration. Moves AllAssets UI state from scattered `@State` int
 - PlatformsTab / NetworksTab aggregation (read-only display, no managed state)
 - Asset detail navigation (Phase 4.2)
 - CSV export stays in view (NSSavePanel is UI-only; CSV generation is testable as pure function)
+- Row grouping: the placebo picker was removed in #118; real grouping returns on native `Table` in #128
 
 ## State
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| selectedTab | AssetTab | .assets | Current tab (assets, nfts, platforms, networks) |
+| selectedTab | AssetTab | .assets | Current tab (assets, platforms, networks) |
 | searchText | String | "" | Filter text for asset search |
-| grouping | AssetGrouping | .none | Row grouping mode (none, category, priceSource) |
 
 ## Types
 
 ```
 enum AssetTab: String, CaseIterable, Equatable
-    assets, nfts, platforms, networks
-
-enum AssetGrouping: String, CaseIterable, Equatable
-    none, category, priceSource
+    assets, platforms, networks
 ```
 
 ## Actions
@@ -46,7 +43,6 @@ enum AssetGrouping: String, CaseIterable, Equatable
 ### User Actions
 - `tabSelected(AssetTab)` -- User taps tab picker
 - `searchTextChanged(String)` -- User types in search field
-- `groupingChanged(AssetGrouping)` -- User selects grouping from picker
 
 ### Internal Actions
 None -- this is a pure-state feature with no effects.
@@ -61,11 +57,6 @@ None -- this is a pure-state feature with no effects.
 ### B2: Search Text
 - WHEN `searchTextChanged` is sent
 - THEN `state.searchText` updates to the new value
-- AND no side effects run
-
-### B3: Grouping Change
-- WHEN `groupingChanged` is sent
-- THEN `state.grouping` updates to the new value
 - AND no side effects run
 
 ### B4: Asset Row Aggregation (Pure Function)

@@ -100,17 +100,6 @@ struct AssetsTab: View {
 
             Spacer()
 
-            Picker("Group", selection: Binding(
-                get: { store.allAssets.grouping },
-                set: { store.send(.allAssets(.groupingChanged($0))) })) {
-                    ForEach(AssetGrouping.allCases, id: \.self) { g in
-                        Text(g.rawValue).tag(g)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 140)
-                .dashboardControl()
-
             Button {
                 exportCSV(rows)
             } label: {

@@ -39,14 +39,6 @@ struct ExposureCurrencyCell: View {
     }
 }
 
-struct ExposureDerivativesCell: View {
-    var body: some View {
-        Text(ExposureFormat.placeholder)
-            .font(DashboardStyle.monoTableFont)
-            .foregroundStyle(PortuTheme.dashboardSecondaryText)
-    }
-}
-
 struct ExposureNetExposureCell<Row: ExposureRow>: View {
     let row: Row
     @Environment(AppState.self) private var appState
@@ -135,8 +127,6 @@ struct ExposureCountPill: View {
 
 enum ExposureFormat {
     private static let locale = Locale(identifier: "en_US_POSIX")
-
-    static let placeholder = "—"
 
     static func currency(_ value: Decimal, fractionDigits: Int, currencyCode: String = "USD") -> String {
         let isNegative = value < 0

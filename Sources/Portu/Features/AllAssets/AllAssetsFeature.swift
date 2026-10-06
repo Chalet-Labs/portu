@@ -6,15 +6,8 @@ import PortuCore
 
 enum AssetTab: String, CaseIterable, Equatable, Hashable {
     case assets = "Assets"
-    case nfts = "NFTs"
     case platforms = "Platforms"
     case networks = "Networks"
-}
-
-enum AssetGrouping: String, CaseIterable, Equatable, Hashable {
-    case none = "None"
-    case category = "Category"
-    case priceSource = "Price Source"
 }
 
 /// Row data for asset table display (nonisolated for Sendable KeyPaths).
@@ -132,13 +125,11 @@ struct AllAssetsFeature {
     struct State: Equatable {
         var selectedTab: AssetTab = .assets
         var searchText: String = ""
-        var grouping: AssetGrouping = .none
     }
 
     enum Action: Equatable {
         case tabSelected(AssetTab)
         case searchTextChanged(String)
-        case groupingChanged(AssetGrouping)
     }
 
     var body: some ReducerOf<Self> {
@@ -150,10 +141,6 @@ struct AllAssetsFeature {
 
             case let .searchTextChanged(text):
                 state.searchText = text
-                return .none
-
-            case let .groupingChanged(grouping):
-                state.grouping = grouping
                 return .none
             }
         }
