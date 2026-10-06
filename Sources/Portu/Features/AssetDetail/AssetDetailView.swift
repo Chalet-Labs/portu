@@ -26,8 +26,9 @@ struct AssetDetailView: View {
         return descriptor
     }
 
+    /// The query already narrows to this id; matching again keeps the view correct if that ever changes.
     private var asset: Asset? {
-        assets.first
+        assets.first { $0.id == assetId }
     }
 
     private var historicalPriceCoinGeckoId: String? {
