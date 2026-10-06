@@ -92,19 +92,8 @@ struct OverviewPositionValueDataTests {
         #expect(group.value == 4000)
     }
 
-    @Test func `placeholder tabs resolve to no groups`() throws {
-        let container = try makeContainer()
-        let context = container.mainContext
-        try seedAccount(in: context, positionType: .idle, protocolName: nil, includeBorrow: true)
-        let positions = try context.fetch(FetchDescriptor<Position>())
-        let projection = projectionContext()
-
-        for tab in [OverviewPositionTab.futures, .options] {
-            #expect(OverviewPositionProjection.groups(
-                for: tab,
-                positions: positions,
-                context: projection).isEmpty)
-        }
+    @Test func `position tabs offer only tabs backed by position data`() {
+        #expect(OverviewPositionTab.allCases == [.keyChanges, .idleStables, .idleMajors, .borrowing])
     }
 
     @Test func `position tabs render when every position is deleted mid-session`() throws {

@@ -6,8 +6,6 @@ enum OverviewPositionTab: String, CaseIterable {
     case idleStables = "Idle Stables"
     case idleMajors = "Idle BTC / ETH / SOL"
     case borrowing = "Borrowing"
-    case futures = "Futures"
-    case options = "Options"
 
     /// Shown when the tab resolves to no positions.
     var emptyMessage: String {
@@ -16,15 +14,6 @@ enum OverviewPositionTab: String, CaseIterable {
         case .idleStables: "No idle stables"
         case .idleMajors: "No idle BTC / ETH / SOL"
         case .borrowing: "No borrowing"
-        case .futures, .options: "No deployed positions"
-        }
-    }
-
-    /// Tabs with no data source yet; they never touch the model graph.
-    var isPlaceholder: Bool {
-        switch self {
-        case .futures, .options: true
-        case .keyChanges, .idleStables, .idleMajors, .borrowing: false
         }
     }
 }
@@ -71,8 +60,6 @@ enum OverviewPositionProjection {
             }
         case .borrowing:
             borrowingGroups(positions: positions, context: context)
-        case .futures, .options:
-            []
         }
     }
 
