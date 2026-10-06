@@ -17,13 +17,11 @@ struct SidebarLayoutSection: Equatable, Identifiable {
 
 enum SidebarItem: Equatable, Identifiable {
     case section(SidebarSection)
-    case strategies
     case settings
 
     var id: String {
         switch self {
         case let .section(section): "section-\(section.id)"
-        case .strategies: "strategies"
         case .settings: "settings"
         }
     }
@@ -48,11 +46,7 @@ enum SidebarLayout {
             title: "MANAGEMENT",
             items: [
                 .section(.accounts)
-            ]),
-        SidebarLayoutSection(
-            title: nil,
-            items: [.strategies],
-            isDisabled: true)
+            ])
     ]
 
     static let footerItems: [SidebarItem] = [.settings]

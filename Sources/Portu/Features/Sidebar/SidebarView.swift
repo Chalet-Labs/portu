@@ -63,8 +63,6 @@ struct SidebarView: View {
             store.send(.sectionSelected(section))
         case .settings:
             openSettings()
-        case .strategies:
-            break
         }
     }
 }
@@ -201,7 +199,7 @@ private struct SidebarNavigationSection: View {
         switch item {
         case let .section(section):
             selectedSection == section
-        case .settings, .strategies:
+        case .settings:
             false
         }
     }
@@ -275,7 +273,7 @@ private struct SidebarFooter: View {
                     }
                     .buttonStyle(.plain)
                     .padding(8)
-                case .section, .strategies:
+                case .section:
                     EmptyView()
                 }
             }
@@ -288,7 +286,6 @@ private extension SidebarItem {
     var title: String {
         switch self {
         case let .section(section): section.title
-        case .strategies: "Strategies"
         case .settings: "Settings"
         }
     }
@@ -296,7 +293,6 @@ private extension SidebarItem {
     var systemImage: String {
         switch self {
         case let .section(section): section.systemImage
-        case .strategies: "lightbulb"
         case .settings: "gearshape"
         }
     }

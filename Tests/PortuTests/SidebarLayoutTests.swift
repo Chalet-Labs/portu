@@ -8,4 +8,16 @@ struct SidebarLayoutTests {
         #expect(!navigationItems.contains(.settings))
         #expect(SidebarLayout.footerItems == [.settings])
     }
+
+    @Test func `navigation sections hold only navigable destinations`() {
+        let navigationItems = SidebarLayout.navigationSections.flatMap(\.items)
+
+        #expect(navigationItems.allSatisfy { item in
+            if case .section = item {
+                true
+            } else {
+                false
+            }
+        })
+    }
 }
