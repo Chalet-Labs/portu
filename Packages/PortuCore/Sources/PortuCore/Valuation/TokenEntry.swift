@@ -13,6 +13,8 @@ public struct TokenEntry: Equatable, Sendable {
     public let amount: Decimal
     public let usdValue: Decimal
     public let logoURL: String?
+    /// When the position holding this token was last synced; `nil` when the entry has no position.
+    public let syncedAt: Date?
 
     public init(
         assetId: UUID,
@@ -25,7 +27,8 @@ public struct TokenEntry: Equatable, Sendable {
         role: TokenRole,
         amount: Decimal,
         usdValue: Decimal,
-        logoURL: String? = nil) {
+        logoURL: String? = nil,
+        syncedAt: Date? = nil) {
         self.assetId = assetId
         self.symbol = symbol
         self.name = name
@@ -38,5 +41,6 @@ public struct TokenEntry: Equatable, Sendable {
         self.amount = amount
         self.usdValue = usdValue
         self.logoURL = logoURL
+        self.syncedAt = syncedAt
     }
 }

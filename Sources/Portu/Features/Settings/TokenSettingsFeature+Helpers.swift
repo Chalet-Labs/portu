@@ -24,7 +24,8 @@ extension TokenSettingsFeature {
             role: token.role,
             amount: amount ?? token.amount,
             usdValue: usdValue,
-            logoURL: logoURL ?? token.logoURL)
+            logoURL: logoURL ?? token.logoURL,
+            syncedAt: token.syncedAt)
     }
 
     static func normalizedCoinGeckoID(_ id: String?) -> String? {

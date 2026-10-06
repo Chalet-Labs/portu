@@ -36,19 +36,10 @@ struct OverviewSummaryCards: View {
                 guard let asset = token.asset else { return nil }
                 return OverviewSummaryToken(
                     token: TokenEntry(
-                        assetId: asset.id,
-                        symbol: asset.symbol,
-                        name: asset.name,
-                        category: asset.category,
+                        token,
+                        asset: asset,
                         portfolioCategory: resolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
-                        coinGeckoId: asset.coinGeckoId,
-                        onchainIdentity: OnchainTokenIdentity(
-                            chain: asset.upsertChain,
-                            contractAddress: asset.upsertContract),
-                        role: token.role,
-                        amount: token.amount,
-                        usdValue: token.usdValue,
-                        logoURL: asset.logoURL),
+                        coinGeckoId: asset.coinGeckoId),
                     positionType: position.positionType)
             }
         }
@@ -262,7 +253,8 @@ enum OverviewSummaryCardsFeature {
             role: adjusted.role,
             amount: adjusted.amount,
             usdValue: value,
-            logoURL: adjusted.logoURL)
+            logoURL: adjusted.logoURL,
+            syncedAt: adjusted.syncedAt)
     }
 }
 
