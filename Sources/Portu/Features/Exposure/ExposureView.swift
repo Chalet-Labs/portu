@@ -60,23 +60,19 @@ struct ExposureView: View {
             settings: dashboardSettings,
             fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
 
-        return GeometryReader { proxy in
-            let isCompact = proxy.size.width < ExposureLayout.compactWidth
+        return ScrollView {
+            VStack(alignment: .leading, spacing: ExposureLayout.sectionSpacing) {
+                pageHeader
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: ExposureLayout.sectionSpacing) {
-                    pageHeader
+                ExposureSummaryGrid(summary: data.summary)
 
-                    ExposureSummaryGrid(summary: data.summary, isCompact: isCompact)
+                ExposureCategoryTable(rows: data.categoryRows)
 
-                    ExposureCategoryTable(rows: data.categoryRows)
-
-                    ExposureAssetTable(rows: data.assetRows)
-                }
-                .padding(DashboardStyle.pagePadding)
+                ExposureAssetTable(rows: data.assetRows)
             }
-            .background(PortuTheme.dashboardBackground)
+            .padding(DashboardStyle.pagePadding)
         }
+        .background(PortuTheme.dashboardBackground)
         .dashboardPage()
         .task(id: data.pollingIDs) {
             if data.pollingIDs.isEmpty {
@@ -108,7 +104,6 @@ struct ExposureView: View {
 }
 
 private enum ExposureLayout {
-    static let compactWidth: CGFloat = 980
     static let sectionSpacing: CGFloat = 32
     static let cardSpacing: CGFloat = 12
     static let tableSpacing: CGFloat = 14
@@ -138,7 +133,6 @@ private extension View {
 
 private struct ExposureSummaryGrid: View {
     let summary: ExposureSummary
-    let isCompact: Bool
     @Environment(AppState.self) private var appState
 
     private var currencyCode: String {
