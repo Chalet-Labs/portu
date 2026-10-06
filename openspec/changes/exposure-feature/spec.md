@@ -11,7 +11,7 @@ Migrate `ExposureView` from `@Environment(AppState.self)` + `@State` to TCA.
 - Reuse `TokenEntry` from AllAssetsFeature as input (same fields needed)
 
 ### Out of scope
-- Derivatives (placeholder — "Coming soon")
+- Derivatives — no placeholder UI; tracked in #113
 
 ---
 

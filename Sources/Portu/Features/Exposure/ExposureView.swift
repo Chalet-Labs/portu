@@ -119,14 +119,20 @@ private enum ExposureLayout {
     static let categoryColumnWidth: CGFloat = 190
     static let exposurePairColumnWidth: CGFloat = 260
     static let spotNetColumnWidth: CGFloat = 160
-    static let derivativesColumnWidth: CGFloat = 230
     static let netExposureColumnWidth: CGFloat = 210
     static let columnSpacing: CGFloat = 12
 
-    static var tableWidth: CGFloat {
-        categoryColumnWidth + exposurePairColumnWidth + spotNetColumnWidth
-            + derivativesColumnWidth + netExposureColumnWidth
-            + columnSpacing * 4 + tableHorizontalPadding * 2
+    /// Below this the table scrolls horizontally; above it the first column absorbs the extra width.
+    static var minimumTableWidth: CGFloat {
+        categoryColumnWidth + exposurePairColumnWidth + spotNetColumnWidth + netExposureColumnWidth
+            + columnSpacing * 3 + tableHorizontalPadding * 2
+    }
+}
+
+private extension View {
+    /// The leading Category / Asset column, flexible so the numeric columns hug the trailing edge.
+    func exposureFirstColumn() -> some View {
+        frame(minWidth: ExposureLayout.categoryColumnWidth, maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -142,7 +148,7 @@ private struct ExposureSummaryGrid: View {
     private var columns: [GridItem] {
         Array(
             repeating: GridItem(.flexible(), spacing: ExposureLayout.cardSpacing),
-            count: isCompact ? 2 : 4)
+            count: 2)
     }
 
     private var netExposureShare: Decimal {
@@ -158,22 +164,6 @@ private struct ExposureSummaryGrid: View {
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-            }
-
-            ExposureSummaryCard(title: "Derivatives") {
-                VStack(alignment: .leading, spacing: 7) {
-                    ExposureDerivativeSummaryLine(label: "Long", color: PortuTheme.dashboardSuccess)
-                    ExposureDerivativeSummaryLine(label: "Short", color: PortuTheme.dashboardWarning)
-                }
-            }
-
-            ExposureSummaryCard(title: "Derivatives total") {
-                Text(ExposureFormat.placeholder)
-                    .font(.system(size: 16, weight: .medium, design: .monospaced))
-                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                Text("Not yet available")
-                    .font(.caption2)
-                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
             }
 
             ExposureSummaryCard(title: "Net exposure (excl. stablecoins)") {
@@ -208,23 +198,6 @@ private struct ExposureSummaryCard<Content: View>: View {
         }
         .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
         .dashboardCard(horizontalPadding: 14, verticalPadding: 12)
-    }
-}
-
-private struct ExposureDerivativeSummaryLine: View {
-    let label: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Text(ExposureFormat.placeholder)
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundStyle(color)
-                .frame(width: 42, alignment: .leading)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(PortuTheme.dashboardSecondaryText)
-        }
     }
 }
 
@@ -288,7 +261,9 @@ private struct ExposureTableSection<Content: View, Trailing: View>: View {
                 VStack(spacing: 0) {
                     content
                 }
-                .frame(width: ExposureLayout.tableWidth, alignment: .leading)
+                .containerRelativeFrame(.horizontal, alignment: .leading) { visibleWidth, _ in
+                    max(visibleWidth, ExposureLayout.minimumTableWidth)
+                }
             }
             .dashboardTable()
             .clipShape(RoundedRectangle(cornerRadius: ExposureLayout.tableCornerRadius, style: .continuous))
@@ -305,15 +280,12 @@ private struct ExposureTableHeader: View {
     var body: some View {
         HStack(spacing: ExposureLayout.columnSpacing) {
             ExposureHeaderText(firstColumnTitle, width: ExposureLayout.categoryColumnWidth, alignment: .leading)
+                .exposureFirstColumn()
             ExposureHeaderText(
                 "Spot Assets / Liabilities",
                 width: ExposureLayout.exposurePairColumnWidth,
                 alignment: .trailing)
             ExposureSortHeader("Spot Net", width: ExposureLayout.spotNetColumnWidth)
-            ExposureHeaderText(
-                "Derivatives Long / Short",
-                width: ExposureLayout.derivativesColumnWidth,
-                alignment: .center)
             ExposureSortHeader("Net Exposure", width: ExposureLayout.netExposureColumnWidth)
         }
         .padding(.horizontal, ExposureLayout.tableHorizontalPadding)
@@ -359,16 +331,13 @@ private struct ExposureCategoryRow: View {
             Text(row.name)
                 .fontWeight(.medium)
                 .foregroundStyle(PortuTheme.dashboardText)
-                .frame(width: ExposureLayout.categoryColumnWidth, alignment: .leading)
+                .exposureFirstColumn()
 
             ExposureSpotLiabilityCell(row: row)
                 .frame(width: ExposureLayout.exposurePairColumnWidth, alignment: .trailing)
 
             ExposureCurrencyCell(value: row.netExposure, fractionDigits: 0)
                 .frame(width: ExposureLayout.spotNetColumnWidth, alignment: .trailing)
-
-            ExposureDerivativesCell()
-                .frame(width: ExposureLayout.derivativesColumnWidth, alignment: .center)
 
             ExposureNetExposureCell(row: row)
                 .frame(width: ExposureLayout.netExposureColumnWidth, alignment: .trailing)
@@ -383,16 +352,13 @@ private struct ExposureAssetRow: View {
     var body: some View {
         ExposureTableRow(index: index) {
             ExposureAssetBadge(symbol: row.symbol, logoURL: row.logoURL)
-                .frame(width: ExposureLayout.categoryColumnWidth, alignment: .leading)
+                .exposureFirstColumn()
 
             ExposureSpotLiabilityCell(row: row)
                 .frame(width: ExposureLayout.exposurePairColumnWidth, alignment: .trailing)
 
             ExposureCurrencyCell(value: row.netExposure, fractionDigits: 0)
                 .frame(width: ExposureLayout.spotNetColumnWidth, alignment: .trailing)
-
-            ExposureDerivativesCell()
-                .frame(width: ExposureLayout.derivativesColumnWidth, alignment: .center)
 
             ExposureNetExposureCell(row: row)
                 .frame(width: ExposureLayout.netExposureColumnWidth, alignment: .trailing)
