@@ -2,6 +2,7 @@
 
 excluded:
   - .build
+  - Packages/*/.build
   - DerivedData
   - "*.xcodeproj"
 

@@ -37,7 +37,7 @@ struct SidebarView: View {
                         ForEach(filteredSections) { section in
                             SidebarNavigationSection(
                                 section: section,
-                                selectedSection: store.sidebarSelection) { item in
+                                selectedSection: store.selectedSection) { item in
                                     select(item)
                                 }
                         }
@@ -72,7 +72,7 @@ struct SidebarView: View {
 // Owns every input the portfolio valuation reads (position, override, and
 // mapping queries; price/currency state; dashboard settings). Parameterless
 // on purpose: when `SidebarView.body` re-evaluates on a navigation click
-// (`store.sidebarSelection`), the unchanged `SidebarPortfolioHeader()` value
+// (`store.selectedSection`), the unchanged `SidebarPortfolioHeader()` value
 // lets SwiftUI skip this body, so the O(portfolio) valuation no longer runs
 // per click (issue #98, criterion 1). It still re-renders when its own
 // observed inputs change.
@@ -171,7 +171,7 @@ private struct SidebarPortfolioHeader: View {
 
 private struct SidebarNavigationSection: View {
     let section: SidebarLayoutSection
-    let selectedSection: SidebarSection?
+    let selectedSection: SidebarSection
     let select: (SidebarItem) -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {

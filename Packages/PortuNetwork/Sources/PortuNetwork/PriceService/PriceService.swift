@@ -1,5 +1,3 @@
-// swiftlint:disable file_length
-
 import Foundation
 import os
 import PortuCore
@@ -7,17 +5,9 @@ import PortuCore
 /// Fetches and caches cryptocurrency prices from CoinGecko's free API.
 /// Rate limit and cache TTL are configurable (see init).
 public actor PriceService {
-    // swiftlint:disable:previous type_body_length
     private static let logger = Logger(subsystem: "com.portu.network", category: "PriceService")
 
     private let session: URLSession
-    private struct CacheKey: Hashable {
-        var currency: FiatCurrency
-        var coinId: String
-    }
-
-    private var cache: [CacheKey: Decimal] = [:]
-    private var lastFetchDates: [FiatCurrency: Date] = [:]
     private var updateCaches: [FiatCurrency: PriceUpdate] = [:]
     private var lastUpdateFetchDates: [FiatCurrency: Date] = [:]
     private var conversionRateCache: [FiatCurrency: (rate: Decimal, date: Date)] = [:]
@@ -33,7 +23,6 @@ public actor PriceService {
     private let maxRequestsPerWindow: Int
     private let windowDuration: TimeInterval
     private var requestTimestamps: [RequestStamp] = []
-    private var activePollingTask: Task<Void, Never>?
 
     private enum Plan {
         case demo, pro
@@ -60,48 +49,6 @@ public actor PriceService {
         self.maxRequestsPerWindow = maxRequestsPerWindow
         self.windowDuration = windowDuration
         self.coinGeckoAPIKey = coinGeckoAPIKey
-    }
-
-    /// Fetch current USD prices for the given CoinGecko coin IDs.
-    /// Returns cached data if within TTL. Enforces client-side rate limit.
-    public func fetchPrices(
-        for coinIds: [String],
-        currency: FiatCurrency = .default) async throws(PriceServiceError) -> [String: Decimal] {
-        guard !coinIds.isEmpty else { return [:] }
-
-        let cacheKeys = coinIds.map { CacheKey(currency: currency, coinId: $0) }
-        if
-            let lastFetch = lastFetchDates[currency],
-            Date.now.timeIntervalSince(lastFetch) < cacheTTL,
-            cacheKeys.allSatisfy({ cache[$0] != nil }) {
-            return Dictionary(coinIds.compactMap { id in
-                cache[CacheKey(currency: currency, coinId: id)].map { (id, $0) }
-            }, uniquingKeysWith: { current, _ in current })
-        }
-
-        let data = try await rateLimitedFetch(
-            coinIds: coinIds,
-            currency: currency,
-            extraParams: [])
-
-        let parsed = try CoinGeckoSimplePriceResponse(from: data, currency: currency)
-        let requested = Set(coinIds)
-
-        // Cap cache to prevent unbounded growth in long-running sessions
-        if cache.count > 500 {
-            cache = [:]
-        }
-        // Remove requested IDs not present in fresh payload to avoid serving stale values
-        for id in requested where parsed.prices[id] == nil {
-            cache.removeValue(forKey: CacheKey(currency: currency, coinId: id))
-        }
-        for (id, price) in parsed.prices {
-            cache[CacheKey(currency: currency, coinId: id)] = price
-        }
-        lastFetchDates[currency] = .now
-        return Dictionary(coinIds.compactMap { id in
-            cache[CacheKey(currency: currency, coinId: id)].map { (id, $0) }
-        }, uniquingKeysWith: { current, _ in current })
     }
 
     /// Fetch current USD prices and 24h change percentages for the given CoinGecko coin IDs.
@@ -489,77 +436,8 @@ public actor PriceService {
         return plan
     }
 
-    /// Returns an async stream that polls prices at the given interval.
-    /// The stream yields price dictionaries keyed by coinGeckoId.
-    /// Transient errors (network, rate limit) are silently retried on the next tick.
-    /// Non-transient errors (decoding, invalid response) terminate the stream.
-    ///
-    /// - Important: Only one active stream per `PriceService` instance is supported.
-    ///   Multiple concurrent streams share the same rate-limit budget and can silently
-    ///   exhaust it, causing all streams to stop yielding values. Cancel the previous
-    ///   stream before creating a new one.
-    /// - Important: `coinIds` is captured at the point `priceStream` is called.
-    ///   The stream will **not** automatically pick up coins added after creation.
-    ///   Recreate the stream (e.g., via `.task(id: coinIdSet)`) whenever the active
-    ///   set of tracked coins changes.
-    public func priceStream(
-        for coinIds: [String],
-        interval: TimeInterval = 30) -> AsyncThrowingStream<[String: Decimal], any Error> {
-        guard !coinIds.isEmpty else {
-            return AsyncThrowingStream { $0.finish() }
-        }
-        let pollingInterval = max(interval, 1)
-
-        // Cancel any lingering polling task synchronously on the actor
-        // before starting a new stream. This eliminates the race where
-        // the old task's deferred cleanup hasn't executed yet.
-        activePollingTask?.cancel()
-        activePollingTask = nil
-
-        let (stream, continuation) = AsyncThrowingStream.makeStream(
-            of: [String: Decimal].self,
-            throwing: (any Error).self,
-            bufferingPolicy: .bufferingNewest(1))
-        let task = Task {
-            while !Task.isCancelled {
-                do {
-                    let prices = try await fetchPrices(for: coinIds)
-                    continuation.yield(prices)
-                } catch PriceServiceError.rateLimited {
-                    // All three branches are transient (rate-limit, offline, upstream 5xx); skip
-                    // the tick so the user keeps seeing the last good prices instead of an empty
-                    // chart. Logged so a persistent outage is discoverable from Console.
-                    Self.logger.notice("Price polling tick skipped: rate limited by CoinGecko.")
-                } catch PriceServiceError.networkUnavailable {
-                    Self.logger.notice("Price polling tick skipped: network unavailable.")
-                } catch let PriceServiceError.invalidResponse(code) where code >= 500 {
-                    Self.logger.notice("Price polling tick skipped: CoinGecko returned \(code, privacy: .public).")
-                } catch {
-                    // Non-transient (decoding, 4xx auth errors) — terminate the stream.
-                    Self.logger.error(
-                        "Price polling stream terminated: \(String(describing: error), privacy: .public)")
-                    continuation.finish(throwing: error)
-                    return
-                }
-                do {
-                    try await Task.sleep(for: .seconds(pollingInterval))
-                } catch {
-                    // Cancellation — clean finish
-                    continuation.finish()
-                    return
-                }
-            }
-            continuation.finish()
-        }
-        activePollingTask = task
-        continuation.onTermination = { _ in task.cancel() }
-        return stream
-    }
-
     /// Clear the price cache, forcing a fresh fetch on next call.
     public func invalidateCache() {
-        cache = [:]
-        lastFetchDates = [:]
         updateCaches = [:]
         lastUpdateFetchDates = [:]
         conversionRateCache = [:]

@@ -200,6 +200,11 @@ public struct PortfolioCategoryResolver: Equatable, Sendable {
     private let rulesBySymbol: [String: UUID]
     private let fallback: PortfolioCategorySnapshot
 
+    /// Shared by every resolver: views rebuild resolvers on each render, so a per-instance cache
+    /// would always start cold. It only remembers how a raw symbol normalizes, never a category,
+    /// so resolvers with different rules can share it.
+    static let normalizationMemo = SymbolNormalizationMemo()
+
     public static let defaults = PortfolioCategoryResolver(
         categories: PortfolioCategoryDefaults.categorySnapshots,
         rules: PortfolioCategoryDefaults.symbolRuleSnapshots)
@@ -248,7 +253,7 @@ public struct PortfolioCategoryResolver: Equatable, Sendable {
     }
 
     public func resolve(symbol: String, legacyCategory: AssetCategory) -> PortfolioCategorySnapshot {
-        let normalized = PortfolioCategoryDefaults.normalizeSymbol(symbol)
+        let normalized = Self.normalizationMemo.normalized(symbol)
         if
             let categoryId = rulesBySymbol[normalized],
             let category = categoriesByID[categoryId] {

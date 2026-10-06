@@ -53,21 +53,7 @@ struct PriceServiceTests {
         self.session = URLSession(configuration: config)
     }
 
-    @Test func `fetch prices success`() async throws {
-        MockURLProtocol.requestHandler = { _ in
-            (Data("""
-            {"bitcoin":{"usd":62400},"ethereum":{"usd":3200}}
-            """.utf8), 200)
-        }
-
-        let service = PriceService(session: session)
-        let prices = try await service.fetchPrices(for: ["bitcoin", "ethereum"])
-
-        #expect(prices["bitcoin"] == 62400)
-        #expect(prices["ethereum"] == 3200)
-    }
-
-    @Test func `fetch prices uses requested fiat currency`() async throws {
+    @Test func `fetch price update requests the selected fiat currency`() async throws {
         var capturedURL: URL?
         MockURLProtocol.requestHandler = { request in
             capturedURL = request.url
@@ -77,70 +63,70 @@ struct PriceServiceTests {
         }
 
         let service = PriceService(session: session)
-        let prices = try await service.fetchPrices(for: ["bitcoin"], currency: .eur)
+        let update = try await service.fetchPriceUpdate(for: ["bitcoin"], currency: .eur)
 
         #expect(capturedURL?.query?.contains("vs_currencies=eur") == true)
-        #expect(prices["bitcoin"] == 53100)
+        #expect(update.prices["bitcoin"] == 53100)
     }
 
-    @Test func `fetch prices rate limited`() async {
+    @Test func `fetch price update rate limited`() async {
         MockURLProtocol.requestHandler = { _ in (nil, 429) }
 
         let service = PriceService(session: session)
         await #expect(throws: PriceServiceError.rateLimited) {
-            try await service.fetchPrices(for: ["bitcoin"])
+            try await service.fetchPriceUpdate(for: ["bitcoin"])
         }
     }
 
-    @Test func `cache returns cached data`() async throws {
+    @Test func `price update cache returns cached data within the ttl`() async throws {
         MockURLProtocol.requestHandler = { _ in
             (Data("""
-            {"bitcoin":{"usd":62400}}
+            {"bitcoin":{"usd":62400,"usd_24h_change":1.5}}
             """.utf8), 200)
         }
 
         let service = PriceService(session: session, cacheTTL: 60)
 
         // First fetch — hits network
-        let first = try await service.fetchPrices(for: ["bitcoin"])
-        #expect(first["bitcoin"] == 62400)
+        let first = try await service.fetchPriceUpdate(for: ["bitcoin"])
+        #expect(first.prices["bitcoin"] == 62400)
 
         // Change mock — but cache should still return old data
         MockURLProtocol.requestHandler = { _ in
             (Data("""
-            {"bitcoin":{"usd":99999}}
+            {"bitcoin":{"usd":99999,"usd_24h_change":1.5}}
             """.utf8), 200)
         }
 
-        let second = try await service.fetchPrices(for: ["bitcoin"])
-        #expect(second["bitcoin"] == 62400) // cached
+        let second = try await service.fetchPriceUpdate(for: ["bitcoin"])
+        #expect(second.prices["bitcoin"] == 62400) // cached
     }
 
-    @Test func `invalidate cache forces refetch`() async throws {
+    @Test func `invalidate cache forces refetch of price updates`() async throws {
         MockURLProtocol.requestHandler = { _ in
             (Data("""
-            {"bitcoin":{"usd":62400}}
+            {"bitcoin":{"usd":62400,"usd_24h_change":1.5}}
             """.utf8), 200)
         }
 
         let service = PriceService(session: session, cacheTTL: 60)
 
         // First fetch
-        let first = try await service.fetchPrices(for: ["bitcoin"])
-        #expect(first["bitcoin"] == 62400)
+        let first = try await service.fetchPriceUpdate(for: ["bitcoin"])
+        #expect(first.prices["bitcoin"] == 62400)
 
         // Update mock and invalidate cache
         MockURLProtocol.requestHandler = { _ in
             (Data("""
-            {"bitcoin":{"usd":99999}}
+            {"bitcoin":{"usd":99999,"usd_24h_change":1.5}}
             """.utf8), 200)
         }
 
         await service.invalidateCache()
 
         // Should fetch fresh data, not cached
-        let second = try await service.fetchPrices(for: ["bitcoin"])
-        #expect(second["bitcoin"] == 99999)
+        let second = try await service.fetchPriceUpdate(for: ["bitcoin"])
+        #expect(second.prices["bitcoin"] == 99999)
     }
 
     @Test func `fetch price update includes24h change`() async throws {
@@ -582,13 +568,13 @@ struct PriceServiceTests {
 
         // First 3 requests succeed
         for _ in 0 ..< 3 {
-            _ = try await service.fetchPrices(for: ["bitcoin"])
+            _ = try await service.fetchPriceUpdate(for: ["bitcoin"])
             await service.invalidateCache() // force re-fetch each time
         }
 
         // 4th request should be rate-limited
         await #expect(throws: PriceServiceError.rateLimited) {
-            try await service.fetchPrices(for: ["bitcoin"])
+            try await service.fetchPriceUpdate(for: ["bitcoin"])
         }
     }
 
@@ -605,7 +591,7 @@ struct PriceServiceTests {
         }
 
         let service = PriceService(session: session, cacheTTL: 0, coinGeckoAPIKey: { "pro-key" })
-        _ = try await service.fetchPrices(for: ["bitcoin"])
+        _ = try await service.fetchPriceUpdate(for: ["bitcoin"])
 
         #expect(fetchHeader == "pro-key")
         #expect(fetchHost == "pro-api.coingecko.com")
@@ -624,7 +610,7 @@ struct PriceServiceTests {
         }
 
         let service = PriceService(session: session, cacheTTL: 0, coinGeckoAPIKey: { "demo-key" })
-        _ = try await service.fetchPrices(for: ["bitcoin"])
+        _ = try await service.fetchPriceUpdate(for: ["bitcoin"])
 
         #expect(fetchHeader == "demo-key")
         #expect(fetchHost == "api.coingecko.com")
@@ -642,7 +628,7 @@ struct PriceServiceTests {
 
         let service = PriceService(session: session, cacheTTL: 0, coinGeckoAPIKey: { "pro-key" })
         for _ in 0 ..< 3 {
-            _ = try await service.fetchPrices(for: ["bitcoin"])
+            _ = try await service.fetchPriceUpdate(for: ["bitcoin"])
             await service.invalidateCache()
         }
 

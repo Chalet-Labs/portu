@@ -12,15 +12,6 @@ struct AppFeature {
     @ObservableState
     struct State: Equatable {
         var selectedSection: SidebarSection = .overview
-        var isSettingsPresented = false
-        var detailRoute: AppDetailRoute {
-            isSettingsPresented ? .settings : .section(selectedSection)
-        }
-
-        var sidebarSelection: SidebarSection? {
-            isSettingsPresented ? nil : selectedSection
-        }
-
         var syncStatus: SyncStatus = .idle
         var syncingAccountID: UUID?
         var connectionStatus: ConnectionStatus = .idle
@@ -64,7 +55,6 @@ struct AppFeature {
         case setAutomaticChecksEnabled(Bool)
         case setUpdateChannel(UpdateChannel)
         case sectionSelected(SidebarSection)
-        case settingsSelected
         case syncTapped
         case accountSyncTapped(UUID)
         case syncProgressUpdated(Double)
@@ -211,17 +201,10 @@ struct AppFeature {
 
             case let .sectionSelected(section):
                 state.selectedSection = section
-                state.isSettingsPresented = false
-                return .none
-
-            case .settingsSelected:
-                state.isSettingsPresented = true
                 return .none
 
             case .syncTapped:
-                if case .syncing = state.syncStatus {
-                    return .none
-                }
+                guard !state.syncStatus.isSyncing else { return .none }
                 state.syncStatus = .syncing(progress: 0)
                 state.syncingAccountID = nil
                 return .run { send in
@@ -232,9 +215,7 @@ struct AppFeature {
                 }
 
             case let .accountSyncTapped(accountID):
-                if case .syncing = state.syncStatus {
-                    return .none
-                }
+                guard !state.syncStatus.isSyncing else { return .none }
                 state.syncStatus = .syncing(progress: 0)
                 state.syncingAccountID = accountID
                 return .run { send in
@@ -248,40 +229,12 @@ struct AppFeature {
                 state.syncStatus = .syncing(progress: progress)
                 return .none
 
-            case let .syncCompleted(.success(result)):
-                state.syncingAccountID = nil
-                if result.isPartial {
-                    state.syncStatus = .completedWithErrors(failedAccounts: result.failedAccounts)
-                } else {
-                    state.syncStatus = .idle
-                }
+            case let .syncCompleted(result), let .scheduledSyncCompleted(result):
+                Self.finishSync(&state, with: result, isAccountSync: false)
                 return .none
 
-            case let .syncCompleted(.failure(error)):
-                state.syncingAccountID = nil
-                state.syncStatus = .error(error.localizedDescription)
-                return .none
-
-            case let .accountSyncCompleted(.success(result)):
-                state.syncingAccountID = nil
-                if result.isPartial {
-                    state.syncStatus = .completedWithErrors(failedAccounts: result.failedAccounts)
-                } else {
-                    state.syncStatus = .idle
-                }
-                return .none
-
-            case let .accountSyncCompleted(.failure(error)):
-                // A single-account failure is surfaced on that row's `lastSyncError`
-                // when the engine throws allAccountsFailed after persisting the row
-                // error. Later-stage failures (snapshot/save) have no row error to
-                // show, so surface those globally.
-                state.syncingAccountID = nil
-                if (error as? SyncError) == .allAccountsFailed {
-                    state.syncStatus = .idle
-                } else {
-                    state.syncStatus = .error(error.localizedDescription)
-                }
+            case let .accountSyncCompleted(result):
+                Self.finishSync(&state, with: result, isAccountSync: true)
                 return .none
 
             case .startScheduledSync:
@@ -327,9 +280,7 @@ struct AppFeature {
                 return .cancel(id: CancelID.scheduledSync)
 
             case let .scheduledSyncDue(scope):
-                if case .syncing = state.syncStatus {
-                    return .none
-                }
+                guard !state.syncStatus.isSyncing else { return .none }
                 state.syncStatus = .syncing(progress: 0)
                 state.syncingAccountID = nil
                 return .run { send in
@@ -338,20 +289,6 @@ struct AppFeature {
                 } catch: { error, send in
                     await send(.scheduledSyncCompleted(.failure(error)))
                 }
-
-            case let .scheduledSyncCompleted(.success(result)):
-                state.syncingAccountID = nil
-                if result.isPartial {
-                    state.syncStatus = .completedWithErrors(failedAccounts: result.failedAccounts)
-                } else {
-                    state.syncStatus = .idle
-                }
-                return .none
-
-            case let .scheduledSyncCompleted(.failure(error)):
-                state.syncingAccountID = nil
-                state.syncStatus = .error(error.localizedDescription)
-                return .none
 
             case let .displayCurrencySelected(currency):
                 // Dedupe against the effective target: while a non-USD switch is in
@@ -498,6 +435,32 @@ private extension AppFeature {
     /// exists — the cache writer upserts, so a 1-day overlap is harmless, and this
     /// avoids re-requesting the full `chartHorizonDays` window on every tick.
     static let historicalFXTopUpDays = 2
+
+    /// Settles the sync state once any sync finishes. A single-account sync that throws
+    /// `allAccountsFailed` has already written the error to that account's row
+    /// (`lastSyncError`), so the global status goes back to idle instead of repeating it.
+    /// Every other failure, including later-stage snapshot or save errors, has no row
+    /// error to show and surfaces globally.
+    static func finishSync(
+        _ state: inout State,
+        with result: Result<SyncResult, Error>,
+        isAccountSync: Bool) {
+        state.syncingAccountID = nil
+        switch result {
+        case let .success(syncResult):
+            if syncResult.isPartial {
+                state.syncStatus = .completedWithErrors(failedAccounts: syncResult.failedAccounts)
+            } else {
+                state.syncStatus = .idle
+            }
+        case let .failure(error):
+            if isAccountSync, (error as? SyncError) == .allAccountsFailed {
+                state.syncStatus = .idle
+            } else {
+                state.syncStatus = .error(error.localizedDescription)
+            }
+        }
+    }
 
     /// Applies a display-currency switch: persists the preference, sets the rate,
     /// clears stale prices, and restarts polling in the new currency. The historical
@@ -780,7 +743,6 @@ extension AppFeature.Action: Equatable {
         case let (.setAutomaticChecksEnabled(l), .setAutomaticChecksEnabled(r)): l == r
         case let (.setUpdateChannel(l), .setUpdateChannel(r)): l == r
         case let (.sectionSelected(l), .sectionSelected(r)): l == r
-        case (.settingsSelected, .settingsSelected): true
         case (.syncTapped, .syncTapped): true
         case let (.accountSyncTapped(l), .accountSyncTapped(r)): l == r
         case let (.syncProgressUpdated(l), .syncProgressUpdated(r)): l == r

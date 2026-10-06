@@ -1,5 +1,8 @@
 # Portu — SwiftUI macOS Crypto Portfolio Dashboard
 
+# Same derived data as script/build_and_run.sh, and inside .build so the CI cache covers it
+derived_data := ".build/DerivedData"
+
 default:
     @just --list
 
@@ -10,7 +13,7 @@ generate:
 
 # Build the app (Debug)
 build:
-    xcodebuild -scheme Portu -configuration Debug -skipMacroValidation build
+    xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation build
 
 # Build the app (Release)
 release:
@@ -24,11 +27,15 @@ test-packages:
 
 # Run all tests (Xcode scheme)
 test:
-    xcodebuild -scheme Portu -configuration Debug -skipMacroValidation test
+    xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test
 
 # Lint all Swift files
 lint:
     swiftlint lint --quiet
+
+# Lint with warnings as errors (what CI runs)
+lint-strict:
+    swiftlint lint --strict --quiet
 
 # Auto-fix lintable violations
 lint-fix:
@@ -38,10 +45,14 @@ lint-fix:
 format:
     swiftformat .
 
+# Fail if any Swift file needs formatting, without changing files (what CI runs)
+format-check:
+    swiftformat --lint .
+
 # Build and launch with debug server on localhost:9999
 debug-run: build
     #!/bin/bash
-    APP=$(xcodebuild -scheme Portu -configuration Debug -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | head -1 | cut -d '=' -f 2- | sed 's/^[[:space:]]*//')/Portu.app
+    APP=$(xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -showBuildSettings 2>/dev/null | grep ' BUILT_PRODUCTS_DIR' | head -1 | cut -d '=' -f 2- | sed 's/^[[:space:]]*//')/Portu.app
     if [ ! -d "$APP" ]; then echo "Could not locate Portu.app at $APP" >&2; exit 1; fi
     lsof -ti tcp:9999 | xargs kill 2>/dev/null || true; sleep 0.5
     open -n "$APP" --args --debug-server

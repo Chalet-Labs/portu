@@ -47,7 +47,7 @@ struct ContentView: View {
                                 .dashboardPage()
                         }
                 }
-                .onChange(of: store.detailRoute) { _, _ in
+                .onChange(of: store.selectedSection) { _, _ in
                     assetNavigationPath = NavigationPath()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -58,15 +58,9 @@ struct ContentView: View {
         .background(PortuTheme.dashboardBackground)
     }
 
-    @ViewBuilder
     private var detailView: some View {
-        switch store.detailRoute {
-        case let .section(section):
-            sectionView(section)
-                .dashboardPage()
-        case .settings:
-            SettingsView(store: store, secretStore: secretStore)
-        }
+        sectionView(store.selectedSection)
+            .dashboardPage()
     }
 
     @ViewBuilder

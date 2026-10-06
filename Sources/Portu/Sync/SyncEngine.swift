@@ -5,7 +5,7 @@ import PortuNetwork
 import SwiftData
 
 @MainActor
-final class SyncEngine: @unchecked Sendable {
+final class SyncEngine {
     private let modelContext: ModelContext
     private let providerFactory: ProviderFactory
     #if DEBUG

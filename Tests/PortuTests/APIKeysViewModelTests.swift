@@ -264,28 +264,31 @@ struct APIKeysViewModelTests {
         #expect(try store.get(key: .serviceAPIKey("coingecko")) == "cg-ghi")
     }
 
-    @Test func `historical backfill reads zerion key saved by settings`() async throws {
+    @Test func `historical backfill sees the zerion key saved by settings`() async throws {
         let store = MockSecretStore()
         let vm = APIKeysViewModel(secretStore: store)
         await vm.load()
         vm.zerionAPIKey = "zap-backfill"
         await vm.save()
 
-        #expect(try PortuApp.zerionAPIKey(from: store) == "zap-backfill")
+        let reader = APIKeyAvailabilityReader(secretStore: store)
+        #expect(try await reader.hasAPIKey(.providerAPIKey(.zerion)))
     }
 
-    @Test func `locked keychain is not interpreted as a missing Zerion key`() {
-        #expect(throws: KeychainError.unexpectedStatus(-25308)) {
-            _ = try PortuApp.zerionAPIKey(from: FailingSecretStore())
+    @Test func `locked keychain is not interpreted as a missing Zerion key`() async {
+        let reader = APIKeyAvailabilityReader(secretStore: FailingSecretStore())
+
+        await #expect(throws: KeychainError.unexpectedStatus(-25308)) {
+            _ = try await reader.hasAPIKey(.providerAPIKey(.zerion))
         }
     }
 
-    @Test func `live pricing treats a failed Zerion key read as unavailable`() throws {
+    @Test func `live pricing treats a failed CoinGecko key read as unavailable`() throws {
         let configured = MockSecretStore()
-        try configured.set(key: .providerAPIKey(.zerion), value: " zerion-key ")
+        try configured.set(key: .serviceAPIKey("coingecko"), value: " coingecko-key ")
 
-        #expect(PortuApp.zerionAPIKeyIfAvailable(from: configured) == "zerion-key")
-        #expect(PortuApp.zerionAPIKeyIfAvailable(from: FailingSecretStore()) == nil)
+        #expect(PortuApp.coinGeckoAPIKey(from: configured) == "coingecko-key")
+        #expect(PortuApp.coinGeckoAPIKey(from: FailingSecretStore()) == nil)
     }
 
     @Test func `save deletes keys when field cleared`() async throws {

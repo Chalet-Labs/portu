@@ -25,7 +25,15 @@ jobs:
 
       - name: Install tools
         run: |
-          brew install xcodegen just
+          # SwiftFormat comes with the runner image; SwiftLint does not
+          brew install xcodegen just swiftlint
+
+      - name: Check formatting and lint
+        run: |
+          swiftformat --version
+          swiftlint --version
+          just format-check
+          just lint-strict
 
       - name: Cache SPM packages
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4

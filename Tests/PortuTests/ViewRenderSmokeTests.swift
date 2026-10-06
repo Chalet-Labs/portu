@@ -98,15 +98,13 @@ struct ViewRenderSmokeTests {
         render(view)
     }
 
-    @Test func `settings route renders without crashing`() throws {
+    @Test func `settings view renders without crashing`() throws {
         let container = try makeContainer()
-        var state = populatedState(section: .overview)
-        state.isSettingsPresented = true
-        let store = makeStore(state: state)
+        let store = makeStore(state: populatedState(section: .overview))
         let appState = AppState()
         appState.bridge(from: store)
 
-        let view = ContentView(store: store)
+        let view = SettingsView(store: store, secretStore: InMemorySecretStore())
             .modelContainer(container)
             .environment(appState)
             .frame(width: 1400, height: 900)
