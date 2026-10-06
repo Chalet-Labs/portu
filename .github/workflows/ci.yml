@@ -30,6 +30,8 @@ jobs:
 
       - name: Check formatting and lint
         run: |
+          swiftformat --version
+          swiftlint --version
           just format-check
           just lint-strict
 
