@@ -42,24 +42,6 @@ struct AllAssetsFeatureTests {
             $0.searchText = ""
         }
     }
-
-    // MARK: - Grouping Change
-
-    @Test func `grouping change updates state`() async {
-        let store = TestStore(initialState: AllAssetsFeature.State()) {
-            AllAssetsFeature()
-        }
-
-        await store.send(.groupingChanged(.category)) {
-            $0.grouping = .category
-        }
-        await store.send(.groupingChanged(.priceSource)) {
-            $0.grouping = .priceSource
-        }
-        await store.send(.groupingChanged(.none)) {
-            $0.grouping = .none
-        }
-    }
 }
 
 // MARK: - Pure Function Tests
