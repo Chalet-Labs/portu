@@ -1,38 +1,6 @@
 import Foundation
 import PortuCore
 
-struct TokenDashboardSettings: Equatable {
-    static let minimumDashboardValueKey = "tokenSettings.minimumDashboardValue"
-    static let hideUnpricedKey = "tokenSettings.hideUnpriced"
-    static let hideDustKey = "tokenSettings.hideDust"
-    static let hideUnpricedTitle = "Hide unpriced"
-    static let hideUnpricedSubtitle = "Exclude tokens without a resolved price from dashboard totals."
-    static let hideDustTitle = "Hide dust"
-    static let defaultMinimumDashboardValue: Decimal = 1
-    static let defaults = TokenDashboardSettings()
-
-    var minimumDashboardValue: Decimal
-    var hideUnpriced: Bool
-    var hideDust: Bool
-
-    init(
-        minimumDashboardValue: Decimal = Self.defaultMinimumDashboardValue,
-        hideUnpriced: Bool = true,
-        hideDust: Bool = true) {
-        self.minimumDashboardValue = minimumDashboardValue
-        self.hideUnpriced = hideUnpriced
-        self.hideDust = hideDust
-    }
-
-    static func fromDefaults(_ defaults: UserDefaults = .standard) -> Self {
-        let storedMinimum = defaults.object(forKey: minimumDashboardValueKey) as? NSNumber
-        return TokenDashboardSettings(
-            minimumDashboardValue: storedMinimum.map { Decimal($0.doubleValue) } ?? defaultMinimumDashboardValue,
-            hideUnpriced: defaults.object(forKey: hideUnpricedKey) as? Bool ?? true,
-            hideDust: defaults.object(forKey: hideDustKey) as? Bool ?? true)
-    }
-}
-
 enum TokenPricingSource: String, CaseIterable, Equatable {
     case live = "Live"
     case syncTime = "Sync-time"
