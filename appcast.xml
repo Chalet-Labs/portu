@@ -3,6 +3,23 @@
     <channel>
         <title>Portu</title>
         <item>
+            <title>1.9.4</title>
+            <pubDate>Wed, 07 Oct 2026 23:12:56 +0000</pubDate>
+            <link>https://github.com/Chalet-Labs/portu</link>
+            <sparkle:version>34</sparkle:version>
+            <sparkle:shortVersionString>1.9.4</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## [1.9.4](https://github.com/Chalet-Labs/portu/compare/v1.9.3...v1.9.4) (2026-10-07)
+
+
+### Bug Fixes
+
+* keep live prices across FX refresh, key polling on the ID set, calm Performance reloads ([#132](https://github.com/Chalet-Labs/portu/issues/132)) ([733b229](https://github.com/Chalet-Labs/portu/commit/733b22917b2d88a43453f2031bac11c7170a5a94)), closes [#120](https://github.com/Chalet-Labs/portu/issues/120)
+
+]]></description>
+            <enclosure url="https://github.com/Chalet-Labs/portu/releases/download/v1.9.4/Portu-1.9.4.dmg" length="13149459" type="application/octet-stream" sparkle:edSignature="DxEQ1eND4aiHbjGAtm4/GyI2OXFazDErzpEZJ7uYLO1ZikuomsJgG1Asa8q/eE4CuZgLMWwqM5eG83LQEG9cDw=="/>
+        </item>
+        <item>
             <title>1.9.3</title>
             <pubDate>Wed, 02 Sep 2026 21:38:40 +0000</pubDate>
             <link>https://github.com/Chalet-Labs/portu</link>
