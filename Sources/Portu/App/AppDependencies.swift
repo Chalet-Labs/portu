@@ -107,7 +107,7 @@ struct PriceServiceClient {
 
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
     private var fetchCoinGeckoPricesOverride: (@Sendable (PricePollingRequest) async throws -> PriceUpdate)?
-    private var fetchOnchainFallbackPricesOverride: (@Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate)?
+    private var fetchOnchainFallbackPricesOverride: (@Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate?)?
     var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
     var fetchHistoricalPricesForCurrency: @Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO]
     var fetchCurrentUSDConversionRate: @Sendable (FiatCurrency) async throws -> Decimal
@@ -130,7 +130,9 @@ struct PriceServiceClient {
         set { fetchCoinGeckoPricesOverride = newValue }
     }
 
-    var fetchOnchainFallbackPrices: @Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate {
+    /// The onchain fallback answers nil when it fetched nothing (no provider key), which the
+    /// polling loop does not count as a fetch.
+    var fetchOnchainFallbackPrices: @Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate? {
         get {
             if let fetchOnchainFallbackPricesOverride {
                 return fetchOnchainFallbackPricesOverride
@@ -144,7 +146,7 @@ struct PriceServiceClient {
     init(
         fetchPrices: @escaping @Sendable ([String]) async throws -> PriceUpdate,
         fetchCoinGeckoPrices: (@Sendable (PricePollingRequest) async throws -> PriceUpdate)? = nil,
-        fetchOnchainFallbackPrices: (@Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate)? = nil,
+        fetchOnchainFallbackPrices: (@Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate?)? = nil,
         fetchHistoricalPrices: @escaping @Sendable (String, Int) async throws -> [HistoricalPriceDTO],
         fetchHistoricalPricesForCurrency: (@Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO])? = nil,
         fetchCurrentUSDConversionRate: @escaping @Sendable (FiatCurrency) async throws -> Decimal = { _ in 1 },

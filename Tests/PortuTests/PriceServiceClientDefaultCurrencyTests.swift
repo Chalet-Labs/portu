@@ -23,7 +23,7 @@ struct PriceServiceClientDefaultCurrencyTests {
         let client = makeClient { ids in requested.withLock { $0.append(ids) } }
         let identity = try #require(OnchainTokenIdentity(historicalPriceID: "asset:base:0xtoken"))
 
-        let update = try await client.fetchOnchainFallbackPrices([identity])
+        let update = try #require(await client.fetchOnchainFallbackPrices([identity]))
 
         #expect(update.currency == .usd)
         #expect(update.prices["btc"] == 100)
@@ -40,7 +40,7 @@ struct PriceServiceClientDefaultCurrencyTests {
         let identity = try #require(OnchainTokenIdentity(historicalPriceID: "asset:base:0xtoken"))
 
         let coinGecko = try await client.fetchCoinGeckoPrices(PricePollingRequest(coinGeckoIDs: ["eth"], onchainIdentities: []))
-        let onchain = try await client.fetchOnchainFallbackPrices([identity])
+        let onchain = try #require(await client.fetchOnchainFallbackPrices([identity]))
 
         #expect(coinGecko.prices == ["eth": 5])
         #expect(onchain.prices == ["asset:base:0xtoken": 7])

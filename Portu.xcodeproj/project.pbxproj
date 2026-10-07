@@ -33,6 +33,7 @@
 		1C06ED9173A0F7A77803D08F /* PortfolioHealthFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F694EE203BEF1CB7608A00BE /* PortfolioHealthFeatureTests.swift */; };
 		1C3D5ABCB44A8943B1616804 /* UpdaterBroadcasterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B3BE994FBAACFD30F314A7 /* UpdaterBroadcasterTests.swift */; };
 		1C646ADBE502DF61DC1D87F5 /* AppFeatureUSDPriceBookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8FFB0F3522D8BA81E0BA30B /* AppFeatureUSDPriceBookTests.swift */; };
+		1D028AD6799683303A6E3CAF /* AppFeaturePollingIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0325C954E51F2A70088FD92 /* AppFeaturePollingIdentityTests.swift */; };
 		225B9560EE490E4AD49C03F2 /* AppDependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AAB6958F228996FEDEDC07A /* AppDependencies.swift */; };
 		230FDDF90C3B1EB88AF0981C /* APIKeysViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68FADFCF9394107370CEE271 /* APIKeysViewModel.swift */; };
 		2669929F16BEC301F7B3987A /* AllAssetsFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3E823F7D4F67B3ECD15695 /* AllAssetsFeatureTests.swift */; };
@@ -393,6 +394,7 @@
 		9D436F6820CAAAF0124BBD7E /* HistoricalPriceBackfillFeature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillFeature.swift; sourceTree = "<group>"; };
 		9F63090E475E44BFE0843C26 /* WalletPnLChartMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WalletPnLChartMode.swift; sourceTree = "<group>"; };
 		9FBA24594EA4F2F406000ACA /* UpdaterClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterClient.swift; sourceTree = "<group>"; };
+		A0325C954E51F2A70088FD92 /* AppFeaturePollingIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeaturePollingIdentityTests.swift; sourceTree = "<group>"; };
 		A0E32C2642EE5FC189F3B962 /* Portu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Portu.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A45DB309773A6FDC0AEA4D94 /* ProtocolFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolFilter.swift; sourceTree = "<group>"; };
 		A5F4BE776CC6D1B2E9953432 /* PerformanceHistoricalPriceChangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceHistoricalPriceChangeTests.swift; sourceTree = "<group>"; };
@@ -747,6 +749,7 @@
 				3A01CB6E84AA5F46CB9019A4 /* AppFeatureAccountSyncTests.swift */,
 				CFB3823EC1EBEAAB21D842FD /* AppFeatureActionEquatableTests.swift */,
 				5671DBA75C15FCC72727EA8E /* AppFeatureIntervalTests.swift */,
+				A0325C954E51F2A70088FD92 /* AppFeaturePollingIdentityTests.swift */,
 				B75EE2617348AB0C8031369E /* AppFeaturePricePollingIntervalTests.swift */,
 				015A266F795505EF5A43A041 /* AppFeatureSyncCompletionTests.swift */,
 				BD13FDD77A649AA0A7CBEA62 /* AppFeatureTests.swift */,
@@ -1129,6 +1132,7 @@
 				ACABB35F9973A57572179B81 /* AppFeatureAccountSyncTests.swift in Sources */,
 				6AE7BEBD0394C8E3D9B7A36D /* AppFeatureActionEquatableTests.swift in Sources */,
 				031B921A0352C8F769525FB9 /* AppFeatureIntervalTests.swift in Sources */,
+				1D028AD6799683303A6E3CAF /* AppFeaturePollingIdentityTests.swift in Sources */,
 				EC4693BE6E6483782293F1F9 /* AppFeaturePricePollingIntervalTests.swift in Sources */,
 				EFA28DA008B4B126807A925B /* AppFeatureSyncCompletionTests.swift in Sources */,
 				C422E37331613CA04BA8E9EC /* AppFeatureTests.swift in Sources */,

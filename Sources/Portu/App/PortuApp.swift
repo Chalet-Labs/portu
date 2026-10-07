@@ -334,7 +334,7 @@ struct PortuApp: App {
                     !identities.isEmpty,
                     try await apiKeyAvailability.hasAPIKey(.providerAPIKey(.zerion))
                 else {
-                    return PricePollingIDResolver.emptyUpdate
+                    return nil
                 }
                 return try await zerionProvider.fetchPriceUpdate(for: identities)
             },

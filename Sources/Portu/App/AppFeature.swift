@@ -40,6 +40,10 @@ struct AppFeature {
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?
         var pricePollingIDs: [String] = []
+        // When the onchain fallback last fetched each identity. A polling restart reads it so
+        // the loop waits out the rest of its interval instead of fetching straight away, and
+        // one entry per identity keeps a restart for other identities from erasing the rest.
+        var onchainFallbackFetchedAt: [OnchainTokenIdentity: Date] = [:]
         var storeIsEphemeral: Bool = false
         var allAssets = AllAssetsFeature.State()
         var assetDetail = AssetDetailFeature.State()
@@ -81,6 +85,7 @@ struct AppFeature {
         case startPricePolling([String])
         case stopPricePolling
         case pricesReceived(PriceUpdate)
+        case onchainFallbackPricesReceived(PriceUpdate, identities: [OnchainTokenIdentity])
         case priceFetchFailed(PriceFetchFailure)
         case allAssets(AllAssetsFeature.Action)
         case assetDetail(AssetDetailFeature.Action)
@@ -390,16 +395,24 @@ struct AppFeature {
                     state.pricePollingIDs = []
                     return .cancel(id: CancelID.pricePolling)
                 }
+                // Live-price ranking can reorder the same IDs; that is still the same poll.
+                guard Set(request.allPriceIDs) != Set(state.pricePollingIDs) else { return .none }
                 state.pricePollingIDs = request.allPriceIDs
                 return startPricePollingEffect(&state)
 
             case let .pricesReceived(update):
                 // The book is USD; an update in any other currency would corrupt it.
                 guard update.currency == .usd else { return .none }
-                state.livePricesUSD.merge(update.prices) { _, new in new }
-                state.priceChanges24h.merge(update.changes24h) { _, new in new }
-                state.lastPriceUpdate = currentDate.now()
-                state.connectionStatus = .idle
+                applyLivePrices(update, at: currentDate.now(), to: &state)
+                return .none
+
+            case let .onchainFallbackPricesReceived(update, identities):
+                guard update.currency == .usd else { return .none }
+                let now = currentDate.now()
+                applyLivePrices(update, at: now, to: &state)
+                for identity in identities {
+                    state.onchainFallbackFetchedAt[identity] = now
+                }
                 return .none
 
             case let .priceFetchFailed(failure):
@@ -488,13 +501,34 @@ private extension AppFeature {
             .cancel(id: CancelID.historicalFXTopUp))
     }
 
+    func applyLivePrices(_ update: PriceUpdate, at date: Date, to state: inout State) {
+        state.livePricesUSD.merge(update.prices) { _, new in new }
+        state.priceChanges24h.merge(update.changes24h) { _, new in new }
+        state.lastPriceUpdate = date
+        state.connectionStatus = .idle
+    }
+
     /// Starts price polling for the current `pricePollingIDs`, replacing any running
     /// poll. Prices come back in USD whatever the display currency is.
     func startPricePollingEffect(_ state: inout State) -> Effect<Action> {
         let request = PricePollingIDResolver.split(state.pricePollingIDs)
         guard request.isEmpty == false else { return .none }
         state.connectionStatus = .fetching
-        return pricePollingEffect(request: request)
+        return pricePollingEffect(
+            request: request,
+            sinceLastOnchainFetch: timeSinceOnchainFetch(covering: request.onchainIdentities, in: state))
+    }
+
+    /// How long ago the onchain fallback fetched the one of `identities` it fetched longest
+    /// ago, which is when the loop's next fetch falls due. Nil when any of them was never
+    /// fetched, so the loop should fetch right away.
+    func timeSinceOnchainFetch(covering identities: [OnchainTokenIdentity], in state: State) -> Duration? {
+        let fetchTimes = identities.compactMap { state.onchainFallbackFetchedAt[$0] }
+        guard
+            fetchTimes.count == identities.count,
+            let oldest = fetchTimes.min()
+        else { return nil }
+        return .seconds(max(0, currentDate.now().timeIntervalSince(oldest)))
     }
 
     /// Arms (or, for USD, disarms) the periodic display-FX-rate refresh. This tracks
@@ -591,44 +625,57 @@ private extension AppFeature {
         .cancellable(id: CancelID.historicalFXTopUp, cancelInFlight: true)
     }
 
-    func pricePollingEffect(request: PricePollingRequest) -> Effect<Action> {
+    func pricePollingEffect(request: PricePollingRequest, sinceLastOnchainFetch: Duration?) -> Effect<Action> {
         var effects: [Effect<Action>] = [
             coinGeckoPricePollingEffect(request: request)
         ]
 
         if request.onchainIdentities.isEmpty == false {
-            effects.append(.run { send in
-                while !Task.isCancelled {
-                    guard pricePollingSettings.onchainFallbackInterval() != nil else {
-                        try await clock.sleep(for: Self.settingsRecheckInterval)
-                        continue
-                    }
-
-                    do {
-                        let update = try await priceService.fetchOnchainFallbackPrices(request.onchainIdentities)
-                        await send(.pricesReceived(update))
-                    } catch {
-                        guard !Task.isCancelled else { return }
-                        await send(.priceFetchFailed(PriceFetchFailure(error)))
-                    }
-
-                    var elapsed: Duration = .zero
-                    while !Task.isCancelled {
-                        guard let currentInterval = pricePollingSettings.onchainFallbackInterval() else {
-                            break
-                        }
-                        guard elapsed < currentInterval else { break }
-                        let remaining = currentInterval - elapsed
-                        let sleepDuration = Self.shorterDuration(remaining, Self.settingsRecheckInterval)
-                        try await clock.sleep(for: sleepDuration)
-                        elapsed += sleepDuration
-                    }
-                }
-            })
+            effects.append(onchainFallbackPollingEffect(
+                identities: request.onchainIdentities,
+                sinceLastFetch: sinceLastOnchainFetch))
         }
 
         return .merge(effects)
             .cancellable(id: CancelID.pricePolling, cancelInFlight: true)
+    }
+
+    /// Fetches the onchain fallback prices on their own interval. `sinceLastFetch` is how
+    /// long ago these identities were last fetched when the loop started, so a restarted
+    /// poll waits out the rest of the interval; nil means they still need their first fetch.
+    func onchainFallbackPollingEffect(
+        identities: [OnchainTokenIdentity],
+        sinceLastFetch: Duration?) -> Effect<Action> {
+        .run { send in
+            var sinceLastFetch = sinceLastFetch
+            while !Task.isCancelled {
+                guard let interval = pricePollingSettings.onchainFallbackInterval() else {
+                    // Manual-only: keep checking the setting, and keep counting the time.
+                    try await clock.sleep(for: Self.settingsRecheckInterval)
+                    sinceLastFetch = sinceLastFetch.map { $0 + Self.settingsRecheckInterval }
+                    continue
+                }
+
+                if let elapsed = sinceLastFetch, elapsed < interval {
+                    let sleepDuration = Self.shorterDuration(interval - elapsed, Self.settingsRecheckInterval)
+                    try await clock.sleep(for: sleepDuration)
+                    sinceLastFetch = elapsed + sleepDuration
+                    continue
+                }
+
+                do {
+                    // No update means nothing was fetched (no provider key), so there is no
+                    // fetch time to record and a restart tries again at once.
+                    if let update = try await priceService.fetchOnchainFallbackPrices(identities) {
+                        await send(.onchainFallbackPricesReceived(update, identities: identities))
+                    }
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    await send(.priceFetchFailed(PriceFetchFailure(error)))
+                }
+                sinceLastFetch = .zero
+            }
+        }
     }
 
     func coinGeckoPricePollingEffect(request: PricePollingRequest) -> Effect<Action> {

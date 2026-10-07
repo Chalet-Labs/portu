@@ -58,9 +58,10 @@ struct AppFeaturePricePollingIntervalTests {
             $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
         }
-        await store.receive(\.pricesReceived) {
+        await store.receive(\.onchainFallbackPricesReceived) {
             $0.livePricesUSD = ["bitcoin": 1, identity.historicalPriceID: 10]
             $0.lastPriceUpdate = testDate
+            $0.onchainFallbackFetchedAt = [identity: testDate]
         }
 
         await testClock.advance(by: .seconds(4))
@@ -69,7 +70,7 @@ struct AppFeaturePricePollingIntervalTests {
         #expect(onchainFetchCount == 1)
 
         await testClock.advance(by: .seconds(1))
-        await store.receive(\.pricesReceived) {
+        await store.receive(\.onchainFallbackPricesReceived) {
             $0.livePricesUSD = ["bitcoin": 1, identity.historicalPriceID: 20]
             $0.lastPriceUpdate = testDate
         }
@@ -278,9 +279,10 @@ struct AppFeaturePricePollingIntervalTests {
 
         onchainInterval = .seconds(10)
         await testClock.advance(by: .seconds(10))
-        await store.receive(\.pricesReceived) {
+        await store.receive(\.onchainFallbackPricesReceived) {
             $0.livePricesUSD = [identity.historicalPriceID: 10]
             $0.lastPriceUpdate = testDate
+            $0.onchainFallbackFetchedAt = [identity: testDate]
         }
         #expect(onchainFetchCount == 1)
 

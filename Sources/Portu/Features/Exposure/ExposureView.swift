@@ -74,7 +74,7 @@ struct ExposureView: View {
         }
         .background(PortuTheme.dashboardBackground)
         .dashboardPage()
-        .task(id: data.pollingIDs) {
+        .task(id: Set(data.pollingIDs)) {
             if data.pollingIDs.isEmpty {
                 store.send(.stopPricePolling)
             } else {

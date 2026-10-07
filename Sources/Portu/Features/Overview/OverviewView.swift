@@ -66,6 +66,8 @@ struct OverviewView: View {
     }
 
     var body: some View {
+        let pollingIDs = pricePollingIDs
+
         GeometryReader { proxy in
             let isWide = proxy.size.width >= 1080
 
@@ -102,11 +104,13 @@ struct OverviewView: View {
             .background(PortuTheme.dashboardBackground)
         }
         .dashboardPage()
-        .task(id: pricePollingIDs) {
-            if pricePollingIDs.isEmpty {
+        // The IDs come ranked by value, so live prices reorder them. Polling is identified
+        // by the set, which only changes when a token really enters or leaves.
+        .task(id: Set(pollingIDs)) {
+            if pollingIDs.isEmpty {
                 store.send(.stopPricePolling)
             } else {
-                store.send(.startPricePolling(pricePollingIDs))
+                store.send(.startPricePolling(pollingIDs))
             }
         }
         .onDisappear {
