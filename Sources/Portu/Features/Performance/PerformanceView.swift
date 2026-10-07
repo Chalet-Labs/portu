@@ -74,7 +74,12 @@ struct PerformanceView: View {
         }
         .dashboardPage()
         .task(id: dataTaskID) {
-            store.send(.performance(.dataRequested(dataTaskID.request(asOf: .now))))
+            // Prices are read here and not in `body`: a live price tick then never
+            // re-evaluates the page, and neither price source can restart the load.
+            store.send(.performance(.dataRequested(dataTaskID.request(
+                asOf: .now,
+                liveDisplayPrices: store.liveDisplayPrices,
+                historicalDisplayPrices: historicalDisplayPrices))))
         }
         .task(id: analyticsTaskID(account: accountInput)) {
             if let context = makeAnalyticsContext(account: accountInput, asOf: .now) {
@@ -172,6 +177,10 @@ struct PerformanceView: View {
     /// start: `ChartTimeRange.startDate` is relative to `.now`, so including it would
     /// make every body pass a fresh identity and relaunch the load forever. The range
     /// enum plus `dataRevision` capture every real reason to refetch.
+    ///
+    /// Prices are left out too. Live ones change on every polling tick and historical ones
+    /// on every refresh, and neither is a reason to reload; a load that does fire is handed
+    /// the prices of that moment instead.
     private struct PerformanceDataTaskID: Equatable {
         var accountId: UUID?
         var range: ChartTimeRange
@@ -179,15 +188,16 @@ struct PerformanceView: View {
         var analyticsScopeFingerprint: String?
         var displayCurrency: FiatCurrency
         var currentUSDToDisplayRate: Decimal
-        var liveDisplayPrices: [String: Decimal]
-        var historicalDisplayPrices: [String: Decimal]
         var minimumDashboardValue: Decimal
         var hideUnpriced: Bool
         var hideDust: Bool
         var historicalBackfillEnabled: Bool
         var dataRevision: Int
 
-        func request(asOf date: Date) -> PerformanceDataRequest {
+        func request(
+            asOf date: Date,
+            liveDisplayPrices: [String: Decimal],
+            historicalDisplayPrices: [String: Decimal]) -> PerformanceDataRequest {
             PerformanceDataRequest(
                 accountId: accountId,
                 startDate: range.startDate(at: date),
@@ -212,8 +222,6 @@ struct PerformanceView: View {
             analyticsScopeFingerprint: analyticsScopeFingerprint,
             displayCurrency: store.selectedCurrency,
             currentUSDToDisplayRate: store.currentUSDToDisplayRate,
-            liveDisplayPrices: store.liveDisplayPrices,
-            historicalDisplayPrices: historicalDisplayPrices,
             minimumDashboardValue: Decimal(minimumDashboardValue),
             hideUnpriced: hideUnpriced,
             hideDust: hideDust,
