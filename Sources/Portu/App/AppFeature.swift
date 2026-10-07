@@ -46,7 +46,7 @@ struct AppFeature {
         var historicalPriceBackfill = HistoricalPriceBackfillFeature.State()
     }
 
-    enum Action {
+    enum Action: Equatable {
         case appLaunched
         case updaterStatusChanged(UpdaterStatus)
         case dismissUpdaterFailure
@@ -58,12 +58,12 @@ struct AppFeature {
         case syncTapped
         case accountSyncTapped(UUID)
         case syncProgressUpdated(Double)
-        case syncCompleted(Result<SyncResult, Error>)
-        case accountSyncCompleted(Result<SyncResult, Error>)
+        case syncCompleted(Result<SyncResult, SyncFailure>)
+        case accountSyncCompleted(Result<SyncResult, SyncFailure>)
         case startScheduledSync
         case stopScheduledSync
         case scheduledSyncDue(PortfolioSyncScope)
-        case scheduledSyncCompleted(Result<SyncResult, Error>)
+        case scheduledSyncCompleted(Result<SyncResult, SyncFailure>)
         case displayCurrencySelected(FiatCurrency)
         case currentCurrencyConversionRateReceived(FiatCurrency, Result<Decimal, CurrencyConversionRefreshError>)
         case currencyConversionRefreshCompleted(FiatCurrency, Result<CurrencyConversionRefreshResult, CurrencyConversionRefreshError>)
@@ -71,7 +71,7 @@ struct AppFeature {
         case startPricePolling([String])
         case stopPricePolling
         case pricesReceived(PriceUpdate)
-        case priceFetchFailed(Error)
+        case priceFetchFailed(PriceFetchFailure)
         case allAssets(AllAssetsFeature.Action)
         case assetDetail(AssetDetailFeature.Action)
         case accounts(AccountsFeature.Action)
@@ -211,7 +211,7 @@ struct AppFeature {
                     let result = try await syncEngine.sync()
                     await send(.syncCompleted(.success(result)))
                 } catch: { error, send in
-                    await send(.syncCompleted(.failure(error)))
+                    await send(.syncCompleted(.failure(SyncFailure(error))))
                 }
 
             case let .accountSyncTapped(accountID):
@@ -222,7 +222,7 @@ struct AppFeature {
                     let result = try await syncEngine.syncAccount(accountID)
                     await send(.accountSyncCompleted(.success(result)))
                 } catch: { error, send in
-                    await send(.accountSyncCompleted(.failure(error)))
+                    await send(.accountSyncCompleted(.failure(SyncFailure(error))))
                 }
 
             case let .syncProgressUpdated(progress):
@@ -287,7 +287,7 @@ struct AppFeature {
                     let result = try await syncEngine.syncScope(scope)
                     await send(.scheduledSyncCompleted(.success(result)))
                 } catch: { error, send in
-                    await send(.scheduledSyncCompleted(.failure(error)))
+                    await send(.scheduledSyncCompleted(.failure(SyncFailure(error))))
                 }
 
             case let .displayCurrencySelected(currency):
@@ -397,8 +397,8 @@ struct AppFeature {
                 state.connectionStatus = .idle
                 return .none
 
-            case let .priceFetchFailed(error):
-                state.connectionStatus = .error(error.localizedDescription)
+            case let .priceFetchFailed(failure):
+                state.connectionStatus = .error(failure.message)
                 return .none
 
             case .stopPricePolling:
@@ -443,7 +443,7 @@ private extension AppFeature {
     /// error to show and surfaces globally.
     static func finishSync(
         _ state: inout State,
-        with result: Result<SyncResult, Error>,
+        with result: Result<SyncResult, SyncFailure>,
         isAccountSync: Bool) {
         state.syncingAccountID = nil
         switch result {
@@ -453,11 +453,11 @@ private extension AppFeature {
             } else {
                 state.syncStatus = .idle
             }
-        case let .failure(error):
-            if isAccountSync, (error as? SyncError) == .allAccountsFailed {
+        case let .failure(failure):
+            if isAccountSync, failure.syncError == .allAccountsFailed {
                 state.syncStatus = .idle
             } else {
-                state.syncStatus = .error(error.localizedDescription)
+                state.syncStatus = .error(failure.message)
             }
         }
     }
@@ -607,7 +607,7 @@ private extension AppFeature {
                         await send(.pricesReceived(update))
                     } catch {
                         guard !Task.isCancelled else { return }
-                        await send(.priceFetchFailed(error))
+                        await send(.priceFetchFailed(PriceFetchFailure(error)))
                     }
 
                     var elapsed: Duration = .zero
@@ -650,7 +650,7 @@ private extension AppFeature {
                     } catch {
                         guard !Task.isCancelled else { return }
                         if tokenRequest.isEmpty {
-                            await send(.priceFetchFailed(error))
+                            await send(.priceFetchFailed(PriceFetchFailure(error)))
                             didEmit = true
                         } else {
                             pendingError = error
@@ -667,7 +667,7 @@ private extension AppFeature {
                         }
                     } catch {
                         guard !Task.isCancelled else { return }
-                        await send(.priceFetchFailed(error))
+                        await send(.priceFetchFailed(PriceFetchFailure(error)))
                         didEmit = true
                     }
                 }
@@ -678,7 +678,7 @@ private extension AppFeature {
                 // Surface the swallowed failure (or an empty update) so it clears.
                 if !didEmit {
                     if let pendingError {
-                        await send(.priceFetchFailed(pendingError))
+                        await send(.priceFetchFailed(PriceFetchFailure(pendingError)))
                     } else {
                         await send(.pricesReceived(PriceUpdate(currency: currency, prices: [:], changes24h: [:])))
                     }
@@ -726,61 +726,5 @@ private extension AppFeature {
         let components = duration.components
         let attosecondsPerSecond = 1_000_000_000_000_000_000.0
         return TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / attosecondsPerSecond
-    }
-}
-
-// MARK: - Equatable for Result
-
-extension AppFeature.Action: Equatable {
-    // swiftlint:disable:next cyclomatic_complexity
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        switch (lhs, rhs) {
-        case (.appLaunched, .appLaunched): true
-        case let (.updaterStatusChanged(l), .updaterStatusChanged(r)): l == r
-        case (.dismissUpdaterFailure, .dismissUpdaterFailure): true
-        case (.checkForUpdatesTapped, .checkForUpdatesTapped): true
-        case let (.updatePreferencesLoaded(l), .updatePreferencesLoaded(r)): l == r
-        case let (.setAutomaticChecksEnabled(l), .setAutomaticChecksEnabled(r)): l == r
-        case let (.setUpdateChannel(l), .setUpdateChannel(r)): l == r
-        case let (.sectionSelected(l), .sectionSelected(r)): l == r
-        case (.syncTapped, .syncTapped): true
-        case let (.accountSyncTapped(l), .accountSyncTapped(r)): l == r
-        case let (.syncProgressUpdated(l), .syncProgressUpdated(r)): l == r
-        case let (.syncCompleted(.success(l)), .syncCompleted(.success(r))): l == r
-        case (.syncCompleted(.failure), .syncCompleted(.failure)): true
-        case let (.accountSyncCompleted(.success(l)), .accountSyncCompleted(.success(r))): l == r
-        case (.accountSyncCompleted(.failure), .accountSyncCompleted(.failure)): true
-        case (.startScheduledSync, .startScheduledSync): true
-        case (.stopScheduledSync, .stopScheduledSync): true
-        case let (.scheduledSyncDue(l), .scheduledSyncDue(r)): l == r
-        case let (.scheduledSyncCompleted(.success(l)), .scheduledSyncCompleted(.success(r))): l == r
-        case (.scheduledSyncCompleted(.failure), .scheduledSyncCompleted(.failure)): true
-        case let (.displayCurrencySelected(l), .displayCurrencySelected(r)): l == r
-        case let (
-            .currentCurrencyConversionRateReceived(lCurrency, .success(lRate)),
-            .currentCurrencyConversionRateReceived(rCurrency, .success(rRate))):
-            lCurrency == rCurrency && lRate == rRate
-        case let (
-            .currentCurrencyConversionRateReceived(lCurrency, .failure(lError)),
-            .currentCurrencyConversionRateReceived(rCurrency, .failure(rError))):
-            lCurrency == rCurrency && lError == rError
-        case let (
-            .currencyConversionRefreshCompleted(lCurrency, .success(lResult)),
-            .currencyConversionRefreshCompleted(rCurrency, .success(rResult))):
-            lCurrency == rCurrency && lResult == rResult
-        case let (.currencyConversionRefreshCompleted(lCurrency, .failure(lError)), .currencyConversionRefreshCompleted(rCurrency, .failure(rError))):
-            lCurrency == rCurrency && lError == rError
-        case let (.startPricePolling(l), .startPricePolling(r)): l == r
-        case (.stopPricePolling, .stopPricePolling): true
-        case let (.pricesReceived(l), .pricesReceived(r)): l == r
-        case (.priceFetchFailed, .priceFetchFailed): true
-        case let (.allAssets(l), .allAssets(r)): l == r
-        case let (.assetDetail(l), .assetDetail(r)): l == r
-        case let (.accounts(l), .accounts(r)): l == r
-        case let (.performance(l), .performance(r)): l == r
-        case let (.portfolioHealth(l), .portfolioHealth(r)): l == r
-        case let (.historicalPriceBackfill(l), .historicalPriceBackfill(r)): l == r
-        default: false
-        }
     }
 }

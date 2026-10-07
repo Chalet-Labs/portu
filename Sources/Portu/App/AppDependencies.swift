@@ -12,6 +12,27 @@ struct SyncResult: Equatable {
     }
 }
 
+/// What a sync completion action carries on failure. It keeps the engine's `SyncError`
+/// when there is one, because `allAccountsFailed` settles an account sync differently
+/// from every other failure.
+struct SyncFailure: LocalizedError, Equatable {
+    let message: String
+    let syncError: SyncError?
+
+    var errorDescription: String? {
+        message
+    }
+
+    init(message: String, syncError: SyncError? = nil) {
+        self.message = message
+        self.syncError = syncError
+    }
+
+    init(_ error: any Error) {
+        self.init(message: error.localizedDescription, syncError: error as? SyncError)
+    }
+}
+
 struct SyncEngineClient {
     var sync: @Sendable () async throws -> SyncResult
     var syncScope: @Sendable (PortfolioSyncScope) async throws -> SyncResult
@@ -58,6 +79,22 @@ enum PortfolioSyncScope: Equatable {
 }
 
 // MARK: - PriceServiceClient
+
+struct PriceFetchFailure: LocalizedError, Equatable {
+    let message: String
+
+    var errorDescription: String? {
+        message
+    }
+
+    init(message: String) {
+        self.message = message
+    }
+
+    init(_ error: any Error) {
+        self.init(message: error.localizedDescription)
+    }
+}
 
 struct PriceServiceClient {
     enum ClientError: Error {

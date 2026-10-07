@@ -88,6 +88,7 @@
 		6A32334FC177377B323F1FC4 /* ProtocolFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A45DB309773A6FDC0AEA4D94 /* ProtocolFilter.swift */; };
 		6A565638DF178D649E405064 /* DebugModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CDBA2EE4C821D8A05F6EB10 /* DebugModeTests.swift */; };
 		6ADB17B62C782CFFF01C69B9 /* PortfolioAnalyticsScopeFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C33F5785494BB479A75F7E0 /* PortfolioAnalyticsScopeFactoryTests.swift */; };
+		6AE7BEBD0394C8E3D9B7A36D /* AppFeatureActionEquatableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFB3823EC1EBEAAB21D842FD /* AppFeatureActionEquatableTests.swift */; };
 		6B29C704D2A50D541BE721D5 /* ExposureCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCD8DF9A40E87470C168B21 /* ExposureCells.swift */; };
 		6B7652324F9349295E869B20 /* AssetPriceChartTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30F8524EBB19474FFA3871C /* AssetPriceChartTests.swift */; };
 		6CE31A8D72650F32D422C063 /* WalletPnLChartMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F63090E475E44BFE0843C26 /* WalletPnLChartMode.swift */; };
@@ -428,6 +429,7 @@
 		C95F1EDADED217BABCD15C10 /* PortfolioHealthPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHealthPanel.swift; sourceTree = "<group>"; };
 		CB355DD3AD1A388B41953998 /* ReleaseAutomationPublishTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseAutomationPublishTests.swift; sourceTree = "<group>"; };
 		CD844541D34035B9A3D430E6 /* PerformanceFeature+ValueChange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PerformanceFeature+ValueChange.swift"; sourceTree = "<group>"; };
+		CFB3823EC1EBEAAB21D842FD /* AppFeatureActionEquatableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureActionEquatableTests.swift; sourceTree = "<group>"; };
 		D3539209B8431690D9850A7F /* ModelContainerFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerFactory.swift; sourceTree = "<group>"; };
 		D371F61690CB468F79B57512 /* PortfolioAnalyticsFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAnalyticsFeatureTests.swift; sourceTree = "<group>"; };
 		D67B42D0DD559419EC991282 /* PortuApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortuApp.swift; sourceTree = "<group>"; };
@@ -746,6 +748,7 @@
 				C89E200AA14746D4F976DBB1 /* APIKeyNormalizationTests.swift */,
 				8F2E020479C2D59A564DAD6A /* APIKeysViewModelTests.swift */,
 				3A01CB6E84AA5F46CB9019A4 /* AppFeatureAccountSyncTests.swift */,
+				CFB3823EC1EBEAAB21D842FD /* AppFeatureActionEquatableTests.swift */,
 				5671DBA75C15FCC72727EA8E /* AppFeatureIntervalTests.swift */,
 				B75EE2617348AB0C8031369E /* AppFeaturePricePollingIntervalTests.swift */,
 				015A266F795505EF5A43A041 /* AppFeatureSyncCompletionTests.swift */,
@@ -1128,6 +1131,7 @@
 				FE3D3F7A3293898A4A4EE084 /* AddPositionCategoryRuleTests.swift in Sources */,
 				2669929F16BEC301F7B3987A /* AllAssetsFeatureTests.swift in Sources */,
 				ACABB35F9973A57572179B81 /* AppFeatureAccountSyncTests.swift in Sources */,
+				6AE7BEBD0394C8E3D9B7A36D /* AppFeatureActionEquatableTests.swift in Sources */,
 				031B921A0352C8F769525FB9 /* AppFeatureIntervalTests.swift in Sources */,
 				EC4693BE6E6483782293F1F9 /* AppFeaturePricePollingIntervalTests.swift in Sources */,
 				EFA28DA008B4B126807A925B /* AppFeatureSyncCompletionTests.swift in Sources */,
