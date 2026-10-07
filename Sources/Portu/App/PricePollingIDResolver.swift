@@ -55,10 +55,6 @@ enum PricePollingIDResolver {
     }
 
     static var emptyUpdate: PriceUpdate {
-        emptyUpdate(currency: .default)
-    }
-
-    static func emptyUpdate(currency: FiatCurrency) -> PriceUpdate {
-        PriceUpdate(currency: currency, prices: [:], changes24h: [:])
+        PriceUpdate(currency: .usd, prices: [:], changes24h: [:])
     }
 }

@@ -33,7 +33,10 @@ struct AppFeature {
         // Settings renders checking copy with no notice. The application menu
         // gates on it.
         var updaterStatus = UpdaterStatus.resolving
-        var prices: [String: Decimal] = [:]
+        // Live prices are kept in USD. A rate refresh or a currency switch only moves
+        // `currentUSDToDisplayRate`, so display prices are derived from this book instead
+        // of stored next to it, and nothing has to be thrown away when the rate changes.
+        var livePricesUSD: [String: Decimal] = [:]
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?
         var pricePollingIDs: [String] = []
@@ -44,6 +47,13 @@ struct AppFeature {
         var performance = PerformanceFeature.State()
         var portfolioHealth = PortfolioHealthFeature.State()
         var historicalPriceBackfill = HistoricalPriceBackfillFeature.State()
+
+        /// The USD book at the committed display rate. During a pending currency switch
+        /// the rate is still the old one, matching the old currency label on screen.
+        var liveDisplayPrices: [String: Decimal] {
+            guard currentUSDToDisplayRate != 1 else { return livePricesUSD }
+            return livePricesUSD.mapValues { $0 * currentUSDToDisplayRate }
+        }
     }
 
     enum Action: Equatable {
@@ -319,18 +329,12 @@ struct AppFeature {
                     state.pendingCurrency = nil
                     return commitDisplayCurrency(&state, currency: currency, rate: rate)
                 }
-                // Launch/refresh path for the already-selected currency: apply the rate
-                // and restart polling so any long-lived loop picks up the fresh value.
-                // Stale prices are cleared so no view pairs an old-rate live price with
-                // the new rate until the restarted poll returns fresh ones.
+                // Launch/refresh path for the already-selected currency. Live prices are in
+                // USD, so only the rate changes: display prices follow it, nothing is
+                // cleared and polling keeps running.
                 guard currency == state.selectedCurrency else { return .none }
                 state.currentUSDToDisplayRate = rate
-                state.prices = [:]
-                state.priceChanges24h = [:]
-                state.lastPriceUpdate = nil
-                return .merge(
-                    restartPricePollingEffect(&state, currency: currency),
-                    historicalFXTopUpEffect(&state, currency: currency))
+                return historicalFXTopUpEffect(&state, currency: currency)
 
             case let .currentCurrencyConversionRateReceived(currency, .failure(error)):
                 if state.pendingCurrency == currency {
@@ -387,11 +391,12 @@ struct AppFeature {
                     return .cancel(id: CancelID.pricePolling)
                 }
                 state.pricePollingIDs = request.allPriceIDs
-                return restartPricePollingEffect(&state, currency: state.selectedCurrency)
+                return startPricePollingEffect(&state)
 
             case let .pricesReceived(update):
-                guard update.currency == state.selectedCurrency else { return .none }
-                state.prices.merge(update.prices) { _, new in new }
+                // The book is USD; an update in any other currency would corrupt it.
+                guard update.currency == .usd else { return .none }
+                state.livePricesUSD.merge(update.prices) { _, new in new }
                 state.priceChanges24h.merge(update.changes24h) { _, new in new }
                 state.lastPriceUpdate = currentDate.now()
                 state.connectionStatus = .idle
@@ -462,10 +467,11 @@ private extension AppFeature {
         }
     }
 
-    /// Applies a display-currency switch: persists the preference, sets the rate,
-    /// clears stale prices, and restarts polling in the new currency. The historical
-    /// FX availability is left untouched for non-USD (the historical refresh resolves
-    /// it) and marked available for USD, which needs no refresh.
+    /// Applies a display-currency switch: persists the preference and sets the rate.
+    /// Live prices are in USD, so the price book and polling are left alone and display
+    /// prices simply follow the new rate. The historical FX availability is left
+    /// untouched for non-USD (the historical refresh resolves it) and marked available
+    /// for USD, which needs no refresh.
     func commitDisplayCurrency(
         _ state: inout State,
         currency: FiatCurrency,
@@ -476,23 +482,19 @@ private extension AppFeature {
         if currency == .usd {
             state.historicalFXAvailability = .available
         }
-        state.prices = [:]
-        state.priceChanges24h = [:]
-        state.lastPriceUpdate = nil
 
         return .merge(
-            restartPricePollingEffect(&state, currency: currency),
             armDisplayRateRefresh(currency: currency),
             .cancel(id: CancelID.historicalFXTopUp))
     }
 
-    /// Restarts price polling for the current `pricePollingIDs`, if any, using the
-    /// display currency's latest stored rate.
-    func restartPricePollingEffect(_ state: inout State, currency: FiatCurrency) -> Effect<Action> {
+    /// Starts price polling for the current `pricePollingIDs`, replacing any running
+    /// poll. Prices come back in USD whatever the display currency is.
+    func startPricePollingEffect(_ state: inout State) -> Effect<Action> {
         let request = PricePollingIDResolver.split(state.pricePollingIDs)
         guard request.isEmpty == false else { return .none }
         state.connectionStatus = .fetching
-        return pricePollingEffect(request: request, currency: currency, rate: state.currentUSDToDisplayRate)
+        return pricePollingEffect(request: request)
     }
 
     /// Arms (or, for USD, disarms) the periodic display-FX-rate refresh. This tracks
@@ -504,9 +506,9 @@ private extension AppFeature {
     }
 
     /// Periodically re-fetches the USD→display rate for the current display currency
-    /// and, on success, restarts price polling with it. A failed tick keeps the
-    /// last-known rate in use and retries on the next tick rather than surfacing an
-    /// error for what is otherwise a healthy, already-converting session.
+    /// and, on success, applies it. A failed tick keeps the last-known rate in use and
+    /// retries on the next tick rather than surfacing an error for what is otherwise a
+    /// healthy, already-converting session.
     func displayRateRefreshEffect(currency: FiatCurrency) -> Effect<Action> {
         .run { send in
             while !Task.isCancelled {
@@ -589,9 +591,9 @@ private extension AppFeature {
         .cancellable(id: CancelID.historicalFXTopUp, cancelInFlight: true)
     }
 
-    func pricePollingEffect(request: PricePollingRequest, currency: FiatCurrency, rate: Decimal) -> Effect<Action> {
+    func pricePollingEffect(request: PricePollingRequest) -> Effect<Action> {
         var effects: [Effect<Action>] = [
-            coinGeckoPricePollingEffect(request: request, currency: currency, rate: rate)
+            coinGeckoPricePollingEffect(request: request)
         ]
 
         if request.onchainIdentities.isEmpty == false {
@@ -603,7 +605,7 @@ private extension AppFeature {
                     }
 
                     do {
-                        let update = try await priceService.fetchOnchainFallbackPrices(request.onchainIdentities, currency, rate)
+                        let update = try await priceService.fetchOnchainFallbackPrices(request.onchainIdentities)
                         await send(.pricesReceived(update))
                     } catch {
                         guard !Task.isCancelled else { return }
@@ -629,7 +631,7 @@ private extension AppFeature {
             .cancellable(id: CancelID.pricePolling, cancelInFlight: true)
     }
 
-    func coinGeckoPricePollingEffect(request: PricePollingRequest, currency: FiatCurrency, rate: Decimal) -> Effect<Action> {
+    func coinGeckoPricePollingEffect(request: PricePollingRequest) -> Effect<Action> {
         let coinRequest = PricePollingRequest(
             coinGeckoIDs: request.coinGeckoIDs,
             onchainIdentities: [])
@@ -644,7 +646,7 @@ private extension AppFeature {
 
                 if coinRequest.isEmpty == false {
                     do {
-                        let update = try await priceService.fetchCoinGeckoPrices(coinRequest, currency, rate)
+                        let update = try await priceService.fetchCoinGeckoPrices(coinRequest)
                         await send(.pricesReceived(update))
                         didEmit = true
                     } catch {
@@ -660,7 +662,7 @@ private extension AppFeature {
 
                 if tokenRequest.isEmpty == false {
                     do {
-                        let update = try await priceService.fetchCoinGeckoPrices(tokenRequest, currency, rate)
+                        let update = try await priceService.fetchCoinGeckoPrices(tokenRequest)
                         if coinRequest.isEmpty || update.prices.isEmpty == false || update.changes24h.isEmpty == false {
                             await send(.pricesReceived(update))
                             didEmit = true
@@ -680,7 +682,7 @@ private extension AppFeature {
                     if let pendingError {
                         await send(.priceFetchFailed(PriceFetchFailure(pendingError)))
                     } else {
-                        await send(.pricesReceived(PriceUpdate(currency: currency, prices: [:], changes24h: [:])))
+                        await send(.pricesReceived(PricePollingIDResolver.emptyUpdate))
                     }
                 }
 

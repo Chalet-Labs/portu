@@ -28,7 +28,7 @@ struct AppStateBridgeTests {
             selectedCurrency: .chf,
             currentUSDToDisplayRate: conversionRate,
             historicalFXAvailability: .loading,
-            prices: ["bitcoin": 50000],
+            livePricesUSD: ["bitcoin": 50000],
             priceChanges24h: ["bitcoin": 2.5],
             lastPriceUpdate: Date(timeIntervalSince1970: 1_000_000),
             storeIsEphemeral: true)) {
@@ -41,7 +41,8 @@ struct AppStateBridgeTests {
         let appState = AppState()
         appState.bridge(from: store)
 
-        #expect(appState.prices == ["bitcoin": 50000])
+        // AppState carries display-currency prices: the USD book at the store's rate.
+        #expect(appState.prices == ["bitcoin": 44000])
         #expect(appState.priceChanges24h == ["bitcoin": 2.5])
         #expect(appState.syncStatus == .syncing(progress: 0.5))
         #expect(appState.connectionStatus == .fetching)
@@ -72,7 +73,7 @@ struct AppStateBridgeTests {
 
     @Test func `bridge is idempotent`() {
         let store = Store(initialState: AppFeature.State(
-            prices: ["ethereum": 3000])) {
+            livePricesUSD: ["ethereum": 3000])) {
                 AppFeature()
             } withDependencies: {
                 $0.syncEngine = .testValue

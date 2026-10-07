@@ -50,7 +50,7 @@ struct AssetsTab: View {
 
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: store.prices,
+            live: store.liveDisplayPrices,
             historical: historicalDisplayPrices)
     }
 

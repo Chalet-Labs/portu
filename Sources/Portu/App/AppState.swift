@@ -59,7 +59,7 @@ final class AppState {
     /// Syncs all TCA state fields from the store; does not touch `onSyncRequested`.
     /// Guards each assignment to avoid redundant Observation notifications.
     func bridge(from store: StoreOf<AppFeature>) {
-        updateIfChanged(\.prices, to: store.prices)
+        updateIfChanged(\.prices, to: store.liveDisplayPrices)
         updateIfChanged(\.priceChanges24h, to: store.priceChanges24h)
         updateIfChanged(\.syncStatus, to: store.syncStatus)
         updateIfChanged(\.connectionStatus, to: store.connectionStatus)

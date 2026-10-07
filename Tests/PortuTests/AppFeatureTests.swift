@@ -134,7 +134,7 @@ struct AppFeatureTests {
             $0.pricePollingIDs = ["bitcoin"]
         }
         await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 65000]
+            $0.livePricesUSD = ["bitcoin": 65000]
             $0.priceChanges24h = ["bitcoin": 2.5]
             $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
@@ -147,32 +147,35 @@ struct AppFeatureTests {
         }
     }
 
-    @Test func `price polling uses selected currency`() async {
+    @Test func `price polling fetches usd prices whatever the display currency`() async {
         let testClock = TestClock()
         let testDate = Date(timeIntervalSince1970: 1_000_000)
-        nonisolated(unsafe) var capturedCurrency: FiatCurrency?
+        nonisolated(unsafe) var capturedRequests: [PricePollingRequest] = []
 
-        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .chf)) {
-            AppFeature()
-        } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { _, currency, _ in
-                capturedCurrency = currency
-                return PriceUpdate(currency: currency, prices: ["bitcoin": 58000], changes24h: [:])
+        let store = TestStore(initialState: AppFeature.State(
+            selectedCurrency: .chf,
+            currentUSDToDisplayRate: 2)) {
+                AppFeature()
+            } withDependencies: {
+                $0.priceService.fetchCoinGeckoPrices = { request in
+                    capturedRequests.append(request)
+                    return PriceUpdate(prices: ["bitcoin": 58000], changes24h: [:])
+                }
+                $0.continuousClock = testClock
+                $0.currentDate.now = { testDate }
             }
-            $0.continuousClock = testClock
-            $0.currentDate.now = { testDate }
-        }
 
         await store.send(.startPricePolling(["bitcoin"])) {
             $0.connectionStatus = .fetching
             $0.pricePollingIDs = ["bitcoin"]
         }
         await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 58000]
+            $0.livePricesUSD = ["bitcoin": 58000]
             $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
         }
-        #expect(capturedCurrency == .chf)
+        #expect(capturedRequests == [PricePollingRequest(coinGeckoIDs: ["bitcoin"], onchainIdentities: [])])
+        #expect(store.state.liveDisplayPrices == ["bitcoin": 116_000])
 
         await store.send(.stopPricePolling) {
             $0.connectionStatus = .idle
@@ -186,24 +189,22 @@ struct AppFeatureTests {
         let testDate = Date(timeIntervalSince1970: 1_000_000)
         nonisolated(unsafe) var capturedRequests: [PricePollingRequest] = []
 
-        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .eur)) {
+        let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request, currency, _ in
+            $0.priceService.fetchCoinGeckoPrices = { request in
                 capturedRequests.append(request)
                 #expect(request.coinGeckoIDs.isEmpty || request.onchainIdentities.isEmpty)
                 if request.coinGeckoIDs == ["bitcoin"] {
-                    return PriceUpdate(currency: currency, prices: ["bitcoin": 58000], changes24h: [:])
+                    return PriceUpdate(prices: ["bitcoin": 58000], changes24h: [:])
                 }
                 if request.onchainIdentities == [identity] {
                     try await Task.sleep(nanoseconds: 10_000_000)
                     return PriceUpdate(
-                        currency: currency,
                         prices: [identity.historicalPriceID: 2],
                         changes24h: [:])
                 }
                 return PriceUpdate(
-                    currency: currency,
                     prices: ["bitcoin": 58000, identity.historicalPriceID: 2],
                     changes24h: [:])
             }
@@ -217,18 +218,16 @@ struct AppFeatureTests {
             $0.pricePollingIDs = ["bitcoin", identity.historicalPriceID]
         }
         await store.receive(.pricesReceived(PriceUpdate(
-            currency: .eur,
             prices: ["bitcoin": 58000],
             changes24h: [:]))) {
-                $0.prices = ["bitcoin": 58000]
+                $0.livePricesUSD = ["bitcoin": 58000]
                 $0.lastPriceUpdate = testDate
                 $0.connectionStatus = .idle
             }
         await store.receive(.pricesReceived(PriceUpdate(
-            currency: .eur,
             prices: [identity.historicalPriceID: 2],
             changes24h: [:]))) {
-                $0.prices = ["bitcoin": 58000, identity.historicalPriceID: 2]
+                $0.livePricesUSD = ["bitcoin": 58000, identity.historicalPriceID: 2]
                 $0.lastPriceUpdate = testDate
             }
 
@@ -251,15 +250,15 @@ struct AppFeatureTests {
         let testClock = TestClock()
         let testDate = Date(timeIntervalSince1970: 1_000_000)
 
-        let store = TestStore(initialState: AppFeature.State(selectedCurrency: .eur)) {
+        let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request, currency, _ in
+            $0.priceService.fetchCoinGeckoPrices = { request in
                 if request.coinGeckoIDs == ["bitcoin"] {
                     throw CoinFailed()
                 }
                 // Token fetch succeeds but returns nothing for the onchain identity.
-                return PriceUpdate(currency: currency, prices: [:], changes24h: [:])
+                return PriceUpdate(prices: [:], changes24h: [:])
             }
             $0.continuousClock = testClock
             $0.pricePollingSettings.onchainFallbackInterval = { nil }
@@ -309,60 +308,6 @@ struct AppFeatureTests {
         }
         #expect(store.state.selectedCurrency == .usd)
         #expect(store.state.currentUSDToDisplayRate == 1)
-    }
-
-    @Test func `currency change clears stale prices and ignores old currency updates`() async {
-        let testClock = TestClock()
-        let testDate = Date(timeIntervalSince1970: 1_000_000)
-        let store = TestStore(initialState: AppFeature.State(
-            selectedCurrency: .usd,
-            prices: ["bitcoin": 65000],
-            priceChanges24h: ["bitcoin": 0.02],
-            lastPriceUpdate: testDate)) {
-                AppFeature()
-            } withDependencies: {
-                $0.currentDate.now = { testDate.addingTimeInterval(60) }
-                $0.continuousClock = testClock
-            }
-
-        await store.send(.displayCurrencySelected(.eur)) {
-            $0.pendingCurrency = .eur
-            $0.historicalFXAvailability = .loading
-        }
-        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(1))) {
-            $0.pendingCurrency = nil
-            $0.selectedCurrency = .eur
-            $0.prices = [:]
-            $0.priceChanges24h = [:]
-            $0.lastPriceUpdate = nil
-        }
-        await store.receive(\.currencyConversionRefreshCompleted) {
-            $0.historicalFXAvailability = .available
-            $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: testDate.addingTimeInterval(60))
-        }
-        await store.send(.pricesReceived(PriceUpdate(
-            currency: .usd,
-            prices: ["bitcoin": 66000],
-            changes24h: ["bitcoin": 0.01])))
-        await store.send(.pricesReceived(PriceUpdate(
-            currency: .eur,
-            prices: ["bitcoin": 61000],
-            changes24h: ["bitcoin": 0.03]))) {
-                $0.prices = ["bitcoin": 61000]
-                $0.priceChanges24h = ["bitcoin": 0.03]
-                $0.lastPriceUpdate = testDate.addingTimeInterval(60)
-                $0.connectionStatus = .idle
-            }
-
-        // Cancel the display-rate-refresh timer armed by the EUR commit; otherwise
-        // it lingers and the test store flags it as still running.
-        await store.send(.displayCurrencySelected(.usd)) {
-            $0.selectedCurrency = .usd
-            $0.currentUSDToDisplayRate = 1
-            $0.prices = [:]
-            $0.priceChanges24h = [:]
-            $0.lastPriceUpdate = nil
-        }
     }
 
     @Test func `currency change refreshes current and historical fx state`() async throws {
@@ -817,7 +762,7 @@ struct AppFeatureTests {
             $0.pricePollingIDs = ["bitcoin"]
         }
         await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 1]
+            $0.livePricesUSD = ["bitcoin": 1]
             $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
         }
@@ -827,7 +772,7 @@ struct AppFeatureTests {
 
         await testClock.advance(by: .seconds(1))
         await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 2]
+            $0.livePricesUSD = ["bitcoin": 2]
             $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
         }
@@ -850,7 +795,7 @@ struct AppFeatureTests {
         let testClock = TestClock()
 
         let store = TestStore(
-            initialState: AppFeature.State(prices: ["bitcoin": 60000])) {
+            initialState: AppFeature.State(livePricesUSD: ["bitcoin": 60000])) {
                 AppFeature()
             } withDependencies: {
                 $0.priceService.fetchPrices = { _ in throw PriceFailed() }
@@ -986,7 +931,7 @@ struct AppFeatureTests {
         let testDate = Date(timeIntervalSince1970: 1_000_000)
         let store = TestStore(
             initialState: AppFeature.State(
-                prices: ["bitcoin": 60000, "ethereum": 3000])) {
+                livePricesUSD: ["bitcoin": 60000, "ethereum": 3000])) {
             AppFeature()
         } withDependencies: {
             $0.currentDate.now = { testDate }
@@ -995,7 +940,7 @@ struct AppFeatureTests {
         await store.send(.pricesReceived(PriceUpdate(
             prices: ["bitcoin": 65000],
             changes24h: ["bitcoin": 2.5]))) {
-                $0.prices = ["bitcoin": 65000, "ethereum": 3000] // merged, not replaced
+                $0.livePricesUSD = ["bitcoin": 65000, "ethereum": 3000] // merged, not replaced
                 $0.priceChanges24h = ["bitcoin": 2.5]
                 $0.lastPriceUpdate = testDate
             }
@@ -1100,40 +1045,5 @@ struct LivePriceUpdateBuilderTests {
         #expect(update.prices["ethereum"] == nil)
         #expect(update.prices[identity.historicalPriceID] == Decimal(string: "2220.5"))
         #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "0.012"))
-    }
-
-    @Test func `non USD onchain fallback preserves normalized 24 hour changes`() async throws {
-        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xabc")
-        AppPriceMockURLProtocol.requestHandler = { request in
-            guard let url = request.url else { return (nil, 500) }
-            if url.path == "/api/v3/simple/token_price/base" {
-                return (Data("{}".utf8), 200)
-            }
-            if url.path == "/api/v3/exchange_rates" {
-                return (Data("""
-                {"rates":{"usd":{"value":1},"eur":{"value":0.92}}}
-                """.utf8), 200)
-            }
-            return (nil, 500)
-        }
-
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [AppPriceMockURLProtocol.self]
-        let service = PriceService(session: URLSession(configuration: configuration), cacheTTL: 0)
-
-        let update = try await LivePriceUpdateBuilder.fetchPrices(
-            coinIds: [identity.historicalPriceID],
-            priceService: service,
-            currency: .eur,
-            fetchOnchainFallbackUpdate: { identities in
-                #expect(identities == [identity])
-                return PriceUpdate(
-                    prices: [identity.historicalPriceID: 10],
-                    changes24h: [identity.historicalPriceID: 0.05])
-            })
-
-        #expect(update.currency == .eur)
-        #expect(update.prices[identity.historicalPriceID] == Decimal(string: "9.2"))
-        #expect(update.changes24h[identity.historicalPriceID] == Decimal(string: "0.05"))
     }
 }

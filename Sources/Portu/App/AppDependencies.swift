@@ -106,8 +106,8 @@ struct PriceServiceClient {
     }
 
     var fetchPrices: @Sendable ([String]) async throws -> PriceUpdate
-    private var fetchCoinGeckoPricesOverride: (@Sendable (PricePollingRequest, FiatCurrency, Decimal) async throws -> PriceUpdate)?
-    private var fetchOnchainFallbackPricesOverride: (@Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate)?
+    private var fetchCoinGeckoPricesOverride: (@Sendable (PricePollingRequest) async throws -> PriceUpdate)?
+    private var fetchOnchainFallbackPricesOverride: (@Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate)?
     var fetchHistoricalPrices: @Sendable (String, Int) async throws -> [HistoricalPriceDTO]
     var fetchHistoricalPricesForCurrency: @Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO]
     var fetchCurrentUSDConversionRate: @Sendable (FiatCurrency) async throws -> Decimal
@@ -117,48 +117,34 @@ struct PriceServiceClient {
     var canFetchOnchainHistoricalPrices: @Sendable () async throws -> Bool
     var invalidateCache: @Sendable () async -> Void
 
-    var fetchCoinGeckoPrices: @Sendable (PricePollingRequest, FiatCurrency, Decimal) async throws -> PriceUpdate {
+    /// Live price polling fetches. Both return USD prices: the display rate is applied
+    /// where prices are shown, so these never take a currency or a rate.
+    var fetchCoinGeckoPrices: @Sendable (PricePollingRequest) async throws -> PriceUpdate {
         get {
             if let fetchCoinGeckoPricesOverride {
                 return fetchCoinGeckoPricesOverride
             }
             let fetchPrices = fetchPrices
-            return { request, currency, _ in
-                // The default fetcher only knows how to return USD-tagged updates. A non-USD
-                // request would be discarded by the reducer's currency guard and stall polling,
-                // so return an empty update tagged with the requested currency instead.
-                guard currency == .default else {
-                    return PricePollingIDResolver.emptyUpdate(currency: currency)
-                }
-                return try await fetchPrices(request.allPriceIDs)
-            }
+            return { request in try await fetchPrices(request.allPriceIDs) }
         }
         set { fetchCoinGeckoPricesOverride = newValue }
     }
 
-    var fetchOnchainFallbackPrices: @Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate {
+    var fetchOnchainFallbackPrices: @Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate {
         get {
             if let fetchOnchainFallbackPricesOverride {
                 return fetchOnchainFallbackPricesOverride
             }
             let fetchPrices = fetchPrices
-            return { identities, currency, _ in
-                // See fetchCoinGeckoPrices: the default fetcher is USD-only, so a non-USD
-                // request returns an empty update tagged with the requested currency rather
-                // than a USD update the reducer would discard.
-                guard currency == .default else {
-                    return PricePollingIDResolver.emptyUpdate(currency: currency)
-                }
-                return try await fetchPrices(identities.map(\.historicalPriceID))
-            }
+            return { identities in try await fetchPrices(identities.map(\.historicalPriceID)) }
         }
         set { fetchOnchainFallbackPricesOverride = newValue }
     }
 
     init(
         fetchPrices: @escaping @Sendable ([String]) async throws -> PriceUpdate,
-        fetchCoinGeckoPrices: (@Sendable (PricePollingRequest, FiatCurrency, Decimal) async throws -> PriceUpdate)? = nil,
-        fetchOnchainFallbackPrices: (@Sendable ([OnchainTokenIdentity], FiatCurrency, Decimal) async throws -> PriceUpdate)? = nil,
+        fetchCoinGeckoPrices: (@Sendable (PricePollingRequest) async throws -> PriceUpdate)? = nil,
+        fetchOnchainFallbackPrices: (@Sendable ([OnchainTokenIdentity]) async throws -> PriceUpdate)? = nil,
         fetchHistoricalPrices: @escaping @Sendable (String, Int) async throws -> [HistoricalPriceDTO],
         fetchHistoricalPricesForCurrency: (@Sendable (String, FiatCurrency, Int) async throws -> [HistoricalPriceDTO])? = nil,
         fetchCurrentUSDConversionRate: @escaping @Sendable (FiatCurrency) async throws -> Decimal = { _ in 1 },
@@ -187,8 +173,8 @@ struct PriceServiceClient {
 extension PriceServiceClient: DependencyKey {
     static let liveValue = Self(
         fetchPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        fetchCoinGeckoPrices: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
-        fetchOnchainFallbackPrices: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchCoinGeckoPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
+        fetchOnchainFallbackPrices: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalPrices: { _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchHistoricalPricesForCurrency: { _, _, _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },
         fetchCurrentUSDConversionRate: { _ in fatalError("PriceServiceClient.liveValue must be overridden at Store creation") },

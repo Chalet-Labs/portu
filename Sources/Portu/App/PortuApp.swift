@@ -326,27 +326,17 @@ struct PortuApp: App {
                         return try await zerionProvider.fetchPriceUpdate(for: identities)
                     }
             },
-            fetchCoinGeckoPrices: { request, currency, usdToDisplayRate in
-                let update = try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
-                    request: request,
-                    priceService: priceService,
-                    currency: .usd)
-                guard currency != .usd else { return update }
-                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate, preserveChanges24h: true)
+            fetchCoinGeckoPrices: { request in
+                try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(request: request, priceService: priceService)
             },
-            fetchOnchainFallbackPrices: { identities, currency, usdToDisplayRate in
+            fetchOnchainFallbackPrices: { identities in
                 guard
                     !identities.isEmpty,
                     try await apiKeyAvailability.hasAPIKey(.providerAPIKey(.zerion))
                 else {
-                    return PricePollingIDResolver.emptyUpdate(currency: currency)
+                    return PricePollingIDResolver.emptyUpdate
                 }
-                let update = try await zerionProvider.fetchPriceUpdate(for: identities)
-                guard currency != .usd else { return update }
-                return update.convertedUSDValues(
-                    to: currency,
-                    rate: usdToDisplayRate,
-                    preserveChanges24h: true)
+                return try await zerionProvider.fetchPriceUpdate(for: identities)
             },
             fetchHistoricalPrices: { coinId, days in
                 try await priceService.fetchHistoricalPrices(for: coinId, days: days)

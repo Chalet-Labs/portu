@@ -236,7 +236,7 @@ struct PerformanceView: View {
             analyticsScopeFingerprint: analyticsScopeFingerprint,
             displayCurrency: store.selectedCurrency,
             currentUSDToDisplayRate: store.currentUSDToDisplayRate,
-            liveDisplayPrices: store.prices,
+            liveDisplayPrices: store.liveDisplayPrices,
             historicalDisplayPrices: historicalDisplayPrices,
             minimumDashboardValue: Decimal(minimumDashboardValue),
             hideUnpriced: hideUnpriced,

@@ -15,7 +15,7 @@ struct AssetPositionsTable: View {
         let entries = PositionTokenEntry.fromActiveTokens(allTokens, assetId: assetId)
         return AssetDetailFeature.aggregatePositionRows(
             tokens: entries,
-            prices: store.prices,
+            prices: store.liveDisplayPrices,
             fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 
