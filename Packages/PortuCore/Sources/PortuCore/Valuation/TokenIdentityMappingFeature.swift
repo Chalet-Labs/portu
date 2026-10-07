@@ -1,15 +1,14 @@
 import Foundation
-import PortuCore
 
-struct TokenIdentityMappingSnapshot: Equatable, Identifiable {
-    var id: UUID
-    var canonicalKey: String
-    var chain: Chain
-    var contractAddress: String
-    var coinGeckoId: String?
-    var zapperId: String?
+public struct TokenIdentityMappingSnapshot: Equatable, Identifiable, Sendable {
+    public var id: UUID
+    public var canonicalKey: String
+    public var chain: Chain
+    public var contractAddress: String
+    public var coinGeckoId: String?
+    public var zapperId: String?
 
-    init(
+    public init(
         id: UUID = UUID(),
         identity: OnchainTokenIdentity,
         coinGeckoId: String? = nil,
@@ -22,25 +21,15 @@ struct TokenIdentityMappingSnapshot: Equatable, Identifiable {
         self.zapperId = TokenIdentityMappingFeature.normalizedProviderID(zapperId)
     }
 
-    @MainActor
-    init(_ mapping: TokenIdentityMapping) {
-        self.id = mapping.id
-        self.canonicalKey = mapping.canonicalKey
-        self.chain = mapping.chain
-        self.contractAddress = mapping.contractAddress
-        self.coinGeckoId = TokenIdentityMappingFeature.normalizedProviderID(mapping.coinGeckoId)
-        self.zapperId = TokenIdentityMappingFeature.normalizedProviderID(mapping.zapperId)
-    }
-
-    var onchainIdentity: OnchainTokenIdentity {
+    public var onchainIdentity: OnchainTokenIdentity {
         OnchainTokenIdentity(chain: chain, contractAddress: contractAddress)
     }
 }
 
-enum TokenIdentityMappingFeature {
+public enum TokenIdentityMappingFeature {
     private static let nativeAssetAddress = "0x0000000000000000000000000000000000000000"
 
-    static func mappingsByIdentity(
+    public static func mappingsByIdentity(
         _ mappings: [TokenIdentityMappingSnapshot]) -> [OnchainTokenIdentity: TokenIdentityMappingSnapshot] {
         var result: [OnchainTokenIdentity: TokenIdentityMappingSnapshot] = [:]
         for mapping in mappings {
@@ -54,14 +43,14 @@ enum TokenIdentityMappingFeature {
         return result
     }
 
-    static func mappedCoinGeckoID(
+    public static func mappedCoinGeckoID(
         for identity: OnchainTokenIdentity?,
         mappingsByIdentity mappings: [OnchainTokenIdentity: TokenIdentityMappingSnapshot]) -> String? {
         guard let identity else { return nil }
         return normalizedProviderID(mappings[identity]?.coinGeckoId)
     }
 
-    static func priceID(
+    public static func priceID(
         coinGeckoId: String?,
         onchainIdentity: OnchainTokenIdentity?) -> String? {
         if let nativeID = nativeCoinGeckoID(for: onchainIdentity) {
@@ -81,7 +70,7 @@ enum TokenIdentityMappingFeature {
         return normalizedProviderID(coinGeckoId)
     }
 
-    static func nativeCoinGeckoID(for identity: OnchainTokenIdentity?) -> String? {
+    public static func nativeCoinGeckoID(for identity: OnchainTokenIdentity?) -> String? {
         guard
             let identity,
             identity.contractAddress.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == nativeAssetAddress
@@ -98,26 +87,26 @@ enum TokenIdentityMappingFeature {
         }
     }
 
-    static func knownContractCoinGeckoID(for identity: OnchainTokenIdentity?) -> String? {
+    public static func knownContractCoinGeckoID(for identity: OnchainTokenIdentity?) -> String? {
         guard let identity else { return nil }
         return knownContractCoinGeckoIDs[TokenIdentityMapping.canonicalKey(for: identity)]
     }
 
-    static func nonOnchainPriceID(_ id: String?) -> String? {
+    public static func nonOnchainPriceID(_ id: String?) -> String? {
         guard let id = normalizedProviderID(id), OnchainTokenIdentity(historicalPriceID: id) == nil else {
             return nil
         }
         return id
     }
 
-    static func normalizedHistoricalPriceID(_ id: String?) -> String? {
+    public static func normalizedHistoricalPriceID(_ id: String?) -> String? {
         guard let id else { return nil }
         let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return OnchainTokenIdentity.normalizedHistoricalPriceID(trimmed)
     }
 
-    static func normalizedProviderID(_ id: String?) -> String? {
+    public static func normalizedProviderID(_ id: String?) -> String? {
         guard let id else { return nil }
         let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized.isEmpty ? nil : normalized

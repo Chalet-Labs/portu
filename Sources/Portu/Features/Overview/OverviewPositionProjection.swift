@@ -110,17 +110,10 @@ enum OverviewPositionProjection {
                 for: identity,
                 mappingsByIdentity: context.mappingMap)
         return TokenEntry(
-            assetId: asset.id,
-            symbol: asset.symbol,
-            name: asset.name,
-            category: asset.category,
+            token,
+            asset: asset,
             portfolioCategory: context.categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
-            coinGeckoId: coinGeckoId,
-            onchainIdentity: identity,
-            role: token.role,
-            amount: token.amount,
-            usdValue: token.usdValue,
-            logoURL: asset.logoURL)
+            coinGeckoId: coinGeckoId)
     }
 
     // MARK: - Tabs

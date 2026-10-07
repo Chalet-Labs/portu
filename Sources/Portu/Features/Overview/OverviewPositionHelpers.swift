@@ -170,7 +170,11 @@ enum OverviewHistoricalPriceChangeFeature {
     }
 
     static func latestPrices(from prices: [HistoricalPriceEntry]) -> [String: Decimal] {
-        var latestByID: [String: HistoricalLatestPrice] = [:]
+        latestCloses(from: prices).mapValues(\.price)
+    }
+
+    static func latestCloses(from prices: [HistoricalPriceEntry]) -> [String: HistoricalClose] {
+        var latestByID: [String: HistoricalClose] = [:]
         for price in prices {
             guard
                 let id = normalizedHistoricalPriceID(price.coinGeckoId),
@@ -178,14 +182,14 @@ enum OverviewHistoricalPriceChangeFeature {
             else { continue }
             let day = HistoricalPriceCalendar.utcStartOfDay(for: price.day)
             guard let existing = latestByID[id] else {
-                latestByID[id] = HistoricalLatestPrice(day: day, price: price.usdPrice)
+                latestByID[id] = HistoricalClose(day: day, price: price.usdPrice)
                 continue
             }
             if day > existing.day || (day == existing.day && price.usdPrice > existing.price) {
-                latestByID[id] = HistoricalLatestPrice(day: day, price: price.usdPrice)
+                latestByID[id] = HistoricalClose(day: day, price: price.usdPrice)
             }
         }
-        return latestByID.mapValues(\.price)
+        return latestByID
     }
 
     static func mergedPrices(
@@ -245,11 +249,6 @@ enum OverviewHistoricalPriceChangeFeature {
     private static func normalizedHistoricalPriceID(_ id: String?) -> String? {
         TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
     }
-}
-
-private struct HistoricalLatestPrice {
-    var day: Date
-    var price: Decimal
 }
 
 private struct HistoricalPriceChangePair {

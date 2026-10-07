@@ -59,64 +59,6 @@ struct AssetAccumulator {
     var borrowUSD: Decimal = 0
 }
 
-/// Lightweight input for row aggregation — decouples from SwiftData models.
-struct TokenEntry: Equatable {
-    let assetId: UUID
-    let symbol: String
-    let name: String
-    let category: AssetCategory
-    let portfolioCategory: PortfolioCategorySnapshot
-    let coinGeckoId: String?
-    let onchainIdentity: OnchainTokenIdentity?
-    let role: TokenRole
-    let amount: Decimal
-    let usdValue: Decimal
-    let logoURL: String?
-
-    init(
-        assetId: UUID,
-        symbol: String,
-        name: String,
-        category: AssetCategory,
-        portfolioCategory: PortfolioCategorySnapshot? = nil,
-        coinGeckoId: String?,
-        onchainIdentity: OnchainTokenIdentity? = nil,
-        role: TokenRole,
-        amount: Decimal,
-        usdValue: Decimal,
-        logoURL: String? = nil) {
-        self.assetId = assetId
-        self.symbol = symbol
-        self.name = name
-        self.category = category
-        self.portfolioCategory = portfolioCategory
-            ?? PortfolioCategoryResolver.defaults.resolve(symbol: symbol, legacyCategory: category)
-        self.coinGeckoId = coinGeckoId
-        self.onchainIdentity = onchainIdentity
-        self.role = role
-        self.amount = amount
-        self.usdValue = usdValue
-        self.logoURL = logoURL
-    }
-
-    /// Convert active PositionTokens to TokenEntries, filtering out tokens without assets or inactive accounts.
-    static func fromActiveTokens(
-        _ tokens: [PositionToken],
-        categoryResolver: PortfolioCategoryResolver = .defaults) -> [TokenEntry] {
-        tokens.compactMap { token in
-            guard let asset = token.asset, token.position?.account?.isActive == true else { return nil }
-            return TokenEntry(
-                assetId: asset.id, symbol: asset.symbol, name: asset.name,
-                category: asset.category,
-                portfolioCategory: categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
-                coinGeckoId: asset.coinGeckoId,
-                onchainIdentity: OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract),
-                role: token.role, amount: token.amount, usdValue: token.usdValue,
-                logoURL: asset.logoURL)
-        }
-    }
-}
-
 // MARK: - AllAssetsFeature
 
 @Reducer
