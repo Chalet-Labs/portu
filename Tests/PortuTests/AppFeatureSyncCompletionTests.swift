@@ -27,7 +27,7 @@ struct AppFeatureSyncCompletionTests {
             }
         }
 
-        func completionAction(_ result: Result<SyncResult, Error>) -> AppFeature.Action {
+        func completionAction(_ result: Result<SyncResult, SyncFailure>) -> AppFeature.Action {
             switch self {
             case .manual: .syncCompleted(result)
             case .account: .accountSyncCompleted(result)
@@ -43,13 +43,13 @@ struct AppFeatureSyncCompletionTests {
         case allAccountsFailed
         case otherSyncError
 
-        var result: Result<SyncResult, Error> {
+        var result: Result<SyncResult, SyncFailure> {
             switch self {
             case .success: .success(SyncResult(failedAccounts: []))
             case .partial: .success(SyncResult(failedAccounts: ["Binance", "Kraken"]))
-            case .failure: .failure(SyncFailed())
-            case .allAccountsFailed: .failure(SyncError.allAccountsFailed)
-            case .otherSyncError: .failure(SyncError.accountNotFound)
+            case .failure: .failure(SyncFailure(SyncFailed()))
+            case .allAccountsFailed: .failure(SyncFailure(SyncError.allAccountsFailed))
+            case .otherSyncError: .failure(SyncFailure(SyncError.accountNotFound))
             }
         }
     }

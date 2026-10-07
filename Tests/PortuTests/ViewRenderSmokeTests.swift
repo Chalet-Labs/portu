@@ -259,7 +259,7 @@ struct ViewRenderSmokeTests {
 
     private func populatedState(section: SidebarSection) -> AppFeature.State {
         var state = AppFeature.State(selectedSection: section)
-        state.prices = ["ethereum": 3050, "usd-coin": 1]
+        state.livePricesUSD = ["ethereum": 3050, "usd-coin": 1]
         state.priceChanges24h = ["ethereum": 0.021, "usd-coin": 0]
         state.lastPriceUpdate = Date(timeIntervalSinceReferenceDate: 800_000_000)
         return state

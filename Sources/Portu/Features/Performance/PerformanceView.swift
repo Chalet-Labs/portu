@@ -1,4 +1,3 @@
-import Combine
 import ComposableArchitecture
 import PortuCore
 import PortuUI
@@ -8,11 +7,9 @@ import SwiftUI
 struct PerformanceView: View {
     let store: StoreOf<AppFeature>
 
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
 
     @Query private var accounts: [Account]
-    @StateObject private var containerSaveObserver = PerformanceContainerSaveObserver()
 
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
@@ -36,11 +33,11 @@ struct PerformanceView: View {
 
         return ScrollView {
             VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
-                DashboardPageHeader("Performance")
+                PerformancePageHeader(
+                    isLoading: store.performance.isDataLoading,
+                    error: store.performance.dataLoadError)
 
                 controlStrip
-
-                dataLoadStatus
 
                 DashboardCard(horizontalPadding: 18, verticalPadding: 16) {
                     switch store.performance.chartMode {
@@ -77,7 +74,12 @@ struct PerformanceView: View {
         }
         .dashboardPage()
         .task(id: dataTaskID) {
-            store.send(.performance(.dataRequested(dataTaskID.request(asOf: .now))))
+            // Prices are read here and not in `body`: a live price tick then never
+            // re-evaluates the page, and neither price source can restart the load.
+            store.send(.performance(.dataRequested(dataTaskID.request(
+                asOf: .now,
+                liveDisplayPrices: store.liveDisplayPrices,
+                historicalDisplayPrices: historicalDisplayPrices))))
         }
         .task(id: analyticsTaskID(account: accountInput)) {
             if let context = makeAnalyticsContext(account: accountInput, asOf: .now) {
@@ -88,16 +90,10 @@ struct PerformanceView: View {
         }
         // One model-boundary hook covers every writer: sync snapshots, retention prunes,
         // analytics/price/FX caches, category-rule and override edits from the separate
-        // Settings scene, and manual position saves. The observer owns the debounced
-        // subscription so body recomputation cannot reset an in-flight debounce.
+        // Settings scene, and manual position saves. The feature owns the subscription and
+        // the debounce, so body recomputation cannot reset a pending reload.
         .onAppear {
-            containerSaveObserver.observe(container: modelContext.container)
-        }
-        .onChange(of: ObjectIdentifier(modelContext.container)) { _, _ in
-            containerSaveObserver.observe(container: modelContext.container)
-        }
-        .onReceive(containerSaveObserver.didSave) {
-            store.send(.performance(.dataInvalidated))
+            store.send(.performance(.screenEntered))
         }
         .onDisappear {
             store.send(.performance(.screenExited))
@@ -145,21 +141,6 @@ struct PerformanceView: View {
         .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
     }
 
-    @ViewBuilder
-    private var dataLoadStatus: some View {
-        if store.performance.isDataLoading {
-            ProgressView("Loading performance data\u{2026}")
-                .controlSize(.small)
-                .foregroundStyle(PortuTheme.dashboardSecondaryText)
-        } else if let error = store.performance.dataLoadError {
-            Label(
-                "Performance data unavailable: \(error)",
-                systemImage: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(PortuTheme.dashboardWarning)
-        }
-    }
-
     private var availableModes: [PerformanceChartMode] {
         PerformanceChartMode.allCases.filter {
             $0 != .pnl || store.performance.analytics.isAvailable
@@ -196,6 +177,10 @@ struct PerformanceView: View {
     /// start: `ChartTimeRange.startDate` is relative to `.now`, so including it would
     /// make every body pass a fresh identity and relaunch the load forever. The range
     /// enum plus `dataRevision` capture every real reason to refetch.
+    ///
+    /// Prices are left out too. Live ones change on every polling tick and historical ones
+    /// on every refresh, and neither is a reason to reload; a load that does fire is handed
+    /// the prices of that moment instead.
     private struct PerformanceDataTaskID: Equatable {
         var accountId: UUID?
         var range: ChartTimeRange
@@ -203,15 +188,16 @@ struct PerformanceView: View {
         var analyticsScopeFingerprint: String?
         var displayCurrency: FiatCurrency
         var currentUSDToDisplayRate: Decimal
-        var liveDisplayPrices: [String: Decimal]
-        var historicalDisplayPrices: [String: Decimal]
         var minimumDashboardValue: Decimal
         var hideUnpriced: Bool
         var hideDust: Bool
         var historicalBackfillEnabled: Bool
         var dataRevision: Int
 
-        func request(asOf date: Date) -> PerformanceDataRequest {
+        func request(
+            asOf date: Date,
+            liveDisplayPrices: [String: Decimal],
+            historicalDisplayPrices: [String: Decimal]) -> PerformanceDataRequest {
             PerformanceDataRequest(
                 accountId: accountId,
                 startDate: range.startDate(at: date),
@@ -236,8 +222,6 @@ struct PerformanceView: View {
             analyticsScopeFingerprint: analyticsScopeFingerprint,
             displayCurrency: store.selectedCurrency,
             currentUSDToDisplayRate: store.currentUSDToDisplayRate,
-            liveDisplayPrices: store.prices,
-            historicalDisplayPrices: historicalDisplayPrices,
             minimumDashboardValue: Decimal(minimumDashboardValue),
             hideUnpriced: hideUnpriced,
             hideDust: hideDust,
@@ -291,23 +275,5 @@ struct PerformanceView: View {
             chartRange: store.performance.selectedRange,
             currency: store.selectedCurrency,
             asOf: asOf)
-    }
-}
-
-final class PerformanceContainerSaveObserver: ObservableObject {
-    let didSave = PassthroughSubject<Void, Never>()
-
-    private var observedContainer: ModelContainer?
-    private var subscription: AnyCancellable?
-
-    func observe(container: ModelContainer) {
-        guard observedContainer !== container else { return }
-        observedContainer = container
-        subscription = NotificationCenter.default.publisher(for: ModelContext.didSave)
-            .compactMap { ($0.object as? ModelContext)?.container }
-            .filter { $0 === container }
-            .map { _ in () }
-            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
-            .sink { [didSave] in didSave.send() }
     }
 }

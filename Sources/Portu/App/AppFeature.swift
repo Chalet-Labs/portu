@@ -33,10 +33,17 @@ struct AppFeature {
         // Settings renders checking copy with no notice. The application menu
         // gates on it.
         var updaterStatus = UpdaterStatus.resolving
-        var prices: [String: Decimal] = [:]
+        // Live prices are kept in USD. A rate refresh or a currency switch only moves
+        // `currentUSDToDisplayRate`, so display prices are derived from this book instead
+        // of stored next to it, and nothing has to be thrown away when the rate changes.
+        var livePricesUSD: [String: Decimal] = [:]
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?
         var pricePollingIDs: [String] = []
+        // When the onchain fallback last fetched each identity. A polling restart reads it so
+        // the loop waits out the rest of its interval instead of fetching straight away, and
+        // one entry per identity keeps a restart for other identities from erasing the rest.
+        var onchainFallbackFetchedAt: [OnchainTokenIdentity: Date] = [:]
         var storeIsEphemeral: Bool = false
         var allAssets = AllAssetsFeature.State()
         var assetDetail = AssetDetailFeature.State()
@@ -44,9 +51,16 @@ struct AppFeature {
         var performance = PerformanceFeature.State()
         var portfolioHealth = PortfolioHealthFeature.State()
         var historicalPriceBackfill = HistoricalPriceBackfillFeature.State()
+
+        /// The USD book at the committed display rate. During a pending currency switch
+        /// the rate is still the old one, matching the old currency label on screen.
+        var liveDisplayPrices: [String: Decimal] {
+            guard currentUSDToDisplayRate != 1 else { return livePricesUSD }
+            return livePricesUSD.mapValues { $0 * currentUSDToDisplayRate }
+        }
     }
 
-    enum Action {
+    enum Action: Equatable {
         case appLaunched
         case updaterStatusChanged(UpdaterStatus)
         case dismissUpdaterFailure
@@ -58,12 +72,12 @@ struct AppFeature {
         case syncTapped
         case accountSyncTapped(UUID)
         case syncProgressUpdated(Double)
-        case syncCompleted(Result<SyncResult, Error>)
-        case accountSyncCompleted(Result<SyncResult, Error>)
+        case syncCompleted(Result<SyncResult, SyncFailure>)
+        case accountSyncCompleted(Result<SyncResult, SyncFailure>)
         case startScheduledSync
         case stopScheduledSync
         case scheduledSyncDue(PortfolioSyncScope)
-        case scheduledSyncCompleted(Result<SyncResult, Error>)
+        case scheduledSyncCompleted(Result<SyncResult, SyncFailure>)
         case displayCurrencySelected(FiatCurrency)
         case currentCurrencyConversionRateReceived(FiatCurrency, Result<Decimal, CurrencyConversionRefreshError>)
         case currencyConversionRefreshCompleted(FiatCurrency, Result<CurrencyConversionRefreshResult, CurrencyConversionRefreshError>)
@@ -71,7 +85,8 @@ struct AppFeature {
         case startPricePolling([String])
         case stopPricePolling
         case pricesReceived(PriceUpdate)
-        case priceFetchFailed(Error)
+        case onchainFallbackPricesReceived(PriceUpdate, identities: [OnchainTokenIdentity])
+        case priceFetchFailed(PriceFetchFailure)
         case allAssets(AllAssetsFeature.Action)
         case assetDetail(AssetDetailFeature.Action)
         case accounts(AccountsFeature.Action)
@@ -211,7 +226,7 @@ struct AppFeature {
                     let result = try await syncEngine.sync()
                     await send(.syncCompleted(.success(result)))
                 } catch: { error, send in
-                    await send(.syncCompleted(.failure(error)))
+                    await send(.syncCompleted(.failure(SyncFailure(error))))
                 }
 
             case let .accountSyncTapped(accountID):
@@ -222,7 +237,7 @@ struct AppFeature {
                     let result = try await syncEngine.syncAccount(accountID)
                     await send(.accountSyncCompleted(.success(result)))
                 } catch: { error, send in
-                    await send(.accountSyncCompleted(.failure(error)))
+                    await send(.accountSyncCompleted(.failure(SyncFailure(error))))
                 }
 
             case let .syncProgressUpdated(progress):
@@ -287,7 +302,7 @@ struct AppFeature {
                     let result = try await syncEngine.syncScope(scope)
                     await send(.scheduledSyncCompleted(.success(result)))
                 } catch: { error, send in
-                    await send(.scheduledSyncCompleted(.failure(error)))
+                    await send(.scheduledSyncCompleted(.failure(SyncFailure(error))))
                 }
 
             case let .displayCurrencySelected(currency):
@@ -319,18 +334,12 @@ struct AppFeature {
                     state.pendingCurrency = nil
                     return commitDisplayCurrency(&state, currency: currency, rate: rate)
                 }
-                // Launch/refresh path for the already-selected currency: apply the rate
-                // and restart polling so any long-lived loop picks up the fresh value.
-                // Stale prices are cleared so no view pairs an old-rate live price with
-                // the new rate until the restarted poll returns fresh ones.
+                // Launch/refresh path for the already-selected currency. Live prices are in
+                // USD, so only the rate changes: display prices follow it, nothing is
+                // cleared and polling keeps running.
                 guard currency == state.selectedCurrency else { return .none }
                 state.currentUSDToDisplayRate = rate
-                state.prices = [:]
-                state.priceChanges24h = [:]
-                state.lastPriceUpdate = nil
-                return .merge(
-                    restartPricePollingEffect(&state, currency: currency),
-                    historicalFXTopUpEffect(&state, currency: currency))
+                return historicalFXTopUpEffect(&state, currency: currency)
 
             case let .currentCurrencyConversionRateReceived(currency, .failure(error)):
                 if state.pendingCurrency == currency {
@@ -386,19 +395,28 @@ struct AppFeature {
                     state.pricePollingIDs = []
                     return .cancel(id: CancelID.pricePolling)
                 }
+                // Live-price ranking can reorder the same IDs; that is still the same poll.
+                guard Set(request.allPriceIDs) != Set(state.pricePollingIDs) else { return .none }
                 state.pricePollingIDs = request.allPriceIDs
-                return restartPricePollingEffect(&state, currency: state.selectedCurrency)
+                return startPricePollingEffect(&state)
 
             case let .pricesReceived(update):
-                guard update.currency == state.selectedCurrency else { return .none }
-                state.prices.merge(update.prices) { _, new in new }
-                state.priceChanges24h.merge(update.changes24h) { _, new in new }
-                state.lastPriceUpdate = currentDate.now()
-                state.connectionStatus = .idle
+                // The book is USD; an update in any other currency would corrupt it.
+                guard update.currency == .usd else { return .none }
+                applyLivePrices(update, at: currentDate.now(), to: &state)
                 return .none
 
-            case let .priceFetchFailed(error):
-                state.connectionStatus = .error(error.localizedDescription)
+            case let .onchainFallbackPricesReceived(update, identities):
+                guard update.currency == .usd else { return .none }
+                let now = currentDate.now()
+                applyLivePrices(update, at: now, to: &state)
+                for identity in identities {
+                    state.onchainFallbackFetchedAt[identity] = now
+                }
+                return .none
+
+            case let .priceFetchFailed(failure):
+                state.connectionStatus = .error(failure.message)
                 return .none
 
             case .stopPricePolling:
@@ -443,7 +461,7 @@ private extension AppFeature {
     /// error to show and surfaces globally.
     static func finishSync(
         _ state: inout State,
-        with result: Result<SyncResult, Error>,
+        with result: Result<SyncResult, SyncFailure>,
         isAccountSync: Bool) {
         state.syncingAccountID = nil
         switch result {
@@ -453,19 +471,20 @@ private extension AppFeature {
             } else {
                 state.syncStatus = .idle
             }
-        case let .failure(error):
-            if isAccountSync, (error as? SyncError) == .allAccountsFailed {
+        case let .failure(failure):
+            if isAccountSync, failure.syncError == .allAccountsFailed {
                 state.syncStatus = .idle
             } else {
-                state.syncStatus = .error(error.localizedDescription)
+                state.syncStatus = .error(failure.message)
             }
         }
     }
 
-    /// Applies a display-currency switch: persists the preference, sets the rate,
-    /// clears stale prices, and restarts polling in the new currency. The historical
-    /// FX availability is left untouched for non-USD (the historical refresh resolves
-    /// it) and marked available for USD, which needs no refresh.
+    /// Applies a display-currency switch: persists the preference and sets the rate.
+    /// Live prices are in USD, so the price book and polling are left alone and display
+    /// prices simply follow the new rate. The historical FX availability is left
+    /// untouched for non-USD (the historical refresh resolves it) and marked available
+    /// for USD, which needs no refresh.
     func commitDisplayCurrency(
         _ state: inout State,
         currency: FiatCurrency,
@@ -476,23 +495,40 @@ private extension AppFeature {
         if currency == .usd {
             state.historicalFXAvailability = .available
         }
-        state.prices = [:]
-        state.priceChanges24h = [:]
-        state.lastPriceUpdate = nil
 
         return .merge(
-            restartPricePollingEffect(&state, currency: currency),
             armDisplayRateRefresh(currency: currency),
             .cancel(id: CancelID.historicalFXTopUp))
     }
 
-    /// Restarts price polling for the current `pricePollingIDs`, if any, using the
-    /// display currency's latest stored rate.
-    func restartPricePollingEffect(_ state: inout State, currency: FiatCurrency) -> Effect<Action> {
+    func applyLivePrices(_ update: PriceUpdate, at date: Date, to state: inout State) {
+        state.livePricesUSD.merge(update.prices) { _, new in new }
+        state.priceChanges24h.merge(update.changes24h) { _, new in new }
+        state.lastPriceUpdate = date
+        state.connectionStatus = .idle
+    }
+
+    /// Starts price polling for the current `pricePollingIDs`, replacing any running
+    /// poll. Prices come back in USD whatever the display currency is.
+    func startPricePollingEffect(_ state: inout State) -> Effect<Action> {
         let request = PricePollingIDResolver.split(state.pricePollingIDs)
         guard request.isEmpty == false else { return .none }
         state.connectionStatus = .fetching
-        return pricePollingEffect(request: request, currency: currency, rate: state.currentUSDToDisplayRate)
+        return pricePollingEffect(
+            request: request,
+            sinceLastOnchainFetch: timeSinceOnchainFetch(covering: request.onchainIdentities, in: state))
+    }
+
+    /// How long ago the onchain fallback fetched the one of `identities` it fetched longest
+    /// ago, which is when the loop's next fetch falls due. Nil when any of them was never
+    /// fetched, so the loop should fetch right away.
+    func timeSinceOnchainFetch(covering identities: [OnchainTokenIdentity], in state: State) -> Duration? {
+        let fetchTimes = identities.compactMap { state.onchainFallbackFetchedAt[$0] }
+        guard
+            fetchTimes.count == identities.count,
+            let oldest = fetchTimes.min()
+        else { return nil }
+        return .seconds(max(0, currentDate.now().timeIntervalSince(oldest)))
     }
 
     /// Arms (or, for USD, disarms) the periodic display-FX-rate refresh. This tracks
@@ -504,9 +540,9 @@ private extension AppFeature {
     }
 
     /// Periodically re-fetches the USD→display rate for the current display currency
-    /// and, on success, restarts price polling with it. A failed tick keeps the
-    /// last-known rate in use and retries on the next tick rather than surfacing an
-    /// error for what is otherwise a healthy, already-converting session.
+    /// and, on success, applies it. A failed tick keeps the last-known rate in use and
+    /// retries on the next tick rather than surfacing an error for what is otherwise a
+    /// healthy, already-converting session.
     func displayRateRefreshEffect(currency: FiatCurrency) -> Effect<Action> {
         .run { send in
             while !Task.isCancelled {
@@ -589,47 +625,60 @@ private extension AppFeature {
         .cancellable(id: CancelID.historicalFXTopUp, cancelInFlight: true)
     }
 
-    func pricePollingEffect(request: PricePollingRequest, currency: FiatCurrency, rate: Decimal) -> Effect<Action> {
+    func pricePollingEffect(request: PricePollingRequest, sinceLastOnchainFetch: Duration?) -> Effect<Action> {
         var effects: [Effect<Action>] = [
-            coinGeckoPricePollingEffect(request: request, currency: currency, rate: rate)
+            coinGeckoPricePollingEffect(request: request)
         ]
 
         if request.onchainIdentities.isEmpty == false {
-            effects.append(.run { send in
-                while !Task.isCancelled {
-                    guard pricePollingSettings.onchainFallbackInterval() != nil else {
-                        try await clock.sleep(for: Self.settingsRecheckInterval)
-                        continue
-                    }
-
-                    do {
-                        let update = try await priceService.fetchOnchainFallbackPrices(request.onchainIdentities, currency, rate)
-                        await send(.pricesReceived(update))
-                    } catch {
-                        guard !Task.isCancelled else { return }
-                        await send(.priceFetchFailed(error))
-                    }
-
-                    var elapsed: Duration = .zero
-                    while !Task.isCancelled {
-                        guard let currentInterval = pricePollingSettings.onchainFallbackInterval() else {
-                            break
-                        }
-                        guard elapsed < currentInterval else { break }
-                        let remaining = currentInterval - elapsed
-                        let sleepDuration = Self.shorterDuration(remaining, Self.settingsRecheckInterval)
-                        try await clock.sleep(for: sleepDuration)
-                        elapsed += sleepDuration
-                    }
-                }
-            })
+            effects.append(onchainFallbackPollingEffect(
+                identities: request.onchainIdentities,
+                sinceLastFetch: sinceLastOnchainFetch))
         }
 
         return .merge(effects)
             .cancellable(id: CancelID.pricePolling, cancelInFlight: true)
     }
 
-    func coinGeckoPricePollingEffect(request: PricePollingRequest, currency: FiatCurrency, rate: Decimal) -> Effect<Action> {
+    /// Fetches the onchain fallback prices on their own interval. `sinceLastFetch` is how
+    /// long ago these identities were last fetched when the loop started, so a restarted
+    /// poll waits out the rest of the interval; nil means they still need their first fetch.
+    func onchainFallbackPollingEffect(
+        identities: [OnchainTokenIdentity],
+        sinceLastFetch: Duration?) -> Effect<Action> {
+        .run { send in
+            var sinceLastFetch = sinceLastFetch
+            while !Task.isCancelled {
+                guard let interval = pricePollingSettings.onchainFallbackInterval() else {
+                    // Manual-only: keep checking the setting, and keep counting the time.
+                    try await clock.sleep(for: Self.settingsRecheckInterval)
+                    sinceLastFetch = sinceLastFetch.map { $0 + Self.settingsRecheckInterval }
+                    continue
+                }
+
+                if let elapsed = sinceLastFetch, elapsed < interval {
+                    let sleepDuration = Self.shorterDuration(interval - elapsed, Self.settingsRecheckInterval)
+                    try await clock.sleep(for: sleepDuration)
+                    sinceLastFetch = elapsed + sleepDuration
+                    continue
+                }
+
+                do {
+                    // No update means nothing was fetched (no provider key), so there is no
+                    // fetch time to record and a restart tries again at once.
+                    if let update = try await priceService.fetchOnchainFallbackPrices(identities) {
+                        await send(.onchainFallbackPricesReceived(update, identities: identities))
+                    }
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    await send(.priceFetchFailed(PriceFetchFailure(error)))
+                }
+                sinceLastFetch = .zero
+            }
+        }
+    }
+
+    func coinGeckoPricePollingEffect(request: PricePollingRequest) -> Effect<Action> {
         let coinRequest = PricePollingRequest(
             coinGeckoIDs: request.coinGeckoIDs,
             onchainIdentities: [])
@@ -644,13 +693,13 @@ private extension AppFeature {
 
                 if coinRequest.isEmpty == false {
                     do {
-                        let update = try await priceService.fetchCoinGeckoPrices(coinRequest, currency, rate)
+                        let update = try await priceService.fetchCoinGeckoPrices(coinRequest)
                         await send(.pricesReceived(update))
                         didEmit = true
                     } catch {
                         guard !Task.isCancelled else { return }
                         if tokenRequest.isEmpty {
-                            await send(.priceFetchFailed(error))
+                            await send(.priceFetchFailed(PriceFetchFailure(error)))
                             didEmit = true
                         } else {
                             pendingError = error
@@ -660,14 +709,14 @@ private extension AppFeature {
 
                 if tokenRequest.isEmpty == false {
                     do {
-                        let update = try await priceService.fetchCoinGeckoPrices(tokenRequest, currency, rate)
+                        let update = try await priceService.fetchCoinGeckoPrices(tokenRequest)
                         if coinRequest.isEmpty || update.prices.isEmpty == false || update.changes24h.isEmpty == false {
                             await send(.pricesReceived(update))
                             didEmit = true
                         }
                     } catch {
                         guard !Task.isCancelled else { return }
-                        await send(.priceFetchFailed(error))
+                        await send(.priceFetchFailed(PriceFetchFailure(error)))
                         didEmit = true
                     }
                 }
@@ -678,9 +727,9 @@ private extension AppFeature {
                 // Surface the swallowed failure (or an empty update) so it clears.
                 if !didEmit {
                     if let pendingError {
-                        await send(.priceFetchFailed(pendingError))
+                        await send(.priceFetchFailed(PriceFetchFailure(pendingError)))
                     } else {
-                        await send(.pricesReceived(PriceUpdate(currency: currency, prices: [:], changes24h: [:])))
+                        await send(.pricesReceived(PricePollingIDResolver.emptyUpdate))
                     }
                 }
 
@@ -726,61 +775,5 @@ private extension AppFeature {
         let components = duration.components
         let attosecondsPerSecond = 1_000_000_000_000_000_000.0
         return TimeInterval(components.seconds) + TimeInterval(components.attoseconds) / attosecondsPerSecond
-    }
-}
-
-// MARK: - Equatable for Result
-
-extension AppFeature.Action: Equatable {
-    // swiftlint:disable:next cyclomatic_complexity
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        switch (lhs, rhs) {
-        case (.appLaunched, .appLaunched): true
-        case let (.updaterStatusChanged(l), .updaterStatusChanged(r)): l == r
-        case (.dismissUpdaterFailure, .dismissUpdaterFailure): true
-        case (.checkForUpdatesTapped, .checkForUpdatesTapped): true
-        case let (.updatePreferencesLoaded(l), .updatePreferencesLoaded(r)): l == r
-        case let (.setAutomaticChecksEnabled(l), .setAutomaticChecksEnabled(r)): l == r
-        case let (.setUpdateChannel(l), .setUpdateChannel(r)): l == r
-        case let (.sectionSelected(l), .sectionSelected(r)): l == r
-        case (.syncTapped, .syncTapped): true
-        case let (.accountSyncTapped(l), .accountSyncTapped(r)): l == r
-        case let (.syncProgressUpdated(l), .syncProgressUpdated(r)): l == r
-        case let (.syncCompleted(.success(l)), .syncCompleted(.success(r))): l == r
-        case (.syncCompleted(.failure), .syncCompleted(.failure)): true
-        case let (.accountSyncCompleted(.success(l)), .accountSyncCompleted(.success(r))): l == r
-        case (.accountSyncCompleted(.failure), .accountSyncCompleted(.failure)): true
-        case (.startScheduledSync, .startScheduledSync): true
-        case (.stopScheduledSync, .stopScheduledSync): true
-        case let (.scheduledSyncDue(l), .scheduledSyncDue(r)): l == r
-        case let (.scheduledSyncCompleted(.success(l)), .scheduledSyncCompleted(.success(r))): l == r
-        case (.scheduledSyncCompleted(.failure), .scheduledSyncCompleted(.failure)): true
-        case let (.displayCurrencySelected(l), .displayCurrencySelected(r)): l == r
-        case let (
-            .currentCurrencyConversionRateReceived(lCurrency, .success(lRate)),
-            .currentCurrencyConversionRateReceived(rCurrency, .success(rRate))):
-            lCurrency == rCurrency && lRate == rRate
-        case let (
-            .currentCurrencyConversionRateReceived(lCurrency, .failure(lError)),
-            .currentCurrencyConversionRateReceived(rCurrency, .failure(rError))):
-            lCurrency == rCurrency && lError == rError
-        case let (
-            .currencyConversionRefreshCompleted(lCurrency, .success(lResult)),
-            .currencyConversionRefreshCompleted(rCurrency, .success(rResult))):
-            lCurrency == rCurrency && lResult == rResult
-        case let (.currencyConversionRefreshCompleted(lCurrency, .failure(lError)), .currencyConversionRefreshCompleted(rCurrency, .failure(rError))):
-            lCurrency == rCurrency && lError == rError
-        case let (.startPricePolling(l), .startPricePolling(r)): l == r
-        case (.stopPricePolling, .stopPricePolling): true
-        case let (.pricesReceived(l), .pricesReceived(r)): l == r
-        case (.priceFetchFailed, .priceFetchFailed): true
-        case let (.allAssets(l), .allAssets(r)): l == r
-        case let (.assetDetail(l), .assetDetail(r)): l == r
-        case let (.accounts(l), .accounts(r)): l == r
-        case let (.performance(l), .performance(r)): l == r
-        case let (.portfolioHealth(l), .portfolioHealth(r)): l == r
-        case let (.historicalPriceBackfill(l), .historicalPriceBackfill(r)): l == r
-        default: false
-        }
     }
 }

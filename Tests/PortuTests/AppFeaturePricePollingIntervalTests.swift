@@ -25,7 +25,7 @@ struct AppFeaturePricePollingIntervalTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request, _, _ in
+            $0.priceService.fetchCoinGeckoPrices = { request in
                 if request.coinGeckoIDs == ["bitcoin"] {
                     coinGeckoCoinFetchCount += 1
                     #expect(request.onchainIdentities.isEmpty)
@@ -36,7 +36,7 @@ struct AppFeaturePricePollingIntervalTests {
                 #expect(request.onchainIdentities == [identity])
                 return PriceUpdate(prices: [:], changes24h: [:])
             }
-            $0.priceService.fetchOnchainFallbackPrices = { identities, _, _ in
+            $0.priceService.fetchOnchainFallbackPrices = { identities in
                 onchainFetchCount += 1
                 #expect(identities == [identity])
                 return PriceUpdate(
@@ -54,13 +54,14 @@ struct AppFeaturePricePollingIntervalTests {
             $0.pricePollingIDs = ["bitcoin", identity.historicalPriceID]
         }
         await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 1]
+            $0.livePricesUSD = ["bitcoin": 1]
             $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
         }
-        await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 1, identity.historicalPriceID: 10]
+        await store.receive(\.onchainFallbackPricesReceived) {
+            $0.livePricesUSD = ["bitcoin": 1, identity.historicalPriceID: 10]
             $0.lastPriceUpdate = testDate
+            $0.onchainFallbackFetchedAt = [identity: testDate]
         }
 
         await testClock.advance(by: .seconds(4))
@@ -69,8 +70,8 @@ struct AppFeaturePricePollingIntervalTests {
         #expect(onchainFetchCount == 1)
 
         await testClock.advance(by: .seconds(1))
-        await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 1, identity.historicalPriceID: 20]
+        await store.receive(\.onchainFallbackPricesReceived) {
+            $0.livePricesUSD = ["bitcoin": 1, identity.historicalPriceID: 20]
             $0.lastPriceUpdate = testDate
         }
         #expect(coinGeckoCoinFetchCount == 1)
@@ -83,108 +84,21 @@ struct AppFeaturePricePollingIntervalTests {
         }
     }
 
-    @Test func `onchain price fallback converts using the stored display rate`() async {
-        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
+    @Test func `display rate refresh keeps prices and leaves polling running`() async {
         let testClock = TestClock()
         let testDate = Date(timeIntervalSince1970: 1_000_000)
-        let storedRate: Decimal = 2
-        nonisolated(unsafe) var receivedRates: [Decimal] = []
-
-        let store = TestStore(initialState: AppFeature.State(currentUSDToDisplayRate: storedRate)) {
-            AppFeature()
-        } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { _, _, _ in
-                PriceUpdate(prices: [:], changes24h: [:])
-            }
-            $0.priceService.fetchOnchainFallbackPrices = { identities, _, rate in
-                receivedRates.append(rate)
-                #expect(identities == [identity])
-                return PriceUpdate(prices: [identity.historicalPriceID: 10], changes24h: [:])
-            }
-            $0.pricePollingSettings.refreshInterval = { .seconds(100) }
-            $0.pricePollingSettings.onchainFallbackInterval = { .seconds(5) }
-            $0.continuousClock = testClock
-            $0.currentDate.now = { testDate }
-        }
-
-        await store.send(.startPricePolling([identity.historicalPriceID])) {
-            $0.connectionStatus = .fetching
-            $0.pricePollingIDs = [identity.historicalPriceID]
-        }
-        await store.receive(\.pricesReceived) {
-            $0.lastPriceUpdate = testDate
-            $0.connectionStatus = .idle
-        }
-        await store.receive(\.pricesReceived) {
-            $0.prices = [identity.historicalPriceID: 10]
-            $0.lastPriceUpdate = testDate
-        }
-
-        #expect(receivedRates == [storedRate])
-
-        await store.send(.stopPricePolling) {
-            $0.connectionStatus = .idle
-            $0.pricePollingIDs = []
-        }
-    }
-
-    @Test func `coingecko price polling converts using the stored display rate`() async {
-        let testClock = TestClock()
-        let testDate = Date(timeIntervalSince1970: 1_000_000)
-        let storedRate: Decimal = 2
-        nonisolated(unsafe) var receivedRates: [Decimal] = []
-
-        let store = TestStore(initialState: AppFeature.State(currentUSDToDisplayRate: storedRate)) {
-            AppFeature()
-        } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request, _, rate in
-                receivedRates.append(rate)
-                #expect(request.coinGeckoIDs == ["bitcoin"])
-                return PriceUpdate(prices: ["bitcoin": 10], changes24h: [:])
-            }
-            $0.pricePollingSettings.refreshInterval = { .seconds(100) }
-            $0.pricePollingSettings.onchainFallbackInterval = { nil }
-            $0.continuousClock = testClock
-            $0.currentDate.now = { testDate }
-        }
-
-        await store.send(.startPricePolling(["bitcoin"])) {
-            $0.connectionStatus = .fetching
-            $0.pricePollingIDs = ["bitcoin"]
-        }
-        await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 10]
-            $0.lastPriceUpdate = testDate
-            $0.connectionStatus = .idle
-        }
-
-        #expect(receivedRates == [storedRate])
-
-        await store.send(.stopPricePolling) {
-            $0.connectionStatus = .idle
-            $0.pricePollingIDs = []
-        }
-    }
-
-    @Test func `display rate refresh restarts polling with a fresh fx rate`() async {
-        let testClock = TestClock()
-        let testDate = Date(timeIntervalSince1970: 1_000_000)
-        let rate: Decimal = 2
         nonisolated(unsafe) var coinGeckoFetchCount = 0
-        nonisolated(unsafe) var fetchRateCallCount = 0
+        nonisolated(unsafe) var currentRate: Decimal = 2
 
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request, currency, _ in
+            $0.priceService.fetchCoinGeckoPrices = { request in
                 coinGeckoFetchCount += 1
                 #expect(request.coinGeckoIDs == ["bitcoin"])
-                return PriceUpdate(currency: currency, prices: ["bitcoin": 10], changes24h: [:])
+                return PriceUpdate(prices: ["bitcoin": 10], changes24h: ["bitcoin": 0.05])
             }
-            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in
-                fetchRateCallCount += 1
-                return rate
-            }
+            $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in currentRate }
             $0.pricePollingSettings.refreshInterval = { .seconds(10000) }
             $0.pricePollingSettings.onchainFallbackInterval = { nil }
             $0.continuousClock = testClock
@@ -195,45 +109,40 @@ struct AppFeaturePricePollingIntervalTests {
             $0.pendingCurrency = .eur
             $0.historicalFXAvailability = .loading
         }
-        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate))) {
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(2))) {
             $0.pendingCurrency = nil
             $0.selectedCurrency = .eur
-            $0.currentUSDToDisplayRate = rate
+            $0.currentUSDToDisplayRate = 2
         }
         await store.receive(\.currencyConversionRefreshCompleted) {
             $0.historicalFXAvailability = .available
             $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: testDate)
         }
-        #expect(fetchRateCallCount == 1)
 
         await store.send(.startPricePolling(["bitcoin"])) {
             $0.connectionStatus = .fetching
             $0.pricePollingIDs = ["bitcoin"]
         }
         await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 10]
+            $0.livePricesUSD = ["bitcoin": 10]
+            $0.priceChanges24h = ["bitcoin": 0.05]
             $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
         }
-        #expect(coinGeckoFetchCount == 1)
+        #expect(store.state.liveDisplayPrices == ["bitcoin": 20])
 
-        // Nothing refreshes the rate until the display-rate-refresh interval elapses.
+        // The periodic refresh moves the rate only: the USD book, the 24h change and the
+        // update time stay, display prices follow the new rate, and polling is not restarted.
+        currentRate = 3
         await testClock.advance(by: .seconds(900))
-        // Stale prices fetched under the old rate are cleared immediately so no view
-        // pairs them with the new rate before the restarted poll returns fresh ones.
-        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(rate))) {
-            $0.prices = [:]
-            $0.lastPriceUpdate = nil
-            $0.connectionStatus = .fetching
+        await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(3))) {
+            $0.currentUSDToDisplayRate = 3
         }
-        await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 10]
-            $0.lastPriceUpdate = testDate
-            $0.connectionStatus = .idle
-        }
-
-        #expect(fetchRateCallCount == 2)
-        #expect(coinGeckoFetchCount == 2)
+        #expect(store.state.livePricesUSD == ["bitcoin": 10])
+        #expect(store.state.liveDisplayPrices == ["bitcoin": 30])
+        #expect(store.state.priceChanges24h == ["bitcoin": 0.05])
+        #expect(store.state.lastPriceUpdate == testDate)
+        #expect(coinGeckoFetchCount == 1)
 
         await store.send(.stopPricePolling) {
             $0.connectionStatus = .idle
@@ -242,8 +151,6 @@ struct AppFeaturePricePollingIntervalTests {
         await store.send(.displayCurrencySelected(.usd)) {
             $0.selectedCurrency = .usd
             $0.currentUSDToDisplayRate = 1
-            $0.prices = [:]
-            $0.lastPriceUpdate = nil
         }
     }
 
@@ -298,8 +205,8 @@ struct AppFeaturePricePollingIntervalTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { _, currency, _ in
-                PriceUpdate(currency: currency, prices: ["bitcoin": 10], changes24h: [:])
+            $0.priceService.fetchCoinGeckoPrices = { _ in
+                PriceUpdate(prices: ["bitcoin": 10], changes24h: [:])
             }
             $0.currencyConversion.fetchCurrentUSDToDisplayRate = { _ in
                 fetchRateCallCount += 1
@@ -316,7 +223,7 @@ struct AppFeaturePricePollingIntervalTests {
             $0.pricePollingIDs = ["bitcoin"]
         }
         await store.receive(\.pricesReceived) {
-            $0.prices = ["bitcoin": 10]
+            $0.livePricesUSD = ["bitcoin": 10]
             $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
         }
@@ -340,12 +247,12 @@ struct AppFeaturePricePollingIntervalTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request, _, _ in
+            $0.priceService.fetchCoinGeckoPrices = { request in
                 #expect(request.coinGeckoIDs.isEmpty)
                 #expect(request.onchainIdentities == [identity])
                 return PriceUpdate(prices: [:], changes24h: [:])
             }
-            $0.priceService.fetchOnchainFallbackPrices = { identities, _, _ in
+            $0.priceService.fetchOnchainFallbackPrices = { identities in
                 onchainFetchCount += 1
                 #expect(identities == [identity])
                 return PriceUpdate(
@@ -372,9 +279,10 @@ struct AppFeaturePricePollingIntervalTests {
 
         onchainInterval = .seconds(10)
         await testClock.advance(by: .seconds(10))
-        await store.receive(\.pricesReceived) {
-            $0.prices = [identity.historicalPriceID: 10]
+        await store.receive(\.onchainFallbackPricesReceived) {
+            $0.livePricesUSD = [identity.historicalPriceID: 10]
             $0.lastPriceUpdate = testDate
+            $0.onchainFallbackFetchedAt = [identity: testDate]
         }
         #expect(onchainFetchCount == 1)
 
@@ -397,12 +305,12 @@ struct AppFeaturePricePollingIntervalTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.priceService.fetchCoinGeckoPrices = { request, _, _ in
+            $0.priceService.fetchCoinGeckoPrices = { request in
                 #expect(request.coinGeckoIDs.isEmpty)
                 #expect(request.onchainIdentities == [identity])
                 return PriceUpdate(prices: [:], changes24h: [:])
             }
-            $0.priceService.fetchOnchainFallbackPrices = { _, _, _ in
+            $0.priceService.fetchOnchainFallbackPrices = { _ in
                 onchainFetchCount += 1
                 return PriceUpdate(prices: [identity.historicalPriceID: 10], changes24h: [:])
             }

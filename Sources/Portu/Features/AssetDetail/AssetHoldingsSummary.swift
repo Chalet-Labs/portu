@@ -15,7 +15,7 @@ struct AssetHoldingsSummary: View {
         let entries = PositionTokenEntry.fromActiveTokens(allTokens, assetId: assetId)
         return AssetDetailFeature.computeHoldingsSummary(
             tokens: entries,
-            prices: store.prices,
+            prices: store.liveDisplayPrices,
             fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
     }
 

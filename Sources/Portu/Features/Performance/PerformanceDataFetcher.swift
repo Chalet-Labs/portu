@@ -31,6 +31,30 @@ private struct PerformanceLoadInputs {
 actor PerformanceDataFetcher {
     private static let secondsPerDay: TimeInterval = 24 * 60 * 60
 
+    /// Every model a load reads, including `Position` and `Account`, which it reaches only
+    /// through a token's relationships. `PerformanceFeature` reloads for saves that touch one
+    /// of these and for no others, so a fetch added to this actor has to be listed here too;
+    /// `PerformanceReadEntitiesTests` checks the list against the schema and this file.
+    static let readEntityNames: Set<String> = {
+        let models: [any PersistentModel.Type] = [
+            PortfolioCategory.self,
+            CategorySymbolRule.self,
+            TokenPricingOverride.self,
+            TokenIdentityMapping.self,
+            Asset.self,
+            Account.self,
+            Position.self,
+            PositionToken.self,
+            CurrencyConversionRatePoint.self,
+            HistoricalPricePoint.self,
+            AssetSnapshot.self,
+            PortfolioSnapshot.self,
+            AccountSnapshot.self,
+            ProviderPortfolioValuePoint.self
+        ]
+        return Set(models.map { Schema.entityName(for: $0) })
+    }()
+
     func load(_ request: PerformanceDataRequest) throws -> PerformanceDataSnapshot {
         try Task.checkCancellation()
         let inputs = try loadInputs(request)

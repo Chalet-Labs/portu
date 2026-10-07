@@ -245,6 +245,7 @@ struct PortuApp: App {
             // `modelContext.container` rather than `self.container`: this closure escapes,
             // and `self` is not fully initialized until `self.store` is assigned.
             $0.performanceData = .live(modelContainer: modelContext.container)
+            $0.modelSave = .live(container: modelContext.container)
             if let ctrl = updaterController {
                 $0.updater = .live(controller: ctrl)
             } else {
@@ -326,27 +327,17 @@ struct PortuApp: App {
                         return try await zerionProvider.fetchPriceUpdate(for: identities)
                     }
             },
-            fetchCoinGeckoPrices: { request, currency, usdToDisplayRate in
-                let update = try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(
-                    request: request,
-                    priceService: priceService,
-                    currency: .usd)
-                guard currency != .usd else { return update }
-                return update.convertedUSDValues(to: currency, rate: usdToDisplayRate, preserveChanges24h: true)
+            fetchCoinGeckoPrices: { request in
+                try await LivePriceUpdateBuilder.fetchCoinGeckoPrices(request: request, priceService: priceService)
             },
-            fetchOnchainFallbackPrices: { identities, currency, usdToDisplayRate in
+            fetchOnchainFallbackPrices: { identities in
                 guard
                     !identities.isEmpty,
                     try await apiKeyAvailability.hasAPIKey(.providerAPIKey(.zerion))
                 else {
-                    return PricePollingIDResolver.emptyUpdate(currency: currency)
+                    return nil
                 }
-                let update = try await zerionProvider.fetchPriceUpdate(for: identities)
-                guard currency != .usd else { return update }
-                return update.convertedUSDValues(
-                    to: currency,
-                    rate: usdToDisplayRate,
-                    preserveChanges24h: true)
+                return try await zerionProvider.fetchPriceUpdate(for: identities)
             },
             fetchHistoricalPrices: { coinId, days in
                 try await priceService.fetchHistoricalPrices(for: coinId, days: days)

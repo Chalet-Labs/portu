@@ -152,7 +152,7 @@
                 guard let store = self?.store else {
                     return Self.jsonResponse(statusCode: 500, body: ["error": "Store unavailable"])
                 }
-                let prices = store.prices.mapValues { ($0 as NSDecimalNumber).doubleValue }
+                let prices = store.liveDisplayPrices.mapValues { ($0 as NSDecimalNumber).doubleValue }
                 let changes = store.priceChanges24h.mapValues { ($0 as NSDecimalNumber).doubleValue }
                 var body: [String: any Sendable] = [
                     "currency": store.selectedCurrency.displayCode,

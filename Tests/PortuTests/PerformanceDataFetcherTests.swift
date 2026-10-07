@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 @testable import Portu
 import PortuCore
@@ -60,23 +59,6 @@ struct PerformanceDataFetcherTests {
             message: "PerformanceDataClient.liveValue must be overridden at Store creation")) {
             _ = try await PerformanceDataClient.liveValue.load(PerformanceDataRequest(
                 startDate: utcDate(2024, 1, 1)))
-        }
-    }
-
-    @Test func `save observer keeps pending debounce when rebound to same container`() async throws {
-        let container = try makeContainer()
-        let observer = PerformanceContainerSaveObserver()
-
-        try await confirmation("Debounced container save", expectedCount: 1) { confirm in
-            let subscription = observer.didSave.sink { confirm() }
-            observer.observe(container: container)
-
-            container.mainContext.insert(PortfolioCategory(name: "Custom", sortOrder: 0))
-            try container.mainContext.save()
-            observer.observe(container: container)
-
-            try await Task.sleep(for: .milliseconds(500))
-            withExtendedLifetime(subscription) {}
         }
     }
 

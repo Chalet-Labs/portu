@@ -9,7 +9,8 @@
     struct DebugServerTCATests {
         private func makeStore(
             selectedCurrency: FiatCurrency = .usd,
-            prices: [String: Decimal] = [:],
+            currentUSDToDisplayRate: Decimal = 1,
+            livePricesUSD: [String: Decimal] = [:],
             priceChanges24h: [String: Decimal] = [:],
             lastPriceUpdate: Date? = nil,
             syncStatus: SyncStatus = .idle,
@@ -17,7 +18,8 @@
             storeIsEphemeral: Bool = false) -> StoreOf<AppFeature> {
             var state = AppFeature.State()
             state.selectedCurrency = selectedCurrency
-            state.prices = prices
+            state.currentUSDToDisplayRate = currentUSDToDisplayRate
+            state.livePricesUSD = livePricesUSD
             state.priceChanges24h = priceChanges24h
             state.lastPriceUpdate = lastPriceUpdate
             state.syncStatus = syncStatus
@@ -36,10 +38,12 @@
 
         // MARK: - GET /state/prices
 
-        @Test func `prices endpoint returns coin prices and changes`() async throws {
+        @Test func `prices endpoint returns display currency prices and changes`() async throws {
+            let rate = try #require(Decimal(string: "0.9"))
             let store = makeStore(
                 selectedCurrency: .chf,
-                prices: ["bitcoin": 50000],
+                currentUSDToDisplayRate: rate,
+                livePricesUSD: ["bitcoin": 50000],
                 priceChanges24h: ["bitcoin": Decimal(2.5)],
                 lastPriceUpdate: Date(timeIntervalSince1970: 1_000_000))
             let server = DebugServer(port: 19020, store: store)
@@ -53,7 +57,7 @@
             #expect(httpResponse.statusCode == 200)
             let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
             let prices = try #require(json["prices"] as? [String: Double])
-            #expect(prices["bitcoin"] == 50000)
+            #expect(prices["bitcoin"] == 45000)
             let changes = try #require(json["changes24h"] as? [String: Double])
             #expect(changes["bitcoin"] == 2.5)
             #expect(json["currency"] as? String == "CHF")

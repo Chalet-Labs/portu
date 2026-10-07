@@ -74,7 +74,7 @@ struct ExposureView: View {
         }
         .background(PortuTheme.dashboardBackground)
         .dashboardPage()
-        .task(id: data.pollingIDs) {
+        .task(id: Set(data.pollingIDs)) {
             if data.pollingIDs.isEmpty {
                 store.send(.stopPricePolling)
             } else {
@@ -98,7 +98,7 @@ struct ExposureView: View {
 
     private var displayPrices: [String: Decimal] {
         OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: store.prices,
+            live: store.liveDisplayPrices,
             historical: historicalDisplayPrices)
     }
 }

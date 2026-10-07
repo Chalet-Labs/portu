@@ -172,7 +172,9 @@ struct PerformanceFeature {
         case chartModeChanged(PerformanceChartMode)
         case portfolioCategoryToggled(String)
         case showCumulativeToggled
+        case screenEntered
         case screenExited
+        case modelSaved(ModelSaveEvent)
         case dataInvalidated
         case dataRequested(PerformanceDataRequest)
         case dataResponse(String, Result<PerformanceDataSnapshot, PerformanceDataClientError>)
@@ -180,8 +182,13 @@ struct PerformanceFeature {
     }
 
     @Dependency(\.performanceData) private var performanceData
+    @Dependency(\.modelSave) private var modelSave
+    @Dependency(\.continuousClock) private var clock
 
-    private enum CancelID { case dataLoad }
+    private enum CancelID { case dataLoad, saveObservation, saveDebounce }
+
+    /// A sync writes in many small saves; waiting out a quiet moment turns them into one reload.
+    private static let saveDebounce = Duration.milliseconds(300)
 
     var body: some ReducerOf<Self> {
         Scope(state: \.analytics, action: \.analytics) {
@@ -215,12 +222,31 @@ struct PerformanceFeature {
                 state.showCumulative.toggle()
                 return .none
 
+            case .screenEntered:
+                return .run { [modelSave] send in
+                    for await event in modelSave.saves() {
+                        await send(.modelSaved(event))
+                    }
+                }
+                .cancellable(id: CancelID.saveObservation, cancelInFlight: true)
+
+            case let .modelSaved(event):
+                guard event.touches(PerformanceDataFetcher.readEntityNames) else { return .none }
+                return .run { [clock] send in
+                    try await clock.sleep(for: Self.saveDebounce)
+                    await send(.dataInvalidated)
+                }
+                .cancellable(id: CancelID.saveDebounce, cancelInFlight: true)
+
             case .screenExited:
                 // Clearing the active identity lets re-entry reload even when the task
                 // inputs are unchanged, and rejects a response that lands after exit.
                 state.activeDataRequestID = nil
                 state.isDataLoading = false
-                return .cancel(id: CancelID.dataLoad)
+                return .merge(
+                    .cancel(id: CancelID.dataLoad),
+                    .cancel(id: CancelID.saveObservation),
+                    .cancel(id: CancelID.saveDebounce))
 
             case .dataInvalidated:
                 state.dataRevision += 1
