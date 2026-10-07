@@ -245,6 +245,7 @@ struct PortuApp: App {
             // `modelContext.container` rather than `self.container`: this closure escapes,
             // and `self` is not fully initialized until `self.store` is assigned.
             $0.performanceData = .live(modelContainer: modelContext.container)
+            $0.modelSave = .live(container: modelContext.container)
             if let ctrl = updaterController {
                 $0.updater = .live(controller: ctrl)
             } else {

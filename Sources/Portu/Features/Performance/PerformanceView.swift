@@ -1,4 +1,3 @@
-import Combine
 import ComposableArchitecture
 import PortuCore
 import PortuUI
@@ -8,11 +7,9 @@ import SwiftUI
 struct PerformanceView: View {
     let store: StoreOf<AppFeature>
 
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
 
     @Query private var accounts: [Account]
-    @StateObject private var containerSaveObserver = PerformanceContainerSaveObserver()
 
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
@@ -36,11 +33,11 @@ struct PerformanceView: View {
 
         return ScrollView {
             VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
-                DashboardPageHeader("Performance")
+                PerformancePageHeader(
+                    isLoading: store.performance.isDataLoading,
+                    error: store.performance.dataLoadError)
 
                 controlStrip
-
-                dataLoadStatus
 
                 DashboardCard(horizontalPadding: 18, verticalPadding: 16) {
                     switch store.performance.chartMode {
@@ -88,16 +85,10 @@ struct PerformanceView: View {
         }
         // One model-boundary hook covers every writer: sync snapshots, retention prunes,
         // analytics/price/FX caches, category-rule and override edits from the separate
-        // Settings scene, and manual position saves. The observer owns the debounced
-        // subscription so body recomputation cannot reset an in-flight debounce.
+        // Settings scene, and manual position saves. The feature owns the subscription and
+        // the debounce, so body recomputation cannot reset a pending reload.
         .onAppear {
-            containerSaveObserver.observe(container: modelContext.container)
-        }
-        .onChange(of: ObjectIdentifier(modelContext.container)) { _, _ in
-            containerSaveObserver.observe(container: modelContext.container)
-        }
-        .onReceive(containerSaveObserver.didSave) {
-            store.send(.performance(.dataInvalidated))
+            store.send(.performance(.screenEntered))
         }
         .onDisappear {
             store.send(.performance(.screenExited))
@@ -143,21 +134,6 @@ struct PerformanceView: View {
         }
         .dashboardControl()
         .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
-    }
-
-    @ViewBuilder
-    private var dataLoadStatus: some View {
-        if store.performance.isDataLoading {
-            ProgressView("Loading performance data\u{2026}")
-                .controlSize(.small)
-                .foregroundStyle(PortuTheme.dashboardSecondaryText)
-        } else if let error = store.performance.dataLoadError {
-            Label(
-                "Performance data unavailable: \(error)",
-                systemImage: "exclamationmark.triangle")
-                .font(.caption)
-                .foregroundStyle(PortuTheme.dashboardWarning)
-        }
     }
 
     private var availableModes: [PerformanceChartMode] {
@@ -291,23 +267,5 @@ struct PerformanceView: View {
             chartRange: store.performance.selectedRange,
             currency: store.selectedCurrency,
             asOf: asOf)
-    }
-}
-
-final class PerformanceContainerSaveObserver: ObservableObject {
-    let didSave = PassthroughSubject<Void, Never>()
-
-    private var observedContainer: ModelContainer?
-    private var subscription: AnyCancellable?
-
-    func observe(container: ModelContainer) {
-        guard observedContainer !== container else { return }
-        observedContainer = container
-        subscription = NotificationCenter.default.publisher(for: ModelContext.didSave)
-            .compactMap { ($0.object as? ModelContext)?.container }
-            .filter { $0 === container }
-            .map { _ in () }
-            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
-            .sink { [didSave] in didSave.send() }
     }
 }
