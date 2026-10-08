@@ -385,28 +385,16 @@ final class SyncEngine {
 
     // MARK: - Snapshot Pruning
 
-    private let snapshotStore = SnapshotStore()
+    private let snapshotPruner = SnapshotPruner()
 
     private static let logger = Logger(subsystem: "com.portu.app", category: "SyncEngine")
 
     /// Best-effort pruning — errors are logged but don't fail the sync.
     private func pruneSnapshots() {
-        let now = Date.now
-        pruneSnapshotType(PortfolioSnapshot.self, now: now)
-        pruneSnapshotType(AccountSnapshot.self, now: now)
-        pruneSnapshotType(AssetSnapshot.self, now: now)
-    }
-
-    private func pruneSnapshotType<T: PersistentModel & Timestamped>(_: T.Type, now: Date) {
         do {
-            let all = try modelContext.fetch(FetchDescriptor<T>())
-            let allDates = all.map(\.timestamp)
-            let retainedDates = Set(snapshotStore.prune(snapshotDates: allDates, now: now))
-            for snapshot in all where !retainedDates.contains(snapshot.timestamp) {
-                modelContext.delete(snapshot)
-            }
+            try snapshotPruner.prune(in: modelContext, now: .now)
         } catch {
-            Self.logger.error("Snapshot pruning failed for \(String(describing: T.self)): \(error)")
+            Self.logger.error("Snapshot pruning failed: \(error)")
         }
     }
 
