@@ -390,6 +390,10 @@ final class SyncEngine {
     private static let logger = Logger(subsystem: "com.portu.app", category: "SyncEngine")
 
     /// Best-effort pruning — errors are logged but don't fail the sync.
+    ///
+    /// The pruner deletes in the store directly, which no `didSave` reports. Call this before the
+    /// save that ends the sync: that save is what makes `@Query`s holding the pruned rows reload.
+    /// Called from one synchronous run with that save, so no frame draws in between.
     private func pruneSnapshots() {
         do {
             try snapshotPruner.prune(in: modelContext, now: .now)

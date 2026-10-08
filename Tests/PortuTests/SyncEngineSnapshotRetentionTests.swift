@@ -136,4 +136,29 @@ struct SyncEngineSnapshotRetentionTests {
         #expect(try survivors(in: context, before: start) == Survivors(
             portfolio: [withoutAssets], account: [withoutAssets], asset: [withAssets]))
     }
+
+    /// Pruning deletes in the store directly, and a store-level delete is not named in the
+    /// `didSave` of the context. Performance reloads on a save that touches one of the snapshot
+    /// entities, and the sync's own save always inserts snapshots, so it still reloads.
+    @Test func `the sync's save names the snapshot entities even when it pruned rows`() async throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = ModelContext(container)
+        try insertManualAccount(into: context)
+        let start = Date.now
+        let dayBase = startOfUTCDay(start - 20 * day)
+        try seed([Batch(timestamp: dayBase + 3 * hour), Batch(timestamp: dayBase + 9 * hour)], into: context)
+        var saves = ModelSaveClient.live(container: container).saves().makeAsyncIterator()
+
+        _ = try await makeEngine(context).sync()
+
+        let event = try #require(await saves.next())
+        guard case let .entities(names) = event else {
+            Issue.record("Expected the sync's save to name its entities, got \(event).")
+            return
+        }
+        #expect(names.isSuperset(of: ["PortfolioSnapshot", "AccountSnapshot", "AssetSnapshot"]))
+        #expect(event.touches(PerformanceDataFetcher.readEntityNames))
+        // The earlier batch of that day really was pruned in the same sync.
+        #expect(try survivors(in: context, before: start).portfolio == [dayBase + 9 * hour])
+    }
 }
