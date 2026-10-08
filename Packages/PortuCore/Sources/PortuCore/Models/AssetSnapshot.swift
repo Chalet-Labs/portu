@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 @Model
-public final class AssetSnapshot: Timestamped {
+public final class AssetSnapshot {
     #Index<AssetSnapshot>([\.timestamp], [\.accountId, \.timestamp], [\.assetId, \.timestamp])
 
     @Attribute(.unique) public var id: UUID
