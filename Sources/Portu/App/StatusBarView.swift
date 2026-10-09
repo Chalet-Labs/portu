@@ -44,9 +44,9 @@ struct StatusBarView: View {
             Label("Ready", systemImage: "checkmark.circle")
                 .font(.caption)
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
-        case let .syncing(progress):
+        case .syncing:
             HStack(spacing: 6) {
-                ProgressView(value: progress)
+                ProgressView(value: store.syncProgress)
                     .frame(width: 60)
                     .tint(PortuTheme.dashboardGold)
                 Text("Syncing\u{2026}")

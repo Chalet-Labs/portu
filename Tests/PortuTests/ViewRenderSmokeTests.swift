@@ -249,7 +249,7 @@ struct ViewRenderSmokeTests {
         Store(initialState: state) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.sync = { SyncResult(failedAccounts: []) }
+            $0.syncEngine.sync = { _ in SyncResult(failedAccounts: []) }
             $0.priceService.fetchPrices = { _ in PriceUpdate(prices: [:], changes24h: [:]) }
             $0.priceService.invalidateCache = {}
             $0.continuousClock = TestClock()

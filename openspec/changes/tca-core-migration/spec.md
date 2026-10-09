@@ -35,10 +35,11 @@
 
 ### B2: Sync — Happy Path
 - WHEN `syncTapped` is sent AND syncStatus is `.idle`
-- THEN `state.syncStatus` becomes `.syncing(progress: 0)`
+- THEN `state.syncStatus` becomes `.syncing` and `state.syncProgress` becomes `0`
 - AND sync effect starts (calls SyncEngineClient.sync)
 - WHEN `syncProgressUpdated(progress)` is received
-- THEN `state.syncStatus` becomes `.syncing(progress: progress)`
+- THEN `state.syncProgress` becomes `progress`, and `state.syncStatus` is left as it is
+- AND only if the status is `.syncing` and `progress > state.syncProgress`; otherwise (a lower or equal value, or not syncing) nothing changes
 - WHEN `syncCompleted(.success(result))` is received
 - THEN `state.syncStatus` becomes `.idle`
 

@@ -19,22 +19,25 @@ final class SyncEngine {
 
     // MARK: - Public API
 
-    func sync() async throws -> SyncResult {
+    // Each entry point reports `progress` after every account, failed or not, and once more
+    // after the snapshot is saved, under the contract documented on `SyncEngineClient`.
+
+    func sync(progress: SyncProgressHandler = { _ in }) async throws -> SyncResult {
         let activeSyncable = try fetchActiveSyncableAccounts()
         let activeManual = try fetchActiveManualAccounts()
 
-        return try await sync(activeSyncable: activeSyncable, activeManual: activeManual)
+        return try await sync(activeSyncable: activeSyncable, activeManual: activeManual, progress: progress)
     }
 
-    func sync(scope: PortfolioSyncScope) async throws -> SyncResult {
+    func sync(scope: PortfolioSyncScope, progress: SyncProgressHandler = { _ in }) async throws -> SyncResult {
         let activeSyncable = try fetchActiveSyncableAccounts(scope: scope)
         guard !activeSyncable.isEmpty else {
             return SyncResult(failedAccounts: [])
         }
-        return try await sync(activeSyncable: activeSyncable, activeManual: [])
+        return try await sync(activeSyncable: activeSyncable, activeManual: [], progress: progress)
     }
 
-    func sync(accountID: UUID) async throws -> SyncResult {
+    func sync(accountID: UUID, progress: SyncProgressHandler = { _ in }) async throws -> SyncResult {
         let account = try fetchAccount(id: accountID)
         guard account.isActive else {
             throw SyncError.accountInactive
@@ -48,23 +51,27 @@ final class SyncEngine {
 
         return try await sync(
             activeSyncable: [account],
-            activeManual: [])
+            activeManual: [],
+            progress: progress)
     }
 
     private func sync(
         activeSyncable: [Account],
-        activeManual: [Account]) async throws -> SyncResult {
+        activeManual: [Account],
+        progress: SyncProgressHandler) async throws -> SyncResult {
         guard !activeSyncable.isEmpty || !activeManual.isEmpty else {
             throw SyncError.noActiveAccounts
         }
 
         let attemptedSyncableAccountIDs = Set(activeSyncable.map(\.id))
+        // One step per syncable account, then one for the snapshot.
+        let totalSteps = activeSyncable.count + 1
 
         // ── Phase A: Per-account fetch + persist ──
         var failedAccounts: [String] = []
         var refreshedSyncableAccountIDs: Set<UUID> = []
 
-        for account in activeSyncable {
+        for (index, account) in activeSyncable.enumerated() {
             do {
                 try await syncAccount(account)
                 refreshedSyncableAccountIDs.insert(account.id)
@@ -72,6 +79,7 @@ final class SyncEngine {
                 account.lastSyncError = error.localizedDescription
                 failedAccounts.append(account.name)
             }
+            await progress(SyncProgress(completedSteps: index + 1, totalSteps: totalSteps))
         }
 
         // ── Phase B: Snapshot all tiers ──
@@ -85,6 +93,7 @@ final class SyncEngine {
         try createSnapshots(
             isPartial: isPartialSnapshot,
             refreshedSyncableAccountIDs: refreshedSyncableAccountIDs)
+        await progress(SyncProgress(completedSteps: totalSteps, totalSteps: totalSteps))
 
         return SyncResult(failedAccounts: failedAccounts)
     }

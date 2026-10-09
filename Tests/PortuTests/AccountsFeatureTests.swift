@@ -459,7 +459,7 @@ struct AccountSheetSyncPolicyTests {
     @Test func `add sheet is blocked during any sync`() {
         let policy = AccountSheetSyncPolicy.state(
             mode: .add,
-            syncStatus: .syncing(progress: 0.4),
+            syncStatus: .syncing,
             syncingAccountID: UUID())
 
         #expect(policy.isSyncing == false)
@@ -470,11 +470,11 @@ struct AccountSheetSyncPolicyTests {
         let accountID = UUID()
         let selectedPolicy = AccountSheetSyncPolicy.state(
             mode: .edit(accountID),
-            syncStatus: .syncing(progress: 0.4),
+            syncStatus: .syncing,
             syncingAccountID: accountID)
         let blockedPolicy = AccountSheetSyncPolicy.state(
             mode: .edit(UUID()),
-            syncStatus: .syncing(progress: 0.4),
+            syncStatus: .syncing,
             syncingAccountID: accountID)
 
         #expect(selectedPolicy.isSyncing == true)

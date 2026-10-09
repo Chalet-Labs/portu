@@ -12,14 +12,14 @@ struct AppFeatureAccountSyncTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.syncAccount = { id in
+            $0.syncEngine.syncAccount = { id, _ in
                 syncedAccountIDs.withLock { $0.append(id) }
                 return SyncResult(failedAccounts: [])
             }
         }
 
         await store.send(.accountSyncTapped(accountID)) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
             $0.syncingAccountID = accountID
         }
         await store.receive(\.accountSyncCompleted) {
@@ -34,11 +34,11 @@ struct AppFeatureAccountSyncTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.syncAccount = { _ in throw SyncError.allAccountsFailed }
+            $0.syncEngine.syncAccount = { _, _ in throw SyncError.allAccountsFailed }
         }
 
         await store.send(.accountSyncTapped(accountID)) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
             $0.syncingAccountID = accountID
         }
         // A single-account failure is surfaced on the row's lastSyncError, not as a
@@ -60,11 +60,11 @@ struct AppFeatureAccountSyncTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.syncAccount = { _ in throw SnapshotSaveFailed() }
+            $0.syncEngine.syncAccount = { _, _ in throw SnapshotSaveFailed() }
         }
 
         await store.send(.accountSyncTapped(accountID)) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
             $0.syncingAccountID = accountID
         }
         await store.receive(\.accountSyncCompleted) {
@@ -79,11 +79,12 @@ struct AppFeatureAccountSyncTests {
         let syncCount = Mutex(0)
         let store = TestStore(
             initialState: AppFeature.State(
-                syncStatus: .syncing(progress: 0.5),
+                syncStatus: .syncing,
+                syncProgress: 0.5,
                 syncingAccountID: syncingAccountID)) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.syncAccount = { _ in
+            $0.syncEngine.syncAccount = { _, _ in
                 syncCount.withLock { $0 += 1 }
                 return SyncResult(failedAccounts: [])
             }

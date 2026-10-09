@@ -173,9 +173,9 @@
                 switch store.syncStatus {
                 case .idle:
                     body["syncStatus"] = "idle"
-                case let .syncing(progress):
+                case .syncing:
                     body["syncStatus"] = "syncing"
-                    body["progress"] = progress
+                    body["progress"] = store.syncProgress
                 case let .completedWithErrors(failedAccounts):
                     body["syncStatus"] = "completedWithErrors"
                     body["failedAccounts"] = failedAccounts

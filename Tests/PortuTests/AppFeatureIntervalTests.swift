@@ -16,7 +16,7 @@ struct AppFeatureIntervalTests {
         } withDependencies: {
             $0.providerSyncSettings.onchainPortfolioSyncInterval = { .seconds(10) }
             $0.providerSyncSettings.exchangePortfolioSyncInterval = { .seconds(21) }
-            $0.syncEngine.syncScope = { scope in
+            $0.syncEngine.syncScope = { scope, _ in
                 syncedScopes.append(scope)
                 return SyncResult(failedAccounts: [])
             }
@@ -32,7 +32,7 @@ struct AppFeatureIntervalTests {
         now = now.addingTimeInterval(1)
         await testClock.advance(by: .seconds(1))
         await store.receive(.scheduledSyncDue(.onchain)) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
         }
         await store.receive(\.scheduledSyncCompleted) {
             $0.syncStatus = .idle
@@ -42,7 +42,7 @@ struct AppFeatureIntervalTests {
         now = now.addingTimeInterval(10)
         await testClock.advance(by: .seconds(10))
         await store.receive(.scheduledSyncDue(.onchain)) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
         }
         await store.receive(\.scheduledSyncCompleted) {
             $0.syncStatus = .idle
@@ -52,7 +52,7 @@ struct AppFeatureIntervalTests {
         now = now.addingTimeInterval(1)
         await testClock.advance(by: .seconds(1))
         await store.receive(.scheduledSyncDue(.exchange)) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
         }
         await store.receive(\.scheduledSyncCompleted) {
             $0.syncStatus = .idle
@@ -73,7 +73,7 @@ struct AppFeatureIntervalTests {
         } withDependencies: {
             $0.providerSyncSettings.onchainPortfolioSyncInterval = { onchainInterval }
             $0.providerSyncSettings.exchangePortfolioSyncInterval = { nil }
-            $0.syncEngine.syncScope = { scope in
+            $0.syncEngine.syncScope = { scope, _ in
                 #expect(scope == .onchain)
                 syncCount += 1
                 return SyncResult(failedAccounts: [])
@@ -91,7 +91,7 @@ struct AppFeatureIntervalTests {
         now = now.addingTimeInterval(10)
         await testClock.advance(by: .seconds(10))
         await store.receive(.scheduledSyncDue(.onchain)) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
         }
         await store.receive(\.scheduledSyncCompleted) {
             $0.syncStatus = .idle
@@ -116,7 +116,7 @@ struct AppFeatureIntervalTests {
         } withDependencies: {
             $0.providerSyncSettings.onchainPortfolioSyncInterval = { nil }
             $0.providerSyncSettings.exchangePortfolioSyncInterval = { nil }
-            $0.syncEngine.syncScope = { _ in
+            $0.syncEngine.syncScope = { _, _ in
                 syncCount += 1
                 return SyncResult(failedAccounts: [])
             }
@@ -137,12 +137,12 @@ struct AppFeatureIntervalTests {
         nonisolated(unsafe) var syncCount = 0
 
         let store = TestStore(
-            initialState: AppFeature.State(syncStatus: .syncing(progress: 0.25))) {
+            initialState: AppFeature.State(syncStatus: .syncing, syncProgress: 0.25)) {
                 AppFeature()
             } withDependencies: {
                 $0.providerSyncSettings.onchainPortfolioSyncInterval = { .seconds(5) }
                 $0.providerSyncSettings.exchangePortfolioSyncInterval = { nil }
-                $0.syncEngine.syncScope = { _ in
+                $0.syncEngine.syncScope = { _, _ in
                     syncCount += 1
                     return SyncResult(failedAccounts: [])
                 }

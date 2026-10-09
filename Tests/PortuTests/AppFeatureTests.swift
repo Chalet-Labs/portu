@@ -49,11 +49,11 @@ struct AppFeatureTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.sync = { SyncResult(failedAccounts: []) }
+            $0.syncEngine.sync = { _ in SyncResult(failedAccounts: []) }
         }
 
         await store.send(.syncTapped) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
         }
         await store.receive(\.syncCompleted) {
             $0.syncStatus = .idle
@@ -66,11 +66,11 @@ struct AppFeatureTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.sync = { SyncResult(failedAccounts: ["Binance"]) }
+            $0.syncEngine.sync = { _ in SyncResult(failedAccounts: ["Binance"]) }
         }
 
         await store.send(.syncTapped) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
         }
         await store.receive(\.syncCompleted) {
             $0.syncStatus = .completedWithErrors(failedAccounts: ["Binance"])
@@ -89,11 +89,11 @@ struct AppFeatureTests {
         let store = TestStore(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.sync = { throw SyncFailed() }
+            $0.syncEngine.sync = { _ in throw SyncFailed() }
         }
 
         await store.send(.syncTapped) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
         }
         await store.receive(\.syncCompleted) {
             $0.syncStatus = .error("Network unavailable")
@@ -104,7 +104,7 @@ struct AppFeatureTests {
 
     @Test func `sync guards against double tap`() async {
         let store = TestStore(
-            initialState: AppFeature.State(syncStatus: .syncing(progress: 0.5))) {
+            initialState: AppFeature.State(syncStatus: .syncing, syncProgress: 0.5)) {
                 AppFeature()
             }
 

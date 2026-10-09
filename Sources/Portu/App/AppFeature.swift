@@ -13,6 +13,9 @@ struct AppFeature {
     struct State: Equatable {
         var selectedSection: SidebarSection = .overview
         var syncStatus: SyncStatus = .idle
+        // Kept apart from `syncStatus` so that the many views that only ask whether a sync
+        // is running are not re-rendered on every step. Meaningful only while syncing.
+        var syncProgress: Double = 0
         var syncingAccountID: UUID?
         var connectionStatus: ConnectionStatus = .idle
         var selectedCurrency: FiatCurrency = .default
@@ -220,28 +223,18 @@ struct AppFeature {
 
             case .syncTapped:
                 guard !state.syncStatus.isSyncing else { return .none }
-                state.syncStatus = .syncing(progress: 0)
-                state.syncingAccountID = nil
-                return .run { send in
-                    let result = try await syncEngine.sync()
-                    await send(.syncCompleted(.success(result)))
-                } catch: { error, send in
-                    await send(.syncCompleted(.failure(SyncFailure(error))))
-                }
+                Self.beginSync(&state, accountID: nil)
+                return syncEffect(completion: Action.syncCompleted) { try await syncEngine.sync($0) }
 
             case let .accountSyncTapped(accountID):
                 guard !state.syncStatus.isSyncing else { return .none }
-                state.syncStatus = .syncing(progress: 0)
-                state.syncingAccountID = accountID
-                return .run { send in
-                    let result = try await syncEngine.syncAccount(accountID)
-                    await send(.accountSyncCompleted(.success(result)))
-                } catch: { error, send in
-                    await send(.accountSyncCompleted(.failure(SyncFailure(error))))
-                }
+                Self.beginSync(&state, accountID: accountID)
+                return syncEffect(completion: Action.accountSyncCompleted) { try await syncEngine.syncAccount(accountID, $0) }
 
             case let .syncProgressUpdated(progress):
-                state.syncStatus = .syncing(progress: progress)
+                // Progress only moves forward, and only while a sync is running.
+                guard state.syncStatus.isSyncing, progress > state.syncProgress else { return .none }
+                state.syncProgress = progress
                 return .none
 
             case let .syncCompleted(result), let .scheduledSyncCompleted(result):
@@ -296,14 +289,8 @@ struct AppFeature {
 
             case let .scheduledSyncDue(scope):
                 guard !state.syncStatus.isSyncing else { return .none }
-                state.syncStatus = .syncing(progress: 0)
-                state.syncingAccountID = nil
-                return .run { send in
-                    let result = try await syncEngine.syncScope(scope)
-                    await send(.scheduledSyncCompleted(.success(result)))
-                } catch: { error, send in
-                    await send(.scheduledSyncCompleted(.failure(SyncFailure(error))))
-                }
+                Self.beginSync(&state, accountID: nil)
+                return syncEffect(completion: Action.scheduledSyncCompleted) { try await syncEngine.syncScope(scope, $0) }
 
             case let .displayCurrencySelected(currency):
                 // Dedupe against the effective target: while a non-USD switch is in
@@ -454,6 +441,14 @@ private extension AppFeature {
     /// avoids re-requesting the full `chartHorizonDays` window on every tick.
     static let historicalFXTopUpDays = 2
 
+    /// Marks a sync as running, from zero progress. `accountID` is the account a single-account
+    /// sync is for, nil for a full or scheduled sync.
+    static func beginSync(_ state: inout State, accountID: UUID?) {
+        state.syncStatus = .syncing
+        state.syncProgress = 0
+        state.syncingAccountID = accountID
+    }
+
     /// Settles the sync state once any sync finishes. A single-account sync that throws
     /// `allAccountsFailed` has already written the error to that account's row
     /// (`lastSyncError`), so the global status goes back to idle instead of repeating it.
@@ -477,6 +472,22 @@ private extension AppFeature {
             } else {
                 state.syncStatus = .error(failure.message)
             }
+        }
+    }
+
+    /// Runs one sync, forwarding each progress step it reports, then sends its completion.
+    /// The engine finishes reporting before it returns or throws, so every progress action
+    /// of a run is reduced before that run's completion.
+    func syncEffect(
+        completion: @escaping @Sendable (Result<SyncResult, SyncFailure>) -> Action,
+        run: @escaping @Sendable (SyncProgressHandler) async throws -> SyncResult) -> Effect<Action> {
+        .run { send in
+            let result = try await run { progress in
+                await send(.syncProgressUpdated(progress.fractionCompleted))
+            }
+            await send(completion(.success(result)))
+        } catch: { error, send in
+            await send(completion(.failure(SyncFailure(error))))
         }
     }
 
