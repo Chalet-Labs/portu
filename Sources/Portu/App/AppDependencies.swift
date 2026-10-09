@@ -33,15 +33,43 @@ struct SyncFailure: LocalizedError, Equatable {
     }
 }
 
+/// How far a sync run has got. A run has one step per syncable account in it, plus one
+/// for the snapshot that ends it.
+struct SyncProgress: Equatable {
+    let completedSteps: Int
+    let totalSteps: Int
+
+    init(completedSteps: Int, totalSteps: Int) {
+        precondition(totalSteps >= 1, "A sync run has at least its snapshot step")
+        precondition((0 ... totalSteps).contains(completedSteps), "Completed steps must lie within the run")
+        self.completedSteps = completedSteps
+        self.totalSteps = totalSteps
+    }
+
+    var fractionCompleted: Double {
+        Double(completedSteps) / Double(totalSteps)
+    }
+}
+
+typealias SyncProgressHandler = @Sendable (SyncProgress) async -> Void
+
+/// Each sync reports its progress through the handler passed to that call: in step order,
+/// awaiting each report, and all of them before the call returns or throws. The handler is
+/// never kept or called from another task, so no progress from a run can reach the reducer
+/// after that run's completion. Keep this when the engine moves off the main actor.
 struct SyncEngineClient {
-    var sync: @Sendable () async throws -> SyncResult
-    var syncScope: @Sendable (PortfolioSyncScope) async throws -> SyncResult
-    var syncAccount: @Sendable (UUID) async throws -> SyncResult
+    var sync: @Sendable (_ progress: SyncProgressHandler) async throws -> SyncResult
+    var syncScope: @Sendable (PortfolioSyncScope, _ progress: SyncProgressHandler) async throws -> SyncResult
+    var syncAccount: @Sendable (UUID, _ progress: SyncProgressHandler) async throws -> SyncResult
 
     init(
-        sync: @escaping @Sendable () async throws -> SyncResult,
-        syncScope: @escaping @Sendable (PortfolioSyncScope) async throws -> SyncResult = { _ in SyncResult(failedAccounts: []) },
-        syncAccount: @escaping @Sendable (UUID) async throws -> SyncResult = { _ in SyncResult(failedAccounts: []) }) {
+        sync: @escaping @Sendable (_ progress: SyncProgressHandler) async throws -> SyncResult,
+        syncScope: @escaping @Sendable (PortfolioSyncScope, _ progress: SyncProgressHandler) async throws -> SyncResult = { _, _ in
+            SyncResult(failedAccounts: [])
+        },
+        syncAccount: @escaping @Sendable (UUID, _ progress: SyncProgressHandler) async throws -> SyncResult = { _, _ in
+            SyncResult(failedAccounts: [])
+        }) {
         self.sync = sync
         self.syncScope = syncScope
         self.syncAccount = syncAccount
@@ -50,19 +78,19 @@ struct SyncEngineClient {
 
 extension SyncEngineClient: DependencyKey {
     static let liveValue = Self(
-        sync: { fatalError("SyncEngineClient.liveValue must be overridden at Store creation") },
-        syncScope: { _ in fatalError("SyncEngineClient.liveValue must be overridden at Store creation") },
-        syncAccount: { _ in fatalError("SyncEngineClient.liveValue must be overridden at Store creation") })
+        sync: { _ in fatalError("SyncEngineClient.liveValue must be overridden at Store creation") },
+        syncScope: { _, _ in fatalError("SyncEngineClient.liveValue must be overridden at Store creation") },
+        syncAccount: { _, _ in fatalError("SyncEngineClient.liveValue must be overridden at Store creation") })
     static let testValue = Self(
-        sync: { SyncResult(failedAccounts: []) },
-        syncScope: { _ in SyncResult(failedAccounts: []) },
-        syncAccount: { _ in SyncResult(failedAccounts: []) })
+        sync: { _ in SyncResult(failedAccounts: []) },
+        syncScope: { _, _ in SyncResult(failedAccounts: []) },
+        syncAccount: { _, _ in SyncResult(failedAccounts: []) })
 
     static func live(engine: SyncEngine) -> Self {
         Self(
-            sync: { try await engine.sync() },
-            syncScope: { scope in try await engine.sync(scope: scope) },
-            syncAccount: { accountID in try await engine.sync(accountID: accountID) })
+            sync: { progress in try await engine.sync(progress: progress) },
+            syncScope: { scope, progress in try await engine.sync(scope: scope, progress: progress) },
+            syncAccount: { accountID, progress in try await engine.sync(accountID: accountID, progress: progress) })
     }
 }
 

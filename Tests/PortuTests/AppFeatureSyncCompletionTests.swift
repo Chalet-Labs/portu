@@ -82,7 +82,7 @@ struct AppFeatureSyncCompletionTests {
         _ outcome: Outcome) async {
         let store = TestStore(
             initialState: AppFeature.State(
-                syncStatus: .syncing(progress: 0.5),
+                syncStatus: .syncing,
                 syncingAccountID: UUID())) {
             AppFeature()
         }
@@ -101,19 +101,20 @@ struct AppFeatureSyncCompletionTests {
         let runningAccountID = UUID()
         let store = TestStore(
             initialState: AppFeature.State(
-                syncStatus: .syncing(progress: 0.5),
+                syncStatus: .syncing,
+                syncProgress: 0.5,
                 syncingAccountID: runningAccountID)) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.sync = {
+            $0.syncEngine.sync = { _ in
                 engineCalls.withLock { $0 += 1 }
                 return SyncResult(failedAccounts: [])
             }
-            $0.syncEngine.syncScope = { _ in
+            $0.syncEngine.syncScope = { _, _ in
                 engineCalls.withLock { $0 += 1 }
                 return SyncResult(failedAccounts: [])
             }
-            $0.syncEngine.syncAccount = { _ in
+            $0.syncEngine.syncAccount = { _, _ in
                 engineCalls.withLock { $0 += 1 }
                 return SyncResult(failedAccounts: [])
             }
@@ -121,7 +122,8 @@ struct AppFeatureSyncCompletionTests {
 
         await store.send(trigger.startAction(accountID: UUID()))
 
-        #expect(store.state.syncStatus == .syncing(progress: 0.5))
+        #expect(store.state.syncStatus == .syncing)
+        #expect(store.state.syncProgress == 0.5)
         #expect(store.state.syncingAccountID == runningAccountID)
         #expect(engineCalls.withLock { $0 } == 0)
     }
@@ -141,7 +143,7 @@ struct AppFeatureSyncCompletionTests {
         }
 
         await store.send(trigger.startAction(accountID: accountID)) {
-            $0.syncStatus = .syncing(progress: 0)
+            $0.syncStatus = .syncing
             $0.syncingAccountID = trigger == .account ? accountID : nil
         }
         switch trigger {

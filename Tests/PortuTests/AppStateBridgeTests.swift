@@ -23,7 +23,7 @@ struct AppStateBridgeTests {
     @Test func `bridge syncs all fields from store to AppState`() throws {
         let conversionRate = try #require(Decimal(string: "0.88"))
         let store = Store(initialState: AppFeature.State(
-            syncStatus: .syncing(progress: 0.5),
+            syncStatus: .syncing,
             connectionStatus: .fetching,
             selectedCurrency: .chf,
             currentUSDToDisplayRate: conversionRate,
@@ -44,7 +44,7 @@ struct AppStateBridgeTests {
         // AppState carries display-currency prices: the USD book at the store's rate.
         #expect(appState.prices == ["bitcoin": 44000])
         #expect(appState.priceChanges24h == ["bitcoin": 2.5])
-        #expect(appState.syncStatus == .syncing(progress: 0.5))
+        #expect(appState.syncStatus == .syncing)
         #expect(appState.connectionStatus == .fetching)
         #expect(appState.lastPriceUpdate == Date(timeIntervalSince1970: 1_000_000))
         #expect(appState.storeIsEphemeral == true)
@@ -139,7 +139,7 @@ struct AppStateBridgeTests {
         let store = Store(initialState: AppFeature.State()) {
             AppFeature()
         } withDependencies: {
-            $0.syncEngine.sync = {
+            $0.syncEngine.sync = { _ in
                 for await _ in syncCompleted.stream {
                     break
                 }
@@ -157,7 +157,7 @@ struct AppStateBridgeTests {
         store.send(.syncTapped)
 
         // Continuous observation should propagate this
-        try await waitForSyncStatus(.syncing(progress: 0), in: appState)
+        try await waitForSyncStatus(.syncing, in: appState)
 
         // Clean up: complete the sync and wait for the in-flight effect
         syncCompleted.continuation.finish()

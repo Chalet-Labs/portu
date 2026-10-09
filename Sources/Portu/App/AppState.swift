@@ -19,7 +19,7 @@ enum ConnectionStatus: Hashable {
 
 enum SyncStatus: Hashable {
     case idle
-    case syncing(progress: Double)
+    case syncing
     case completedWithErrors(failedAccounts: [String])
     case error(String)
 

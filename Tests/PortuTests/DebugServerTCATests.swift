@@ -14,8 +14,10 @@
             priceChanges24h: [String: Decimal] = [:],
             lastPriceUpdate: Date? = nil,
             syncStatus: SyncStatus = .idle,
+            syncProgress: Double = 0,
             connectionStatus: ConnectionStatus = .idle,
-            storeIsEphemeral: Bool = false) -> StoreOf<AppFeature> {
+            storeIsEphemeral: Bool = false,
+            syncEngine: SyncEngineClient = SyncEngineClient(sync: { _ in SyncResult(failedAccounts: []) })) -> StoreOf<AppFeature> {
             var state = AppFeature.State()
             state.selectedCurrency = selectedCurrency
             state.currentUSDToDisplayRate = currentUSDToDisplayRate
@@ -23,12 +25,13 @@
             state.priceChanges24h = priceChanges24h
             state.lastPriceUpdate = lastPriceUpdate
             state.syncStatus = syncStatus
+            state.syncProgress = syncProgress
             state.connectionStatus = connectionStatus
             state.storeIsEphemeral = storeIsEphemeral
             return Store(initialState: state) {
                 AppFeature()
             } withDependencies: {
-                $0.syncEngine = SyncEngineClient(sync: { SyncResult(failedAccounts: []) })
+                $0.syncEngine = syncEngine
                 $0.priceService = PriceServiceClient(
                     fetchPrices: { _ in PriceUpdate(prices: [:], changes24h: [:]) },
                     fetchHistoricalPrices: { _, _ in [] },
@@ -96,7 +99,7 @@
         }
 
         @Test func `sync endpoint serializes syncing with progress`() async throws {
-            let store = makeStore(syncStatus: .syncing(progress: 0.75))
+            let store = makeStore(syncStatus: .syncing, syncProgress: 0.75)
             let server = DebugServer(port: 19023, store: store)
             try await server.start()
             defer { server.stop() }
@@ -106,6 +109,41 @@
             let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
             #expect(json["syncStatus"] as? String == "syncing")
             #expect(json["progress"] as? Double == 0.75)
+        }
+
+        @Test func `sync endpoint reports the progress of a running sync`() async throws {
+            let progressDelivered = Gate()
+            let release = Gate()
+            let store = makeStore(syncEngine: SyncEngineClient(sync: { progress in
+                await progress(SyncProgress(completedSteps: 1, totalSteps: 2))
+                await progressDelivered.open()
+                await release.wait()
+                return SyncResult(failedAccounts: [])
+            }))
+            let server = DebugServer(port: 19034, store: store)
+            try await server.start()
+            defer { server.stop() }
+
+            let url = try #require(URL(string: "http://127.0.0.1:19034/state/sync"))
+
+            let sync = store.send(.syncTapped)
+            await progressDelivered.wait()
+            let data: Data
+            do {
+                (data, _) = try await URLSession.shared.data(from: url)
+            } catch {
+                // Let the sync finish so it isn't left parked on the gate.
+                await release.open()
+                await sync.finish()
+                throw error
+            }
+            await release.open()
+            await sync.finish()
+
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(json["syncStatus"] as? String == "syncing")
+            #expect(json["progress"] as? Double == 0.5)
+            #expect(store.syncStatus == .idle)
         }
 
         @Test func `sync endpoint serializes completedWithErrors`() async throws {
@@ -268,6 +306,25 @@
             let httpResponse = try #require(response as? HTTPURLResponse)
             #expect(httpResponse.statusCode == 405)
             #expect(httpResponse.value(forHTTPHeaderField: "Allow") == "POST")
+        }
+    }
+
+    /// Holds waiters until it is opened; once open, it stays open.
+    private actor Gate {
+        private var isOpen = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        func open() {
+            isOpen = true
+            for waiter in waiters {
+                waiter.resume()
+            }
+            waiters = []
+        }
+
+        func wait() async {
+            guard !isOpen else { return }
+            await withCheckedContinuation { waiters.append($0) }
         }
     }
 #endif
