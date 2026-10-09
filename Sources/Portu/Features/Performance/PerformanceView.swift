@@ -88,10 +88,12 @@ struct PerformanceView: View {
                 store.send(.performance(.analytics(.selectionUnavailable)))
             }
         }
-        // One model-boundary hook covers every writer: sync snapshots, retention prunes,
-        // analytics/price/FX caches, category-rule and override edits from the separate
-        // Settings scene, and manual position saves. The feature owns the subscription and
-        // the debounce, so body recomputation cannot reset a pending reload.
+        // One model-boundary hook covers every writer: sync snapshots, analytics/price/FX
+        // caches, category-rule and override edits from the separate Settings scene, and
+        // manual position saves. Retention prunes delete in the store and post no didSave of
+        // their own; the sync's save that follows them inserts snapshots, which is what reloads
+        // the page. The feature owns the subscription and the debounce, so body recomputation
+        // cannot reset a pending reload.
         .onAppear {
             store.send(.performance(.screenEntered))
         }

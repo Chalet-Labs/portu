@@ -2,10 +2,14 @@ import Foundation
 import SwiftData
 
 @Model
-public final class AssetSnapshot: Timestamped {
+public final class AssetSnapshot {
+    #Index<AssetSnapshot>([\.timestamp], [\.accountId, \.timestamp], [\.assetId, \.timestamp])
+
     @Attribute(.unique) public var id: UUID
     public var syncBatchId: UUID
-    public var timestamp: Date
+    /// The hash modifier is what makes an existing store pick up the indexes above: SwiftData leaves
+    /// the entity hash alone for an index-only change, so without it only new stores get them.
+    @Attribute(hashModifier: "snapshot-time-series-indexes-1") public var timestamp: Date
 
     /// Not a relationship — survives deletion
     public var accountId: UUID
