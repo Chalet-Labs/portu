@@ -23,6 +23,15 @@ public struct TokenDashboardSettings: Equatable, Sendable {
         self.hideDust = hideDust
     }
 
+    /// The dust threshold in USD. A negative setting hides nothing.
+    public var dustThresholdUSD: Decimal {
+        Self.normalizedThreshold(minimumDashboardValue)
+    }
+
+    public static func normalizedThreshold(_ value: Decimal) -> Decimal {
+        max(0, value)
+    }
+
     public static func fromDefaults(_ defaults: UserDefaults = .standard) -> Self {
         let storedMinimum = defaults.object(forKey: minimumDashboardValueKey) as? NSNumber
         return TokenDashboardSettings(
