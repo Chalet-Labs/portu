@@ -16,6 +16,32 @@ public struct HistoricalCloseRow: Equatable, Sendable {
     }
 }
 
+/// The historical half of the USD price inputs (spec I1): the latest close per price ID with its UTC
+/// day, and the consecutive-day 24h fractions. It has no live book, so views that read it are not
+/// invalidated by live ticks; `MarketPrices(liveUSD:liveChanges24h:historical:)` joins the two.
+public struct HistoricalMarketPrices: Equatable, Sendable {
+    public static let empty = HistoricalMarketPrices()
+
+    public let closesUSD: [String: HistoricalClose]
+    public let changes24h: [String: Decimal]
+
+    public init(closesUSD: [String: HistoricalClose] = [:], changes24h: [String: Decimal] = [:]) {
+        self.closesUSD = closesUSD
+        self.changes24h = changes24h
+    }
+
+    /// USD rows inside today's window only; empty when historical backfill is disabled.
+    public init(closeRows: [HistoricalCloseRow], isBackfillEnabled: Bool, now: Date = .now) {
+        guard isBackfillEnabled else {
+            self.init()
+            return
+        }
+        let windowStart = MarketPrices.closeWindowStart(now: now)
+        let rows = closeRows.filter { $0.day >= windowStart }
+        self.init(closesUSD: MarketPrices.latestCloses(from: rows), changes24h: MarketPrices.changes24h(from: rows))
+    }
+}
+
 /// The USD price inputs of a valuation (spec I1): the live book, the latest close per price ID and
 /// the merged 24h fractions. Keys are normalized price IDs. There is deliberately no merged book:
 /// a close only competes with the sync value (V1.5), never with a live price.
@@ -42,12 +68,21 @@ public struct MarketPrices: Equatable, Sendable {
         closeRows: [HistoricalCloseRow],
         isBackfillEnabled: Bool,
         now: Date = .now) {
-        let windowStart = Self.closeWindowStart(now: now)
-        let rows = isBackfillEnabled ? closeRows.filter { $0.day >= windowStart } : []
         self.init(
             liveUSD: liveUSD,
-            closesUSD: Self.latestCloses(from: rows),
-            changes24h: Self.mergedChanges24h(live: liveChanges24h, historical: Self.changes24h(from: rows)))
+            liveChanges24h: liveChanges24h,
+            historical: HistoricalMarketPrices(closeRows: closeRows, isBackfillEnabled: isBackfillEnabled, now: now))
+    }
+
+    /// Joins the live book and live fractions with the historical half. Live fractions win.
+    public init(
+        liveUSD: [String: Decimal],
+        liveChanges24h: [String: Decimal],
+        historical: HistoricalMarketPrices) {
+        self.init(
+            liveUSD: liveUSD,
+            closesUSD: historical.closesUSD,
+            changes24h: Self.mergedChanges24h(live: liveChanges24h, historical: historical.changes24h))
     }
 
     /// The first day whose closes count as current: UTC today minus two days.

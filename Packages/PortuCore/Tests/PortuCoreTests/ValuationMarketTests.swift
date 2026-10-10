@@ -122,6 +122,65 @@ struct ValuationMarketTests {
         #expect(valued.value == 4000)
     }
 
+    @Test func `historical half keeps usd closes and consecutive day fractions inside the window`() throws {
+        let historical = HistoricalMarketPrices(
+            closeRows: [
+                Fixture.closeRow("ethereum", 1000, day: -1),
+                Fixture.closeRow("ethereum", 1100, day: 0),
+                Fixture.closeRow("ethereum", 5000, day: 0, currency: .chf),
+                Fixture.closeRow("bitcoin", 60000, day: 0, currency: .chf),
+                Fixture.closeRow("old", 5, day: -3)
+            ],
+            isBackfillEnabled: true,
+            now: Fixture.noon(0))
+
+        #expect(historical.closesUSD == ["ethereum": HistoricalClose(day: Fixture.day(0), price: 1100)])
+        #expect(historical.changes24h == ["ethereum": Fixture.decimal("0.1")])
+        #expect(try #require(historical.closesUSD["ethereum"]).day == Fixture.day(0))
+    }
+
+    @Test func `historical half is empty when historical backfill is disabled`() {
+        let historical = HistoricalMarketPrices(
+            closeRows: [Fixture.closeRow("ethereum", 1000, day: -1), Fixture.closeRow("ethereum", 1100, day: 0)],
+            isBackfillEnabled: false,
+            now: Fixture.noon(0))
+
+        #expect(historical == .empty)
+        #expect(historical.closesUSD.isEmpty)
+        #expect(historical.changes24h.isEmpty)
+    }
+
+    @Test(arguments: [false, true])
+    func `market prices composed from the historical half equal the rows based builder`(isBackfillEnabled: Bool) {
+        let rows = [
+            Fixture.closeRow("ethereum", 1000, day: -1),
+            Fixture.closeRow("ethereum", 1100, day: 0),
+            Fixture.closeRow("bitcoin", 50000, day: -1),
+            Fixture.closeRow("bitcoin", 60000, day: 0),
+            Fixture.closeRow("bitcoin", 99999, day: 0, currency: .eur),
+            Fixture.closeRow("old", 5, day: -3)
+        ]
+        let live: [String: Decimal] = ["ethereum": 4000, " Solana ": 150]
+        let liveChanges = ["ethereum": Fixture.decimal("0.3"), "solana": Fixture.decimal("-0.02")]
+        let now = Fixture.noon(0)
+
+        let composed = MarketPrices(
+            liveUSD: live,
+            liveChanges24h: liveChanges,
+            historical: HistoricalMarketPrices(closeRows: rows, isBackfillEnabled: isBackfillEnabled, now: now))
+        let built = MarketPrices(
+            liveUSD: live,
+            liveChanges24h: liveChanges,
+            closeRows: rows,
+            isBackfillEnabled: isBackfillEnabled,
+            now: now)
+
+        #expect(composed == built)
+        #expect(composed.changes24h["ethereum"] == Fixture.decimal("0.3"))
+        #expect(composed.changes24h["bitcoin"] == (isBackfillEnabled ? Fixture.decimal("0.2") : nil))
+        #expect(composed.liveUSD["solana"] == 150)
+    }
+
     @Test func `historical close rows project the currency and keep the day`() {
         let row = HistoricalCloseRow(priceID: "ethereum", day: Fixture.noon(-1), currency: .eur, price: 10)
 

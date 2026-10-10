@@ -5,6 +5,9 @@ import SwiftUI
 extension EnvironmentValues {
     @Entry var historicalPriceChanges24h: [String: Decimal] = [:]
     @Entry var historicalDisplayPrices: [String: Decimal] = [:]
+    /// The historical half of the USD valuation inputs. It never carries the live book, so a live
+    /// tick does not invalidate its readers.
+    @Entry var historicalMarketPrices: HistoricalMarketPrices = .empty
 }
 
 struct HistoricalPriceChanges24hProvider<Content: View>: View {
@@ -16,10 +19,11 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
     @AppStorage(HistoricalPriceBackfillSettings.isEnabledKey)
     private var historicalBackfillEnabled = HistoricalPriceBackfillSettings.defaultIsEnabled
 
+    private let now: Date
     private let content: Content
 
     init(now: Date = .now, @ViewBuilder content: () -> Content) {
-        let startDate = OverviewHistoricalPriceChangeFeature.queryStartDate(now: now)
+        let startDate = MarketPrices.closeWindowStart(now: now)
         _historicalPrices = Query(
             filter: #Predicate<HistoricalPricePoint> { $0.day >= startDate },
             sort: [
@@ -29,6 +33,7 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
         _currencyRates = Query(
             filter: #Predicate<CurrencyConversionRatePoint> { $0.day >= startDate },
             sort: \.day)
+        self.now = now
         self.content = content()
     }
 
@@ -45,6 +50,10 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
         return content
             .environment(\.historicalPriceChanges24h, changes24h)
             .environment(\.historicalDisplayPrices, displayPrices)
+            .environment(\.historicalMarketPrices, HistoricalMarketPricesFeature.prices(
+                from: historicalPrices,
+                isBackfillEnabled: historicalBackfillEnabled,
+                now: now))
     }
 
     private var historicalEntries: [HistoricalPriceEntry] {
@@ -56,6 +65,20 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
             from: historicalPrices,
             displayCurrency: appState.selectedCurrency,
             context: context)
+    }
+}
+
+enum HistoricalMarketPricesFeature {
+    /// The USD closes and consecutive-day fractions of the stored rows. No currency or rate goes in:
+    /// non-USD rows are dropped, never converted.
+    static func prices(
+        from rows: [HistoricalPricePoint],
+        isBackfillEnabled: Bool,
+        now: Date) -> HistoricalMarketPrices {
+        HistoricalMarketPrices(
+            closeRows: rows.map(HistoricalCloseRow.init),
+            isBackfillEnabled: isBackfillEnabled,
+            now: now)
     }
 }
 

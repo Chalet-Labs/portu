@@ -43,6 +43,9 @@ final class AppState {
     var currentUSDToDisplayRate: Decimal = 1
     var historicalFXAvailability: CurrencyFXAvailability = .available
     var prices: [String: Decimal] = [:]
+    /// The live book in USD, unscaled: the valuation input (spec I1). Every tick changes it, so a
+    /// view that reads it re-renders per tick.
+    var livePricesUSD: [String: Decimal] = [:]
     var priceChanges24h: [String: Decimal] = [:]
     var connectionStatus: ConnectionStatus = .idle
     var syncStatus: SyncStatus = .idle
@@ -60,6 +63,7 @@ final class AppState {
     /// Guards each assignment to avoid redundant Observation notifications.
     func bridge(from store: StoreOf<AppFeature>) {
         updateIfChanged(\.prices, to: store.liveDisplayPrices)
+        updateIfChanged(\.livePricesUSD, to: store.livePricesUSD)
         updateIfChanged(\.priceChanges24h, to: store.priceChanges24h)
         updateIfChanged(\.syncStatus, to: store.syncStatus)
         updateIfChanged(\.connectionStatus, to: store.connectionStatus)
