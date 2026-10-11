@@ -153,7 +153,7 @@ The rules are evaluated in order. The first rule that applies decides the value 
 | Overview headline and Sidebar header | net | portfolio: the net total |
 | Summary cards | per card (A3) | portfolio: Idle + Deployed − Debt = net total |
 | Idle Stables and Idle majors tabs | net | the tab's own subset |
-| Borrowing tab | borrow values | the tab's subset (Σ = debt over borrows in that tab's positions) |
+| Borrowing tab | borrow values, shown positive | the tab's subset (Σ = debt over borrows in that tab's positions) |
 | Key Changes tab | net | **exempt**: a top-20 selection (F5). Group total = Σ shown rows |
 | Top Assets donut (both modes) | **gross** | portfolio: gross assets |
 | Exposure summary | Spot total gross; Liabilities borrow values; Net total net | portfolio: Net total = net total |
@@ -252,8 +252,9 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 
 ### S3: Overview tabs, donut, watchlist and health (PR a)
 - **Tabs:**
-  - Rows show contributions. The Borrowing tab shows borrow values.
-  - Idle tabs: group total = Σ visible rows + the hidden line. A group's 24h change also covers its hidden rows (A4).
+  - Rows show contributions. The Borrowing tab shows borrow values as **positive debt** (A2): its rows, group totals and 24h change are on the debt basis, and a rising debt is tinted as a loss. Decided 2026-10-11.
+  - Idle and Borrowing tabs: group total = Σ visible rows + the group's hidden line. A group's 24h change also covers its hidden rows (A4).
+  - A position group with at least one visible row ends with its own hidden line. A group with **no** visible row gets no card. Its rows go into one hidden line at the end of the tab, so nothing leaves the tab. Decided 2026-10-11.
   - Key Changes: per F5.
 - **Donut:** gross basis, per F5. The hidden line adds a hidden-balances share.
   - A visible row with value 0 (unpriced, with hideUnpriced off) is a legend row with no slice.
@@ -263,7 +264,8 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
   - Ignored assets are excluded.
 - **Health:**
   - Rows are grouped per symbol + name, as today. A row's weight is its net contribution floored at 0, divided by the sum of the floored values.
-  - The metrics (concentration, HHI, stablecoin ratio) cover **every** valued asset, the way totals do.
+  - The metrics (concentration, HHI, stablecoin ratio, asset count) cover **every** symbol + name group, hidden ones included, the way totals do. They use the floored values of the weights: a net-negative group has weight 0 and is not counted as an asset.
+  - Identity mappings apply to the cards and Health as everywhere else. Their views gain a query for the mapping rows, which change rarely; that is not high-frequency observed state.
   - The expanded weight list applies the display filter, the hidden line and F4.
   - Plausibility, manual prices and mappings apply.
   - Ignored tokens are excluded.
