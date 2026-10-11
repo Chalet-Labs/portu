@@ -64,13 +64,13 @@ unique_teams=$(printf '%s\n' "${teams[@]}" | sort -u)
 if [ -z "$TEAM" ]; then
   if [ "$(printf '%s\n' "$unique_teams" | wc -l | tr -d ' ')" -ne 1 ]; then
     echo "Apple Development identities exist for several teams:" >&2
-    printf '  %s\n' $unique_teams >&2
+    printf '%s\n' "$unique_teams" | sed 's/^/  /' >&2
     echo "Choose one with --team TEAM_ID." >&2
     exit 2
   fi
   TEAM="$unique_teams"
 elif ! printf '%s\n' "$unique_teams" | grep -qxF -- "$TEAM"; then
-  echo "No Apple Development identity for team $TEAM. Available: $(echo $unique_teams)" >&2
+  echo "No Apple Development identity for team $TEAM. Available: ${unique_teams//$'\n'/ }" >&2
   exit 2
 fi
 

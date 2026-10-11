@@ -73,12 +73,12 @@ extension ReleaseAutomationTests {
 
         let ambiguous = try stub.run([])
         #expect(ambiguous.status == 2)
-        #expect(ambiguous.error.contains("TESTTEAM01"))
-        #expect(ambiguous.error.contains("TESTTEAM02"))
+        #expect(ambiguous.error.contains("  TESTTEAM01\n  TESTTEAM02\n"))
         #expect(!FileManager.default.fileExists(atPath: stub.defaultOutputPath))
 
         let unknown = try stub.run(["--team", "NOSUCHTEAM"])
         #expect(unknown.status == 2)
+        #expect(unknown.error.contains("Available: TESTTEAM01 TESTTEAM02\n"))
         #expect(!FileManager.default.fileExists(atPath: stub.defaultOutputPath))
 
         let chosen = try stub.run(["--team", "TESTTEAM02"])
