@@ -66,6 +66,11 @@ debug-run: build
     curl -s http://localhost:9999/health | jq .
     echo "Debug server ready at http://localhost:9999"
 
+# Sign Debug builds from this checkout with your Apple Development identity, so keychain access survives rebuilds
+[positional-arguments]
+signing-setup *args:
+    script/setup_local_signing.sh "$@"
+
 # Stop the running debug app
 debug-stop:
     lsof -ti tcp:9999 | xargs kill 2>/dev/null || true

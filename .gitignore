@@ -33,3 +33,6 @@ pnevma.toml
 
 # Local watchdog configuration
 /WATCHDOG.yml
+
+# Per-Mac Debug signing, written by `just signing-setup`
+/Configs/Local.xcconfig
