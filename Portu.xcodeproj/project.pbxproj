@@ -168,6 +168,7 @@
 		A69CC0139006AEAEC405CABE /* UpdaterIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D727DC43294E81CB398E1040 /* UpdaterIntegrationTests.swift */; };
 		AA40EDB8109D9D0FA28B005B /* LivePricesAndSyncSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23B874D0CFF53C5ECFB5A247 /* LivePricesAndSyncSettingsView.swift */; };
 		AAAB1F935EF02D565C748435 /* AccountSheetDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFB16B288A8FDA49E18239C2 /* AccountSheetDraft.swift */; };
+		AC85B3422199D8E5346CB08A /* LocalSigningSetupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF14531F794AF3BD778434D9 /* LocalSigningSetupTests.swift */; };
 		ACABB35F9973A57572179B81 /* AppFeatureAccountSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A01CB6E84AA5F46CB9019A4 /* AppFeatureAccountSyncTests.swift */; };
 		ACC0582AA532A78461C7BE47 /* SettingsUpdateStatusNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5234A960C589AFF10DB36D51 /* SettingsUpdateStatusNotice.swift */; };
 		B0612D7929CE6AB324AE4005 /* AssetDetailAssetQueryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E2A0E96EA8A1F782D412C5 /* AssetDetailAssetQueryTests.swift */; };
@@ -399,6 +400,7 @@
 		8AAA2334D5B05A6C7B1C84F2 /* MainWindowPlacementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowPlacementTests.swift; sourceTree = "<group>"; };
 		8B29E879272450B6C72BF893 /* TokenSettingsOverrideWriterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenSettingsOverrideWriterTests.swift; sourceTree = "<group>"; };
 		8BC6E0EF8231855B36484C69 /* ProviderPortfolioHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderPortfolioHistory.swift; sourceTree = "<group>"; };
+		8C4865A8FBF94CC3F3FEBD73 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		8CF84E350EEC53843B0C9C86 /* AppFeatureUpdaterStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureUpdaterStatusTests.swift; sourceTree = "<group>"; };
 		8F2E020479C2D59A564DAD6A /* APIKeysViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeysViewModelTests.swift; sourceTree = "<group>"; };
 		8F7F08C277E7F9AED8896AFE /* DeadlockWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeadlockWatchdog.swift; sourceTree = "<group>"; };
@@ -497,6 +499,7 @@
 		FB29EB7B31D9B8FE27EDCC5A /* SyncEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineTests.swift; sourceTree = "<group>"; };
 		FB47E7990208DC0893BDB696 /* NetworksTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworksTab.swift; sourceTree = "<group>"; };
 		FEC920312DC620E98B3A81AE /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		FF14531F794AF3BD778434D9 /* LocalSigningSetupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSigningSetupTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -718,6 +721,14 @@
 			path = Overview;
 			sourceTree = "<group>";
 		};
+		AD889715570D5044EAE4CA76 /* Configs */ = {
+			isa = PBXGroup;
+			children = (
+				8C4865A8FBF94CC3F3FEBD73 /* Debug.xcconfig */,
+			);
+			path = Configs;
+			sourceTree = "<group>";
+		};
 		ADE711CDA186FFC02E630A37 /* Debug */ = {
 			isa = PBXGroup;
 			children = (
@@ -810,6 +821,7 @@
 				633176F0FC26C90721D6E759 /* HistoricalPriceBackfillLiveTests.swift */,
 				09FAC79936969B0BBA1C5A51 /* HistoricalPriceBackfillRequestTimingTests.swift */,
 				726BED9040CC03635619F414 /* HTTPParserTests.swift */,
+				FF14531F794AF3BD778434D9 /* LocalSigningSetupTests.swift */,
 				8AAA2334D5B05A6C7B1C84F2 /* MainWindowPlacementTests.swift */,
 				2484DC04A5C1AFF75F895D46 /* ManualPositionPricingTests.swift */,
 				3A5142ECBCDD19AC6722761A /* MigratingSecretStoreConcurrencyTests.swift */,
@@ -877,6 +889,7 @@
 		D158B12CBC9C1801D9070A25 = {
 			isa = PBXGroup;
 			children = (
+				AD889715570D5044EAE4CA76 /* Configs */,
 				501CF69630B97E19BD6D3F4B /* Packages */,
 				F3FA8B6AA37ED9636D8A38C1 /* Portu */,
 				D11BE0F9AD64A5B147A38504 /* PortuTests */,
@@ -1206,6 +1219,7 @@
 				0F827ACE62BBE11CB91A8F54 /* HistoricalPriceBackfillFeatureTests.swift in Sources */,
 				EF4DA0876F26CDD150371955 /* HistoricalPriceBackfillLiveTests.swift in Sources */,
 				010C49B4C2BB4659CAF03E36 /* HistoricalPriceBackfillRequestTimingTests.swift in Sources */,
+				AC85B3422199D8E5346CB08A /* LocalSigningSetupTests.swift in Sources */,
 				D5C9D5612731410483F544D3 /* MainWindowPlacementTests.swift in Sources */,
 				8B7E055E11C5B50EA1E46E5F /* ManualPositionPricingTests.swift in Sources */,
 				FBD3E0AC146502033AFBCD7A /* MigratingSecretStoreConcurrencyTests.swift in Sources */,
@@ -1338,6 +1352,7 @@
 		};
 		B225627B5319FA76B13333BE /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8C4865A8FBF94CC3F3FEBD73 /* Debug.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -1462,7 +1477,6 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Sources/Portu/Resources/Portu.entitlements;
-				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = Sources/Portu/Resources/Info.plist;

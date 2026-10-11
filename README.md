@@ -93,6 +93,18 @@ For a full local build, launch, and process verification:
 ./script/build_and_run.sh --verify
 ```
 
+Debug builds are ad hoc signed by default, so macOS asks for keychain access again after every rebuild. To stop that, add your Apple ID in Xcode (Settings > Accounts; a free account is enough), choose Manage Certificates, and add an Apple Development certificate. Then run this once in each checkout or git worktree you build from:
+
+```bash
+just signing-setup
+```
+
+It writes `Configs/Local.xcconfig`, which git ignores, so Debug builds from that checkout sign with the identity. Click "Always Allow" once per stored key on the next launch; later rebuilds keep that access. Release builds and CI are unaffected.
+
+- To undo it, delete `Configs/Local.xcconfig`; Debug builds go back to ad hoc signing.
+- The certificate lasts a year. Renew it under Manage Certificates. If a Debug build fails because no signing certificate is found, renew it or delete `Configs/Local.xcconfig`.
+- Older versions of `./script/build_and_run.sh` created and trusted a self-signed "Portu Local Development" certificate, which no longer does anything. List it with `security find-identity -p codesigning` and remove each copy with `security delete-identity -Z <hash> -t`.
+
 ## Architecture
 
 Portu is generated from `project.yml` and split into three SwiftPM packages:

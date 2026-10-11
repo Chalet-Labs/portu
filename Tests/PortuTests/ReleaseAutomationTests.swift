@@ -344,8 +344,20 @@ extension ReleaseAutomationTests {
         FileManager.default.fileExists(atPath: repoRoot.appending(path: path).path(percentEncoded: false))
     }
 
+    func repoURL(_ path: String) -> URL {
+        repoRoot.appending(path: path)
+    }
+
     func runScript(
         _ path: String,
+        arguments: [String],
+        input: String? = nil,
+        environment: [String: String] = [:]) throws -> (status: Int32, output: String, error: String) {
+        try runScript(at: repoRoot.appending(path: path), arguments: arguments, input: input, environment: environment)
+    }
+
+    func runScript(
+        at executable: URL,
         arguments: [String],
         input: String? = nil,
         environment: [String: String] = [:]) throws -> (status: Int32, output: String, error: String) {
@@ -361,7 +373,7 @@ extension ReleaseAutomationTests {
         let outputHandle = try FileHandle(forWritingTo: outputURL)
         let errorHandle = try FileHandle(forWritingTo: errorURL)
         let inputPipe = Pipe()
-        process.executableURL = repoRoot.appending(path: path)
+        process.executableURL = executable
         process.arguments = arguments
         process.standardOutput = outputHandle
         if !environment.isEmpty {

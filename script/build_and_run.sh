@@ -12,7 +12,6 @@ APP_BUNDLE="$DERIVED_DATA/Build/Products/Debug/$APP_NAME.app"
 cd "$ROOT_DIR"
 
 xcodegen generate
-CODE_SIGN_IDENTITY_NAME="$("$ROOT_DIR/script/ensure_local_signing_identity.sh")"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
@@ -22,8 +21,6 @@ xcodebuild \
   -configuration Debug \
   -derivedDataPath "$DERIVED_DATA" \
   -skipMacroValidation \
-  CODE_SIGN_IDENTITY="$CODE_SIGN_IDENTITY_NAME" \
-  CODE_SIGN_STYLE=Manual \
   build
 
 open_app() {

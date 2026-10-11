@@ -12,6 +12,7 @@ Portu is a native macOS SwiftUI crypto portfolio dashboard. It is local-first, h
 - Prefer `./script/build_and_run.sh --verify` to build, launch, and confirm the `Portu` process is running.
 - Use `./script/build_and_run.sh --logs` or `--telemetry` when runtime logs are needed.
 - Use `./script/build_and_run.sh --debug` to build, open LLDB, and start the app under the debugger.
+- Debug signing: read `docs/agents/debug-signing.md` before changing signing settings in `project.yml` or `Configs/`, or when macOS asks for keychain access after a rebuild.
 
 Common commands:
 
