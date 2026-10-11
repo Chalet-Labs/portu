@@ -6,6 +6,7 @@ import SwiftUI
 struct OverviewSummaryCards: View {
     @Environment(AppState.self) private var appState
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
     @Query private var allPositions: [Position]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -29,22 +30,6 @@ struct OverviewSummaryCards: View {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
     }
 
-    private var summaryTokens: [OverviewSummaryToken] {
-        let resolver = categoryResolver
-        return positions.flatMap { position in
-            position.tokens.compactMap { token in
-                guard let asset = token.asset else { return nil }
-                return OverviewSummaryToken(
-                    token: TokenEntry(
-                        token,
-                        asset: asset,
-                        portfolioCategory: resolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
-                        coinGeckoId: asset.coinGeckoId),
-                    positionType: position.positionType)
-            }
-        }
-    }
-
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
     }
@@ -56,29 +41,21 @@ struct OverviewSummaryCards: View {
             hideDust: hideDust)
     }
 
-    private var idleBreakdown: [(String, Decimal)] {
-        OverviewSummaryCardsFeature.idleBreakdown(
-            tokens: summaryTokens,
-            prices: displayPrices,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            categories: categoryResolver.categories,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var deployedBreakdown: [(String, Decimal)] {
-        OverviewSummaryCardsFeature.deployedBreakdown(
-            tokens: summaryTokens,
-            prices: displayPrices,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
+    private var cards: [OverviewSummaryCard] {
+        let resolver = categoryResolver
+        return OverviewSummaryCardsFeature.cards(
+            OverviewValuationContext(
+                inputs: ValuationInput.activeAccounts(positions.flatMap(\.tokens), categoryResolver: resolver),
+                overrides: overrideSnapshots,
+                mappings: [],
+                settings: dashboardSettings,
+                usdToDisplayRate: appState.currentUSDToDisplayRate,
+                prices: OverviewPriceInputs(
+                    livePricesUSD: appState.livePricesUSD,
+                    historical: historicalMarketPrices,
+                    liveDisplayPrices: appState.prices,
+                    historicalDisplayPrices: historicalDisplayPrices)),
+            categories: resolver.categories)
     }
 
     private var currencyCode: String {
@@ -87,12 +64,13 @@ struct OverviewSummaryCards: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: PortuTheme.dashboardContentSpacing) {
-            summaryCard(title: "Idle", items: idleBreakdown)
-            summaryCard(title: "Deployed", items: deployedBreakdown)
+            ForEach(cards) { card in
+                summaryCard(title: card.title, items: card.rows)
+            }
         }
     }
 
-    private func summaryCard(title: String, items: [(String, Decimal)]) -> some View {
+    private func summaryCard(title: String, items: [OverviewSummaryCardRow]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(DashboardStyle.sectionTitleFont)
@@ -106,15 +84,15 @@ struct OverviewSummaryCards: View {
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             } else {
-                ForEach(items, id: \.0) { label, value in
+                ForEach(items) { item in
                     HStack(spacing: 8) {
-                        Text(label)
+                        Text(item.label)
                             .font(.caption)
                             .foregroundStyle(PortuTheme.dashboardSecondaryText)
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Spacer()
-                        Text(OverviewPriceDisplay.currency(value, currencyCode: currencyCode))
+                        Text(OverviewPriceDisplay.currency(item.value, currencyCode: currencyCode))
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundStyle(PortuTheme.dashboardText)
                             .lineLimit(1)

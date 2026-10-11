@@ -79,6 +79,7 @@ private struct SidebarPortfolioHeader: View {
     @Environment(AppState.self) private var appState
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
     @Query private var positions: [Position]
     @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
     private var tokenPricingOverrides: [TokenPricingOverride]
@@ -94,37 +95,20 @@ private struct SidebarPortfolioHeader: View {
         positions.filter { $0.account?.isActive == true }
     }
 
-    private var totalValue: Decimal {
-        OverviewFeature.portfolioTotalValue(
-            tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
-            prices: displayPrices,
+    private var headline: OverviewHeadline {
+        OverviewFeature.headline(OverviewValuationContext(
+            inputs: ValuationInput.activeAccounts(activePositions.flatMap(\.tokens)),
             overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
             mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
             settings: dashboardSettings,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var change24h: Decimal {
-        OverviewPriceChangeFeature.portfolioChange24h(
-            tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
-            prices: displayPrices,
-            changes24h: priceChanges24h,
-            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
-            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var priceChanges24h: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
-            live: appState.priceChanges24h,
-            historical: historicalPriceChanges24h)
+            usdToDisplayRate: appState.currentUSDToDisplayRate,
+            prices: OverviewPriceInputs(
+                livePricesUSD: appState.livePricesUSD,
+                liveChanges24h: appState.priceChanges24h,
+                historical: historicalMarketPrices,
+                liveDisplayPrices: appState.prices,
+                historicalDisplayPrices: historicalDisplayPrices,
+                historicalChanges24h: historicalPriceChanges24h)))
     }
 
     private var dashboardSettings: TokenDashboardSettings {
@@ -135,8 +119,7 @@ private struct SidebarPortfolioHeader: View {
     }
 
     var body: some View {
-        let totalValue = totalValue
-        let change24h = change24h
+        let currentHeadline = headline
         let currencyCode = appState.selectedCurrency.displayCode
 
         HStack(alignment: .top, spacing: 10) {
@@ -150,17 +133,17 @@ private struct SidebarPortfolioHeader: View {
             .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(OverviewPriceDisplay.currency(totalValue, currencyCode: currencyCode))
+                Text(OverviewPriceDisplay.currency(currentHeadline.total, currencyCode: currencyCode))
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
                 HStack(spacing: 4) {
-                    Text(OverviewPriceDisplay.currency(change24h, currencyCode: currencyCode))
+                    Text(OverviewPriceDisplay.currency(currentHeadline.change24h, currencyCode: currencyCode))
                     Text("24h")
                 }
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(change24h < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSuccess)
+                .foregroundStyle(currentHeadline.change24h < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSuccess)
             }
         }
         .padding(.horizontal, 4)

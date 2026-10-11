@@ -7,6 +7,7 @@ struct PriceWatchlist: View {
     @Environment(AppState.self) private var appState
     @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
@@ -24,28 +25,6 @@ struct PriceWatchlist: View {
     private var hideDust = true
     @State private var searchText = ""
 
-    private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(
-            tokens,
-            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
-    }
-
-    private var mappedTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.applyIdentityMappings(
-            to: tokenEntries,
-            mappings: mappingSnapshots,
-            overrides: overrideSnapshots)
-    }
-
-    private var dashboardTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: mappedTokenEntries,
-            prices: displayPrices,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            usdToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
     private var assetCandidates: [OverviewAssetCandidate] {
         OverviewAssetCandidate.fromAssets(assets, overrides: overrideSnapshots)
     }
@@ -59,34 +38,28 @@ struct PriceWatchlist: View {
     }
 
     private var rows: [OverviewPriceRowData] {
-        OverviewFeature.priceRows(
-            tokens: dashboardTokenEntries,
+        OverviewFeature.watchlistRows(
+            OverviewValuationContext(
+                inputs: ValuationInput.activeAccounts(
+                    tokens,
+                    categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)),
+                overrides: overrideSnapshots,
+                mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
+                settings: dashboardSettings,
+                usdToDisplayRate: appState.currentUSDToDisplayRate,
+                prices: OverviewPriceInputs(
+                    livePricesUSD: appState.livePricesUSD,
+                    liveChanges24h: appState.priceChanges24h,
+                    historical: historicalMarketPrices,
+                    liveDisplayPrices: appState.prices,
+                    historicalDisplayPrices: historicalDisplayPrices,
+                    historicalChanges24h: historicalPriceChanges24h)),
             assetsByCoinGeckoId: assetCandidatesByCoinGeckoId,
-            prices: displayPrices,
-            changes24h: priceChanges24h,
-            watchlistIDs: watchlistIDs,
-            overrides: overrideSnapshots,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var priceChanges24h: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
-            live: appState.priceChanges24h,
-            historical: historicalPriceChanges24h)
+            watchlistIDs: watchlistIDs)
     }
 
     private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
         tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
-        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
     }
 
     private var dashboardSettings: TokenDashboardSettings {

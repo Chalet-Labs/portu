@@ -9,6 +9,7 @@ struct TopAssetsDonut: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
     @Query private var tokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -25,59 +26,23 @@ struct TopAssetsDonut: View {
 
     @State private var selectedMode: TopAssetMode = .assets
 
-    private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(
-            tokens,
-            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
-    }
-
-    private var dashboardTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: mappedTokenEntries,
-            prices: displayPrices,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            usdToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var mappedTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.applyIdentityMappings(
-            to: tokenEntries,
-            mappings: mappingSnapshots,
-            overrides: overrideSnapshots)
-    }
-
     private var slices: [OverviewAssetSlice] {
-        switch selectedMode {
-        case .assets:
-            OverviewFeature.topAssetSlices(
-                from: dashboardTokenEntries,
-                prices: displayPrices,
-                overrides: overrideSnapshots,
-                limit: 5,
-                fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-        case .category:
-            OverviewFeature.categorySlices(
-                from: dashboardTokenEntries,
-                prices: displayPrices,
-                overrides: overrideSnapshots,
-                limit: 6,
-                fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-        }
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
-        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
+        OverviewFeature.topAssets(
+            selectedMode,
+            context: OverviewValuationContext(
+                inputs: ValuationInput.activeAccounts(
+                    tokens,
+                    categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)),
+                overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
+                mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
+                settings: dashboardSettings,
+                usdToDisplayRate: appState.currentUSDToDisplayRate,
+                prices: OverviewPriceInputs(
+                    livePricesUSD: appState.livePricesUSD,
+                    historical: historicalMarketPrices,
+                    liveDisplayPrices: appState.prices,
+                    historicalDisplayPrices: historicalDisplayPrices)))
+            .slices
     }
 
     private var dashboardSettings: TokenDashboardSettings {
@@ -88,6 +53,8 @@ struct TopAssetsDonut: View {
     }
 
     var body: some View {
+        let currentSlices = slices
+
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 18) {
                 modeButton(.assets)
@@ -103,7 +70,7 @@ struct TopAssetsDonut: View {
                 .buttonStyle(.plain)
             }
 
-            if slices.isEmpty {
+            if currentSlices.isEmpty {
                 Text("No data")
                     .font(.caption)
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
@@ -111,7 +78,7 @@ struct TopAssetsDonut: View {
                     .frame(maxWidth: .infinity, minHeight: 180, alignment: .center)
             } else {
                 HStack(alignment: .center, spacing: 16) {
-                    Chart(slices) { slice in
+                    Chart(currentSlices) { slice in
                         SectorMark(
                             angle: .value("Value", slice.value),
                             innerRadius: .ratio(0.58),
@@ -122,7 +89,7 @@ struct TopAssetsDonut: View {
                     .frame(width: 162, height: 162)
 
                     VStack(alignment: .leading, spacing: 10) {
-                        ForEach(slices) { slice in
+                        ForEach(currentSlices) { slice in
                             HStack(spacing: 7) {
                                 legendMarker(for: slice)
 
@@ -197,7 +164,7 @@ enum TopAssetsDonutText {
     static let seeAllButtonTitle = "See all →"
 }
 
-private enum TopAssetMode {
+enum TopAssetMode {
     case assets
     case category
 

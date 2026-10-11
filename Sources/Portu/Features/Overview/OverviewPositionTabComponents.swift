@@ -77,21 +77,28 @@ struct OverviewPositionTokenData: Identifiable, Equatable {
     }
 }
 
-/// A position and its qualifying tokens, ready to render.
+/// A position and its qualifying tokens, ready to render. The group's list ends with its own
+/// hidden-balances line (F3), so its total and 24h change cover the hidden rows too.
 struct OverviewPositionGroupData: Identifiable, Equatable {
     let position: OverviewPositionMeta
     let tokens: [OverviewPositionTokenData]
+    /// The group's rows the display filter hides, in the display currency; `nil` while hidden rows
+    /// are dropped.
+    var hidden: HiddenBalances?
+    /// The hidden rows' 24h change, signed like `change24h`.
+    var hiddenChange24h: Decimal = 0
 
     var id: UUID {
         position.id
     }
 
+    /// Σ visible rows + the hidden line. A borrow-only group's hidden net is minus its hidden debt.
     var value: Decimal {
-        tokens.reduce(.zero) { $0 + $1.signedValue }
+        tokens.reduce(.zero) { $0 + $1.signedValue } + (hidden?.net ?? 0)
     }
 
     var change24h: Decimal {
-        tokens.reduce(.zero) { $0 + $1.signedChange24h }
+        tokens.reduce(.zero) { $0 + $1.signedChange24h } + hiddenChange24h
     }
 }
 

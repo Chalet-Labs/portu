@@ -29,6 +29,25 @@ struct OverviewPositionContext {
     let fallbackUSDToDisplayRate: Decimal
 }
 
+/// Valuation inputs for the position tabs, with the position metadata the groups show.
+struct OverviewPositionInputs {
+    let inputs: [ValuationInput]
+    let positions: [UUID: OverviewPositionMeta]
+}
+
+/// A tab as shown: its position groups, each ending with its own hidden-balances line.
+struct OverviewPositionTabData: Equatable {
+    let groups: [OverviewPositionGroupData]
+
+    var total: Decimal {
+        groups.reduce(Decimal.zero) { $0 + $1.value }
+    }
+
+    var change24h: Decimal {
+        groups.reduce(Decimal.zero) { $0 + $1.change24h }
+    }
+}
+
 /// The boundary between SwiftData and the Overview position UI.
 ///
 /// `SyncEngine` deletes and reinserts `Position` rows on the main actor while SwiftUI
@@ -47,73 +66,112 @@ enum OverviewPositionProjection {
         for tab: OverviewPositionTab,
         positions: [Position],
         context: OverviewPositionContext) -> [OverviewPositionGroupData] {
-        switch tab {
-        case .keyChanges:
-            keyChangeGroups(positions: positions, context: context)
-        case .idleStables:
-            idleGroups(positions: positions, context: context) { entry in
-                entry.portfolioCategory.semanticRole == .stablecoin
-            }
-        case .idleMajors:
-            idleGroups(positions: positions, context: context) { entry in
-                PortfolioCategoryDefaults.majorCategoryIDs.contains(entry.portfolioCategory.id)
-            }
-        case .borrowing:
-            borrowingGroups(positions: positions, context: context)
-        }
+        groups(
+            for: tab,
+            projected: inputs(from: positions, for: tab, categoryResolver: context.categoryResolver),
+            context: context)
+    }
+
+    /// The position-tab seam: one tab of the active-account inputs.
+    static func tab(
+        _ tab: OverviewPositionTab,
+        context valuation: OverviewValuationContext,
+        positions: [UUID: OverviewPositionMeta]) -> OverviewPositionTabData {
+        let context = OverviewPositionContext(
+            prices: valuation.prices.displayPrices,
+            changes24h: valuation.prices.displayChanges24h,
+            overrideMap: TokenSettingsFeature.overridesByAssetId(valuation.overrides),
+            mappingMap: TokenIdentityMappingFeature.mappingsByIdentity(valuation.mappings),
+            // The inputs arrive categorised; the resolver only serves the `Position` entry point.
+            categoryResolver: .defaults,
+            dashboardSettings: valuation.settings,
+            fallbackUSDToDisplayRate: valuation.usdToDisplayRate)
+        let groups = groups(
+            for: tab,
+            projected: OverviewPositionInputs(inputs: valuation.inputs, positions: positions),
+            context: context)
+        return OverviewPositionTabData(groups: groups)
     }
 
     // MARK: - Model boundary
 
-    /// The only place position models are read.
+    /// The only place position models are read: the active-account valuation inputs `tab` can show
+    /// and the metadata of the positions they belong to.
     ///
-    /// Work is discarded as early as possible: positions are rejected on their own
-    /// attributes before any token is projected, tokens are filtered before the
-    /// position's metadata is faulted, and each surviving token is projected once.
-    private static func projectedTokens(
-        positions: [Position],
-        context: OverviewPositionContext,
-        wherePosition isPositionIncluded: (PositionType) -> Bool = { _ in true },
-        including isIncluded: (TokenEntry) -> Bool) -> [ProjectedToken] {
-        positions.flatMap { position -> [ProjectedToken] in
-            let positionType = position.positionType
-            guard isPositionIncluded(positionType) else { return [] }
-
-            let included = position.tokens.compactMap { token -> (id: UUID, entry: TokenEntry)? in
-                guard
-                    let entry = tokenEntry(for: token, context: context),
-                    isIncluded(entry)
-                else { return nil }
-                return (token.id, entry)
-            }
-            guard !included.isEmpty else { return [] }
-
-            let meta = OverviewPositionMeta(
+    /// Work is discarded as early as possible: positions are rejected on their type before any
+    /// token is projected, tokens on their role before they become inputs, and metadata is
+    /// faulted only for positions that still contribute an input.
+    static func inputs(
+        from positions: [Position],
+        for tab: OverviewPositionTab,
+        categoryResolver: PortfolioCategoryResolver) -> OverviewPositionInputs {
+        let tokens = positions
+            .filter { tab.admits($0.positionType) }
+            .flatMap(\.tokens)
+            .filter { tab.admits($0.role) }
+        let inputs = ValuationInput.activeAccounts(tokens, categoryResolver: categoryResolver)
+        let positionIDs = Set(inputs.map(\.position.positionId))
+        var meta: [UUID: OverviewPositionMeta] = [:]
+        for position in positions where positionIDs.contains(position.id) {
+            meta[position.id] = OverviewPositionMeta(
                 id: position.id,
                 title: position.protocolName ?? position.account?.name ?? "Wallet",
-                positionType: positionType,
+                positionType: position.positionType,
                 chain: position.chain)
+        }
+        return OverviewPositionInputs(inputs: inputs, positions: meta)
+    }
 
-            return included.map { ProjectedToken(id: $0.id, entry: $0.entry, position: meta) }
+    private static func groups(
+        for tab: OverviewPositionTab,
+        projected: OverviewPositionInputs,
+        context: OverviewPositionContext) -> [OverviewPositionGroupData] {
+        switch tab {
+        case .keyChanges:
+            keyChangeGroups(projected, context: context)
+        case .idleStables:
+            idleGroups(.idleStables, projected, context: context) { entry in
+                entry.portfolioCategory.semanticRole == .stablecoin
+            }
+        case .idleMajors:
+            idleGroups(.idleMajors, projected, context: context) { entry in
+                PortfolioCategoryDefaults.majorCategoryIDs.contains(entry.portfolioCategory.id)
+            }
+        case .borrowing:
+            borrowingGroups(projected, context: context)
         }
     }
 
-    /// Tokens without an asset cannot be priced or categorised, so they are dropped
-    /// here exactly as the visibility filters used to drop them.
+    /// Inputs are rejected on the tab's position types and roles before their entry is mapped, and
+    /// each surviving token is mapped once. The seam can be fed every active input, as the T2 specs
+    /// do, so this repeats the model boundary's rejection.
+    private static func projectedTokens(
+        _ projected: OverviewPositionInputs,
+        for tab: OverviewPositionTab,
+        context: OverviewPositionContext,
+        including isIncluded: (TokenEntry) -> Bool) -> [ProjectedToken] {
+        projected.inputs.compactMap { input -> ProjectedToken? in
+            guard
+                tab.admits(input.position.positionType),
+                tab.admits(input.token.role),
+                let meta = projected.positions[input.position.positionId]
+            else { return nil }
+            let entry = tokenEntry(for: input.token, context: context)
+            guard isIncluded(entry) else { return nil }
+            return ProjectedToken(id: input.tokenId, entry: entry, position: meta)
+        }
+    }
+
+    /// The asset's own CoinGecko ID, else the identity-mapped one.
     private static func tokenEntry(
-        for token: PositionToken,
-        context: OverviewPositionContext) -> TokenEntry? {
-        guard let asset = token.asset else { return nil }
-        let identity = OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract)
-        let coinGeckoId = OverviewWatchlistStore.normalizedID(asset.coinGeckoId)
+        for token: TokenEntry,
+        context: OverviewPositionContext) -> TokenEntry {
+        let coinGeckoId = OverviewWatchlistStore.normalizedID(token.coinGeckoId)
             ?? TokenIdentityMappingFeature.mappedCoinGeckoID(
-                for: identity,
+                for: token.onchainIdentity,
                 mappingsByIdentity: context.mappingMap)
-        return TokenEntry(
-            token,
-            asset: asset,
-            portfolioCategory: context.categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
-            coinGeckoId: coinGeckoId)
+        guard coinGeckoId != token.coinGeckoId else { return token }
+        return TokenSettingsFeature.tokenEntry(from: token, coinGeckoId: coinGeckoId, usdValue: token.usdValue)
     }
 
     // MARK: - Tabs
@@ -121,12 +179,12 @@ enum OverviewPositionProjection {
     /// The biggest movers: change-visible positive tokens ranked by absolute 24h
     /// change, capped at `keyChangeLimit` and grouped by position.
     private static func keyChangeGroups(
-        positions: [Position],
+        _ projected: OverviewPositionInputs,
         context: OverviewPositionContext) -> [OverviewPositionGroupData] {
         // Ranking needs each candidate's change, so it is computed here and again for
         // the surviving `keyChangeLimit` tokens when their row data is built.
-        let ranked = projectedTokens(positions: positions, context: context) { entry in
-            entry.role.isPositive && isChangeVisible(entry, context: context)
+        let ranked = projectedTokens(projected, for: .keyChanges, context: context) { entry in
+            isChangeVisible(entry, context: context)
         }
         .compactMap { token -> (token: ProjectedToken, change: Decimal)? in
             let change = change24h(token.entry, context: context)
@@ -149,28 +207,23 @@ enum OverviewPositionProjection {
     /// Idle tokens the dashboard shows and whose resolved category satisfies
     /// `predicate` — stablecoins for Idle Stables, majors for Idle BTC / ETH / SOL.
     private static func idleGroups(
-        positions: [Position],
+        _ tab: OverviewPositionTab,
+        _ projected: OverviewPositionInputs,
         context: OverviewPositionContext,
         matching predicate: (TokenEntry) -> Bool) -> [OverviewPositionGroupData] {
-        let idle = projectedTokens(
-            positions: positions,
-            context: context,
-            wherePosition: { $0 == .idle },
-            including: { entry in
-                entry.role.isPositive
-                    && isVisible(entry, context: context)
-                    && predicate(entry)
-            })
+        let idle = projectedTokens(projected, for: tab, context: context) { entry in
+            isVisible(entry, context: context) && predicate(entry)
+        }
 
         return groups(from: idle, context: context)
     }
 
     /// Borrowed, dashboard-visible tokens grouped by the position that owes them.
     private static func borrowingGroups(
-        positions: [Position],
+        _ projected: OverviewPositionInputs,
         context: OverviewPositionContext) -> [OverviewPositionGroupData] {
-        let borrowed = projectedTokens(positions: positions, context: context) { entry in
-            entry.role.isBorrow && isVisible(entry, context: context)
+        let borrowed = projectedTokens(projected, for: .borrowing, context: context) { entry in
+            isVisible(entry, context: context)
         }
 
         return groups(from: borrowed, context: context)
@@ -267,6 +320,24 @@ enum OverviewPositionProjection {
             changes24h: context.changes24h,
             override: context.overrideMap[entry.assetId],
             fallbackUSDToDisplayRate: context.fallbackUSDToDisplayRate)
+    }
+}
+
+private extension OverviewPositionTab {
+    /// Idle tabs show idle positions only; the other tabs look at every position.
+    func admits(_ positionType: PositionType) -> Bool {
+        switch self {
+        case .idleStables, .idleMajors: positionType == .idle
+        case .keyChanges, .borrowing: true
+        }
+    }
+
+    /// Borrowing shows borrows; every other tab shows positive roles.
+    func admits(_ role: TokenRole) -> Bool {
+        switch self {
+        case .borrowing: role.isBorrow
+        case .keyChanges, .idleStables, .idleMajors: role.isPositive
+        }
     }
 }
 

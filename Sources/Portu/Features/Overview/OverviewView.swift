@@ -8,6 +8,7 @@ struct OverviewView: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
     @Query private var allTokens: [PositionToken]
     @Query private var tokenPricingOverrides: [TokenPricingOverride]
     @Query private var tokenIdentityMappings: [TokenIdentityMapping]
@@ -19,43 +20,24 @@ struct OverviewView: View {
     @AppStorage(TokenDashboardSettings.hideDustKey)
     private var hideDust = true
 
-    private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(allTokens)
-    }
-
-    private var mappedTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.applyIdentityMappings(
-            to: tokenEntries,
-            mappings: mappingSnapshots,
-            overrides: overrideSnapshots)
-    }
-
     private var watchlistIDs: [String] {
         OverviewWatchlistStore.decode(watchlistRaw)
     }
 
     private var pricePollingIDs: [String] {
         OverviewFeature.pricePollingIDs(
-            tokens: mappedTokenEntries,
-            prices: displayPrices,
-            watchlistIDs: watchlistIDs,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            usdToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
-        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
+            OverviewValuationContext(
+                inputs: ValuationInput.activeAccounts(allTokens),
+                overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
+                mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
+                settings: dashboardSettings,
+                usdToDisplayRate: appState.currentUSDToDisplayRate,
+                prices: OverviewPriceInputs(
+                    livePricesUSD: appState.livePricesUSD,
+                    historical: historicalMarketPrices,
+                    liveDisplayPrices: appState.prices,
+                    historicalDisplayPrices: historicalDisplayPrices)),
+            watchlistIDs: watchlistIDs)
     }
 
     private var dashboardSettings: TokenDashboardSettings {
