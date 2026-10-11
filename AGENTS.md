@@ -12,10 +12,7 @@ Portu is a native macOS SwiftUI crypto portfolio dashboard. It is local-first, h
 - Prefer `./script/build_and_run.sh --verify` to build, launch, and confirm the `Portu` process is running.
 - Use `./script/build_and_run.sh --logs` or `--telemetry` when runtime logs are needed.
 - Use `./script/build_and_run.sh --debug` to build, open LLDB, and start the app under the debugger.
-- Debug signing comes from `Configs/Debug.xcconfig`. Without the untracked `Configs/Local.xcconfig`, Debug builds are ad hoc signed, and macOS asks for keychain access after every rebuild. `just signing-setup` writes `Local.xcconfig` for the developer's Apple Development identity (a free Apple ID is enough), and "Always Allow" then holds across rebuilds. A self-signed certificate cannot fix this: without an Apple team ID the keychain records each build's cdhash.
-- `Local.xcconfig` belongs to one checkout. Each git worktree or clone needs its own `just signing-setup` (or a copy of the file); otherwise its Debug builds are ad hoc signed and prompt again. A secret first stored by an ad hoc build is tied to that build until a team-signed build is allowed once.
-- With team signing, keychain access follows the developer's Apple Development signing key rather than one exact build, so that key must never be exported or shared.
-- Never commit `Configs/Local.xcconfig` and never add a provisioning profile to Debug signing. A profile adds an `application-identifier` entitlement, which moves `KeychainService` to the data protection keychain, where the existing items do not live.
+- Debug signing: read `docs/agents/debug-signing.md` before changing signing settings in `project.yml` or `Configs/`, or when macOS asks for keychain access after a rebuild.
 
 Common commands:
 
