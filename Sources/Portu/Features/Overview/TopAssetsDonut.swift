@@ -94,8 +94,9 @@ struct TopAssetsDonut: View {
                 }
             }
 
+            // The F3 line is longer than the legend column, so it wraps instead of truncating.
             if let hidden = topAssets.hidden {
-                HStack(spacing: 7) {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
                     Circle()
                         .fill(Self.hiddenColor)
                         .frame(width: 7, height: 7)
@@ -106,9 +107,8 @@ struct TopAssetsDonut: View {
                         currencyCode: appState.selectedCurrency.displayCode))
                         .font(.system(size: 11))
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .truncationMode(.middle)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     legendPercent(topAssets.hiddenDisplayPercent)
                 }
