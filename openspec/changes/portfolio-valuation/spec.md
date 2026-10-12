@@ -222,7 +222,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - **Where they exist:** Platforms, Networks, the donut, the Health weight list and the Asset Detail per-chain breakdown.
 - **Definition:** a share is the row's value ÷ the list total, on the list's basis.
 - **When shown:** only when the list is non-empty and its total is > 0. Otherwise each share shows "—".
-- **Rounding:** displayed shares, including the capped remainder and the hidden line, sum to 100%. Apply the AGENTS.md rule: the residual goes to the row with the largest absolute value.
+- **Rounding:** displayed shares, including the capped remainder and the hidden line, sum to 100% by largest remainder (the AGENTS.md rule, decided 2026-10-12). Round each exact share to the nearest display step (0.1%, or 1% where a view shows whole percents such as the donut legend). Then move the residual one step at a time: a positive residual adds a step to the rows with the largest (exact − rounded) error, a negative one takes a step from the rows with the most negative error. Ties go to the larger absolute value, then the earlier row. Each row moves at most one step, so no displayed share is a step or more from its exact value. Example: one row at 95.2% and 120 rows at 0.04% each show 95.2%, 48 rows at 0.1% and 72 at 0.0%; the old residual-to-largest rule showed the large row at 100.0%.
 - **Negative rows:** a negative row on a net list shows a negative share.
 - **Not shares:** Exposure's "% of spot" figures are ratios. They are not forced to sum to 100%.
 

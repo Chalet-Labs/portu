@@ -235,8 +235,9 @@ not tax advice.
 
 ### B22: Percentage rounding
 
-If displayed component percentages must sum to 100%, round each display value
-first and apply the residual to the largest stable row.
+If displayed component percentages must sum to 100%, use largest-remainder
+rounding as the AGENTS.md Code Style rule states (`ListShares.rounded` in
+PortuCore). Never add the whole residual to one row.
 
 ## Persistence lifecycle
 
