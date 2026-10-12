@@ -13,7 +13,7 @@ import Testing
 extension OverviewModelWiringTests {
     /// The mapping row values DEGEN at 100, ETH's +25% is only in `appState.priceChanges24h`, and
     /// the ignore row (second case) drops DEGEN.
-    @Test(arguments: [false, true])
+    @Test(.renderedTextReadable, arguments: [false, true])
     func `the top bar and sidebar header show the sources headline`(ignoringDegen: Bool) throws {
         let store = try Store(ignoring: ignoringDegen ? ["DEGEN"] : [])
         let expected = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(positions) })
@@ -34,7 +34,7 @@ extension OverviewModelWiringTests {
 
     /// A 3 ETH borrow outweighs the holdings, so the prior total (−2900 + 600) is not positive: both
     /// headers show "—", and the top bar drops the arrow it draws next to a percentage.
-    @Test func `the top bar and sidebar header show a dash and no arrow without a positive prior`() throws {
+    @Test(.renderedTextReadable) func `the top bar and sidebar header show a dash and no arrow without a positive prior`() throws {
         let store = try Store()
         let wallet = try #require(store.positions.first { $0.account?.isActive == true })
         let eth = try #require(wallet.tokens.first { $0.asset?.symbol == "ETH" }?.asset)
@@ -53,7 +53,7 @@ extension OverviewModelWiringTests {
 
     /// The cards view builds its resolver from the store's categories and rules: renamed major
     /// categories and a DEGEN → Stablecoins rule.
-    @Test func `the cards view uses the store's categories and rules`() throws {
+    @Test(.renderedTextReadable) func `the cards view uses the store's categories and rules`() throws {
         let store = try Store()
         try store.seedCategories()
         let currencyCode = store.appState.selectedCurrency.displayCode
@@ -68,7 +68,7 @@ extension OverviewModelWiringTests {
     }
 
     /// The Idle Stables tab shows DEGEN only under the store's DEGEN → Stablecoins rule.
-    @Test func `the position tabs view uses the store's categories and rules`() throws {
+    @Test(.renderedTextReadable) func `the position tabs view uses the store's categories and rules`() throws {
         let store = try Store()
         try store.seedCategories()
 
@@ -79,7 +79,7 @@ extension OverviewModelWiringTests {
     }
 
     /// Category mode files DEGEN under the store's Stablecoins category.
-    @Test func `the donut view uses the store's categories and rules`() throws {
+    @Test(.renderedTextReadable) func `the donut view uses the store's categories and rules`() throws {
         let store = try Store()
         try store.seedCategories()
 
@@ -94,7 +94,7 @@ extension OverviewModelWiringTests {
     }
 
     /// DEGEN (100 of 6100) is the only stablecoin, under the store's rule.
-    @Test func `the health view uses the store's categories and rules`() throws {
+    @Test(.renderedTextReadable) func `the health view uses the store's categories and rules`() throws {
         let store = try Store()
         try store.seedCategories()
 
@@ -108,7 +108,7 @@ extension OverviewModelWiringTests {
 
     /// The hidden line pairs its amount, converted at `AppState`'s rate, with `AppState`'s currency
     /// code, so it never shows the new code with the old rate while the store's currency switches.
-    @Test func `the health hidden line uses the app state currency code`() throws {
+    @Test(.renderedTextReadable) func `the health hidden line uses the app state currency code`() throws {
         let store = try Store()
         try store.addDust()
         store.appState.selectedCurrency = .chf
@@ -209,5 +209,28 @@ extension OverviewModelWiringTests {
             texts += accessibilityTexts(child)
         }
         return texts
+    }
+
+    /// Whether this host builds SwiftUI's accessibility tree, which `texts(of:over:)` reads.
+    static func renderedTextIsReadable() -> Bool {
+        let hostingView = NSHostingView(rootView: Text("accessibility probe"))
+        hostingView.frame = CGRect(x: 0, y: 0, width: 200, height: 40)
+        let window = NSWindow(contentRect: hostingView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = hostingView
+        window.layoutIfNeeded()
+        hostingView.layoutSubtreeIfNeeded()
+        hostingView.displayIfNeeded()
+        return accessibilityTexts(hostingView).contains("accessibility probe")
+    }
+}
+
+extension Trait where Self == ConditionTrait {
+    /// GitHub's macOS runner builds no SwiftUI accessibility tree, so every rendered element reads
+    /// back empty there. Tests that read rendered text skip on such a host and run where the tree
+    /// exists; `OverviewModelWiringTests`' probe tests pin the same sources on every host.
+    static var renderedTextReadable: Self {
+        .enabled("SwiftUI builds no accessibility tree on this host") {
+            await MainActor.run { OverviewModelWiringTests.renderedTextIsReadable() }
+        }
     }
 }
