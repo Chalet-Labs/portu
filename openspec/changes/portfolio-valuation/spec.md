@@ -152,9 +152,9 @@ The rules are evaluated in order. The first rule that applies decides the value 
 |---|---|---|
 | Overview headline and Sidebar header | net | portfolio: the net total |
 | Summary cards | per card (A3) | portfolio: Idle + Deployed − Debt = net total |
-| Idle Stables and Idle majors tabs | net | the tab's own subset |
+| Idle Stables and Idle majors tabs | net (the tabs admit positive roles only, so net equals gross) | the tab's own subset |
 | Borrowing tab | borrow values, shown positive | the tab's subset (Σ = debt over borrows in that tab's positions) |
-| Key Changes tab | net | **exempt**: a top-20 selection (F5). Group total = Σ shown rows |
+| Key Changes tab | net (positive roles only, so net equals gross) | **exempt**: a top-20 selection (F5). Group total = Σ shown rows |
 | Top Assets donut (both modes) | **gross** | portfolio: gross assets |
 | Exposure summary | Spot total gross; Liabilities borrow values; Net total net | portfolio: Net total = net total |
 | Exposure category table, Exposure asset table | each row has spot, liabilities and net | per table: Σ row spot = Spot total, Σ row liabilities = Liabilities, Σ row net = Net total (with that table's hidden sums per basis) |
@@ -339,7 +339,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 
 ### S12: Polling and backfill eligibility (PR a for polling, PR b for backfill)
 - **Shared rule:** their value checks call the module, and their own selection rules stay. Ignored tokens are never candidates, which is today's rule.
-- **Selection value:** the module value, or `|usdValue|` when the module value is 0. Polling ranks by it (OPP:127-137); backfill uses it for eligibility (HPBF:239-242) and keeps its own price-ID ordering.
+- **Selection value:** the module value, or `|usdValue|` when the module value is 0 (`ValuedToken.selectionValue`). Polling ranks by it (`OverviewFeature.pricePollingIDs`); backfill uses it for eligibility (`HistoricalPriceBackfillFeature.shouldIncludeToken`) and keeps its own price-ID ordering.
 - **Polling:**
   - It keeps today's rank-by-value top N plus the watchlist.
   - Two copies exist: Overview's (PR a) and Exposure's `dashboardPollingPriceID`, which migrates with Exposure in PR (b).
