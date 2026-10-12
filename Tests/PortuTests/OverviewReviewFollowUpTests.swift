@@ -4,127 +4,98 @@ import PortuCore
 import Testing
 
 struct OverviewReviewFollowUpTests {
-    @Test func `position pricing uses manual price overrides`() {
+    private typealias Fixture = OverviewValuationFixture
+
+    @Test func `tab rows use a manual price override`() throws {
         let assetId = UUID()
-        let local = token(assetId: assetId, symbol: "LOCAL", coinGeckoId: "stale-local", amount: 4, usdValue: 0)
-        let override = TokenPricingOverrideSnapshot(assetId: assetId, manualPriceUSD: 2.5)
+        let context = Fixture.context(
+            tokens: [token(assetId: assetId, symbol: "LOCAL", category: .stablecoin, coinGeckoId: "stale-local", amount: 4, usdValue: 0)],
+            overrides: [TokenPricingOverrideSnapshot(assetId: assetId, manualPriceUSD: 2.5)],
+            livePricesUSD: ["stale-local": 100],
+            liveChanges24h: ["stale-local": Fixture.decimal("0.1")])
 
-        #expect(OverviewPositionPricing.price(
-            token: local,
-            prices: ["stale-local": 100],
-            override: override) == 2.5)
-        #expect(OverviewPositionPricing.tokenValue(
-            token: local,
-            prices: ["stale-local": 100],
-            override: override) == 10)
-        #expect(OverviewPositionPricing.change24h(
-            token: local,
-            prices: ["stale-local": 100],
-            changes24h: ["stale-local": 0.10],
-            override: override) == 0)
+        let row = try #require(tab(.idleStables, context).groups.first?.tokens.first)
+
+        #expect(row.price == 2.5)
+        #expect(row.value == 10)
+        #expect(row.change24h == 0)
     }
 
-    @Test func `position pricing uses coin gecko overrides`() {
+    /// The exact formula (V4): 10 × 0.25 / 1.25 = 2.
+    @Test func `tab rows use a coin gecko override`() throws {
         let assetId = UUID()
-        let mapped = token(assetId: assetId, symbol: "MAP", coinGeckoId: "old-map", amount: 2, usdValue: 1)
-        let override = TokenPricingOverrideSnapshot(assetId: assetId, coinGeckoIdOverride: " new-map ")
+        let context = Fixture.context(
+            tokens: [token(assetId: assetId, symbol: "MAP", category: .stablecoin, coinGeckoId: "old-map", amount: 2, usdValue: 1)],
+            overrides: [TokenPricingOverrideSnapshot(assetId: assetId, coinGeckoIdOverride: " new-map ")],
+            livePricesUSD: ["old-map": 100, "new-map": 5],
+            liveChanges24h: ["old-map": Fixture.decimal("0.5"), "new-map": Fixture.decimal("0.25")])
 
-        #expect(OverviewPositionPricing.price(
-            token: mapped,
-            prices: ["old-map": 100, "new-map": 5],
-            override: override) == 5)
-        #expect(OverviewPositionPricing.tokenValue(
-            token: mapped,
-            prices: ["old-map": 100, "new-map": 5],
-            override: override) == 10)
-        #expect(OverviewPositionPricing.change24h(
-            token: mapped,
-            prices: ["old-map": 100, "new-map": 5],
-            changes24h: ["old-map": 0.50, "new-map": 0.10],
-            override: override) == 1)
+        let row = try #require(tab(.idleStables, context).groups.first?.tokens.first)
+
+        #expect(row.price == 5)
+        #expect(row.value == 10)
+        #expect(row.change24h == 2)
     }
 
-    @Test func `summary breakdowns respect dashboard visibility and overrides`() {
-        let ignoredStableId = UUID()
-        let manualMajorId = UUID()
-        let visibleStable = summaryToken(
-            token(symbol: "USDC", category: .stablecoin, coinGeckoId: "usd-coin", amount: 100, usdValue: 100),
-            positionType: .idle)
-        let ignoredStable = summaryToken(
-            token(assetId: ignoredStableId, symbol: "USDT", category: .stablecoin, coinGeckoId: "tether", amount: 1000, usdValue: 1000),
-            positionType: .idle)
-        let manualMajor = summaryToken(
-            token(assetId: manualMajorId, symbol: "ETH", category: .major, amount: 2, usdValue: 0),
-            positionType: .idle)
-        let dustToken = summaryToken(
-            token(symbol: "DUST", category: .defi, coinGeckoId: "dust", amount: 1, usdValue: 0.25),
-            positionType: .idle)
-        let deployedMapped = summaryToken(
-            token(symbol: "STAKE", category: .defi, coinGeckoId: "old-stake", amount: 3, usdValue: 0),
-            positionType: .staking)
+    /// A3: the cards are not display-filtered, so the 0.25 dust holding counts, and an ignored token
+    /// never does.
+    @Test func `cards respect overrides and keep dust`() {
+        let ignoredStable = token(symbol: "USDT", category: .stablecoin, coinGeckoId: "tether", amount: 1000, usdValue: 1000)
+        let manualMajor = token(symbol: "ETH", category: .major, amount: 2, usdValue: 0)
+        let staked = token(symbol: "STAKE", category: .defi, coinGeckoId: "old-stake", amount: 3, usdValue: 0)
+        let context = OverviewValuationContext(
+            inputs: [
+                Fixture.input(601, .wallet, token(symbol: "USDC", category: .stablecoin, coinGeckoId: "usd-coin", amount: 100, usdValue: 100)),
+                Fixture.input(602, .wallet, ignoredStable),
+                Fixture.input(603, .wallet, manualMajor),
+                Fixture.input(604, .wallet, token(symbol: "DUST", category: .defi, coinGeckoId: "dust", amount: 1, usdValue: 0.25)),
+                Fixture.input(605, .lido, staked)
+            ],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: ignoredStable.assetId, isIgnored: true),
+                TokenPricingOverrideSnapshot(assetId: manualMajor.assetId, manualPriceUSD: 2000),
+                TokenPricingOverrideSnapshot(assetId: staked.assetId, coinGeckoIdOverride: "new-stake")
+            ],
+            mappings: [],
+            settings: .defaults,
+            usdToDisplayRate: 1,
+            prices: OverviewPriceInputs(livePricesUSD: ["usd-coin": 1, "tether": 1, "dust": 0.25, "old-stake": 100, "new-stake": 5]))
 
-        let overrides = [
-            TokenPricingOverrideSnapshot(assetId: ignoredStableId, isIgnored: true),
-            TokenPricingOverrideSnapshot(assetId: manualMajorId, manualPriceUSD: 2000),
-            TokenPricingOverrideSnapshot(assetId: deployedMapped.token.assetId, coinGeckoIdOverride: "new-stake")
-        ]
+        let cards = OverviewSummaryCardsFeature.cards(context, categories: PortfolioCategoryDefaults.categorySnapshots)
 
-        let idle = OverviewSummaryCardsFeature.idleBreakdown(
-            tokens: [visibleStable, ignoredStable, manualMajor, dustToken],
-            prices: ["usd-coin": 1, "tether": 1, "dust": 0.25],
-            overrides: overrides,
-            categories: PortfolioCategoryDefaults.categorySnapshots)
-        let deployed = OverviewSummaryCardsFeature.deployedBreakdown(
-            tokens: [deployedMapped],
-            prices: ["old-stake": 100, "new-stake": 5],
-            overrides: overrides)
-
-        #expect(idle.map(\.0) == ["Stablecoins & Fiat", "BTC / ETH / SOL", "Tokens & Memecoins"])
-        #expect(idle.map(\.1) == [100, 4000, 0])
-        #expect(deployed.map(\.0) == ["Lending", "Staked", "Yield"])
-        #expect(deployed.map(\.1) == [0, 15, 0])
+        #expect(cards.map(\.title) == ["Idle", "Deployed", "Debt"])
+        #expect(cards[0].rows.map(\.label) == ["Stablecoins & Fiat", "BTC / ETH / SOL", "Tokens & Memecoins"])
+        #expect(cards[0].rows.map(\.value) == [100, 4000, 0.25])
+        #expect(cards[1].rows.map(\.label) == ["Lending", "Staked", "Yield", "Other"])
+        #expect(cards[1].rows.map(\.value) == [0, 15, 0, 0])
+        #expect(cards[2].rows.map(\.value) == [0])
     }
 
-    @Test func `summary breakdowns exclude implausible onchain provider prices`() {
+    @Test func `cards value an implausible onchain price at zero`() {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xBadPrice")
-        let bad = summaryToken(
-            token(
-                symbol: "BAD",
-                category: .defi,
-                amount: 1_000_000,
-                usdValue: 10,
-                onchainIdentity: identity),
-            positionType: .idle)
+        let context = Fixture.context(
+            tokens: [token(symbol: "BAD", category: .defi, amount: 1_000_000, usdValue: 10, onchainIdentity: identity)],
+            livePricesUSD: [identity.historicalPriceID: 1_000_000])
 
-        let idle = OverviewSummaryCardsFeature.idleBreakdown(
-            tokens: [bad],
-            prices: [identity.historicalPriceID: 1_000_000],
-            overrides: [],
-            categories: PortfolioCategoryDefaults.categorySnapshots)
+        let cards = OverviewSummaryCardsFeature.cards(context, categories: PortfolioCategoryDefaults.categorySnapshots)
 
-        #expect(idle.map(\.1) == [0, 0, 0])
+        #expect(cards[0].rows.map(\.value) == [0, 0, 0])
     }
 
-    @Test func `summary breakdowns scale the dust threshold by the display rate`() throws {
+    /// The threshold hides rows from the dashboard lists only (A3), so a dust manual token still
+    /// counts, converted once.
+    @Test(arguments: [Decimal(10), 100])
+    func `cards count a near dust manual token whatever the threshold`(threshold: Decimal) {
         let assetId = UUID()
-        let manualPrice = try #require(Decimal(string: "10.50"))
-        let rate = try #require(Decimal(string: "0.5"))
-        let expectedValue = try #require(Decimal(string: "5.25"))
-        let nearDust = summaryToken(
-            token(assetId: assetId, symbol: "NEAR", category: .major, amount: 1, usdValue: 0),
-            positionType: .idle)
-        let overrides = [TokenPricingOverrideSnapshot(assetId: assetId, manualPriceUSD: manualPrice)]
-        let settings = TokenDashboardSettings(minimumDashboardValue: 10, hideUnpriced: true, hideDust: true)
+        let context = Fixture.context(
+            tokens: [token(assetId: assetId, symbol: "NEAR", category: .major, amount: 1, usdValue: 0)],
+            overrides: [TokenPricingOverrideSnapshot(assetId: assetId, manualPriceUSD: Fixture.decimal("10.50"))],
+            settings: TokenDashboardSettings(minimumDashboardValue: threshold, hideUnpriced: true, hideDust: true),
+            rate: Fixture.decimal("0.5"))
 
-        let idle = OverviewSummaryCardsFeature.idleBreakdown(
-            tokens: [nearDust],
-            prices: [:],
-            overrides: overrides,
-            settings: settings,
-            categories: PortfolioCategoryDefaults.categorySnapshots,
-            fallbackUSDToDisplayRate: rate)
+        let cards = OverviewSummaryCardsFeature.cards(context, categories: PortfolioCategoryDefaults.categorySnapshots)
 
-        #expect(idle.map(\.1) == [0, 0, expectedValue])
+        #expect(cards[0].rows.map(\.value) == [0, 0, Fixture.decimal("5.25")])
     }
 
     @Test func `category slices use stable ids when equal value category names collide`() throws {
@@ -142,32 +113,28 @@ struct OverviewReviewFollowUpTests {
             sortOrder: 0,
             semanticRole: .normal,
             isSystemRequired: false)
-        let tokens = [
+        let tokens = [laterCategory, earlierCategory].map { category in
             TokenEntry(
                 assetId: UUID(),
-                symbol: "LATER",
-                name: "LATER",
+                symbol: category.id == laterID ? "LATER" : "EARLIER",
+                name: category.id == laterID ? "LATER" : "EARLIER",
                 category: .other,
-                portfolioCategory: laterCategory,
-                coinGeckoId: "later",
-                role: .balance,
-                amount: 1,
-                usdValue: 10),
-            TokenEntry(
-                assetId: UUID(),
-                symbol: "EARLIER",
-                name: "EARLIER",
-                category: .other,
-                portfolioCategory: earlierCategory,
-                coinGeckoId: "earlier",
+                portfolioCategory: category,
+                coinGeckoId: category.id == laterID ? "later" : "earlier",
                 role: .balance,
                 amount: 1,
                 usdValue: 10)
-        ]
+        }
 
-        let slices = OverviewFeature.categorySlices(from: tokens, prices: ["later": 10, "earlier": 10], limit: 2)
+        let slices = OverviewFeature.topAssets(
+            .category,
+            context: Fixture.context(tokens: tokens, livePricesUSD: ["later": 10, "earlier": 10])).slices
 
         #expect(slices.map(\.id) == [earlierID.uuidString, laterID.uuidString])
+    }
+
+    private func tab(_ tab: OverviewPositionTab, _ context: OverviewValuationContext) -> OverviewPositionTabData {
+        OverviewPositionProjection.tab(tab, context: context, positions: Fixture.positions)
     }
 
     private func token(
@@ -189,11 +156,5 @@ struct OverviewReviewFollowUpTests {
             role: role,
             amount: amount,
             usdValue: usdValue)
-    }
-
-    private func summaryToken(
-        _ token: TokenEntry,
-        positionType: PositionType) -> OverviewSummaryToken {
-        OverviewSummaryToken(token: token, positionType: positionType)
     }
 }

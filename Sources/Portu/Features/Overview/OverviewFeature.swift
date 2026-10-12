@@ -63,7 +63,8 @@ struct OverviewAssetSlice: Equatable, Identifiable {
     let id: String
     let label: String
     let value: Decimal
-    let displayPercent: Int
+    /// `nil` shows "—" (F4: the list total is not positive).
+    let displayPercent: Int?
     let colorIndex: Int
     let logoURL: String?
 }
@@ -154,8 +155,8 @@ enum OverviewWatchlistStore {
 
 // swiftlint:disable:next type_body_length
 enum OverviewFeature {
-    private static let assetResidualSliceID = "asset-residual"
-    private static let categoryResidualSliceID = "category-residual"
+    static let assetResidualSliceID = "asset-residual"
+    static let categoryResidualSliceID = "category-residual"
     private static let reservedMarketSymbols: [String: Set<String>] = [
         "BTC": ["bitcoin"],
         "ETH": ["ether", "ethereum"],
@@ -437,7 +438,7 @@ enum OverviewFeature {
         return rows
     }
 
-    private struct SliceInput {
+    struct SliceInput {
         let id: String
         let label: String
         let value: Decimal
@@ -519,7 +520,7 @@ enum OverviewFeature {
             }
     }
 
-    private static func assetAggregateKey(
+    static func assetAggregateKey(
         for token: TokenEntry,
         priceID: String?) -> String {
         let normalizedSymbol = token.symbol.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -649,7 +650,7 @@ enum OverviewFeature {
         return aggregate.fallbackPrice
     }
 
-    private static func displayLabel(
+    static func displayLabel(
         symbol: String,
         name: String,
         priceID: String?) -> String {
@@ -671,7 +672,7 @@ enum OverviewFeature {
         return trimmedName
     }
 
-    private static func displayPercentages(for values: [Decimal]) -> [Int] {
+    static func displayPercentages(for values: [Decimal]) -> [Int] {
         let total = values.reduce(Decimal.zero, +)
         guard total > 0 else { return Array(repeating: 0, count: values.count) }
 

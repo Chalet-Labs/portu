@@ -163,26 +163,11 @@ enum OverviewValuationFixture {
 
     static let watchlistIDs = ["bitcoin", "dogecoin"]
 
-    /// The panel's chain count over every stored token: the fixture's accounts are all active, so
-    /// it is every position's chain, the ignored-only Scam Wallet's `base` included.
-    static var legacyChainCount: Int {
-        Set(inputs.compactMap(\.position.chain)).count
-    }
-
-    /// Both halves of the price inputs. The display books are the USD books at `rate`, as the
-    /// app's bridge and historical provider publish them for rows stored in USD.
     static func prices(
-        rate: Decimal = 1,
         livePricesUSD: [String: Decimal] = Self.livePricesUSD,
         liveChanges24h: [String: Decimal] = Self.liveChanges24h,
         historical: HistoricalMarketPrices = Self.historical) -> OverviewPriceInputs {
-        OverviewPriceInputs(
-            livePricesUSD: livePricesUSD,
-            liveChanges24h: liveChanges24h,
-            historical: historical,
-            liveDisplayPrices: livePricesUSD.mapValues { $0 * rate },
-            historicalDisplayPrices: historical.closesUSD.mapValues { $0.price * rate },
-            historicalChanges24h: historical.changes24h)
+        OverviewPriceInputs(livePricesUSD: livePricesUSD, liveChanges24h: liveChanges24h, historical: historical)
     }
 
     /// The seam input. Specs with their own tokens pass `inputs` and, when the shared books would
@@ -201,7 +186,28 @@ enum OverviewValuationFixture {
             mappings: mappings,
             settings: settings,
             usdToDisplayRate: rate,
-            prices: prices(rate: rate, livePricesUSD: livePricesUSD, liveChanges24h: liveChanges24h, historical: historical))
+            prices: prices(livePricesUSD: livePricesUSD, liveChanges24h: liveChanges24h, historical: historical))
+    }
+
+    /// A seam input over ad-hoc tokens, each in the main wallet, with only the books and overrides
+    /// a spec passes.
+    static func context(
+        tokens: [TokenEntry],
+        position: PositionSlot = .wallet,
+        overrides: [TokenPricingOverrideSnapshot] = [],
+        mappings: [TokenIdentityMappingSnapshot] = [],
+        settings: TokenDashboardSettings = .defaults,
+        rate: Decimal = 1,
+        livePricesUSD: [String: Decimal] = [:],
+        liveChanges24h: [String: Decimal] = [:],
+        historical: HistoricalMarketPrices = .empty) -> OverviewValuationContext {
+        OverviewValuationContext(
+            inputs: tokens.enumerated().map { ValuationInput(tokenId: uuid(5000 + $0), token: $1, position: position.context) },
+            overrides: overrides,
+            mappings: mappings,
+            settings: settings,
+            usdToDisplayRate: rate,
+            prices: OverviewPriceInputs(livePricesUSD: livePricesUSD, liveChanges24h: liveChanges24h, historical: historical))
     }
 
     // MARK: - Builders

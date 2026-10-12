@@ -2,6 +2,47 @@ import Foundation
 import PortuCore
 
 extension OverviewFeature {
+    /// The live-polling set: the top holdings by selection value, then the watchlist (S12). Values
+    /// and usable prices come from the module; the selection and ranking rules are polling's own.
+    static func pricePollingIDs(
+        _ context: OverviewValuationContext,
+        watchlistIDs: [String],
+        portfolioLimit: Int = 25) -> [String] {
+        let tokens = context.valuation().tokens
+        let settings = context.settings
+        let visible = Set(DashboardList(tokens, basis: .net, settings: settings, groupedBy: \.tokenId).visibleRows.map(\.key))
+        let candidates = tokens.compactMap { token -> (id: String, priority: Decimal)? in
+            guard
+                let priceID = token.priceID,
+                let priority = token.selectionValue,
+                token.isCounted,
+                isPolled(token, priceID: priceID, isVisible: visible.contains(token.tokenId), settings: settings)
+            else { return nil }
+            return (priceID, priority)
+        }
+        return rankedPollingIDs(candidates, watchlistIDs: watchlistIDs, portfolioLimit: portfolioLimit)
+    }
+
+    /// A token with a usable price is polled while the dashboard shows it. One without (valued from
+    /// its sync value, or unpriced) is polled so it can get one, except an onchain ID whose sync
+    /// value is dust under `hideDust`.
+    private static func isPolled(
+        _ token: ValuedToken,
+        priceID: String,
+        isVisible: Bool,
+        settings: TokenDashboardSettings) -> Bool {
+        switch token.source {
+        case .manual, .live, .close:
+            return isVisible
+        case .sync, .unpriced:
+            guard !token.alwaysShow, settings.hideUnpriced else { return true }
+            guard OnchainTokenIdentity(historicalPriceID: priceID) != nil else { return true }
+            return !settings.hideDust || abs(token.token.usdValue) >= settings.dustThresholdUSD
+        case .ignored:
+            return false
+        }
+    }
+
     static func pricePollingIDs(
         tokens: [TokenEntry],
         prices: [String: Decimal] = [:],
@@ -11,9 +52,7 @@ extension OverviewFeature {
         portfolioLimit: Int = 25,
         usdToDisplayRate: Decimal = 1) -> [String] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        var candidates: [String: PollingIDCandidate] = [:]
-        var insertionIndex = 0
-        for token in tokens {
+        let candidates = tokens.compactMap { token -> (id: String, priority: Decimal)? in
             let override = overrideMap[token.assetId]
             guard
                 let priceID = pollingPriceID(
@@ -22,17 +61,31 @@ extension OverviewFeature {
                     override: override,
                     settings: settings,
                     usdToDisplayRate: usdToDisplayRate)
-            else { continue }
-            upsertCandidate(
-                id: priceID,
-                priority: pollingPriority(
+            else { return nil }
+            return (
+                priceID,
+                pollingPriority(
                     token: token,
                     prices: prices,
                     override: override,
-                    fallbackUSDToDisplayRate: usdToDisplayRate),
+                    fallbackUSDToDisplayRate: usdToDisplayRate))
+        }
+        return rankedPollingIDs(candidates, watchlistIDs: watchlistIDs, portfolioLimit: portfolioLimit)
+    }
+
+    /// Sums each ID's priorities, keeps the `portfolioLimit` largest (ties by first appearance), then
+    /// appends the watchlist.
+    private static func rankedPollingIDs(
+        _ tokenCandidates: [(id: String, priority: Decimal)],
+        watchlistIDs: [String],
+        portfolioLimit: Int) -> [String] {
+        var candidates: [String: PollingIDCandidate] = [:]
+        for (insertionIndex, candidate) in tokenCandidates.enumerated() {
+            upsertCandidate(
+                id: candidate.id,
+                priority: candidate.priority,
                 insertionIndex: insertionIndex,
                 candidates: &candidates)
-            insertionIndex += 1
         }
 
         var result = candidates.values.sorted {

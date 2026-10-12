@@ -5,46 +5,11 @@ import SwiftUI
 
 struct OverviewTopBar: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
-    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
     @Query private var positions: [Position]
-    @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
-    private var tokenPricingOverrides: [TokenPricingOverride]
-    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
-
-    /// Only positions from active accounts
-    private var activePositions: [Position] {
-        positions.filter { $0.account?.isActive == true }
-    }
+    var sources = OverviewValuationSources()
 
     private var headline: OverviewHeadline {
-        OverviewFeature.headline(OverviewValuationContext(
-            inputs: ValuationInput.activeAccounts(activePositions.flatMap(\.tokens)),
-            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
-            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings,
-            usdToDisplayRate: appState.currentUSDToDisplayRate,
-            prices: OverviewPriceInputs(
-                livePricesUSD: appState.livePricesUSD,
-                liveChanges24h: appState.priceChanges24h,
-                historical: historicalMarketPrices,
-                liveDisplayPrices: appState.prices,
-                historicalDisplayPrices: historicalDisplayPrices,
-                historicalChanges24h: historicalPriceChanges24h)))
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
+        sources.headline(positions)
     }
 
     private var currencyCode: String {
@@ -76,12 +41,9 @@ struct OverviewTopBar: View {
                     if let changePercentage = currentHeadline.changePercentage {
                         Image(systemName: changePercentage >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
                             .font(.caption2)
-                        Text(changePercentage, format: .percent.precision(.fractionLength(2)))
-                            .lineLimit(1)
-                    } else {
-                        Text("—")
-                            .lineLimit(1)
                     }
+                    Text(OverviewPriceDisplay.changePercentage(currentHeadline.changePercentage))
+                        .lineLimit(1)
                     Spacer()
                     Text("% change 24h")
                         .foregroundStyle(PortuTheme.dashboardTertiaryText)

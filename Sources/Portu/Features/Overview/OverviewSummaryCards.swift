@@ -5,57 +5,14 @@ import SwiftUI
 
 struct OverviewSummaryCards: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
-    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
     @Query private var allPositions: [Position]
-    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
-    private var portfolioCategories: [PortfolioCategory]
-    @Query(sort: \CategorySymbolRule.normalizedSymbol)
-    private var categoryRules: [CategorySymbolRule]
-    @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
-    private var tokenPricingOverrides: [TokenPricingOverride]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
-
-    /// Only positions from active accounts
-    private var positions: [Position] {
-        allPositions.filter { $0.account?.isActive == true }
-    }
-
-    private var categoryResolver: PortfolioCategoryResolver {
-        PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
-    }
+    var sources = OverviewValuationSources()
+    var categories = OverviewCategorySource()
 
     private var cards: [OverviewSummaryCard] {
-        let resolver = categoryResolver
-        return OverviewSummaryCardsFeature.cards(
-            OverviewValuationContext(
-                inputs: ValuationInput.activeAccounts(positions.flatMap(\.tokens), categoryResolver: resolver),
-                overrides: overrideSnapshots,
-                mappings: [],
-                settings: dashboardSettings,
-                usdToDisplayRate: appState.currentUSDToDisplayRate,
-                prices: OverviewPriceInputs(
-                    livePricesUSD: appState.livePricesUSD,
-                    historical: historicalMarketPrices,
-                    liveDisplayPrices: appState.prices,
-                    historicalDisplayPrices: historicalDisplayPrices)),
-            categories: resolver.categories)
+        sources.summaryCards(
+            allPositions,
+            categoryResolver: categories.resolver)
     }
 
     private var currencyCode: String {

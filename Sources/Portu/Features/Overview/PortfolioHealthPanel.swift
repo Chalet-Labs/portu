@@ -6,57 +6,22 @@ import SwiftUI
 
 struct PortfolioHealthPanel: View {
     let store: StoreOf<AppFeature>
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
-    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
+    @Environment(AppState.self) private var appState
     @Query private var allTokens: [PositionToken]
-    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
-    private var portfolioCategories: [PortfolioCategory]
-    @Query(sort: \CategorySymbolRule.normalizedSymbol)
-    private var categoryRules: [CategorySymbolRule]
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
+    var sources = OverviewValuationSources()
+    var categories = OverviewCategorySource()
 
     private var health: PortfolioHealthData {
-        PortfolioHealthFeature.health(
-            OverviewValuationContext(
-                inputs: ValuationInput.activeAccounts(
-                    allTokens,
-                    categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)),
-                overrides: overrideSnapshots,
-                mappings: [],
-                settings: dashboardSettings,
-                usdToDisplayRate: store.currentUSDToDisplayRate,
-                prices: OverviewPriceInputs(
-                    livePricesUSD: store.livePricesUSD,
-                    historical: historicalMarketPrices,
-                    liveDisplayPrices: store.liveDisplayPrices,
-                    historicalDisplayPrices: historicalDisplayPrices)),
-            legacyChainCount: Set(allTokens.compactMap { $0.position?.chain }).count)
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
+        sources.health(
+            allTokens,
+            categoryResolver: categories.resolver)
     }
 
     var body: some View {
         let currentHealth = health
         let riskLevel = PortfolioHealthFeature.classifyRiskLevel(metrics: currentHealth.metrics)
-        let risks = PortfolioHealthFeature.computeConcentrationRisks(
-            weights: currentHealth.weights,
-            threshold: Decimal(string: "0.25")!)
-        let displayedWeights = store.portfolioHealth.showAllAssets ? currentHealth.weights : Array(currentHealth.weights.prefix(5))
+        let risks = currentHealth.concentrationRisks
+        let weightList = currentHealth.weightList(showAll: store.portfolioHealth.showAllAssets)
 
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -73,9 +38,9 @@ struct PortfolioHealthPanel: View {
                 concentrationWarnings(risks)
             }
 
-            weightsList(displayedWeights)
+            weightsList(weightList)
 
-            if currentHealth.weights.count > 5 {
+            if currentHealth.weights.count > PortfolioHealthWeightList.previewCount {
                 Button(store.portfolioHealth.showAllAssets ? "Show Top 5" : "Show All") {
                     store.send(.portfolioHealth(.showAllAssetsToggled))
                 }
@@ -131,27 +96,49 @@ struct PortfolioHealthPanel: View {
         }
     }
 
-    private func weightsList(_ displayedWeights: [AssetWeight]) -> some View {
+    private func weightsList(_ list: PortfolioHealthWeightList) -> some View {
         VStack(spacing: 4) {
-            ForEach(displayedWeights) { weight in
+            ForEach(list.rows) { row in
                 HStack {
-                    Text(weight.symbol)
+                    Text(row.weight.symbol)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(PortuTheme.dashboardText)
                         .frame(width: 50, alignment: .leading)
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: 2)
                             .fill(PortuTheme.dashboardGoldMuted)
-                            .frame(width: max(4, geo.size.width * CGFloat(truncating: weight.percentage as NSDecimalNumber)))
+                            .frame(width: max(4, geo.size.width * CGFloat(truncating: row.weight.percentage as NSDecimalNumber)))
                     }
                     .frame(height: 8)
-                    Text(weight.percentage.formatted(.percent.precision(.fractionLength(1))))
+                    shareText(row.share)
+                }
+            }
+
+            if let hidden = list.hidden {
+                HStack {
+                    Text(OverviewPriceDisplay.hiddenBalancesLine(hidden, basis: .positiveNet, currencyCode: currencyCode))
                         .font(.caption2)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                        .frame(width: 40, alignment: .trailing)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    shareText(list.hiddenShare)
                 }
             }
         }
+    }
+
+    private func shareText(_ share: Decimal?) -> some View {
+        Text(share.map { $0.formatted(.percent.precision(.fractionLength(1))) } ?? "—")
+            .font(.caption2)
+            .foregroundStyle(PortuTheme.dashboardSecondaryText)
+            .frame(width: 40, alignment: .trailing)
+    }
+
+    /// `AppState`'s currency, like the rate the hidden line is converted at, so the two always match.
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 }
 

@@ -432,7 +432,11 @@ enum OverviewPositionChangeTone: Equatable {
     case unfavorable
 
     static func tone(for role: TokenRole, change: Decimal) -> OverviewPositionChangeTone {
-        if role.isBorrow {
+        tone(isDebt: role.isBorrow, change: change)
+    }
+
+    static func tone(isDebt: Bool, change: Decimal) -> OverviewPositionChangeTone {
+        if isDebt {
             return change <= 0 ? .favorable : .unfavorable
         }
         return change >= 0 ? .favorable : .unfavorable

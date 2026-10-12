@@ -67,55 +67,21 @@ struct SidebarView: View {
     }
 }
 
-// Owns every input the portfolio valuation reads (position, override, and
-// mapping queries; price/currency state; dashboard settings). Parameterless
+// Owns every input the portfolio valuation reads (the position query here, the
+// rest through `OverviewValuationSources`). Parameterless
 // on purpose: when `SidebarView.body` re-evaluates on a navigation click
 // (`store.selectedSection`), the unchanged `SidebarPortfolioHeader()` value
 // lets SwiftUI skip this body, so the O(portfolio) valuation no longer runs
 // per click (issue #98, criterion 1). It still re-renders when its own
 // observed inputs change.
 
-private struct SidebarPortfolioHeader: View {
+struct SidebarPortfolioHeader: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
-    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
     @Query private var positions: [Position]
-    @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
-    private var tokenPricingOverrides: [TokenPricingOverride]
-    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
-
-    private var activePositions: [Position] {
-        positions.filter { $0.account?.isActive == true }
-    }
+    var sources = OverviewValuationSources()
 
     private var headline: OverviewHeadline {
-        OverviewFeature.headline(OverviewValuationContext(
-            inputs: ValuationInput.activeAccounts(activePositions.flatMap(\.tokens)),
-            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
-            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings,
-            usdToDisplayRate: appState.currentUSDToDisplayRate,
-            prices: OverviewPriceInputs(
-                livePricesUSD: appState.livePricesUSD,
-                liveChanges24h: appState.priceChanges24h,
-                historical: historicalMarketPrices,
-                liveDisplayPrices: appState.prices,
-                historicalDisplayPrices: historicalDisplayPrices,
-                historicalChanges24h: historicalPriceChanges24h)))
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
+        sources.headline(positions)
     }
 
     var body: some View {
@@ -138,15 +104,27 @@ private struct SidebarPortfolioHeader: View {
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
-                HStack(spacing: 4) {
-                    Text(OverviewPriceDisplay.currency(currentHeadline.change24h, currencyCode: currencyCode))
-                    Text("24h")
+                Group {
+                    HStack(spacing: 4) {
+                        Text(OverviewPriceDisplay.currency(currentHeadline.change24h, currencyCode: currencyCode))
+                        Text("24h")
+                    }
+                    .foregroundStyle(currentHeadline.change24h < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSuccess)
+
+                    Text(OverviewPriceDisplay.changePercentage(currentHeadline.changePercentage))
+                        .foregroundStyle(percentageColor(currentHeadline.changePercentage))
                 }
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(currentHeadline.change24h < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSuccess)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             }
         }
         .padding(.horizontal, 4)
+    }
+
+    private func percentageColor(_ percentage: Decimal?) -> Color {
+        guard let percentage else { return PortuTheme.dashboardTertiaryText }
+        return percentage < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSuccess
     }
 }
 

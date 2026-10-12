@@ -15,14 +15,12 @@ struct OverviewListSeamTests {
 
         #expect(tab.groups.map(\.position.title) == ["Main Wallet"])
         #expect(tab.groups.map { $0.tokens.map(\.symbol) } == [["USDC"]])
-        withKnownIssue("converges in step 5: S3/F3 — the Main Wallet group ends with its hidden dust line (DAI 0.5) and its change") {
-            #expect(tab.groups.map(\.value) == [Fixture.decimal("1000.5")])
-            #expect(tab.groups.map(\.change24h) == [Fixture.decimal("0.1")])
-            #expect(tab.groups.first?.hidden?.rowCount == 1)
-            #expect(tab.groups.first?.hidden?.isAllDust == true)
-            #expect(tab.groups.first?.hidden?.gross == Fixture.decimal("0.5"))
-            #expect(tab.total == Fixture.decimal("1000.5"))
-        }
+        #expect(tab.groups.map(\.value) == [Fixture.decimal("1000.5")])
+        #expect(tab.groups.map(\.change24h) == [Fixture.decimal("0.1")])
+        #expect(tab.groups.first?.hidden?.rowCount == 1)
+        #expect(tab.groups.first?.hidden?.isAllDust == true)
+        #expect(tab.groups.first?.hidden?.gross == Fixture.decimal("0.5"))
+        #expect(tab.total == Fixture.decimal("1000.5"))
     }
 
     @Test func `idle majors tab shows idle majors with their exact change`() {
@@ -30,9 +28,7 @@ struct OverviewListSeamTests {
 
         #expect(tab.groups.map { $0.tokens.map(\.symbol) } == [["ETH"]])
         #expect(tab.total == 6000)
-        withKnownIssue("converges in step 5: V4 — exact 24h formula") {
-            #expect(tab.change24h == 1200)
-        }
+        #expect(tab.change24h == 1200)
     }
 
     @Test func `borrowing group total is its visible debt plus its hidden line`() {
@@ -40,13 +36,11 @@ struct OverviewListSeamTests {
 
         #expect(tab.groups.map(\.position.title) == ["Aave V3"])
         #expect(tab.groups.map { $0.tokens.map(\.symbol) } == [["ETH"]])
-        withKnownIssue("converges in step 5: S3/F3/V4 — the Aave V3 group ends with its hidden dust borrow (USDT 0.4); exact change") {
-            #expect(tab.groups.map(\.value) == [Fixture.decimal("-1500.4")])
-            #expect(tab.groups.map(\.change24h) == [-300])
-            #expect(tab.groups.first?.hidden?.rowCount == 1)
-            #expect(tab.groups.first?.hidden?.debt == Fixture.decimal("0.4"))
-            #expect(tab.total == Fixture.decimal("-1500.4"))
-        }
+        #expect(tab.groups.map(\.value) == [Fixture.decimal("1500.4")])
+        #expect(tab.groups.map(\.change24h) == [300])
+        #expect(tab.groups.first?.hidden?.rowCount == 1)
+        #expect(tab.groups.first?.hidden?.debt == Fixture.decimal("0.4"))
+        #expect(tab.total == Fixture.decimal("1500.4"))
     }
 
     @Test func `idle tab rows take the sync value under newer of`() {
@@ -66,13 +60,11 @@ struct OverviewListSeamTests {
         #expect(stable.token.portfolioCategory.semanticRole == .stablecoin)
         #expect(PortfolioCategoryDefaults.majorCategoryIDs.contains(major.token.portfolioCategory.id))
         #expect(majors.groups.flatMap(\.tokens).map(\.symbol) == ["BTC"])
-        withKnownIssue("converges in step 5: V1.5/S3 — a sync-only stable shows its sync value; a same-day close loses to the sync") {
-            #expect(stables.groups.flatMap(\.tokens).map(\.symbol) == ["USDS"])
-            #expect(stables.groups.flatMap(\.tokens).map(\.value) == [500])
-            #expect(stables.groups.flatMap(\.tokens).map(\.price) == [1])
-            #expect(majors.groups.flatMap(\.tokens).map(\.value) == [600])
-            #expect(majors.groups.flatMap(\.tokens).map(\.price) == [60000])
-        }
+        #expect(stables.groups.flatMap(\.tokens).map(\.symbol) == ["USDS"])
+        #expect(stables.groups.flatMap(\.tokens).map(\.value) == [500])
+        #expect(stables.groups.flatMap(\.tokens).map(\.price) == [1])
+        #expect(majors.groups.flatMap(\.tokens).map(\.value) == [600])
+        #expect(majors.groups.flatMap(\.tokens).map(\.price) == [60000])
     }
 
     @Test func `key changes rank the visible movers and their group totals are the shown rows`() {
@@ -83,13 +75,10 @@ struct OverviewListSeamTests {
         #expect(tab.groups.map { $0.tokens.map(\.value) } == [[6000, 160, 10], [3000]])
         #expect(tab.groups.map(\.value) == [6170, 3000])
         #expect(tab.groups.allSatisfy { $0.hidden == nil })
-        withKnownIssue("converges in step 5: V4/F5 — the exact change ranks and shows each mover") {
-            #expect(tab.groups.map { $0.tokens.map(\.change24h) } == [[1200, 32, -10], [600]])
-        }
+        #expect(tab.groups.map { $0.tokens.map(\.change24h) } == [[1200, 32, -10], [600]])
     }
 
-    /// One shared fraction keeps the rank by |change| the rank by value under today's formula and
-    /// under V4 alike.
+    /// One shared fraction makes the rank by |change| the rank by value, whatever the change formula.
     @Test func `key changes show the top twenty movers with the symbol tie break and no hidden line`() {
         var movers: [(symbol: String, value: Decimal)] = (1 ... 20).map { (String(format: "K%02d", $0), Decimal(2100 - 100 * $0)) }
         movers += [("TIEA", 1050), ("TIEB", 1050)]
@@ -124,16 +113,14 @@ struct OverviewListSeamTests {
 
         #expect(topAssets.slices.prefix(3).map(\.label) == ["ETH", "SOL", "USDC"])
         #expect(topAssets.slices.prefix(3).map(\.value) == [9000, 1500, 1000])
-        withKnownIssue("converges in step 5: F5/A7 — the sync-only OTC ranks, the hidden line (dust DAI, unpriced BAD) closes the total") {
-            #expect(topAssets.slices.map(\.label) == ["ETH", "SOL", "USDC", "OTC", "LINK", "other"])
-            #expect(topAssets.slices.map(\.value) == [9000, 1500, 1000, 250, 160, Fixture.decimal("370.3")])
-            #expect(topAssets.hidden?.rowCount == 2)
-            #expect(topAssets.hidden?.unpricedCount == 1)
-            #expect(topAssets.hidden?.gross == Fixture.decimal("0.5"))
-            #expect(topAssets.hiddenDisplayPercent == 0)
-            let gross = topAssets.slices.reduce(Decimal.zero) { $0 + $1.value } + (topAssets.hidden?.gross ?? 0)
-            #expect(gross == Fixture.decimal("12280.8"))
-        }
+        #expect(topAssets.slices.map(\.label) == ["ETH", "SOL", "USDC", "OTC", "LINK", "other"])
+        #expect(topAssets.slices.map(\.value) == [9000, 1500, 1000, 250, 160, Fixture.decimal("370.3")])
+        #expect(topAssets.hidden?.rowCount == 2)
+        #expect(topAssets.hidden?.unpricedCount == 1)
+        #expect(topAssets.hidden?.gross == Fixture.decimal("0.5"))
+        #expect(topAssets.hiddenDisplayPercent == 0)
+        let gross = topAssets.slices.reduce(Decimal.zero) { $0 + $1.value } + (topAssets.hidden?.gross ?? 0)
+        #expect(gross == Fixture.decimal("12280.8"))
     }
 
     @Test func `category slices are gross per category`() {
@@ -141,13 +128,11 @@ struct OverviewListSeamTests {
 
         #expect(topAssets.slices.prefix(2).map(\.label) == ["ETH", "SOL"])
         #expect(topAssets.slices.first { $0.label == "Meme" }?.value == 110)
-        withKnownIssue("converges in step 5: F2/A7 — dust is judged per category row, sync values count, same-day sync wins") {
-            #expect(topAssets.slices.map(\.label) == ["ETH", "SOL", "Stablecoins", "Other Tokens", "DeFi", "Meme"])
-            #expect(topAssets.slices.map(\.value) == [
-                9000, 1500, Fixture.decimal("1000.5"), Fixture.decimal("340.3"), 330, 110
-            ])
-            #expect(topAssets.slices.reduce(Decimal.zero) { $0 + $1.value } == Fixture.decimal("12280.8"))
-        }
+        #expect(topAssets.slices.map(\.label) == ["ETH", "SOL", "Stablecoins", "Other Tokens", "DeFi", "Meme"])
+        #expect(topAssets.slices.map(\.value) == [
+            9000, 1500, Fixture.decimal("1000.5"), Fixture.decimal("340.3"), 330, 110
+        ])
+        #expect(topAssets.slices.reduce(Decimal.zero) { $0 + $1.value } == Fixture.decimal("12280.8"))
     }
 
     // MARK: - Watchlist
@@ -168,11 +153,9 @@ struct OverviewListSeamTests {
         #expect(rows.suffix(2).map(\.price) == [60000, Fixture.decimal("0.2")])
         #expect(rows.suffix(2).map(\.change24h) == [Fixture.decimal("0.1"), Fixture.decimal("-0.2")])
         #expect(!rows.contains { ["SCAM", "BAD", "DAI"].contains($0.symbol) })
-        withKnownIssue("converges in step 5: S3/F5/V5 — held rows rank by module value and show Σ value ÷ Σ amount") {
-            #expect(Set(rows.dropLast(2).map(\.symbol)) == ["ETH", "SOL", "USDC", "OTC", "LINK", "MNL", "DEGEN", "ARB", "UNI", "PEPE"])
-            #expect(rows.first { $0.symbol == "UNI" }?.price == 7)
-            #expect(rows.first { $0.symbol == "OTC" }?.price == 50)
-        }
+        #expect(Set(rows.dropLast(2).map(\.symbol)) == ["ETH", "SOL", "USDC", "OTC", "LINK", "MNL", "DEGEN", "ARB", "UNI", "PEPE"])
+        #expect(rows.first { $0.symbol == "UNI" }?.price == 7)
+        #expect(rows.first { $0.symbol == "OTC" }?.price == 50)
     }
 
     @Test func `watchlist prices are converted once at a non usd rate`() {
@@ -189,31 +172,27 @@ struct OverviewListSeamTests {
     // MARK: - Health
 
     @Test func `health weights are shares of the floored asset nets`() throws {
-        let health = PortfolioHealthFeature.health(Fixture.context(), legacyChainCount: Fixture.legacyChainCount)
+        let health = PortfolioHealthFeature.health(Fixture.context())
 
         let eth = try #require(health.weights.first { $0.symbol == "ETH" })
         #expect(eth.usdValue == 7500)
         #expect(!health.weights.contains { ["DAI", "USDT", "SCAM", "BAD"].contains($0.symbol) })
-        withKnownIssue("converges in step 5: S3/F1 — every valued asset counts, floored at 0, with the dust line hidden") {
-            #expect(eth.percentage == 7500 / Fixture.decimal("10780.8"))
-            #expect(Set(health.weights.map(\.symbol)) == [
-                "USDC", "ETH", "PEPE", "MNL", "LINK", "UNI", "TINY", "DEGEN", "OTC", "SOL", "ARB"
-            ])
-            #expect(health.hidden?.gross == Fixture.decimal("0.5"))
-            #expect(health.hiddenShare == Fixture.decimal("0.5") / Fixture.decimal("10780.8"))
-            let total = health.weights.reduce(Decimal.zero) { $0 + $1.usdValue } + (health.hidden?.net ?? 0)
-            #expect(total == Fixture.decimal("10780.8"))
-        }
+        #expect(eth.percentage == 7500 / Fixture.decimal("10780.8"))
+        #expect(Set(health.weights.map(\.symbol)) == [
+            "USDC", "ETH", "PEPE", "MNL", "LINK", "UNI", "TINY", "DEGEN", "OTC", "SOL", "ARB"
+        ])
+        #expect(health.hidden?.gross == Fixture.decimal("0.5"))
+        #expect(health.hiddenShare == Fixture.decimal("0.5") / Fixture.decimal("10780.8"))
+        let total = health.weights.reduce(Decimal.zero) { $0 + $1.usdValue } + (health.hidden?.net ?? 0)
+        #expect(total == Fixture.decimal("10780.8"))
     }
 
     @Test func `health metrics cover every valued asset in active accounts`() {
-        let health = PortfolioHealthFeature.health(Fixture.context(), legacyChainCount: Fixture.legacyChainCount)
+        let health = PortfolioHealthFeature.health(Fixture.context())
 
-        withKnownIssue("converges in step 5: S3 — metrics include dust and sync values; chainCount drops ignored-only chains") {
-            #expect(health.metrics.assetCount == 12)
-            #expect(health.metrics.chainCount == 4)
-            #expect(health.metrics.stablecoinRatio == Fixture.decimal("1000.5") / Fixture.decimal("10780.8"))
-        }
+        #expect(health.metrics.assetCount == 12)
+        #expect(health.metrics.chainCount == 4)
+        #expect(health.metrics.stablecoinRatio == Fixture.decimal("1000.5") / Fixture.decimal("10780.8"))
     }
 
     // MARK: - Polling candidates (characterization, S12)
@@ -234,12 +213,12 @@ struct OverviewListSeamTests {
     private func watchlist(rate: Decimal = 1) -> [OverviewPriceRowData] {
         OverviewFeature.watchlistRows(
             Fixture.context(rate: rate),
-            assetsByCoinGeckoId: [:],
+            assets: [],
             watchlistIDs: Fixture.watchlistIDs)
     }
 }
 
-// MARK: - Seam wiring that holds today and per spec
+// MARK: - Seam wiring
 
 extension OverviewListSeamTests {
     @Test(arguments: OverviewPositionTab.allCases)
@@ -254,6 +233,8 @@ extension OverviewListSeamTests {
         #expect(display.groups.map { $0.tokens.map(\.value) } == usd.groups.map { $0.tokens.map { $0.value * rate } })
         #expect(display.groups.map { $0.tokens.map(\.change24h) } == usd.groups.map { $0.tokens.map { $0.change24h * rate } })
         #expect(display.groups.map(\.value) == usd.groups.map { $0.value * rate })
+        #expect(display.groups.map(\.hiddenChange24h) == usd.groups.map { $0.hiddenChange24h * rate })
+        #expect(display.groups.map(\.change24h) == usd.groups.map { $0.change24h * rate })
     }
 
     @Test func `key changes price a mapped token through its mapping and never show an ignored one`() {
@@ -275,7 +256,7 @@ extension OverviewListSeamTests {
 
         #expect(topAssets.slices.count == 6)
         #expect(topAssets.slices.last?.label == "other")
-        #expect(topAssets.slices.reduce(0) { $0 + $1.displayPercent } + (topAssets.hiddenDisplayPercent ?? 0) == 100)
+        #expect(topAssets.slices.compactMap(\.displayPercent).reduce(0, +) + (topAssets.hiddenDisplayPercent ?? 0) == 100)
     }
 
     @Test(arguments: [TopAssetMode.assets, .category])
@@ -291,8 +272,8 @@ extension OverviewListSeamTests {
 
     @Test func `health weights scale with the display rate`() throws {
         let rate = Fixture.decimal("0.9")
-        let usd = PortfolioHealthFeature.health(Fixture.context(), legacyChainCount: Fixture.legacyChainCount)
-        let display = PortfolioHealthFeature.health(Fixture.context(rate: rate), legacyChainCount: Fixture.legacyChainCount)
+        let usd = PortfolioHealthFeature.health(Fixture.context())
+        let display = PortfolioHealthFeature.health(Fixture.context(rate: rate))
 
         let eth = try #require(display.weights.first { $0.symbol == "ETH" })
         #expect(eth.usdValue == 6750)
@@ -305,5 +286,124 @@ extension OverviewListSeamTests {
 
         #expect(ids.contains("degen-base"))
         #expect(!ids.contains(Fixture.degenIdentity.historicalPriceID))
+    }
+}
+
+// MARK: - Tab footer, debt basis and the sync-valued poll (decided 2026-10-11)
+
+extension OverviewListSeamTests {
+    private static let walletUSDC = Fixture.input(401, .wallet, Fixture.token(
+        Fixture.AssetID.usdc, "USDC", "USD Coin", .stablecoin, coinGeckoId: "usd-coin", amount: 1000, usdValue: 1000))
+    private static let degenDAI = Fixture.input(402, .degenWallet, Fixture.token(
+        Fixture.AssetID.dai, "DAI", "Dai", .stablecoin, coinGeckoId: "dai",
+        amount: Fixture.decimal("0.5"), usdValue: Fixture.decimal("0.5")))
+    private static let aaveBorrow = Fixture.input(403, .aave, Fixture.token(
+        Fixture.AssetID.eth, "ETH", "Ethereum", .major, coinGeckoId: "ethereum", role: .borrow,
+        amount: Fixture.decimal("0.5"), usdValue: 1450))
+    private static let lidoDustBorrow = Fixture.input(404, .lido, Fixture.token(
+        Fixture.AssetID.usdt, "USDT", "Tether", .stablecoin, coinGeckoId: "tether", role: .borrow,
+        amount: Fixture.decimal("0.4"), usdValue: Fixture.decimal("0.4")))
+
+    @Test func `a group with no visible row folds into one hidden line at the end of the tab`() {
+        let tab = OverviewPositionProjection.tab(
+            .idleStables,
+            context: Fixture.context(inputs: [Self.walletUSDC, Self.degenDAI]),
+            positions: Fixture.positions)
+
+        #expect(tab.groups.map(\.position.title) == ["Main Wallet"])
+        #expect(tab.groups.allSatisfy { $0.hidden == nil })
+        #expect(tab.hidden?.rowCount == 1)
+        #expect(tab.hidden?.isAllDust == true)
+        #expect(tab.hidden?.gross == Fixture.decimal("0.5"))
+        #expect(tab.total == Fixture.decimal("1000.5"))
+        #expect(tab.change24h == Fixture.decimal("0.1"))
+    }
+
+    @Test func `the tab hidden line is converted once at the display rate`() {
+        let rate = Fixture.decimal("0.9")
+        let tab = OverviewPositionProjection.tab(
+            .idleStables,
+            context: Fixture.context(rate: rate, inputs: [Self.walletUSDC, Self.degenDAI]),
+            positions: Fixture.positions)
+
+        #expect(tab.hidden?.gross == Fixture.decimal("0.45"))
+        #expect(tab.total == Fixture.decimal("900.45"))
+        #expect(tab.change24h == Fixture.decimal("0.1") * rate)
+    }
+
+    @Test func `a tab whose every row is hidden keeps its hidden line and no card`() {
+        let tab = OverviewPositionProjection.tab(
+            .idleStables,
+            context: Fixture.context(inputs: [Self.degenDAI]),
+            positions: Fixture.positions)
+
+        #expect(tab.groups.isEmpty)
+        #expect(tab.hidden?.rowCount == 1)
+        #expect(tab.total == Fixture.decimal("0.5"))
+    }
+
+    @Test func `a borrowing group with only dust debt folds into the tab line as positive debt`() {
+        let tab = OverviewPositionProjection.tab(
+            .borrowing,
+            context: Fixture.context(inputs: [Self.aaveBorrow, Self.lidoDustBorrow]),
+            positions: Fixture.positions)
+
+        #expect(tab.groups.map(\.position.title) == ["Aave V3"])
+        #expect(tab.groups.map(\.value) == [1500])
+        #expect(tab.hidden?.debt == Fixture.decimal("0.4"))
+        #expect(tab.total == Fixture.decimal("1500.4"))
+        #expect(tab.change24h == 300)
+    }
+
+    @Test func `a rising debt is tinted as a loss and a rising holding as a gain`() throws {
+        let borrowing = OverviewPositionProjection.tab(.borrowing, context: Fixture.context(), positions: Fixture.positions)
+        let majors = OverviewPositionProjection.tab(.idleMajors, context: Fixture.context(), positions: Fixture.positions)
+
+        let aave = try #require(borrowing.groups.first)
+        #expect(aave.change24h > 0)
+        #expect(aave.changeTone == .unfavorable)
+        let wallet = try #require(majors.groups.first)
+        #expect(wallet.change24h > 0)
+        #expect(wallet.changeTone == .favorable)
+    }
+
+    /// Cold start: no live price yet, so the token is valued from its sync value and must still be
+    /// polled to get one.
+    @Test func `polling asks for a dust token valued from its sync value`() {
+        let dust = Fixture.input(405, .wallet, Fixture.token(
+            Fixture.uuid(1005), "DST", "Dust Coin", .other, coinGeckoId: "dust-coin",
+            amount: 1, usdValue: Fixture.decimal("0.5")))
+        let ids = OverviewFeature.pricePollingIDs(
+            Fixture.context(inputs: [dust], livePricesUSD: [:], liveChanges24h: [:], historical: .empty),
+            watchlistIDs: [])
+
+        #expect(ids == ["dust-coin"])
+    }
+}
+
+// MARK: - Key changes on an ad-hoc portfolio
+
+extension OverviewListSeamTests {
+    /// The exact formula (V4): MAP 20 × 0.25 / 1.25 = 4 under its mapped id, ZAP 15 × −0.2 / 0.8 =
+    /// −3.75 under its onchain id. Ranked by |change|.
+    @Test func `key changes include a mapped holding and an onchain priced one`() {
+        let mappedIdentity = OnchainTokenIdentity(chain: .degen, contractAddress: "0xMapped")
+        let onchainIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xProvider")
+        let token = { (symbol: String, amount: Decimal, usdValue: Decimal, identity: OnchainTokenIdentity) in
+            TokenEntry(
+                assetId: UUID(), symbol: symbol, name: symbol, category: .defi, coinGeckoId: nil, onchainIdentity: identity,
+                role: .balance, amount: amount, usdValue: usdValue, syncedAt: Fixture.noon(0))
+        }
+        let context = Fixture.context(
+            tokens: [token("MAP", 2, 20, mappedIdentity), token("ZAP", 3, 15, onchainIdentity)],
+            mappings: [TokenIdentityMappingSnapshot(identity: mappedIdentity, coinGeckoId: "mapped-token")],
+            livePricesUSD: ["mapped-token": 10, onchainIdentity.historicalPriceID: 5],
+            liveChanges24h: ["mapped-token": Fixture.decimal("0.25"), onchainIdentity.historicalPriceID: Fixture.decimal("-0.2")])
+
+        let rows = OverviewPositionProjection.tab(.keyChanges, context: context, positions: Fixture.positions)
+            .groups.flatMap(\.tokens)
+
+        #expect(rows.map(\.symbol) == ["MAP", "ZAP"])
+        #expect(rows.map(\.change24h) == [4, Fixture.decimal("-3.75")])
     }
 }

@@ -126,10 +126,7 @@ struct PortfolioHealthDiversificationTests {
                 usdValue: 10000)
         ]
         let prices: [String: Decimal] = try ["usd-coin": #require(Decimal(string: "1.05"))]
-        let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: prices)
-
-        let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokens, weights: weights, chainCount: 1)
+        let metrics = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens, livePricesUSD: prices)).metrics
 
         // Resolved USDC = 10000 * 1.05 = 10500, total = 60500
         #expect(metrics.stablecoinRatio == Decimal(10500) / Decimal(60500))
@@ -165,10 +162,7 @@ struct PortfolioHealthDiversificationTests {
                 amount: 5000,
                 usdValue: 5000)
         ]
-        let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: [:])
-
-        let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokens, weights: weights, chainCount: 1)
+        let metrics = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens)).metrics
 
         // Only positive-role stablecoins: USDC supply (20000)
         // DAI borrow excluded by isPositive filter, also filtered from weights (net < 0)
@@ -207,10 +201,7 @@ struct PortfolioHealthDiversificationTests {
                 amount: 5000,
                 usdValue: 5000)
         ]
-        let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: [:])
-
-        let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokens, weights: weights, chainCount: 1)
+        let metrics = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens)).metrics
 
         // USDC net = 20000 - 5000 = 15000, BTC = 50000, total = 65000
         #expect(metrics.stablecoinRatio == Decimal(15000) / Decimal(65000))
@@ -251,10 +242,7 @@ struct PortfolioHealthDiversificationTests {
             "ethereum": 3000,
             "usd-coin": #require(Decimal(string: "1.01"))
         ]
-        let weights = PortfolioHealthFeature.computeAssetWeights(tokens: tokens, prices: prices)
-
-        let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: tokens, weights: weights, chainCount: 3)
+        let metrics = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens, livePricesUSD: prices)).metrics
 
         // Resolved: BTC=55000, ETH=30000, USDC=10100, total=95100
         #expect(metrics.stablecoinRatio == Decimal(10100) / Decimal(95100))

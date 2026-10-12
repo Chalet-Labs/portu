@@ -1,0 +1,207 @@
+import Foundation
+@testable import Portu
+import PortuCore
+import Testing
+
+/// The live-polling set through the production seam (S12): who is a candidate, the usable-price
+/// check, the ranking and the watchlist append. Books are USD.
+struct OverviewPollingSeamTests {
+    private typealias Fixture = OverviewValuationFixture
+
+    private static let hideBoth = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
+
+    @Test func `polling combines the ranked holdings and the watchlist in a stable order`() {
+        let context = Fixture.context(
+            tokens: [
+                token(symbol: "ETH", coinGeckoId: "ethereum", amount: 1, usdValue: 3000),
+                token(symbol: "BTC", coinGeckoId: "bitcoin", amount: 1, usdValue: 70000),
+                token(symbol: "ETH", coinGeckoId: "ethereum", amount: 2, usdValue: 6000),
+                token(symbol: "BORROW", coinGeckoId: "borrow-token", role: .borrow, amount: 10, usdValue: 100),
+                token(symbol: "REWARD", coinGeckoId: "reward-token", role: .reward, amount: 10, usdValue: 100),
+                token(symbol: "ZERO", coinGeckoId: "zero-token", amount: 10, usdValue: 0)
+            ],
+            livePricesUSD: ["ethereum": 3000, "bitcoin": 70000, "borrow-token": 10])
+
+        let ids = OverviewFeature.pricePollingIDs(context, watchlistIDs: ["solana", " Bitcoin ", "monero"])
+
+        #expect(ids == ["bitcoin", "ethereum", "borrow-token", "zero-token", "solana", "monero"])
+    }
+
+    @Test func `polling skips ignored dust and unpriceable holdings`() {
+        let ignored = token(symbol: "IGNORED", coinGeckoId: "ignored", amount: 1, usdValue: 10)
+        let context = Fixture.context(
+            tokens: [
+                token(symbol: "VISIBLE", coinGeckoId: "visible", amount: 1, usdValue: 2),
+                ignored,
+                token(symbol: "DUST", coinGeckoId: "dust", amount: 1, usdValue: Fixture.decimal("0.25")),
+                token(symbol: "UNPRICEABLE", amount: 1, usdValue: 0)
+            ],
+            overrides: [TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true)],
+            livePricesUSD: ["visible": 2, "ignored": 10, "dust": Fixture.decimal("0.25")])
+
+        let ids = OverviewFeature.pricePollingIDs(context, watchlistIDs: ["bitcoin"])
+
+        #expect(ids == ["visible", "bitcoin"])
+    }
+
+    @Test func `polling skips a token the dashboard hides although it has a live price`() {
+        let context = Fixture.context(
+            tokens: [token(symbol: "DUST", coinGeckoId: "dust", amount: 1, usdValue: 5)],
+            settings: Self.hideBoth,
+            livePricesUSD: ["dust": Fixture.decimal("0.25")])
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []).isEmpty)
+    }
+
+    /// Neither has a usable price, so only the counted check keeps them out: a reward valued from its
+    /// sync value, and a zero amount.
+    @Test func `polling skips an uncounted token`() {
+        let context = Fixture.context(
+            tokens: [
+                token(symbol: "REWARD", coinGeckoId: "reward-token", role: .reward, amount: 10, usdValue: 100),
+                token(symbol: "EMPTY", coinGeckoId: "empty-token", amount: 0, usdValue: 50)
+            ],
+            settings: TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: false, hideDust: false))
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []).isEmpty)
+    }
+
+    @Test func `polling keeps a resolvable unpriced holding so it can recover`() {
+        let context = Fixture.context(tokens: [token(symbol: "UNPRICED", coinGeckoId: "unpriced", amount: 1, usdValue: 0)])
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == ["unpriced"])
+    }
+
+    @Test func `polling asks for an unmapped onchain holding by its onchain id`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
+        let context = Fixture.context(tokens: [token(symbol: "LOCAL", amount: 2, usdValue: 8, onchainIdentity: identity)])
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == [identity.historicalPriceID])
+    }
+
+    @Test func `polling preserves a mixed case Solana mint`() {
+        let identity = OnchainTokenIdentity(chain: .solana, contractAddress: "SoLanaMiNtCase")
+        let context = Fixture.context(tokens: [token(symbol: "SOLTOKEN", amount: 2, usdValue: 8, onchainIdentity: identity)])
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == [identity.historicalPriceID])
+    }
+
+    @Test func `polling uses the canonical key of a known contract`() {
+        let identity = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xAf88d065e77c8cC2239327C5EDb3A432268e5831")
+        let context = Fixture.context(tokens: [token(symbol: "USDC", amount: 390, usdValue: 390, onchainIdentity: identity)])
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == [identity.historicalPriceID])
+    }
+
+    @Test func `polling ranks larger unpriced onchain holdings first`() {
+        let low = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0x1111")
+        let usdc = OnchainTokenIdentity(chain: .arbitrum, contractAddress: "0xAf88d065e77c8cC2239327C5EDb3A432268e5831")
+        let context = Fixture.context(
+            tokens: [
+                token(symbol: "LOW", amount: 1, usdValue: 2, onchainIdentity: low),
+                token(symbol: "USDC", amount: 390, usdValue: 390, onchainIdentity: usdc)
+            ],
+            settings: Self.hideBoth)
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == [usdc.historicalPriceID, low.historicalPriceID])
+    }
+
+    @Test func `polling caps the holdings but keeps every watchlist id`() {
+        let context = Fixture.context(tokens: [
+            token(symbol: "LOW", coinGeckoId: "low", amount: 1, usdValue: 10),
+            token(symbol: "HIGH", coinGeckoId: "high", amount: 1, usdValue: 100),
+            token(symbol: "MID", coinGeckoId: "mid", amount: 1, usdValue: 50)
+        ])
+
+        let ids = OverviewFeature.pricePollingIDs(context, watchlistIDs: ["watch", "high"], portfolioLimit: 2)
+
+        #expect(ids == ["high", "mid", "watch"])
+    }
+
+    @Test func `polling ranks an implausible onchain price by its sync value`() {
+        let nativeETH = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0x0000000000000000000000000000000000000000")
+        let badIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xBadPrice")
+        let context = Fixture.context(
+            tokens: [
+                token(symbol: "BAD", amount: 1_000_000, usdValue: 10, onchainIdentity: badIdentity),
+                token(symbol: "ETH", amount: 1, usdValue: 3000, onchainIdentity: nativeETH)
+            ],
+            livePricesUSD: [badIdentity.historicalPriceID: 1_000_000])
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: [], portfolioLimit: 1) == ["ethereum"])
+    }
+
+    @Test func `polling skips an onchain dust token with no usable price under hideDust`() {
+        let dust = OnchainTokenIdentity(chain: .base, contractAddress: "0xDust")
+        let visible = OnchainTokenIdentity(chain: .base, contractAddress: "0xVisible")
+        let context = Fixture.context(
+            tokens: [
+                token(symbol: "DUST", amount: 2, usdValue: Fixture.decimal("0.25"), onchainIdentity: dust),
+                token(symbol: "VISIBLE", amount: 2, usdValue: 8, onchainIdentity: visible)
+            ],
+            settings: Self.hideBoth)
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == [visible.historicalPriceID])
+    }
+
+    /// The onchain dust gate applies only while the dashboard would hide the token anyway.
+    @Test(arguments: [
+        (TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true), true),
+        (TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: false, hideDust: true), false),
+        (TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: false), false)
+    ])
+    func `polling keeps onchain dust with no usable price when it is shown`(settings: TokenDashboardSettings, alwaysShow: Bool) {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xDust")
+        let dust = token(symbol: "DUST", amount: 2, usdValue: Fixture.decimal("0.25"), onchainIdentity: identity)
+        let context = Fixture.context(
+            tokens: [dust],
+            overrides: alwaysShow ? [TokenPricingOverrideSnapshot(assetId: dust.assetId, alwaysShow: true)] : [],
+            settings: settings)
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == [identity.historicalPriceID])
+    }
+
+    /// LIVE is worth $80 and FALLBACK $70 in USD; the rate scales both, so the order never changes.
+    @Test(arguments: [Decimal(1), Fixture.decimal("0.5")])
+    func `polling ranks by usd value whatever the display rate`(rate: Decimal) {
+        let context = Fixture.context(
+            tokens: [
+                token(symbol: "FALLBACK", coinGeckoId: "fallback-coin", amount: 1, usdValue: 70),
+                token(symbol: "LIVE", coinGeckoId: "live-coin", amount: 1, usdValue: 0)
+            ],
+            rate: rate,
+            livePricesUSD: ["live-coin": 80])
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: [], portfolioLimit: 1) == ["live-coin"])
+    }
+
+    @Test func `polling asks for the coin gecko override`() {
+        let mapped = token(symbol: "MAP", coinGeckoId: "old-map", amount: 1, usdValue: 10)
+        let context = Fixture.context(
+            tokens: [mapped],
+            overrides: [TokenPricingOverrideSnapshot(assetId: mapped.assetId, coinGeckoIdOverride: " New-Map ")],
+            livePricesUSD: ["new-map": 10])
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == ["new-map"])
+    }
+
+    private func token(
+        symbol: String,
+        coinGeckoId: String? = nil,
+        role: TokenRole = .balance,
+        amount: Decimal,
+        usdValue: Decimal,
+        onchainIdentity: OnchainTokenIdentity? = nil) -> TokenEntry {
+        TokenEntry(
+            assetId: UUID(),
+            symbol: symbol,
+            name: symbol,
+            category: .major,
+            coinGeckoId: coinGeckoId,
+            onchainIdentity: onchainIdentity,
+            role: role,
+            amount: amount,
+            usdValue: usdValue,
+            syncedAt: Fixture.noon(0))
+    }
+}

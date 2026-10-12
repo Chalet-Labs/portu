@@ -241,7 +241,7 @@ struct ViewRenderSmokeTests {
         render(view, size: CGSize(width: 780, height: 200))
     }
 
-    private func makeStore(section: SidebarSection) -> StoreOf<AppFeature> {
+    func makeStore(section: SidebarSection) -> StoreOf<AppFeature> {
         makeStore(state: populatedState(section: section))
     }
 
@@ -265,7 +265,7 @@ struct ViewRenderSmokeTests {
         return state
     }
 
-    private func makeContainer() throws -> ModelContainer {
+    func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             Account.self,
             WalletAddress.self,
@@ -410,7 +410,7 @@ struct ViewRenderSmokeTests {
         let batch = UUID(uuidString: "00000000-0000-0000-0000-0000000000B1")!
     }
 
-    private func render(
+    func render(
         _ view: some View,
         size: CGSize = CGSize(width: 1400, height: 900)) {
         let hostingView = NSHostingView(rootView: view)

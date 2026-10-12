@@ -18,33 +18,33 @@ enum OverviewPositionTab: String, CaseIterable {
     }
 }
 
-/// Pricing and visibility inputs, gathered once per render pass.
-struct OverviewPositionContext {
-    let prices: [String: Decimal]
-    let changes24h: [String: Decimal]
-    let overrideMap: [UUID: TokenPricingOverrideSnapshot]
-    let mappingMap: [OnchainTokenIdentity: TokenIdentityMappingSnapshot]
-    let categoryResolver: PortfolioCategoryResolver
-    let dashboardSettings: TokenDashboardSettings
-    let fallbackUSDToDisplayRate: Decimal
-}
-
 /// Valuation inputs for the position tabs, with the position metadata the groups show.
 struct OverviewPositionInputs {
     let inputs: [ValuationInput]
     let positions: [UUID: OverviewPositionMeta]
 }
 
-/// A tab as shown: its position groups, each ending with its own hidden-balances line.
+/// A tab as shown: its position groups, each ending with its own hidden-balances line, then one line
+/// for the groups that have no visible row (S3). Totals and changes are on the tab's basis.
 struct OverviewPositionTabData: Equatable {
     let groups: [OverviewPositionGroupData]
+    var basis: DashboardBasis = .gross
+    /// The rows of groups with no visible row, in the display currency; `nil` when there are none.
+    var hidden: HiddenBalances?
+    /// Those rows' 24h change on the tab's basis.
+    var hiddenChange24h: Decimal = 0
 
     var total: Decimal {
-        groups.reduce(Decimal.zero) { $0 + $1.value }
+        groups.reduce(Decimal.zero) { $0 + $1.value } + (hidden?.value(on: basis) ?? 0)
     }
 
     var change24h: Decimal {
-        groups.reduce(Decimal.zero) { $0 + $1.change24h }
+        groups.reduce(Decimal.zero) { $0 + $1.change24h } + hiddenChange24h
+    }
+
+    /// A tab whose rows are all hidden still shows its hidden line instead of the empty message.
+    var showsEmptyState: Bool {
+        groups.isEmpty && hidden == nil
     }
 }
 
@@ -58,39 +58,35 @@ struct OverviewPositionTabData: Equatable {
 enum OverviewPositionProjection {
     static let keyChangeLimit = 20
 
-    /// Resolves a single tab into renderable value data.
-    ///
-    /// Only the selected tab is resolved: a body evaluation costs one projection pass
-    /// rather than filtering every token for every tab.
-    static func groups(
-        for tab: OverviewPositionTab,
-        positions: [Position],
-        context: OverviewPositionContext) -> [OverviewPositionGroupData] {
-        groups(
-            for: tab,
-            projected: inputs(from: positions, for: tab, categoryResolver: context.categoryResolver),
-            context: context)
-    }
-
     /// The position-tab seam: one tab of the active-account inputs.
+    ///
+    /// Only the selected tab is resolved, and only the inputs it admits are valued.
     static func tab(
         _ tab: OverviewPositionTab,
-        context valuation: OverviewValuationContext,
+        context: OverviewValuationContext,
         positions: [UUID: OverviewPositionMeta]) -> OverviewPositionTabData {
-        let context = OverviewPositionContext(
-            prices: valuation.prices.displayPrices,
-            changes24h: valuation.prices.displayChanges24h,
-            overrideMap: TokenSettingsFeature.overridesByAssetId(valuation.overrides),
-            mappingMap: TokenIdentityMappingFeature.mappingsByIdentity(valuation.mappings),
-            // The inputs arrive categorised; the resolver only serves the `Position` entry point.
-            categoryResolver: .defaults,
-            dashboardSettings: valuation.settings,
-            fallbackUSDToDisplayRate: valuation.usdToDisplayRate)
-        let groups = groups(
-            for: tab,
-            projected: OverviewPositionInputs(inputs: valuation.inputs, positions: positions),
-            context: context)
-        return OverviewPositionTabData(groups: groups)
+        let admitted = context.inputs.filter { input in
+            tab.admits(input.position.positionType)
+                && tab.admits(input.token.role)
+                && tab.admits(input.token.portfolioCategory)
+                && positions[input.position.positionId] != nil
+        }
+        let valuation = context.restricted(to: admitted).valuation()
+
+        switch tab {
+        case .keyChanges:
+            let movers = valuation.keyChanges(settings: context.settings, limit: keyChangeLimit)
+            let groups = grouped(movers, positions: positions).map { position, tokens in
+                OverviewPositionGroupData(
+                    position: position,
+                    tokens: tokens.map { row($0, basis: .gross, rate: context.usdToDisplayRate) })
+            }
+            return OverviewPositionTabData(groups: groups)
+        case .idleStables, .idleMajors:
+            return filtered(valuation.tokens, basis: .gross, positions: positions, context: context)
+        case .borrowing:
+            return filtered(valuation.tokens, basis: .debt, positions: positions, context: context)
+        }
     }
 
     // MARK: - Model boundary
@@ -122,204 +118,83 @@ enum OverviewPositionProjection {
         return OverviewPositionInputs(inputs: inputs, positions: meta)
     }
 
-    private static func groups(
-        for tab: OverviewPositionTab,
-        projected: OverviewPositionInputs,
-        context: OverviewPositionContext) -> [OverviewPositionGroupData] {
-        switch tab {
-        case .keyChanges:
-            keyChangeGroups(projected, context: context)
-        case .idleStables:
-            idleGroups(.idleStables, projected, context: context) { entry in
-                entry.portfolioCategory.semanticRole == .stablecoin
+    // MARK: - Filtered tabs
+
+    /// One display-filtered list per position group, so each group ends with its own hidden line. A
+    /// group with no visible row gets no card; its rows fold into the tab's line.
+    private static func filtered(
+        _ tokens: [ValuedToken],
+        basis: DashboardBasis,
+        positions: [UUID: OverviewPositionMeta],
+        context: OverviewValuationContext) -> OverviewPositionTabData {
+        let rate = context.usdToDisplayRate
+        var groups: [OverviewPositionGroupData] = []
+        var folded: [ValuedToken] = []
+
+        for (position, tokens) in grouped(tokens, positions: positions) {
+            let list = DashboardList(tokens, basis: basis, settings: context.settings, groupedBy: \.tokenId)
+            let visible = list.visibleRows.flatMap(\.tokens)
+            guard !visible.isEmpty else {
+                folded += tokens
+                continue
             }
-        case .idleMajors:
-            idleGroups(.idleMajors, projected, context: context) { entry in
-                PortfolioCategoryDefaults.majorCategoryIDs.contains(entry.portfolioCategory.id)
-            }
-        case .borrowing:
-            borrowingGroups(projected, context: context)
+            groups.append(OverviewPositionGroupData(
+                position: position,
+                tokens: visible.map { row($0, basis: basis, rate: rate) },
+                basis: basis,
+                hidden: list.hidden.isEmpty ? nil : list.hidden.display(rate: rate),
+                hiddenChange24h: hiddenChange24h(list, basis: basis) * rate))
         }
+
+        let footer = DashboardList(folded, basis: basis, settings: context.settings, groupedBy: \.tokenId)
+        return OverviewPositionTabData(
+            groups: groups,
+            basis: basis,
+            hidden: footer.hidden.isEmpty ? nil : footer.hidden.display(rate: rate),
+            hiddenChange24h: hiddenChange24h(footer, basis: basis) * rate)
     }
 
-    /// Inputs are rejected on the tab's position types and roles before their entry is mapped, and
-    /// each surviving token is mapped once. The seam can be fed every active input, as the T2 specs
-    /// do, so this repeats the model boundary's rejection.
-    private static func projectedTokens(
-        _ projected: OverviewPositionInputs,
-        for tab: OverviewPositionTab,
-        context: OverviewPositionContext,
-        including isIncluded: (TokenEntry) -> Bool) -> [ProjectedToken] {
-        projected.inputs.compactMap { input -> ProjectedToken? in
-            guard
-                tab.admits(input.position.positionType),
-                tab.admits(input.token.role),
-                let meta = projected.positions[input.position.positionId]
-            else { return nil }
-            let entry = tokenEntry(for: input.token, context: context)
-            guard isIncluded(entry) else { return nil }
-            return ProjectedToken(id: input.tokenId, entry: entry, position: meta)
-        }
-    }
-
-    /// The asset's own CoinGecko ID, else the identity-mapped one.
-    private static func tokenEntry(
-        for token: TokenEntry,
-        context: OverviewPositionContext) -> TokenEntry {
-        let coinGeckoId = OverviewWatchlistStore.normalizedID(token.coinGeckoId)
-            ?? TokenIdentityMappingFeature.mappedCoinGeckoID(
-                for: token.onchainIdentity,
-                mappingsByIdentity: context.mappingMap)
-        guard coinGeckoId != token.coinGeckoId else { return token }
-        return TokenSettingsFeature.tokenEntry(from: token, coinGeckoId: coinGeckoId, usdValue: token.usdValue)
-    }
-
-    // MARK: - Tabs
-
-    /// The biggest movers: change-visible positive tokens ranked by absolute 24h
-    /// change, capped at `keyChangeLimit` and grouped by position.
-    private static func keyChangeGroups(
-        _ projected: OverviewPositionInputs,
-        context: OverviewPositionContext) -> [OverviewPositionGroupData] {
-        // Ranking needs each candidate's change, so it is computed here and again for
-        // the surviving `keyChangeLimit` tokens when their row data is built.
-        let ranked = projectedTokens(projected, for: .keyChanges, context: context) { entry in
-            isChangeVisible(entry, context: context)
-        }
-        .compactMap { token -> (token: ProjectedToken, change: Decimal)? in
-            let change = change24h(token.entry, context: context)
-            guard change != 0 else { return nil }
-            return (token, change)
-        }
-        .sorted {
-            OverviewPriceChangeFeature.isOrderedByChangeMagnitude(
-                lhsChange: $0.change,
-                lhsSymbol: $0.token.entry.symbol,
-                rhsChange: $1.change,
-                rhsSymbol: $1.token.entry.symbol)
-        }
-        .prefix(keyChangeLimit)
-        .map(\.token)
-
-        return groups(from: Array(ranked), context: context)
-    }
-
-    /// Idle tokens the dashboard shows and whose resolved category satisfies
-    /// `predicate` — stablecoins for Idle Stables, majors for Idle BTC / ETH / SOL.
-    private static func idleGroups(
-        _ tab: OverviewPositionTab,
-        _ projected: OverviewPositionInputs,
-        context: OverviewPositionContext,
-        matching predicate: (TokenEntry) -> Bool) -> [OverviewPositionGroupData] {
-        let idle = projectedTokens(projected, for: tab, context: context) { entry in
-            isVisible(entry, context: context) && predicate(entry)
-        }
-
-        return groups(from: idle, context: context)
-    }
-
-    /// Borrowed, dashboard-visible tokens grouped by the position that owes them.
-    private static func borrowingGroups(
-        _ projected: OverviewPositionInputs,
-        context: OverviewPositionContext) -> [OverviewPositionGroupData] {
-        let borrowed = projectedTokens(projected, for: .borrowing, context: context) { entry in
-            isVisible(entry, context: context)
-        }
-
-        return groups(from: borrowed, context: context)
-    }
-
-    /// Prices each surviving token once and groups them by owning position, preserving
-    /// first-appearance order.
-    private static func groups(
-        from projected: [ProjectedToken],
-        context: OverviewPositionContext) -> [OverviewPositionGroupData] {
+    /// Groups tokens by owning position, preserving first-appearance order.
+    private static func grouped(
+        _ tokens: [ValuedToken],
+        positions: [UUID: OverviewPositionMeta]) -> [(OverviewPositionMeta, [ValuedToken])] {
         var order: [UUID] = []
-        var grouped: [UUID: (position: OverviewPositionMeta, tokens: [OverviewPositionTokenData])] = [:]
-
-        for item in projected {
-            let token = OverviewPositionTokenData(
-                id: item.id,
-                entry: item.entry,
-                price: price(item.entry, context: context),
-                value: tokenValue(item.entry, context: context),
-                change24h: change24h(item.entry, context: context))
-
-            if grouped[item.position.id] == nil {
-                order.append(item.position.id)
-                grouped[item.position.id] = (item.position, [])
+        var grouped: [UUID: [ValuedToken]] = [:]
+        for token in tokens {
+            let id = token.position.positionId
+            if grouped[id] == nil {
+                order.append(id)
             }
-            grouped[item.position.id]?.tokens.append(token)
+            grouped[id, default: []].append(token)
         }
-
         return order.compactMap { id in
-            guard let group = grouped[id] else { return nil }
-            return OverviewPositionGroupData(position: group.position, tokens: group.tokens)
+            guard let position = positions[id], let tokens = grouped[id] else { return nil }
+            return (position, tokens)
         }
     }
 
-    // MARK: - Visibility and pricing
-
-    /// Whether the token passes the dashboard's value and dust thresholds.
-    private static func isVisible(_ entry: TokenEntry, context: OverviewPositionContext) -> Bool {
-        OverviewPositionVisibility.isVisible(
-            token: entry,
-            prices: context.prices,
-            overrideMap: context.overrideMap,
-            settings: context.dashboardSettings,
-            usdToDisplayRate: context.fallbackUSDToDisplayRate)
+    /// A token row in the display currency. Value and change are on the tab's basis: a borrow shows
+    /// its debt, and its change is positive when the debt grows.
+    private static func row(_ token: ValuedToken, basis: DashboardBasis, rate: Decimal) -> OverviewPositionTokenData {
+        let price = token.token.amount > 0 ? token.value / token.token.amount : 0
+        return OverviewPositionTokenData(
+            id: token.tokenId,
+            entry: token.token,
+            price: price * rate,
+            value: token.value * rate,
+            change24h: onBasis(token.change24h, basis) * rate)
     }
 
-    /// The visibility rule used when ranking 24h changes. Same thresholds as
-    /// `isVisible`, but measured against the change reference value rather than the
-    /// display value, so a token's eligibility for the movers list is judged by the
-    /// value its 24h change was derived from.
-    private static func isChangeVisible(_ entry: TokenEntry, context: OverviewPositionContext) -> Bool {
-        OverviewPriceChangeFeature.isDashboardEligibleForChange(
-            token: entry,
-            prices: context.prices,
-            changes24h: context.changes24h,
-            override: context.overrideMap[entry.assetId],
-            settings: context.dashboardSettings,
-            usdToDisplayRate: context.fallbackUSDToDisplayRate)
+    /// The hidden rows' 24h change, in USD, on the list's basis.
+    private static func hiddenChange24h(_ list: DashboardList<UUID>, basis: DashboardBasis) -> Decimal {
+        list.rows
+            .filter { $0.status.isDashboardRow && !$0.isVisible }
+            .reduce(Decimal.zero) { $0 + onBasis($1.totals.change24h, basis) }
     }
 
-    /// Display-currency price, manual override applied.
-    private static func price(_ entry: TokenEntry, context: OverviewPositionContext) -> Decimal {
-        OverviewPositionPricing.price(
-            token: entry,
-            prices: context.prices,
-            override: context.overrideMap[entry.assetId],
-            fallbackUSDToDisplayRate: context.fallbackUSDToDisplayRate)
-    }
-
-    /// Falls back to the 24h change reference so a token with no live price still shows
-    /// the value its change was derived from.
-    private static func tokenValue(_ entry: TokenEntry, context: OverviewPositionContext) -> Decimal {
-        let resolvedValue = OverviewPositionPricing.tokenValue(
-            token: entry,
-            prices: context.prices,
-            override: context.overrideMap[entry.assetId],
-            fallbackUSDToDisplayRate: context.fallbackUSDToDisplayRate)
-        if resolvedValue != 0 {
-            return resolvedValue
-        }
-        return OverviewPositionPricing.changeReferenceValue(
-            token: entry,
-            prices: context.prices,
-            changes24h: context.changes24h,
-            override: context.overrideMap[entry.assetId],
-            fallbackUSDToDisplayRate: context.fallbackUSDToDisplayRate)
-    }
-
-    /// Display-currency 24h change, manual override applied.
-    private static func change24h(_ entry: TokenEntry, context: OverviewPositionContext) -> Decimal {
-        OverviewPositionPricing.change24h(
-            token: entry,
-            prices: context.prices,
-            changes24h: context.changes24h,
-            override: context.overrideMap[entry.assetId],
-            fallbackUSDToDisplayRate: context.fallbackUSDToDisplayRate)
+    /// A net change (a borrow's contribution falls as its debt grows) expressed on `basis`.
+    private static func onBasis(_ netChange: Decimal, _ basis: DashboardBasis) -> Decimal {
+        basis == .debt ? -netChange : netChange
     }
 }
 
@@ -339,11 +214,13 @@ private extension OverviewPositionTab {
         case .keyChanges, .idleStables, .idleMajors: role.isPositive
         }
     }
-}
 
-/// A `PositionToken` projected to value types, tagged with its owning position.
-private struct ProjectedToken {
-    let id: UUID
-    let entry: TokenEntry
-    let position: OverviewPositionMeta
+    /// Idle Stables shows stablecoins and Idle BTC / ETH / SOL the majors.
+    func admits(_ category: PortfolioCategorySnapshot) -> Bool {
+        switch self {
+        case .idleStables: category.semanticRole == .stablecoin
+        case .idleMajors: PortfolioCategoryDefaults.majorCategoryIDs.contains(category.id)
+        case .keyChanges, .borrowing: true
+        }
+    }
 }

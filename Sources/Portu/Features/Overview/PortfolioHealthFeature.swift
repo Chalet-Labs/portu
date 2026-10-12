@@ -94,6 +94,9 @@ struct PortfolioHealthFeature {
             .sorted { $0.percentage > $1.percentage }
     }
 
+    /// A group at or above this share of the portfolio raises a concentration warning.
+    static let concentrationThreshold = Decimal(25) / 100
+
     static func computeConcentrationRisks(weights: [AssetWeight], threshold: Decimal) -> [ConcentrationRisk] {
         weights
             .filter { $0.percentage >= threshold }

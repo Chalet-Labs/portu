@@ -9,23 +9,19 @@ struct OverviewTokenPathTests {
     private typealias Fixture = OverviewValuationFixture
 
     @Test func `a sync only token counts its sync value on every path`() {
-        withKnownIssue("converges in step 5: V1.5 — a sync value with no price ID is valued (number change: sync-only tokens)") {
-            #expect(headlineShare(of: Fixture.AssetID.otc) == 250)
-            #expect(cardsShare(of: Fixture.AssetID.otc) == 250)
-            #expect(slice("OTC", .assets) == 250)
-            #expect(weight("OTC") == 250)
-            #expect(watchlistPrice("OTC") == 50)
-        }
+        #expect(headlineShare(of: Fixture.AssetID.otc) == 250)
+        #expect(cardsShare(of: Fixture.AssetID.otc) == 250)
+        #expect(slice("OTC", .assets) == 250)
+        #expect(weight("OTC") == 250)
+        #expect(watchlistPrice("OTC") == 50)
     }
 
     @Test func `a close on the sync day loses to the sync value on every path`() {
-        withKnownIssue("converges in step 5: V1.5 newer-of — a same-day close loses to the sync value") {
-            #expect(headlineShare(of: Fixture.AssetID.uni) == 70)
-            #expect(cardsShare(of: Fixture.AssetID.uni) == 70)
-            #expect(slice("DeFi", .category) == 330)
-            #expect(weight("UNI") == 70)
-            #expect(watchlistPrice("UNI") == 7)
-        }
+        #expect(headlineShare(of: Fixture.AssetID.uni) == 70)
+        #expect(cardsShare(of: Fixture.AssetID.uni) == 70)
+        #expect(slice("DeFi", .category) == 330)
+        #expect(weight("UNI") == 70)
+        #expect(watchlistPrice("UNI") == 7)
     }
 
     @Test func `a close on a later day than the sync wins on every path`() {
@@ -47,10 +43,8 @@ struct OverviewTokenPathTests {
         #expect(headlineShare(of: Fixture.AssetID.degen) == 100)
         #expect(slice("Meme", .category) == 110)
         #expect(watchlistPrice("DEGEN") == Fixture.decimal("0.01"))
-        withKnownIssue("converges in step 5: S2/S3 — the cards and Health apply identity mappings") {
-            #expect(cardsShare(of: Fixture.AssetID.degen) == 100)
-            #expect(weight("DEGEN") == 100)
-        }
+        #expect(cardsShare(of: Fixture.AssetID.degen) == 100)
+        #expect(weight("DEGEN") == 100)
     }
 
     @Test func `an implausible onchain live price is unpriced on every path`() {
@@ -73,12 +67,10 @@ struct OverviewTokenPathTests {
         let idleStables = OverviewPositionProjection.tab(.idleStables, context: Fixture.context(), positions: Fixture.positions)
         #expect(!idleStables.groups.flatMap(\.tokens).contains { $0.symbol == "DAI" })
         #expect(weight("DAI") == nil)
-        withKnownIssue("converges in step 5: A1/A3 — totals include dust (number change: dust tokens and dust borrows)") {
-            #expect(headlineShare(of: Fixture.AssetID.dai) == Fixture.decimal("0.5"))
-            #expect(cardsShare(of: Fixture.AssetID.dai) == Fixture.decimal("0.5"))
-            #expect(headlineShare(of: Fixture.AssetID.usdt) == Fixture.decimal("-0.4"))
-            #expect(cardsShare(of: Fixture.AssetID.usdt) == Fixture.decimal("-0.4"))
-        }
+        #expect(headlineShare(of: Fixture.AssetID.dai) == Fixture.decimal("0.5"))
+        #expect(cardsShare(of: Fixture.AssetID.dai) == Fixture.decimal("0.5"))
+        #expect(headlineShare(of: Fixture.AssetID.usdt) == Fixture.decimal("-0.4"))
+        #expect(cardsShare(of: Fixture.AssetID.usdt) == Fixture.decimal("-0.4"))
     }
 
     @Test func `an always shown dust token keeps its value on every path`() {
@@ -120,12 +112,12 @@ struct OverviewTokenPathTests {
     }
 
     private func weight(_ symbol: String) -> Decimal? {
-        PortfolioHealthFeature.health(Fixture.context(), legacyChainCount: Fixture.legacyChainCount)
+        PortfolioHealthFeature.health(Fixture.context())
             .weights.first { $0.symbol == symbol }?.usdValue
     }
 
     private func watchlistPrice(_ symbol: String) -> Decimal? {
-        OverviewFeature.watchlistRows(Fixture.context(), assetsByCoinGeckoId: [:], watchlistIDs: [])
+        OverviewFeature.watchlistRows(Fixture.context(), assets: [], watchlistIDs: [])
             .first { $0.symbol == symbol }?.price
     }
 }
