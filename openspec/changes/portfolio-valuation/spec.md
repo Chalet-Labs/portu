@@ -261,7 +261,12 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - **Watchlist:**
   - Held rows show their V5 price × rate and their V5 fraction.
   - A watched coin that is not held shows its live price, else its latest close, × rate, plus its merged fraction.
-  - Ignored assets are excluded.
+  - Ignored assets are excluded from the held rows **and** from the watched coins. Decided 2026-10-12.
+    - The user ignores an asset, not a coin. A watched coin is hidden only when at least one asset is priced under its ID and **every** asset priced under it is ignored, even when it is on the watchlist.
+    - Priced under the ID: every asset whose CoinGecko ID (override applied) is that ID, and the asset of every held token whose resolved non-onchain price ID is that ID (identity mappings included).
+    - Ignored follows the override that applies to the asset (lowest override ID wins), as in valuation.
+    - Example: native USDC and bridged USDC.e are both priced under `usd-coin`. Ignoring USDC.e keeps a watched `usd-coin`; ignoring both hides it.
+    - A shown watched coin describes the preferred non-ignored asset whose CoinGecko ID is its ID. Only when every such asset is ignored (the coin shows through a held, non-ignored token, e.g. a mapped one) does it fall back to the preferred asset, as before.
 - **Health:**
   - Rows are grouped per symbol + name, as today. A row's weight is its net contribution floored at 0, divided by the sum of the floored values.
   - The metrics (concentration, HHI, stablecoin ratio, asset count) cover **every** symbol + name group, hidden ones included, the way totals do. They use the floored values of the weights: a net-negative group has weight 0 and is not counted as an asset.
