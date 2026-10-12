@@ -191,7 +191,7 @@ struct ValuationShareTests {
         #expect(shares == [Fixture.decimal("0.334"), Fixture.decimal("0.333"), Fixture.decimal("0.333")])
     }
 
-    @Test func `residual goes to the entry with the largest absolute value`() throws {
+    @Test func `rounding error ties go to the larger absolute value`() throws {
         let shares = try #require(ListShares.rounded([1, 1, 2]))
 
         #expect(shares == [Fixture.decimal("0.25"), Fixture.decimal("0.25"), Fixture.decimal("0.5")])
@@ -199,10 +199,69 @@ struct ValuationShareTests {
         #expect(thirds == [Fixture.decimal("0.167"), Fixture.decimal("0.167"), Fixture.decimal("0.666")])
     }
 
-    @Test func `residual goes to a negative entry when its absolute value is the largest`() throws {
+    @Test func `rounding error ties go to the larger absolute value when it is negative`() throws {
         let shares = try #require(ListShares.rounded([-4, 2, 2, 3]))
 
         #expect(shares == [Fixture.decimal("-1.334"), Fixture.decimal("0.667"), Fixture.decimal("0.667"), 1])
+    }
+
+    @Test func `rounding error and value ties go to the earlier row`() throws {
+        let shares = try #require(ListShares.rounded([1, 2, 2, 1, 1]))
+
+        #expect(shares == [0.143, 0.285, 0.286, 0.143, 0.143].map { Fixture.decimal("\($0)") })
+    }
+
+    /// Largest remainder: the large row keeps its own rounded share instead of absorbing the
+    /// residual of every tiny row.
+    @Test func `one large row among many tiny rows shows its own rounded share`() throws {
+        let values = [Decimal(9520)] + Array(repeating: Decimal(4), count: 120)
+
+        let shares = try #require(ListShares.rounded(values))
+
+        #expect(shares.first == Fixture.decimal("0.952"))
+        #expect(shares.dropFirst().prefix(48).allSatisfy { $0 == Fixture.decimal("0.001") })
+        #expect(shares.dropFirst(49).allSatisfy { $0 == 0 })
+        #expect(shares.reduce(0, +) == 1)
+        #expect(Self.largestError(values, shares) < Fixture.decimal("0.001"))
+    }
+
+    @Test func `a negative row with the largest rounding error takes the step`() throws {
+        let up = try #require(ListShares.rounded([150, Fixture.decimal("-50.06"), Fixture.decimal("0.03"), Fixture.decimal("0.03")]))
+        let down = try #require(ListShares.rounded([150, Fixture.decimal("-49.94"), Fixture.decimal("-0.03"), Fixture.decimal("-0.03")]))
+
+        #expect(up == [Fixture.decimal("1.5"), Fixture.decimal("-0.5"), 0, 0])
+        #expect(down == [Fixture.decimal("1.5"), Fixture.decimal("-0.5"), 0, 0])
+    }
+
+    @Test func `whole percent shares round by largest remainder`() throws {
+        let shares = try #require(ListShares.rounded([98200, 450, 450, 450, 450], fractionDigits: 2))
+
+        #expect(shares == [Fixture.decimal("0.98"), Fixture.decimal("0.01"), Fixture.decimal("0.01"), 0, 0])
+    }
+
+    @Test func `random lists round within one step of exact and sum to one hundred percent`() {
+        var generator = SplitMix64(seed: 122)
+        for _ in 0 ..< 200 {
+            let count = Int.random(in: 1 ... 60, using: &generator)
+            var values = (0 ..< count).map { _ in
+                Decimal(Int.random(in: -500 ... 100_000, using: &generator)) / 100
+            }
+            if values.reduce(Decimal.zero, +) <= 0 {
+                values.append(1000)
+            }
+            guard let shares = ListShares.rounded(values) else {
+                Issue.record("no shares for \(values)")
+                continue
+            }
+
+            #expect(shares.reduce(0, +) == 1, "\(values)")
+            #expect(Self.largestError(values, shares) < Fixture.decimal("0.001"), "\(values)")
+        }
+    }
+
+    private static func largestError(_ values: [Decimal], _ shares: [Decimal]) -> Decimal {
+        let total = values.reduce(Decimal.zero, +)
+        return zip(values, shares).map { abs($1 - $0 / total) }.max() ?? 0
     }
 
     @Test func `hidden balances take part in the shares`() throws {

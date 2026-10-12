@@ -306,22 +306,41 @@ public struct ListShares: Equatable, Sendable {
         rows + [remainder, hidden].compactMap(\.self)
     }
 
-    /// Each value's share of their sum, rounded to 0.1% with the residual on the largest absolute
-    /// value so the shares sum to exactly 1. `nil` for an empty list or a total that is not positive.
-    public static func rounded(_ values: [Decimal]) -> [Decimal]? {
+    /// Each value's share of their sum, rounded to `fractionDigits` (3 is 0.1%, 2 is whole percent)
+    /// by largest remainder so the shares sum to exactly 1. Each share is rounded to the nearest
+    /// step, then the leftover steps go one each to the rows rounded furthest from their exact
+    /// share: a positive leftover to the largest errors, a negative one to the most negative. Ties
+    /// go to the larger absolute value, then the earlier row. No share ends a step or more from
+    /// exact. `nil` for an empty list or a total that is not positive.
+    public static func rounded(_ values: [Decimal], fractionDigits: Int = 3) -> [Decimal]? {
         let total = values.reduce(Decimal.zero, +)
         guard !values.isEmpty, total > 0 else { return nil }
 
-        var shares = values.map { value in
+        let stepsInOne = pow(Decimal(10), fractionDigits)
+        var steps = values.map { value in
             var share = value / total
             var rounded = Decimal()
-            NSDecimalRound(&rounded, &share, 3, .plain)
-            return rounded
+            NSDecimalRound(&rounded, &share, fractionDigits, .plain)
+            return rounded * stepsInOne
         }
-        let residual = 1 - shares.reduce(Decimal.zero, +)
-        if residual != 0, let largest = values.indices.max(by: { abs(values[$0]) < abs(values[$1]) }) {
-            shares[largest] += residual
+        // The rounding error in steps times the total, which is exact, so equal errors tie.
+        let errors = values.indices.map { values[$0] * stepsInOne - steps[$0] * total }
+        let residual = stepsInOne - steps.reduce(Decimal.zero, +)
+        guard residual != 0 else { return steps.map { $0 / stepsInOne } }
+
+        let order = values.indices.sorted { lhs, rhs in
+            if errors[lhs] != errors[rhs] {
+                return residual > 0 ? errors[lhs] > errors[rhs] : errors[lhs] < errors[rhs]
+            }
+            if abs(values[lhs]) != abs(values[rhs]) {
+                return abs(values[lhs]) > abs(values[rhs])
+            }
+            return lhs < rhs
         }
-        return shares
+        let step: Decimal = residual > 0 ? 1 : -1
+        for index in order.prefix(Int(truncating: abs(residual) as NSDecimalNumber)) {
+            steps[index] += step
+        }
+        return steps.map { $0 / stepsInOne }
     }
 }

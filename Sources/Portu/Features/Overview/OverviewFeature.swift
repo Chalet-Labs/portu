@@ -251,21 +251,4 @@ enum OverviewFeature {
         }
         return trimmedName
     }
-
-    static func displayPercentages(for values: [Decimal]) -> [Int] {
-        let total = values.reduce(Decimal.zero, +)
-        guard total > 0 else { return Array(repeating: 0, count: values.count) }
-
-        var percentages = values.map { value in
-            let ratio = NSDecimalNumber(decimal: value / total).doubleValue
-            return Int((ratio * 100).rounded())
-        }
-
-        let residual = 100 - percentages.reduce(0, +)
-        if residual != 0, let residualIndex = values.indices.max(by: { values[$0] < values[$1] }) {
-            percentages[residualIndex] += residual
-        }
-
-        return percentages
-    }
 }

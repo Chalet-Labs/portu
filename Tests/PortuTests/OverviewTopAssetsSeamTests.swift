@@ -148,6 +148,25 @@ struct OverviewTopAssetsSeamTests {
         #expect(slices.first?.displayPercent == 34)
     }
 
+    /// Largest remainder in whole percent: BTC keeps its own 98%, the leftover two points go to
+    /// the slices with the largest rounding error.
+    @Test func `the largest slice does not absorb the rounding of the small ones`() {
+        let context = Fixture.context(
+            tokens: [
+                token(symbol: "BTC", coinGeckoId: "btc", amount: 1, usdValue: 98200),
+                token(symbol: "AAA", coinGeckoId: "aaa", amount: 1, usdValue: 450),
+                token(symbol: "BBB", coinGeckoId: "bbb", amount: 1, usdValue: 450),
+                token(symbol: "CCC", coinGeckoId: "ccc", amount: 1, usdValue: 450),
+                token(symbol: "DDD", coinGeckoId: "ddd", amount: 1, usdValue: 450)
+            ],
+            livePricesUSD: ["btc": 98200, "aaa": 450, "bbb": 450, "ccc": 450, "ddd": 450])
+
+        let slices = OverviewFeature.topAssets(.assets, context: context).slices
+
+        #expect(slices.first?.label == "BTC")
+        #expect(slices.map(\.displayPercent) == [98, 1, 1, 0, 0])
+    }
+
     @Test func `category mode keeps the omitted categories in other`() throws {
         let context = Fixture.context(
             tokens: [

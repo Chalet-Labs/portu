@@ -143,12 +143,13 @@ extension OverviewFeature {
             inputs.append(SliceInput(id: residualID, label: "other", value: remainder, logoURL: nil))
         }
         let hidden = ranked.hidden
-        // Shares come from the USD values, so the rounding never depends on the rate. With no
-        // positive gross there is nothing to share out, and every share shows "—" (F4).
+        // Shares come from the USD values, so the rounding never depends on the rate. The legend
+        // shows whole percents. With no positive gross there is nothing to share out, and every
+        // share shows "—" (F4).
         let values = inputs.map(\.value) + (hidden.isEmpty ? [] : [hidden.gross])
-        let percentages: [Int?] = values.reduce(Decimal.zero, +) > 0
-            ? displayPercentages(for: values)
-            : Array(repeating: nil, count: values.count)
+        let percentages: [Int?] = ListShares.rounded(values, fractionDigits: 2)?
+            .map { Int(truncating: ($0 * 100) as NSDecimalNumber) }
+            ?? Array(repeating: nil, count: values.count)
         let slices = zip(inputs.indices, inputs).map { index, input in
             OverviewAssetSlice(
                 id: input.id,
