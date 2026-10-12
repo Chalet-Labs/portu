@@ -35,7 +35,8 @@ struct OverviewValuationSources: DynamicProperty {
         OverviewFeature.headline(activePortfolio(positions, categoryResolver: .defaults, includingLiveChanges: true))
     }
 
-    /// The summary cards show no 24h figure, so they do not read the live fractions.
+    /// The summary cards show no 24h figure, so they do not read the live fractions: a change to
+    /// the fractions alone leaves them be. A price tick still re-renders them.
     func summaryCards(_ positions: [Position], categoryResolver: PortfolioCategoryResolver) -> [OverviewSummaryCard] {
         OverviewSummaryCardsFeature.cards(
             activePortfolio(positions, categoryResolver: categoryResolver, includingLiveChanges: false),

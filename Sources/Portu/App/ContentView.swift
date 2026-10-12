@@ -16,7 +16,7 @@ struct ContentView: View {
     }
 
     var body: some View {
-        HistoricalPriceChanges24hProvider {
+        HistoricalPricesProvider {
             mainDashboard
         }
         .frame(minWidth: 900, minHeight: 600)

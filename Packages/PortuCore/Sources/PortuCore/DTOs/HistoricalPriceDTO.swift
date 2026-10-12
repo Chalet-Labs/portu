@@ -1,11 +1,15 @@
 import Foundation
 
 public enum HistoricalPriceCalendar {
-    public static func utcStartOfDay(for date: Date) -> Date {
+    private static let utc: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone.gmt
         calendar.locale = Locale(identifier: "en_US_POSIX")
-        return calendar.startOfDay(for: date)
+        return calendar
+    }()
+
+    public static func utcStartOfDay(for date: Date) -> Date {
+        utc.startOfDay(for: date)
     }
 }
 

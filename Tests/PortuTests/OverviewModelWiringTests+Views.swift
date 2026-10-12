@@ -32,6 +32,25 @@ extension OverviewModelWiringTests {
         }
     }
 
+    /// A 3 ETH borrow outweighs the holdings, so the prior total (−2900 + 600) is not positive: both
+    /// headers show "—", and the top bar drops the arrow it draws next to a percentage.
+    @Test func `the top bar and sidebar header show a dash and no arrow without a positive prior`() throws {
+        let store = try Store()
+        let wallet = try #require(store.positions.first { $0.account?.isActive == true })
+        let eth = try #require(wallet.tokens.first { $0.asset?.symbol == "ETH" }?.asset)
+        try store.insert([PositionToken(role: .borrow, amount: 3, usdValue: 8700, asset: eth, position: wallet)])
+        let headline = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(positions) })
+
+        #expect(headline.changePercentage == nil)
+        for view in [AnyView(OverviewTopBar()), AnyView(SidebarPortfolioHeader())] {
+            let texts = try Self.texts(of: view, over: store)
+            #expect(texts.contains("—"), "\(texts)")
+        }
+        let arrows = try Self.images(of: OverviewTopBar(), over: Store())
+        #expect(!arrows.isEmpty, "the positive-prior top bar draws its arrow")
+        #expect(try Self.images(of: OverviewTopBar(), over: store).isEmpty)
+    }
+
     /// The cards view builds its resolver from the store's categories and rules: renamed major
     /// categories and a DEGEN → Stablecoins rule.
     @Test func `the cards view uses the store's categories and rules`() throws {
@@ -160,6 +179,24 @@ extension OverviewModelWiringTests {
             return true
         }
         return false
+    }
+
+    /// The image elements in the rendered view, by their accessibility description or label.
+    static func images(of view: some View, over store: Store) throws -> [String] {
+        let hostingView = try #require(render(view, over: store, size: CGSize(width: 400, height: 200)))
+        return accessibilityImages(hostingView)
+    }
+
+    private static func accessibilityImages(_ element: Any) -> [String] {
+        let object = element as AnyObject
+        var images: [String] = []
+        if accessibilityString("accessibilityRole", of: element) == NSAccessibility.Role.image.rawValue {
+            images.append(accessibilityString("accessibilityLabel", of: element) ?? "")
+        }
+        for child in object.accessibilityChildren?() ?? [] {
+            images += accessibilityImages(child)
+        }
+        return images
     }
 
     private static func accessibilityTexts(_ element: Any) -> [String] {

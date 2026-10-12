@@ -4,14 +4,21 @@ import PortuCore
 
 // MARK: - Types
 
+/// A Health row's identity: one symbol + name group. Kept as two fields so "AB" + "C" and "A" + "BC"
+/// stay apart.
+struct PortfolioHealthGroupKey: Hashable {
+    let symbol: String
+    let name: String
+}
+
 struct AssetWeight: Equatable, Identifiable {
     let symbol: String
     let name: String
     let usdValue: Decimal
     let percentage: Decimal
 
-    var id: String {
-        symbol + name
+    var id: PortfolioHealthGroupKey {
+        PortfolioHealthGroupKey(symbol: symbol, name: name)
     }
 }
 
@@ -21,8 +28,8 @@ struct ConcentrationRisk: Equatable, Identifiable {
     let percentage: Decimal
     let threshold: Decimal
 
-    var id: String {
-        symbol + name
+    var id: PortfolioHealthGroupKey {
+        PortfolioHealthGroupKey(symbol: symbol, name: name)
     }
 }
 
@@ -77,7 +84,7 @@ struct PortfolioHealthFeature {
 
         let stablecoinIds = Set(tokens
             .filter { $0.portfolioCategory.semanticRole == .stablecoin }
-            .map { $0.symbol + $0.name })
+            .map { PortfolioHealthGroupKey(symbol: $0.symbol, name: $0.name) })
         let stablecoinValue = weights
             .filter { stablecoinIds.contains($0.id) }
             .reduce(Decimal.zero) { $0 + $1.usdValue }

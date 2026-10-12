@@ -175,6 +175,20 @@ struct OverviewPollingSeamTests {
         #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: [], portfolioLimit: 1) == ["live-coin"])
     }
 
+    /// Plan change (#98): a CoinGecko dust holding whose only close is not newer than its sync keeps
+    /// its sync value and is polled so it can get a price. A close on a later UTC day values it, and
+    /// as hidden dust it is not polled.
+    @Test(arguments: [(-1, true), (0, true), (1, false)])
+    func `polling a dust coin depends on whether its close is newer than its sync`(closeDay: Int, isPolled: Bool) {
+        let close = HistoricalClose(day: Fixture.day(closeDay), price: Fixture.decimal("0.6"))
+        let context = Fixture.context(
+            tokens: [token(symbol: "DST", coinGeckoId: "dust-coin", amount: 1, usdValue: Fixture.decimal("0.5"))],
+            settings: Self.hideBoth,
+            historical: HistoricalMarketPrices(closesUSD: ["dust-coin": close]))
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == (isPolled ? ["dust-coin"] : []))
+    }
+
     @Test func `polling asks for the coin gecko override`() {
         let mapped = token(symbol: "MAP", coinGeckoId: "old-map", amount: 1, usdValue: 10)
         let context = Fixture.context(

@@ -6,7 +6,8 @@ public struct ValuationTotals: Equatable, Sendable {
     public var gross: Decimal
     /// Σ borrow values, as a positive amount.
     public var debt: Decimal
-    /// Σ contributions of every token (A4).
+    /// Σ the tokens' 24h changes (V4) over every token, valued or not (A4). A change, not a value:
+    /// `net` is the total it belongs to.
     public var change24h: Decimal
     /// Σ role-signed amounts of counted tokens, ignored ones included. Only meaningful for one asset.
     public var netAmount: Decimal

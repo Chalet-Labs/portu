@@ -243,6 +243,38 @@ struct OverviewTopAssetsSeamTests {
         #expect(topAssets.hiddenDisplayPercent == 0)
     }
 
+    /// F4: the hidden line takes part in the largest-remainder rounding. ETH alone is 99.1%, the
+    /// hidden dust 0.9%, so the legend reads 99% + 1%, not a slice at 100% next to a 1% line.
+    @Test(arguments: [TopAssetMode.assets, .category])
+    func `donut shares round the hidden line together with the slices`(mode: TopAssetMode) {
+        let context = Fixture.context(tokens: [
+            token(symbol: "ETH", amount: 1, usdValue: 99),
+            token(symbol: "DUST", category: .meme, amount: 1, usdValue: Fixture.decimal("0.9"))
+        ])
+
+        let topAssets = OverviewFeature.topAssets(mode, context: context)
+
+        #expect(topAssets.slices.count == 1)
+        #expect(topAssets.slices.map(\.displayPercent) == [99])
+        #expect(topAssets.hiddenDisplayPercent == 1)
+        #expect(topAssets.slices.compactMap(\.displayPercent).reduce(0, +) + (topAssets.hiddenDisplayPercent ?? 0) == 100)
+    }
+
+    /// The same with an "other" remainder: six 16.5% slices and a 0.9% line round to 6 × 17 + 1,
+    /// so the three ties earliest in the legend give back a point each.
+    @Test func `donut shares round the remainder and the hidden line together`() {
+        let symbols = ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"]
+        let context = Fixture.context(tokens: symbols.map { token(symbol: $0, amount: 1, usdValue: 16) }
+            + [token(symbol: "DUST", amount: 1, usdValue: Fixture.decimal("0.9"))])
+
+        let topAssets = OverviewFeature.topAssets(.assets, context: context)
+
+        #expect(topAssets.slices.map(\.label).last == "other")
+        #expect(topAssets.slices.map(\.displayPercent) == [16, 16, 16, 17, 17, 17])
+        #expect(topAssets.hiddenDisplayPercent == 1)
+        #expect(topAssets.slices.compactMap(\.displayPercent).reduce(0, +) + (topAssets.hiddenDisplayPercent ?? 0) == 100)
+    }
+
     @Test func `donut hidden line is converted once at the display rate`() throws {
         let rate = Fixture.decimal("0.9")
         let usd = try #require(OverviewFeature.topAssets(.assets, context: Fixture.context()).hidden)

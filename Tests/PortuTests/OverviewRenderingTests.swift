@@ -84,6 +84,12 @@ struct OverviewRenderingTests {
         #expect(OverviewPriceDisplay.changePercentage(0) == "0.00%")
     }
 
+    /// Only POSIX leaves out the grouping separator and the space before the sign, so this fails on
+    /// any host locale if the formatter loses its fixed locale.
+    @Test func `the 24h percentage ignores the host locale`() {
+        #expect(OverviewPriceDisplay.changePercentage(Fixture.decimal("12.345")) == "1234.50%")
+    }
+
     // MARK: - Top Assets donut
 
     @Test func `the donut charts every positive slice and the hidden gross`() {
@@ -112,6 +118,7 @@ struct OverviewRenderingTests {
         #expect(topAssets.slices.count == 2)
         #expect(topAssets.slices.contains { $0.value == 0 })
         #expect(topAssets.chartSlices.map(\.value) == [1000])
+        #expect(topAssets.slices.map(\.displayPercent) == [100, 0])
         #expect(topAssets.hidden == nil)
     }
 

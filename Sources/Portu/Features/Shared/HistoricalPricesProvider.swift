@@ -9,7 +9,9 @@ extension EnvironmentValues {
     @Entry var historicalMarketPrices: HistoricalMarketPrices = .empty
 }
 
-struct HistoricalPriceChanges24hProvider<Content: View>: View {
+/// Publishes the stored historical prices to the content: the USD closes and fractions valuation
+/// reads, and the display-currency closes Assets, Exposure and Performance still read.
+struct HistoricalPricesProvider<Content: View>: View {
     @Environment(AppState.self) private var appState
 
     @Query private var historicalPrices: [HistoricalPricePoint]
@@ -64,14 +66,15 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
 
 enum HistoricalMarketPricesFeature {
     /// The USD closes and consecutive-day fractions of the stored rows. No currency or rate goes in:
-    /// non-USD rows are dropped, never converted.
+    /// non-USD rows are dropped, never converted. With backfill disabled no row is read.
     static func prices(
         from rows: [HistoricalPricePoint],
         isBackfillEnabled: Bool,
         now: Date) -> HistoricalMarketPrices {
-        HistoricalMarketPrices(
+        guard isBackfillEnabled else { return .empty }
+        return HistoricalMarketPrices(
             closeRows: rows.map(HistoricalCloseRow.init),
-            isBackfillEnabled: isBackfillEnabled,
+            isBackfillEnabled: true,
             now: now)
     }
 }

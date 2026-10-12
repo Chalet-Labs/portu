@@ -24,8 +24,8 @@ extension OverviewFeature {
     }
 
     /// A token with a usable price is polled while the dashboard shows it. One without (valued from
-    /// its sync value, or unpriced) is polled so it can get one, except an onchain ID whose sync
-    /// value is dust under `hideDust`.
+    /// its sync value, or unpriced) is polled so it can get one, except, when `hideUnpriced` is on
+    /// and the asset is not `alwaysShow`, an onchain ID whose sync value is dust under `hideDust`.
     private static func isPolled(
         _ token: ValuedToken,
         priceID: String,

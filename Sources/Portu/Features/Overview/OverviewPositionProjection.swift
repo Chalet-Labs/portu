@@ -25,22 +25,16 @@ struct OverviewPositionInputs {
 }
 
 /// A tab as shown: its position groups, each ending with its own hidden-balances line, then one line
-/// for the groups that have no visible row (S3). Totals and changes are on the tab's basis.
+/// for the groups that have no visible row (S3). Money is in the display currency, and the total and
+/// change are the module's aggregates over the tab on its basis.
 struct OverviewPositionTabData: Equatable {
     let groups: [OverviewPositionGroupData]
-    var basis: DashboardBasis = .gross
-    /// The rows of groups with no visible row, in the display currency; `nil` when there are none.
-    var hidden: HiddenBalances?
-    /// Those rows' 24h change on the tab's basis.
-    var hiddenChange24h: Decimal = 0
-
-    var total: Decimal {
-        groups.reduce(Decimal.zero) { $0 + $1.value } + (hidden?.value(on: basis) ?? 0)
-    }
-
-    var change24h: Decimal {
-        groups.reduce(Decimal.zero) { $0 + $1.change24h } + hiddenChange24h
-    }
+    let basis: DashboardBasis
+    /// The rows of groups with no visible row; `nil` when there are none.
+    let hidden: HiddenBalances?
+    /// Every group plus the tab's hidden line; for Key Changes, the shown rows.
+    let total: Decimal
+    let change24h: Decimal
 
     /// A tab whose rows are all hidden still shows its hidden line instead of the empty message.
     var showsEmptyState: Bool {
@@ -72,20 +66,34 @@ enum OverviewPositionProjection {
                 && positions[input.position.positionId] != nil
         }
         let valuation = context.restricted(to: admitted).valuation()
+        let rate = context.usdToDisplayRate
 
         switch tab {
         case .keyChanges:
+            // Exempt in A7: the groups and the tab total the shown movers only.
+            let basis = DashboardBasis.net
             let movers = valuation.keyChanges(settings: context.settings, limit: keyChangeLimit)
             let groups = grouped(movers, positions: positions).map { position, tokens in
-                OverviewPositionGroupData(
+                let totals = ValuationTotals(tokens)
+                return OverviewPositionGroupData(
                     position: position,
-                    tokens: tokens.map { row($0, basis: .gross, rate: context.usdToDisplayRate) })
+                    tokens: tokens.map { row($0, basis: basis, rate: rate) },
+                    basis: basis,
+                    hidden: nil,
+                    value: totals.value(on: basis) * rate,
+                    change24h: onBasis(totals.change24h, basis) * rate)
             }
-            return OverviewPositionTabData(groups: groups)
+            let totals = ValuationTotals(movers)
+            return OverviewPositionTabData(
+                groups: groups,
+                basis: basis,
+                hidden: nil,
+                total: totals.value(on: basis) * rate,
+                change24h: onBasis(totals.change24h, basis) * rate)
         case .idleStables, .idleMajors:
-            return filtered(valuation.tokens, basis: .gross, positions: positions, context: context)
+            return filtered(valuation, basis: .net, positions: positions, context: context)
         case .borrowing:
-            return filtered(valuation.tokens, basis: .debt, positions: positions, context: context)
+            return filtered(valuation, basis: .debt, positions: positions, context: context)
         }
     }
 
@@ -121,9 +129,11 @@ enum OverviewPositionProjection {
     // MARK: - Filtered tabs
 
     /// One display-filtered list per position group, so each group ends with its own hidden line. A
-    /// group with no visible row gets no card; its rows fold into the tab's line.
+    /// group with no visible row gets no card; its rows fold into the tab's line. A group's total and
+    /// change are its list's, which cover its hidden rows; the tab's are the valuation's, since
+    /// `valuation` holds exactly the tab's tokens.
     private static func filtered(
-        _ tokens: [ValuedToken],
+        _ valuation: PortfolioValuation,
         basis: DashboardBasis,
         positions: [UUID: OverviewPositionMeta],
         context: OverviewValuationContext) -> OverviewPositionTabData {
@@ -131,7 +141,7 @@ enum OverviewPositionProjection {
         var groups: [OverviewPositionGroupData] = []
         var folded: [ValuedToken] = []
 
-        for (position, tokens) in grouped(tokens, positions: positions) {
+        for (position, tokens) in grouped(valuation.tokens, positions: positions) {
             let list = DashboardList(tokens, basis: basis, settings: context.settings, groupedBy: \.tokenId)
             let visible = list.visibleRows.flatMap(\.tokens)
             guard !visible.isEmpty else {
@@ -143,15 +153,17 @@ enum OverviewPositionProjection {
                 tokens: visible.map { row($0, basis: basis, rate: rate) },
                 basis: basis,
                 hidden: list.hidden.isEmpty ? nil : list.hidden.display(rate: rate),
-                hiddenChange24h: hiddenChange24h(list, basis: basis) * rate))
+                value: list.total * rate,
+                change24h: onBasis(list.totals.change24h, basis) * rate))
         }
 
-        let footer = DashboardList(folded, basis: basis, settings: context.settings, groupedBy: \.tokenId)
+        let footer = DashboardList(folded, basis: basis, settings: context.settings, groupedBy: \.tokenId).hidden
         return OverviewPositionTabData(
             groups: groups,
             basis: basis,
-            hidden: footer.hidden.isEmpty ? nil : footer.hidden.display(rate: rate),
-            hiddenChange24h: hiddenChange24h(footer, basis: basis) * rate)
+            hidden: footer.isEmpty ? nil : footer.display(rate: rate),
+            total: valuation.totals.value(on: basis) * rate,
+            change24h: onBasis(valuation.totals.change24h, basis) * rate)
     }
 
     /// Groups tokens by owning position, preserving first-appearance order.
@@ -174,22 +186,16 @@ enum OverviewPositionProjection {
     }
 
     /// A token row in the display currency. Value and change are on the tab's basis: a borrow shows
-    /// its debt, and its change is positive when the debt grows.
+    /// its debt, and its change is positive when the debt grows. The holding tabs admit positive
+    /// roles only, so on their net basis a row's value is its gross value.
     private static func row(_ token: ValuedToken, basis: DashboardBasis, rate: Decimal) -> OverviewPositionTokenData {
-        let price = token.token.amount > 0 ? token.value / token.token.amount : 0
+        let shown = token.display(rate: rate)
         return OverviewPositionTokenData(
-            id: token.tokenId,
-            entry: token.token,
-            price: price * rate,
-            value: token.value * rate,
-            change24h: onBasis(token.change24h, basis) * rate)
-    }
-
-    /// The hidden rows' 24h change, in USD, on the list's basis.
-    private static func hiddenChange24h(_ list: DashboardList<UUID>, basis: DashboardBasis) -> Decimal {
-        list.rows
-            .filter { $0.status.isDashboardRow && !$0.isVisible }
-            .reduce(Decimal.zero) { $0 + onBasis($1.totals.change24h, basis) }
+            id: shown.tokenId,
+            entry: shown.token,
+            price: shown.token.amount > 0 ? shown.value / shown.token.amount : 0,
+            value: shown.value,
+            change24h: onBasis(shown.change24h, basis))
     }
 
     /// A net change (a borrow's contribution falls as its debt grows) expressed on `basis`.

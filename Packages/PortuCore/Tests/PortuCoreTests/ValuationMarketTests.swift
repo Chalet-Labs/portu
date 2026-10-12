@@ -21,6 +21,14 @@ struct ValuationMarketTests {
         #expect(closes["usd-coin"] == HistoricalClose(day: Fixture.day(0), price: 1))
     }
 
+    /// Either end of a UTC day maps to its start, whatever the host time zone.
+    @Test(arguments: [1800.0, 86400.0 - 1800])
+    func `the utc start of day ignores the host time zone`(secondsIntoDay: TimeInterval) {
+        let instant = Fixture.day(0).addingTimeInterval(secondsIntoDay)
+
+        #expect(HistoricalPriceCalendar.utcStartOfDay(for: instant) == Fixture.day(0))
+    }
+
     @Test(arguments: [false, true])
     func `same day closes keep the higher price whatever the row order`(reversed: Bool) throws {
         let rows = [Fixture.closeRow("ethereum", 3000, day: 0), Fixture.closeRow("ethereum", 3100, day: 0)]

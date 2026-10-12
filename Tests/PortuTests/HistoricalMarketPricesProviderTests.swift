@@ -134,7 +134,7 @@ struct HistoricalMarketPricesProviderTests {
             appState.selectedCurrency = .chf
             appState.currentUSDToDisplayRate = try #require(Decimal(string: "0.88"))
 
-            let hostingView = NSHostingView(rootView: HistoricalPriceChanges24hProvider(
+            let hostingView = NSHostingView(rootView: HistoricalPricesProvider(
                 now: HistoricalMarketPricesProviderTests.now) { [recorder] in
                     Sink(recorder: recorder)
                 }

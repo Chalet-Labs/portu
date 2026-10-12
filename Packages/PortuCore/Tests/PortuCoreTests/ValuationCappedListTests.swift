@@ -13,7 +13,7 @@ struct ValuationCappedListTests {
 
         let donut = Fixture.list(valuation, .gross) { $0.token.symbol }
             .ranked(top: 5)
-        let shares = try #require(donut.shares)
+        let shares = try #require(donut.shares())
 
         #expect(donut.rows.map(\.key) == ["T0", "T1", "T2", "T3", "T4"])
         #expect(try #require(donut.remainder).gross == 6)
@@ -23,6 +23,23 @@ struct ValuationCappedListTests {
         #expect(shares.remainder == Fixture.decimal("0.06"))
         #expect(shares.hidden == Fixture.decimal("0.005"))
         #expect(shares.all.reduce(0, +) == 1)
+    }
+
+    /// Whole percents for the donut legend: the hidden 0.5 of 99.5 rounds up to 1%.
+    @Test func `shares round to the step the caller asks for`() throws {
+        let values: [Decimal] = [30, 25, 20, 10, 8, 4, 2, Fixture.decimal("0.5")]
+        let valuation = Fixture.valuation(values.enumerated().map { index, value in
+            Fixture.input(Fixture.synced("T\(index)", value))
+        })
+
+        let donut = Fixture.list(valuation, .gross) { $0.token.symbol }.ranked(top: 5)
+        let shares = try #require(donut.shares(fractionDigits: 2))
+
+        #expect(shares.rows == ["0.3", "0.25", "0.2", "0.1", "0.08"].map(Fixture.decimal))
+        #expect(shares.remainder == Fixture.decimal("0.06"))
+        #expect(shares.hidden == Fixture.decimal("0.01"))
+        #expect(shares.all.reduce(0, +) == 1)
+        #expect(donut.shares() == donut.shares(fractionDigits: 3))
     }
 
     @Test func `ranking ties use the caller's tie break`() {
@@ -41,7 +58,7 @@ struct ValuationCappedListTests {
         let valuation = Fixture.valuation([Fixture.input(Fixture.synced("A", 10))])
 
         let ranked = Fixture.list(valuation, .gross) { $0.token.symbol }.ranked(top: 5)
-        let shares = try #require(ranked.shares)
+        let shares = try #require(ranked.shares())
 
         #expect(ranked.remainder == nil)
         #expect(ranked.displayRemainder(rate: 2) == nil)
@@ -150,6 +167,31 @@ struct ValuationCappedListTests {
         #expect(movers.map(\.token.symbol) == ["SHOWN", "V2", "V1"])
     }
 
+    /// Twenty gainers at +10 each and one loser at −500: by signed change the loser would come 21st
+    /// and miss the cap.
+    @Test func `key changes rank a large loser ahead of smaller gainers`() throws {
+        var inputs: [ValuationInput] = []
+        var live: [String: Decimal] = [:]
+        var changes: [String: Decimal] = [:]
+        for index in 0 ..< 20 {
+            let id = "g\(index)"
+            inputs.append(Fixture.input(Fixture.token("G\(index)", coinGeckoId: id, amount: 1)))
+            live[id] = 110
+            changes[id] = Fixture.decimal("0.1")
+        }
+        inputs.append(Fixture.input(Fixture.token("LOSER", coinGeckoId: "loser", amount: 1)))
+        live["loser"] = 500
+        changes["loser"] = Fixture.decimal("-0.5")
+        let valuation = Fixture.valuation(inputs, market: Fixture.market(live: live, changes: changes))
+
+        let movers = valuation.keyChanges(settings: .defaults, limit: 20)
+
+        #expect(movers.count == 20)
+        #expect(try #require(movers.first).token.symbol == "LOSER")
+        #expect(try #require(movers.first).change24h == -500)
+        #expect(movers.dropFirst().allSatisfy { $0.change24h == 10 })
+    }
+
     @Test func `key change ties are broken by symbol`() {
         let valuation = Fixture.valuation(
             [
@@ -174,7 +216,7 @@ struct ValuationCappedListTests {
 
         let health = Fixture.list(valuation, .positiveNet) { $0.token.symbol }
             .ranked()
-        let shares = try #require(health.shares)
+        let shares = try #require(health.shares())
 
         #expect(health.rows.count == 7)
         #expect(shares.all.reduce(0, +) == 1)
@@ -273,7 +315,7 @@ struct ValuationShareTests {
         ])
 
         let ranked = Fixture.list(valuation, .net) { $0.token.symbol }.ranked()
-        let shares = try #require(ranked.shares)
+        let shares = try #require(ranked.shares())
 
         #expect(shares.rows == [Fixture.decimal("0.334"), Fixture.decimal("0.333")])
         #expect(shares.hidden == Fixture.decimal("0.333"))

@@ -31,13 +31,19 @@ struct OverviewListSeamTests {
         #expect(tab.change24h == 1200)
     }
 
+    /// The +25% tether fraction moves the hidden USDT borrow: its contribution −0.4 changes by
+    /// −0.08, a debt that grew by 0.08, so the group reads 300 + 0.08.
     @Test func `borrowing group total is its visible debt plus its hidden line`() {
-        let tab = OverviewPositionProjection.tab(.borrowing, context: Fixture.context(), positions: Fixture.positions)
+        let tab = OverviewPositionProjection.tab(
+            .borrowing,
+            context: Fixture.context(liveChanges24h: Self.tetherRising),
+            positions: Fixture.positions)
 
         #expect(tab.groups.map(\.position.title) == ["Aave V3"])
         #expect(tab.groups.map { $0.tokens.map(\.symbol) } == [["ETH"]])
         #expect(tab.groups.map(\.value) == [Fixture.decimal("1500.4")])
-        #expect(tab.groups.map(\.change24h) == [300])
+        #expect(tab.groups.map(\.change24h) == [Fixture.decimal("300.08")])
+        #expect(tab.change24h == Fixture.decimal("300.08"))
         #expect(tab.groups.first?.hidden?.rowCount == 1)
         #expect(tab.groups.first?.hidden?.debt == Fixture.decimal("0.4"))
         #expect(tab.total == Fixture.decimal("1500.4"))
@@ -182,7 +188,9 @@ struct OverviewListSeamTests {
             "USDC", "ETH", "PEPE", "MNL", "LINK", "UNI", "TINY", "DEGEN", "OTC", "SOL", "ARB"
         ])
         #expect(health.hidden?.gross == Fixture.decimal("0.5"))
-        #expect(health.hiddenShare == Fixture.decimal("0.5") / Fixture.decimal("10780.8"))
+        // The shown share of 0.5 in 10,780.8 rounds to 0.0%, and the expanded list shows that one.
+        #expect(health.displayShares?.hidden == 0)
+        #expect(health.weightList(showAll: true).hiddenShare == health.displayShares?.hidden)
         let total = health.weights.reduce(Decimal.zero) { $0 + $1.usdValue } + (health.hidden?.net ?? 0)
         #expect(total == Fixture.decimal("10780.8"))
     }
@@ -233,8 +241,9 @@ extension OverviewListSeamTests {
         #expect(display.groups.map { $0.tokens.map(\.value) } == usd.groups.map { $0.tokens.map { $0.value * rate } })
         #expect(display.groups.map { $0.tokens.map(\.change24h) } == usd.groups.map { $0.tokens.map { $0.change24h * rate } })
         #expect(display.groups.map(\.value) == usd.groups.map { $0.value * rate })
-        #expect(display.groups.map(\.hiddenChange24h) == usd.groups.map { $0.hiddenChange24h * rate })
         #expect(display.groups.map(\.change24h) == usd.groups.map { $0.change24h * rate })
+        #expect(display.total == usd.total * rate)
+        #expect(display.change24h == usd.change24h * rate)
     }
 
     @Test func `key changes price a mapped token through its mapping and never show an ignored one`() {
@@ -300,6 +309,7 @@ extension OverviewListSeamTests {
     private static let aaveBorrow = Fixture.input(403, .aave, Fixture.token(
         Fixture.AssetID.eth, "ETH", "Ethereum", .major, coinGeckoId: "ethereum", role: .borrow,
         amount: Fixture.decimal("0.5"), usdValue: 1450))
+    private static let tetherRising = Fixture.liveChanges24h.merging(["tether": Fixture.decimal("0.25")]) { $1 }
     private static let lidoDustBorrow = Fixture.input(404, .lido, Fixture.token(
         Fixture.AssetID.usdt, "USDT", "Tether", .stablecoin, coinGeckoId: "tether", role: .borrow,
         amount: Fixture.decimal("0.4"), usdValue: Fixture.decimal("0.4")))
@@ -342,17 +352,19 @@ extension OverviewListSeamTests {
         #expect(tab.total == Fixture.decimal("0.5"))
     }
 
+    /// The folded USDT borrow's change (+0.08 of debt at +25%) reaches the tab, not the Aave group.
     @Test func `a borrowing group with only dust debt folds into the tab line as positive debt`() {
         let tab = OverviewPositionProjection.tab(
             .borrowing,
-            context: Fixture.context(inputs: [Self.aaveBorrow, Self.lidoDustBorrow]),
+            context: Fixture.context(inputs: [Self.aaveBorrow, Self.lidoDustBorrow], liveChanges24h: Self.tetherRising),
             positions: Fixture.positions)
 
         #expect(tab.groups.map(\.position.title) == ["Aave V3"])
         #expect(tab.groups.map(\.value) == [1500])
+        #expect(tab.groups.map(\.change24h) == [300])
         #expect(tab.hidden?.debt == Fixture.decimal("0.4"))
         #expect(tab.total == Fixture.decimal("1500.4"))
-        #expect(tab.change24h == 300)
+        #expect(tab.change24h == Fixture.decimal("300.08"))
     }
 
     @Test func `a rising debt is tinted as a loss and a rising holding as a gain`() throws {

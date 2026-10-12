@@ -71,28 +71,21 @@ struct OverviewPositionTokenData: Identifiable, Equatable {
 }
 
 /// A position and its qualifying tokens, ready to render. The group's list ends with its own
-/// hidden-balances line (F3), so its total and 24h change cover the hidden rows too. Both are on
-/// the tab's basis: gross for the holding tabs, positive debt for Borrowing (S3).
+/// hidden-balances line (F3), so its total and 24h change, the module's over the group, cover the
+/// hidden rows too. Money is in the display currency and on the tab's basis: positive debt for
+/// Borrowing (S3).
 struct OverviewPositionGroupData: Identifiable, Equatable {
     let position: OverviewPositionMeta
     let tokens: [OverviewPositionTokenData]
-    var basis: DashboardBasis = .gross
-    /// The group's rows the display filter hides, in the display currency; `nil` when none are.
-    var hidden: HiddenBalances?
-    /// The hidden rows' 24h change, on the group's basis.
-    var hiddenChange24h: Decimal = 0
+    let basis: DashboardBasis
+    /// The group's rows the display filter hides; `nil` when none are.
+    let hidden: HiddenBalances?
+    /// Σ visible rows + the hidden line.
+    let value: Decimal
+    let change24h: Decimal
 
     var id: UUID {
         position.id
-    }
-
-    /// Σ visible rows + the hidden line.
-    var value: Decimal {
-        tokens.reduce(.zero) { $0 + $1.value } + (hidden?.value(on: basis) ?? 0)
-    }
-
-    var change24h: Decimal {
-        tokens.reduce(.zero) { $0 + $1.change24h } + hiddenChange24h
     }
 
     /// A growing debt is a loss.

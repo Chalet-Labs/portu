@@ -14,7 +14,8 @@ struct OverviewPriceInputs: Equatable {
     }
 
     /// The app's USD book. Only views that show a 24h change read the live fractions, so the others
-    /// do not re-render when they tick.
+    /// do not re-render on a change to the fractions alone. Every view reads the live prices, and a
+    /// poll writes prices and fractions together, so a price tick re-renders them all.
     @MainActor
     static func live(
         _ appState: AppState,
@@ -146,23 +147,22 @@ extension OverviewFeature {
         // Shares come from the USD values, so the rounding never depends on the rate. The legend
         // shows whole percents. With no positive gross there is nothing to share out, and every
         // share shows "—" (F4).
-        let values = inputs.map(\.value) + (hidden.isEmpty ? [] : [hidden.gross])
-        let percentages: [Int?] = ListShares.rounded(values, fractionDigits: 2)?
-            .map { Int(truncating: ($0 * 100) as NSDecimalNumber) }
-            ?? Array(repeating: nil, count: values.count)
+        let shares = ranked.shares(fractionDigits: 2)
+        let percent = { (share: Decimal?) in share.map { Int(truncating: ($0 * 100) as NSDecimalNumber) } }
+        let sliceShares = shares.map { $0.rows + [$0.remainder].compactMap(\.self) }
         let slices = zip(inputs.indices, inputs).map { index, input in
             OverviewAssetSlice(
                 id: input.id,
                 label: input.label,
                 value: input.value * rate,
-                displayPercent: percentages[index],
+                displayPercent: percent(sliceShares?[index]),
                 colorIndex: index,
                 logoURL: input.logoURL)
         }
         return OverviewTopAssets(
             slices: slices,
             hidden: hidden.isEmpty ? nil : hidden.display(rate: rate),
-            hiddenDisplayPercent: hidden.isEmpty ? nil : percentages.last.flatMap(\.self))
+            hiddenDisplayPercent: percent(shares?.hidden))
     }
 
     // MARK: - Watchlist
@@ -387,8 +387,6 @@ struct PortfolioHealthData: Equatable {
     let concentrationRisks: [ConcentrationRisk]
     /// The expanded list's hidden-balances line, in the display currency; `nil` when nothing is hidden.
     let hidden: HiddenBalances?
-    /// The hidden line's unrounded share, on the same scale as `AssetWeight.percentage`.
-    let hiddenShare: Decimal?
     /// The weights and the hidden line rounded together so they sum to 100% (F4).
     let displayShares: ListShares?
 }
@@ -401,7 +399,7 @@ struct PortfolioHealthWeightList: Equatable {
         /// `nil` shows "—".
         let share: Decimal?
 
-        var id: String {
+        var id: PortfolioHealthGroupKey {
             weight.id
         }
     }
@@ -434,23 +432,19 @@ extension PortfolioHealthData {
 }
 
 extension PortfolioHealthFeature {
-    private struct GroupKey: Hashable {
-        let symbol: String
-        let name: String
-    }
-
     /// Weights per symbol + name group, net and floored at 0 (A7), and the metrics and concentration
-    /// risks over every such group, hidden ones included (S3).
+    /// risks over every such group, hidden ones included (S3). Only counted tokens that are not
+    /// ignored can mark a group as a stablecoin.
     static func health(_ context: OverviewValuationContext) -> PortfolioHealthData {
         let valuation = context.valuation()
         let rate = context.usdToDisplayRate
         let list = DashboardList(valuation.tokens, basis: .positiveNet, settings: context.settings) {
-            GroupKey(symbol: $0.token.symbol, name: $0.token.name)
+            PortfolioHealthGroupKey(symbol: $0.token.symbol, name: $0.token.name)
         }
         let ranked = list.ranked { lhs, rhs in
             lhs.key.symbol != rhs.key.symbol ? lhs.key.symbol < rhs.key.symbol : lhs.key.name < rhs.key.name
         }
-        let weight = { (row: DashboardRow<GroupKey>) in
+        let weight = { (row: DashboardRow<PortfolioHealthGroupKey>) in
             AssetWeight(
                 symbol: row.key.symbol,
                 name: row.key.name,
@@ -458,7 +452,6 @@ extension PortfolioHealthFeature {
                 percentage: list.weight(of: row) ?? 0)
         }
         let chainCount = Set(valuation.tokens.filter { $0.isCounted && $0.isValued }.compactMap(\.position.chain)).count
-        let total = list.total
         let everyGroup = list.rows.map(weight).sorted {
             $0.percentage != $1.percentage ? $0.percentage > $1.percentage : ($0.symbol, $0.name) < ($1.symbol, $1.name)
         }
@@ -466,12 +459,11 @@ extension PortfolioHealthFeature {
         return PortfolioHealthData(
             weights: ranked.rows.map(weight),
             metrics: computeDiversificationMetrics(
-                tokens: valuation.tokens.map(\.token),
+                tokens: valuation.tokens.filter { $0.isCounted && !$0.isIgnored }.map(\.token),
                 weights: everyGroup,
                 chainCount: chainCount),
             concentrationRisks: computeConcentrationRisks(weights: everyGroup, threshold: concentrationThreshold),
             hidden: list.hidden.isEmpty ? nil : list.hidden.display(rate: rate),
-            hiddenShare: list.hidden.isEmpty || total <= 0 ? nil : list.hidden.net / total,
-            displayShares: ranked.shares)
+            displayShares: ranked.shares())
     }
 }

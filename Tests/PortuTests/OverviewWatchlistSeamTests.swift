@@ -333,6 +333,9 @@ struct OverviewWatchlistSeamTests {
 
         #expect(rows.map(\.coinGeckoId) == ["bitcoin", "usd-coin"])
         #expect(rows.map(\.isWatchlisted) == [false, true])
+        // Every candidate under the ID is ignored, so the row falls back to describing USDC.e.
+        #expect(rows.last?.symbol == "USDC.e")
+        #expect(rows.last?.assetId == bridged)
     }
 
     /// DEGEN has no CoinGecko ID of its own; only its identity mapping prices it under `degen-base`
@@ -371,6 +374,33 @@ struct OverviewWatchlistSeamTests {
 
         #expect(rows.map(\.coinGeckoId) == ["bitcoin", "degen-base"])
         #expect(rows.map(\.isWatchlisted) == [false, true])
+        #expect(rows.last?.symbol == "DEGEN")
+        #expect(rows.last?.assetId == ignored)
+    }
+
+    /// Plan: a holding whose same-asset debt equals (1) or exceeds (2) its supply has no positive
+    /// net, so it is no held row. Watched, it shows once as the watched coin with its market quote.
+    @Test(arguments: [Decimal(1), Decimal(2)])
+    func `a watched holding with no positive net shows once as the watched coin`(borrowed: Decimal) throws {
+        let eth = UUID()
+        let context = Fixture.context(
+            tokens: [
+                token(assetId: eth, symbol: "ETH", coinGeckoId: "ethereum", amount: 1, usdValue: 3000),
+                token(assetId: eth, symbol: "ETH", coinGeckoId: "ethereum", role: .borrow, amount: borrowed, usdValue: 3000 * borrowed)
+            ],
+            livePricesUSD: ["ethereum": 3100],
+            liveChanges24h: ["ethereum": Fixture.decimal("0.02")])
+
+        let rows = rows(context, assets: [asset(id: eth, symbol: "ETH", coinGeckoId: "ethereum")], watchlistIDs: ["ethereum"])
+
+        let row = try #require(rows.first)
+        #expect(rows.count == 1)
+        #expect(row.id == "ethereum")
+        #expect(row.coinGeckoId == "ethereum")
+        #expect(row.assetId == eth)
+        #expect(row.price == 3100)
+        #expect(row.change24h == Fixture.decimal("0.02"))
+        #expect(row.isWatchlisted)
     }
 
     private func rows(

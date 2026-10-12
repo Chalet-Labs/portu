@@ -173,9 +173,11 @@ extension OverviewModelWiringTests {
         #expect(screens.pollingIDs == ["ethereum"])
     }
 
-    /// The cards, donut, Health and polling show no 24h figure, so a live fraction tick must not
-    /// re-render them (spec S3; the Overview re-render costs seconds in Debug).
-    @Test func `only the headline, tabs and watchlist observe the live 24h fractions`() throws {
+    /// The cards, donut, Health and polling show no 24h figure, so a change to the live fractions
+    /// alone must not re-render them (the Overview re-render costs seconds in Debug). A real poll
+    /// writes the prices too, and every view reads those, so this covers a fraction-only change,
+    /// not every tick.
+    @Test func `only the headline, tabs and watchlist observe a fraction only change`() throws {
         let store = try Store()
 
         let flags = try #require(Self.probe(store) { sources, positions, tokens, assets in

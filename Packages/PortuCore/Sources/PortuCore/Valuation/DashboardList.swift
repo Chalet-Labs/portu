@@ -2,11 +2,13 @@ import Foundation
 
 /// How a dashboard list builds its rows (F1) and which value it shows and sums (A7).
 public enum DashboardBasis: Sendable {
-    /// Positive-role tokens only; shows gross. The donut and the Idle tabs.
+    /// Positive-role tokens only; shows gross. The donut (and Exposure's spot, through `ratio(of:to:)`).
     case gross
     /// Borrow tokens only; shows debt. The Borrowing tab.
     case debt
-    /// Every token; shows net. Exposure, Assets, Platforms, Networks, Performance, Token Settings.
+    /// Every token; shows net. The Overview Idle and Key Changes tabs (which admit positive roles
+    /// only, so their net is their gross), the watchlist and polling, Exposure, Assets, Platforms,
+    /// Networks, Performance, Token Settings.
     case net
     /// Every token, keeping only rows whose net is positive; shows net. The Health weight list.
     case positiveNet
@@ -272,9 +274,9 @@ public struct RankedDashboardList<Key: Hashable & Sendable>: Equatable, Sendable
         remainder.map { $0.value(on: basis) * rate }
     }
 
-    /// F4 shares of the rows, the remainder and the hidden line, rounded to sum to 100%; `nil` when
-    /// shares show "—".
-    public var shares: ListShares? {
+    /// F4 shares of the rows, the remainder and the hidden line, rounded to `fractionDigits` (3 is
+    /// 0.1%, 2 is whole percent) so they sum to 100%; `nil` when shares show "—".
+    public func shares(fractionDigits: Int = 3) -> ListShares? {
         var values = rows.map(\.value)
         if let remainder {
             values.append(remainder.value(on: basis))
@@ -282,7 +284,7 @@ public struct RankedDashboardList<Key: Hashable & Sendable>: Equatable, Sendable
         if !hidden.isEmpty {
             values.append(hidden.value(on: basis))
         }
-        guard let rounded = ListShares.rounded(values) else { return nil }
+        guard let rounded = ListShares.rounded(values, fractionDigits: fractionDigits) else { return nil }
         var tail = rounded.dropFirst(rows.count)
         let remainderShare = remainder == nil ? nil : tail.popFirst()
         let hiddenShare = hidden.isEmpty ? nil : tail.popFirst()

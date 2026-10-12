@@ -167,7 +167,7 @@ struct ValuationFilterTests {
         let health = bySymbol(valuation)
 
         #expect(health.rows.isEmpty)
-        #expect(health.ranked().shares == nil)
+        #expect(health.ranked().shares() == nil)
     }
 
     @Test func `net negative asset has no health row and health sums its positive nets`() throws {
