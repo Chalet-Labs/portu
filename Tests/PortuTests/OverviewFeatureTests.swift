@@ -141,50 +141,6 @@ struct OverviewFeatureTests {
         #expect(removed == ["ethereum"])
     }
 
-    @Test func `token change ignores implausible onchain live prices`() {
-        let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xBad")
-        let local = token(symbol: "BAD", amount: 1_000_000, usdValue: 10, onchainIdentity: identity)
-
-        let change = OverviewPositionPricing.change24h(
-            token: local,
-            prices: [identity.historicalPriceID: 1_000_000],
-            changes24h: [identity.historicalPriceID: 0.10],
-            override: nil)
-
-        #expect(change == 0)
-    }
-
-    @Test func `overview position visibility excludes ignored dashboard tokens`() {
-        let hidden = token(symbol: "HIDDEN", coinGeckoId: "hidden", amount: 1, usdValue: 10)
-        let overrideMap = TokenSettingsFeature.overridesByAssetId([
-            TokenPricingOverrideSnapshot(assetId: hidden.assetId, isIgnored: true)
-        ])
-
-        #expect(!OverviewPositionVisibility.isVisible(
-            token: hidden,
-            prices: ["hidden": 10],
-            overrideMap: overrideMap,
-            settings: .defaults))
-    }
-
-    @Test func `position pricing normalizes coin gecko ids`() {
-        #expect(OverviewPositionPricing.price(
-            coinGeckoId: " Ethereum ",
-            amount: 2,
-            usdValue: 10,
-            prices: ["ethereum": 3000]) == 3000)
-        #expect(OverviewPositionPricing.tokenValue(
-            coinGeckoId: " Ethereum ",
-            amount: 2,
-            usdValue: 10,
-            prices: ["ethereum": 3000]) == 6000)
-        #expect(OverviewPositionPricing.change24h(
-            coinGeckoId: " Ethereum ",
-            amount: 2,
-            prices: ["ethereum": 3000],
-            changes24h: ["ethereum": 0.05]) == 300)
-    }
-
     @Test func `borrow change tone treats increasing liabilities as unfavorable`() {
         #expect(OverviewPositionChangeTone.tone(for: .borrow, change: 10) == .unfavorable)
         #expect(OverviewPositionChangeTone.tone(for: .borrow, change: -10) == .favorable)
@@ -214,30 +170,6 @@ struct OverviewFeatureTests {
 
         #expect(OverviewSummaryLabels.majorCategoryTitle(categories: [customETH, customBTC]) == "Majors / L1s")
         #expect(OverviewSummaryLabels.majorCategoryTitle(categories: []) == "Majors")
-    }
-
-    private func token(
-        assetId: UUID = UUID(),
-        symbol: String,
-        name: String? = nil,
-        category: AssetCategory = .major,
-        coinGeckoId: String? = nil,
-        role: TokenRole = .balance,
-        amount: Decimal,
-        usdValue: Decimal,
-        onchainIdentity: OnchainTokenIdentity? = nil,
-        logoURL: String? = nil) -> TokenEntry {
-        TokenEntry(
-            assetId: assetId,
-            symbol: symbol,
-            name: name ?? symbol,
-            category: category,
-            coinGeckoId: coinGeckoId,
-            onchainIdentity: onchainIdentity,
-            role: role,
-            amount: amount,
-            usdValue: usdValue,
-            logoURL: logoURL)
     }
 
     private func asset(

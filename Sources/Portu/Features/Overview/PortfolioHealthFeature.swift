@@ -62,38 +62,6 @@ struct PortfolioHealthFeature {
 
     // MARK: - Pure Functions
 
-    static func computeAssetWeights(
-        tokens: [TokenEntry],
-        prices: [String: Decimal],
-        fallbackUSDToDisplayRate: Decimal = 1) -> [AssetWeight] {
-        // Group by (symbol, name), net positive - borrow, skip rewards
-        var groups: [String: (symbol: String, name: String, value: Decimal)] = [:]
-
-        for token in tokens {
-            let resolved = resolveValue(
-                token: token,
-                prices: prices,
-                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-            let key = token.symbol + token.name
-
-            var entry = groups[key] ?? (symbol: token.symbol, name: token.name, value: 0)
-            if token.role.isPositive {
-                entry.value += resolved
-            } else if token.role.isBorrow {
-                entry.value -= resolved
-            }
-            groups[key] = entry
-        }
-
-        let total = groups.values.reduce(Decimal.zero) { $0 + max(0, $1.value) }
-        guard total > 0 else { return [] }
-
-        return groups.values
-            .filter { $0.value > 0 }
-            .map { AssetWeight(symbol: $0.symbol, name: $0.name, usdValue: $0.value, percentage: $0.value / total) }
-            .sorted { $0.percentage > $1.percentage }
-    }
-
     /// A group at or above this share of the portfolio raises a concentration warning.
     static let concentrationThreshold = Decimal(25) / 100
 
@@ -132,17 +100,5 @@ struct PortfolioHealthFeature {
             return .medium
         }
         return .low
-    }
-
-    // MARK: - Private
-
-    private static func resolveValue(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        fallbackUSDToDisplayRate: Decimal) -> Decimal {
-        if let cgId = token.coinGeckoId, let livePrice = prices[cgId] {
-            return token.amount * livePrice
-        }
-        return token.usdValue * fallbackUSDToDisplayRate
     }
 }

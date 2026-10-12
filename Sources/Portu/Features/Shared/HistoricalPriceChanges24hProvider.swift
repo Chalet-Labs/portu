@@ -3,7 +3,6 @@ import SwiftData
 import SwiftUI
 
 extension EnvironmentValues {
-    @Entry var historicalPriceChanges24h: [String: Decimal] = [:]
     @Entry var historicalDisplayPrices: [String: Decimal] = [:]
     /// The historical half of the USD valuation inputs. It never carries the live book, so a live
     /// tick does not invalidate its readers.
@@ -38,17 +37,12 @@ struct HistoricalPriceChanges24hProvider<Content: View>: View {
     }
 
     var body: some View {
-        let (changes24h, displayPrices): ([String: Decimal], [String: Decimal])
-        if historicalBackfillEnabled {
-            let entries = historicalEntries
-            changes24h = OverviewHistoricalPriceChangeFeature.changes24h(from: entries)
-            displayPrices = OverviewHistoricalPriceChangeFeature.latestPrices(from: entries)
+        let displayPrices: [String: Decimal] = if historicalBackfillEnabled {
+            OverviewHistoricalPriceChangeFeature.latestPrices(from: historicalEntries)
         } else {
-            changes24h = [:]
-            displayPrices = [:]
+            [:]
         }
         return content
-            .environment(\.historicalPriceChanges24h, changes24h)
             .environment(\.historicalDisplayPrices, displayPrices)
             .environment(\.historicalMarketPrices, HistoricalMarketPricesFeature.prices(
                 from: historicalPrices,

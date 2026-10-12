@@ -109,19 +109,6 @@ struct OverviewPositionValueDataTests {
         render(view)
     }
 
-    @Test func `mover ordering prefers larger absolute change then symbol`() {
-        // Larger magnitude wins regardless of sign.
-        #expect(OverviewPriceChangeFeature.isOrderedByChangeMagnitude(
-            lhsChange: -50, lhsSymbol: "ZZZ", rhsChange: 10, rhsSymbol: "AAA"))
-        #expect(!OverviewPriceChangeFeature.isOrderedByChangeMagnitude(
-            lhsChange: 10, lhsSymbol: "AAA", rhsChange: -50, rhsSymbol: "ZZZ"))
-        // Equal magnitude falls back to symbol order.
-        #expect(OverviewPriceChangeFeature.isOrderedByChangeMagnitude(
-            lhsChange: 10, lhsSymbol: "AAA", rhsChange: -10, rhsSymbol: "BBB"))
-        #expect(!OverviewPriceChangeFeature.isOrderedByChangeMagnitude(
-            lhsChange: -10, lhsSymbol: "BBB", rhsChange: 10, rhsSymbol: "AAA"))
-    }
-
     // MARK: - Fixtures
 
     /// The production path: the model boundary, then the tab seam. Visibility is permissive so tests

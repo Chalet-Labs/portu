@@ -20,37 +20,6 @@ struct OverviewHistoricalPriceChangeTests {
         #expect(price == "$ <1e-8")
     }
 
-    @Test func `historical price cache derives latest daily price changes`() {
-        let id = "asset:base:0xabc"
-        let oldDay = Date(timeIntervalSince1970: 0)
-        let previousDay = Date(timeIntervalSince1970: 86400)
-        let latestDay = Date(timeIntervalSince1970: 172_800)
-
-        let changes = OverviewHistoricalPriceChangeFeature.changes24h(from: [
-            HistoricalPriceEntry(coinGeckoId: id, day: oldDay, usdPrice: 1),
-            HistoricalPriceEntry(coinGeckoId: id, day: previousDay, usdPrice: 2),
-            HistoricalPriceEntry(coinGeckoId: id, day: latestDay, usdPrice: 3),
-            HistoricalPriceEntry(coinGeckoId: "ignored", day: latestDay, usdPrice: 1)
-        ])
-
-        #expect(changes[id] == 0.5)
-        #expect(changes["ignored"] == nil)
-    }
-
-    @Test func `historical price cache normalizes legacy zapper ids to canonical asset ids`() {
-        let previousDay = Date(timeIntervalSince1970: 86400)
-        let latestDay = Date(timeIntervalSince1970: 172_800)
-        let canonicalID = "asset:base:0xabc"
-
-        let changes = OverviewHistoricalPriceChangeFeature.changes24h(from: [
-            HistoricalPriceEntry(coinGeckoId: "zapper:base:0xabc", day: previousDay, usdPrice: 2),
-            HistoricalPriceEntry(coinGeckoId: "zapper:base:0xabc", day: latestDay, usdPrice: 3)
-        ])
-
-        #expect(changes[canonicalID] == 0.5)
-        #expect(changes["zapper:base:0xabc"] == nil)
-    }
-
     @Test func `latest historical prices prefer newest row and canonicalize onchain ids`() {
         let oldDay = Date(timeIntervalSince1970: 0)
         let latestDay = Date(timeIntervalSince1970: 172_800)
@@ -124,14 +93,6 @@ struct OverviewHistoricalPriceChangeTests {
 
         #expect(merged["ethereum"] == 2200)
         #expect(merged["asset:base:0xabc"] == 3)
-    }
-
-    @Test func `historical price change query starts at utc day two days before now`() {
-        let now = Date(timeIntervalSince1970: 172_800 + 43200)
-
-        let startDate = OverviewHistoricalPriceChangeFeature.queryStartDate(now: now)
-
-        #expect(startDate == Date(timeIntervalSince1970: 0))
     }
 
     /// No live price or change: the token is valued from its sync value and moved by the historical

@@ -92,13 +92,6 @@ struct HistoricalMarketPricesProviderTests {
         #expect(prices.closesUSD["ethereum"]?.price == 1100)
     }
 
-    @Test func `provider query window is the core close window`() {
-        for offset in [0, 1, 43199, 43200, 86399] {
-            let now = Self.day(0).addingTimeInterval(TimeInterval(offset))
-            #expect(OverviewHistoricalPriceChangeFeature.queryStartDate(now: now) == MarketPrices.closeWindowStart(now: now))
-        }
-    }
-
     @Test func `provider publishes usd closes unconverted while chf is selected`() throws {
         let host = try HostedProvider()
         defer { host.tearDown() }

@@ -101,22 +101,6 @@ struct OverviewPositionGroupData: Identifiable, Equatable {
     }
 }
 
-enum OverviewPositionVisibility {
-    static func isVisible(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        overrideMap: [UUID: TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings,
-        usdToDisplayRate: Decimal = 1) -> Bool {
-        TokenSettingsFeature.isDashboardEligible(
-            token: token,
-            prices: prices,
-            override: overrideMap[token.assetId],
-            settings: settings,
-            usdToDisplayRate: usdToDisplayRate)
-    }
-}
-
 struct OverviewPositionGroupCard: View {
     let group: OverviewPositionGroupData
     let currencyCode: String

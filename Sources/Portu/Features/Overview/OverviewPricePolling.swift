@@ -43,36 +43,6 @@ extension OverviewFeature {
         }
     }
 
-    static func pricePollingIDs(
-        tokens: [TokenEntry],
-        prices: [String: Decimal] = [:],
-        watchlistIDs: [String],
-        overrides: [TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults,
-        portfolioLimit: Int = 25,
-        usdToDisplayRate: Decimal = 1) -> [String] {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        let candidates = tokens.compactMap { token -> (id: String, priority: Decimal)? in
-            let override = overrideMap[token.assetId]
-            guard
-                let priceID = pollingPriceID(
-                    token: token,
-                    prices: prices,
-                    override: override,
-                    settings: settings,
-                    usdToDisplayRate: usdToDisplayRate)
-            else { return nil }
-            return (
-                priceID,
-                pollingPriority(
-                    token: token,
-                    prices: prices,
-                    override: override,
-                    fallbackUSDToDisplayRate: usdToDisplayRate))
-        }
-        return rankedPollingIDs(candidates, watchlistIDs: watchlistIDs, portfolioLimit: portfolioLimit)
-    }
-
     /// Sums each ID's priorities, keeps the `portfolioLimit` largest (ties by first appearance), then
     /// appends the watchlist.
     private static func rankedPollingIDs(
@@ -108,46 +78,6 @@ extension OverviewFeature {
         return result
     }
 
-    private static func pollingPriceID(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings,
-        usdToDisplayRate: Decimal) -> String? {
-        guard
-            let priceID = TokenSettingsFeature.resolvedPriceID(
-                token: token,
-                override: override)
-        else { return nil }
-
-        if
-            TokenSettingsFeature.isDashboardEligible(
-                token: token,
-                prices: prices,
-                override: override,
-                settings: settings,
-                usdToDisplayRate: usdToDisplayRate) {
-            return priceID
-        }
-
-        guard token.amount > 0 else { return nil }
-        guard token.role.isPositive || token.role.isBorrow else { return nil }
-        guard override?.isIgnored != true else { return nil }
-        guard
-            TokenSettingsFeature.resolvedValue(
-                token: token,
-                prices: prices,
-                override: override) == nil
-        else { return nil }
-        if OnchainTokenIdentity(historicalPriceID: priceID) != nil {
-            let threshold = normalizedThreshold(settings.minimumDashboardValue)
-            guard threshold == 0 || absolute(token.usdValue) >= threshold || settings.hideDust == false else {
-                return nil
-            }
-        }
-        return priceID
-    }
-
     private struct PollingIDCandidate {
         var id: String
         var priority: Decimal
@@ -175,26 +105,5 @@ extension OverviewFeature {
 
     private static func normalizePollingID(_ id: String) -> String {
         OnchainTokenIdentity.normalizedHistoricalPriceID(id)
-    }
-
-    private static func pollingPriority(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?,
-        fallbackUSDToDisplayRate: Decimal) -> Decimal {
-        let value = OverviewPositionPricing.tokenValue(
-            token: token,
-            prices: prices,
-            override: override,
-            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-        return value == 0 ? absolute(token.usdValue * fallbackUSDToDisplayRate) : absolute(value)
-    }
-
-    private static func normalizedThreshold(_ value: Decimal) -> Decimal {
-        value < 0 ? 0 : value
-    }
-
-    private static func absolute(_ value: Decimal) -> Decimal {
-        value < 0 ? -value : value
     }
 }
