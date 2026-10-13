@@ -14,20 +14,18 @@ struct ExposurePollingSeamTests {
     @Test func `polling follows the asset table's visible rows`() {
         let ids = ExposureFeature.dashboard(Fixture.context()).pollingIDs
 
-        withKnownIssue("Exposure converges on the module in the next commit") {
-            #expect(ids == [
-                "arbitrum",
-                Fixture.badIdentity.historicalPriceID,
-                "chainlink",
-                "degen-base",
-                "ethereum",
-                "pepe",
-                "solana",
-                "tiny-coin",
-                "uniswap",
-                "usd-coin"
-            ].sorted())
-        }
+        #expect(ids == [
+            "arbitrum",
+            Fixture.badIdentity.historicalPriceID,
+            "chainlink",
+            "degen-base",
+            "ethereum",
+            "pepe",
+            "solana",
+            "tiny-coin",
+            "uniswap",
+            "usd-coin"
+        ].sorted())
     }
 
     /// S12: an implausible onchain live price leaves the token unpriced, and it stays polled so it
@@ -47,9 +45,7 @@ struct ExposurePollingSeamTests {
 
         #expect(data.assetRows.isEmpty)
         #expect(data.pollingIDs == [identity.historicalPriceID])
-        withKnownIssue("Exposure converges on the module in the next commit") {
-            #expect(data.assetHidden?.rowCount == 1)
-        }
+        #expect(data.assetHidden?.rowCount == 1)
     }
 
     /// Ignored, manual, reward and zero-amount tokens are never polled; a visible borrow is.
@@ -82,10 +78,8 @@ struct ExposurePollingSeamTests {
             ],
             livePricesUSD: ["bitcoin": 50000, "live-dust": Fixture.decimal("0.5")]))
 
-        withKnownIssue("Exposure converges on the module in the next commit") {
-            #expect(data.assetRows.map(\.symbol) == ["BTC"])
-            #expect(data.pollingIDs == ["bitcoin", "sync-dust"])
-        }
+        #expect(data.assetRows.map(\.symbol) == ["BTC"])
+        #expect(data.pollingIDs == ["bitcoin", "sync-dust"])
     }
 
     /// A token in a visible row is polled by its overridden CoinGecko ID.
@@ -96,9 +90,7 @@ struct ExposurePollingSeamTests {
             livePricesUSD: ["new-map": 4]))
 
         #expect(data.pollingIDs == ["new-map"])
-        withKnownIssue("Exposure converges on the module in the next commit") {
-            #expect(data.assetRows.map(\.spotAssets) == [4])
-        }
+        #expect(data.assetRows.map(\.spotAssets) == [4])
     }
 
     private static let bonk = Fixture.uuid(801)

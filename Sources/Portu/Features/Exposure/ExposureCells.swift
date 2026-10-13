@@ -16,7 +16,8 @@ struct ExposureSpotLiabilityCell<Row: ExposureRow>: View {
                 .foregroundStyle(PortuTheme.dashboardText)
             Text("/")
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
-            Text(ExposureFormat.currency(-row.liabilities, fractionDigits: 0, currencyCode: currencyCode))
+            // Liabilities show positive, in the warning colour (A2, decided 2026-10-13).
+            Text(ExposureFormat.currency(row.liabilities, fractionDigits: 0, currencyCode: currencyCode))
                 .foregroundStyle(row.liabilities > 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSecondaryText)
         }
         .font(DashboardStyle.monoTableFont)
@@ -41,6 +42,7 @@ struct ExposureCurrencyCell: View {
 
 struct ExposureNetExposureCell<Row: ExposureRow>: View {
     let row: Row
+    var showsShare = true
     @Environment(AppState.self) private var appState
 
     private var currencyCode: String {
@@ -54,7 +56,7 @@ struct ExposureNetExposureCell<Row: ExposureRow>: View {
                 .font(DashboardStyle.monoTableFont)
                 .foregroundStyle(row.netExposure < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardGold)
                 .lineLimit(1)
-            Text(ExposureFormat.percent(row.shareOfSpot, fractionDigits: 1))
+            Text(showsShare ? ExposureFormat.percent(row.shareOfSpot, fractionDigits: 1) : "")
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 .frame(width: 46, alignment: .trailing)

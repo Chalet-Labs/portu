@@ -28,11 +28,9 @@ extension ViewRenderSmokeTests {
         let hiddenRows = texts.indices.filter { texts[$0] == hidden }
 
         #expect(categoryTable < lastCategoryRow)
-        withKnownIssue("Exposure converges on the module in the next commit") {
-            #expect(hiddenRows.count == 2, "\(texts)")
-            #expect(hiddenRows.first.map { $0 > lastCategoryRow && $0 < assetTable } == true, "\(texts)")
-            #expect(hiddenRows.last.map { $0 > lastAssetRow } == true, "\(texts)")
-        }
+        #expect(hiddenRows.count == 2, "\(texts)")
+        #expect(hiddenRows.first.map { $0 > lastCategoryRow && $0 < assetTable } == true, "\(texts)")
+        #expect(hiddenRows.last.map { $0 > lastAssetRow } == true, "\(texts)")
     }
 
     /// Every active holding is dust: neither table has a visible row, and each shows its hidden
@@ -51,11 +49,9 @@ extension ViewRenderSmokeTests {
         let hidden = ExposureLabels.hiddenRowTitle(rowCount: 1, isAllDust: true)
 
         #expect(texts.contains("Exposure by asset"), "\(texts)")
-        withKnownIssue("Exposure converges on the module in the next commit") {
-            #expect(texts.filter { $0 == hidden }.count == 2, "\(texts)")
-            #expect(!texts.contains("No category exposure"), "\(texts)")
-            #expect(!texts.contains("No asset exposure"), "\(texts)")
-        }
+        #expect(texts.filter { $0 == hidden }.count == 2, "\(texts)")
+        #expect(!texts.contains("No category exposure"), "\(texts)")
+        #expect(!texts.contains("No asset exposure"), "\(texts)")
     }
 
     private func insertDust(into account: Account, context: ModelContext) {

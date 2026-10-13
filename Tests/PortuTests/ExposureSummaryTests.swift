@@ -114,15 +114,14 @@ struct ExposureTokenValueTests {
         let manual = makeToken(symbol: "MANUAL", category: .meme, amount: 2, usdValue: 0)
         let pinned = makeToken(symbol: "PINNED", coinGeckoId: "pinned", category: .privacy, amount: 1, usdValue: makeDecimal("0.25"))
 
-        let rows = ExposureFeature.computeDashboardAssetExposure(
+        let rows = ExposureFeature.dashboard(PortfolioValuationFixture.context(
             tokens: [visible, unpriced, dust, ignored, manual, pinned],
-            prices: ["bitcoin": 100, "dust": makeDecimal("0.50"), "ignored": 10, "pinned": makeDecimal("0.25")],
             overrides: [
                 TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true),
                 TokenPricingOverrideSnapshot(assetId: manual.assetId, manualPriceUSD: 2),
                 TokenPricingOverrideSnapshot(assetId: pinned.assetId, alwaysShow: true)
             ],
-            settings: .defaults)
+            livePricesUSD: ["bitcoin": 100, "dust": makeDecimal("0.50"), "ignored": 10, "pinned": makeDecimal("0.25")])).assetRows
 
         #expect(rows.map(\.symbol) == ["BTC", "MANUAL", "PINNED"])
         #expect(try #require(rows.first { $0.symbol == "MANUAL" }).spotAssets == 4)
@@ -147,15 +146,14 @@ struct ExposureTokenValueTests {
         let manual = makeToken(symbol: "MANUAL", category: .meme, amount: 2, usdValue: 0)
         let mapped = makeToken(symbol: "MAP", coinGeckoId: "old-map", category: .privacy, usdValue: 3)
 
-        let data = ExposureFeature.computeDashboardData(
+        let data = ExposureFeature.dashboard(PortfolioValuationFixture.context(
             tokens: [btc, ignored, manual, mapped],
-            prices: ["bitcoin": 100, "new-map": 4],
             overrides: [
                 TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true),
                 TokenPricingOverrideSnapshot(assetId: manual.assetId, manualPriceUSD: 2),
                 TokenPricingOverrideSnapshot(assetId: mapped.assetId, coinGeckoIdOverride: " New-Map ")
             ],
-            settings: .defaults)
+            livePricesUSD: ["bitcoin": 100, "new-map": 4]))
 
         #expect(data.assetRows.map(\.symbol) == ["BTC", "MANUAL", "MAP"])
         #expect(data.categoryRows.map(\.name) == ["BTC", "Meme", "Privacy"])
@@ -168,11 +166,7 @@ struct ExposureTokenValueTests {
     @Test func `dashboard data polls resolvable unpriced holdings for recovery without showing rows`() {
         let unpriced = makeToken(symbol: "UNPRICED", coinGeckoId: "recoverable", category: .other, amount: 1, usdValue: 0)
 
-        let data = ExposureFeature.computeDashboardData(
-            tokens: [unpriced],
-            prices: [:],
-            overrides: [],
-            settings: .defaults)
+        let data = ExposureFeature.dashboard(PortfolioValuationFixture.context(tokens: [unpriced]))
 
         #expect(data.assetRows.isEmpty)
         #expect(data.categoryRows.isEmpty)
