@@ -33,6 +33,7 @@
 		1092FA247224E643A48E416B /* PerformancePageHeaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BB1BC8EF497BE1DEAA5CB2 /* PerformancePageHeaderTests.swift */; };
 		116319AA82CCF6024DB32A83 /* PerformanceDataTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDD4CD7BC973EEBA6750157E /* PerformanceDataTypes.swift */; };
 		15A71008787601EB0E7F3266 /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A62C2FBC34B034ADA2096E87 /* StatusBarView.swift */; };
+		15E846AE78912AF6217B5459 /* HiddenBalancesLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F24FC7E499C44313A47E07 /* HiddenBalancesLabel.swift */; };
 		161D133418BA6198EE8C6403 /* PerformanceFeature+ValueChange.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD844541D34035B9A3D430E6 /* PerformanceFeature+ValueChange.swift */; };
 		1676C070FD119BE9C6EACC65 /* ModelSaveClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A8C7E2ABBC3EF37BDD2913 /* ModelSaveClient.swift */; };
 		16BE6F537FE233C8124E7781 /* OverviewPollingSeamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08F07C1CD9BFC389EF82221E /* OverviewPollingSeamTests.swift */; };
@@ -369,6 +370,7 @@
 		3E0F258A4C5B03A912AF1819 /* DebugEndpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugEndpoints.swift; sourceTree = "<group>"; };
 		3E6FF9588E006CC2658730D6 /* TokenSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenSettingsView.swift; sourceTree = "<group>"; };
 		40F9B7162AA8C1D822C51BBB /* DisplayCurrencyPreference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayCurrencyPreference.swift; sourceTree = "<group>"; };
+		41F24FC7E499C44313A47E07 /* HiddenBalancesLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HiddenBalancesLabel.swift; sourceTree = "<group>"; };
 		422D1FBCDC9876F189F06C46 /* PortfolioAnalyticsReviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAnalyticsReviewTests.swift; sourceTree = "<group>"; };
 		430524BFB090BCB155179038 /* PerformanceFeatureSaveHandlingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceFeatureSaveHandlingTests.swift; sourceTree = "<group>"; };
 		4380A24E20292C5476B33034 /* TokenSettingsSeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenSettingsSeamTests.swift; sourceTree = "<group>"; };
@@ -611,6 +613,7 @@
 				6EBE743A9AC8B9A2C8333003 /* AssetValueFormatter.swift */,
 				37E2A3E671D1FD2E10EB6F2F /* CurrencyConversionContext.swift */,
 				6E73BD66578FD9C7009C3632 /* DashboardStyle.swift */,
+				41F24FC7E499C44313A47E07 /* HiddenBalancesLabel.swift */,
 				8489FFB3B14202D63DFC5284 /* HistoricalPortfolioEstimator.swift */,
 				34106A87F63B161FEC71DFFF /* HistoricalPricesProvider.swift */,
 				1B05E124916137AABAB8EC24 /* ValuationContext.swift */,
@@ -1184,6 +1187,7 @@
 				83245BEC701E64C1A764211B /* ExposureView.swift in Sources */,
 				FC9E6D44EAC2FB43F1A36D36 /* GeneralSettingsView.swift in Sources */,
 				C36EE8AD5FBEA7657ED9D603 /* HTTPParser.swift in Sources */,
+				15E846AE78912AF6217B5459 /* HiddenBalancesLabel.swift in Sources */,
 				FF81CC0D113B55DB616C0B11 /* HistoricalBackfillStatusRow.swift in Sources */,
 				9B6EF7B079ECBD17B2E9CF6E /* HistoricalDataSettingsView.swift in Sources */,
 				4D6FBF67ABA1F278F4B6BB23 /* HistoricalPortfolioEstimator.swift in Sources */,

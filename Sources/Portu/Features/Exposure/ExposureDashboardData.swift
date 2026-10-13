@@ -85,7 +85,7 @@ nonisolated struct ExposureHiddenRow: ExposureRow {
     }
 
     var title: String {
-        ExposureLabels.hiddenRowTitle(rowCount: rowCount, isAllDust: isAllDust)
+        HiddenBalancesLabel.title(rowCount: rowCount, isAllDust: isAllDust)
     }
 
     init(rowCount: Int, isAllDust: Bool, spotAssets: Decimal, liabilities: Decimal) {
@@ -130,9 +130,4 @@ enum ExposureTableEntry<Row: ExposureRow>: Identifiable, Equatable {
 
 enum ExposureLabels {
     static let assetCountPillTitle = "Assets"
-
-    /// The hidden line's first cell (F3): "small" when every hidden row is dust.
-    static func hiddenRowTitle(rowCount: Int, isAllDust: Bool) -> String {
-        "\(rowCount) \(isAllDust ? "small" : "hidden") \(rowCount == 1 ? "balance" : "balances")"
-    }
 }

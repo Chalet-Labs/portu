@@ -20,7 +20,7 @@ extension ViewRenderSmokeTests {
         try context.save()
 
         let texts = try exposureTexts(container)
-        let hidden = ExposureLabels.hiddenRowTitle(rowCount: 1, isAllDust: true)
+        let hidden = HiddenBalancesLabel.title(rowCount: 1, isAllDust: true)
         let categoryTable = try #require(texts.firstIndex(of: "Exposure by asset category"), "\(texts)")
         let assetTable = try #require(texts.firstIndex(of: "Exposure by asset"), "\(texts)")
         let lastCategoryRow = try #require(texts.indices.last { $0 < assetTable && ["ETH", "Stablecoins"].contains(texts[$0]) }, "\(texts)")
@@ -45,7 +45,7 @@ extension ViewRenderSmokeTests {
         try context.save()
 
         let texts = try exposureTexts(container)
-        let hidden = ExposureLabels.hiddenRowTitle(rowCount: 1, isAllDust: true)
+        let hidden = HiddenBalancesLabel.title(rowCount: 1, isAllDust: true)
         let assetTable = try #require(texts.firstIndex(of: "Exposure by asset"), "\(texts)")
         let hiddenRow = try #require(texts.indices.last { $0 > assetTable && texts[$0] == hidden }, "\(texts)")
         let ethRow = try #require(texts.indices.first { $0 > assetTable && texts[$0] == "ETH" }, "\(texts)")
@@ -122,7 +122,7 @@ extension ViewRenderSmokeTests {
         try context.save()
 
         let texts = try exposureTexts(container)
-        let hidden = ExposureLabels.hiddenRowTitle(rowCount: 1, isAllDust: true)
+        let hidden = HiddenBalancesLabel.title(rowCount: 1, isAllDust: true)
 
         #expect(texts.contains("Exposure by asset"), "\(texts)")
         #expect(texts.filter { $0 == hidden }.count == 2, "\(texts)")

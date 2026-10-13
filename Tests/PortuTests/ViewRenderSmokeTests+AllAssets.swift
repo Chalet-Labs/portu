@@ -155,7 +155,7 @@ extension ViewRenderSmokeTests {
         #expect(!texts.contains("No assets"), "\(texts)")
     }
 
-    private static let hiddenTitle = ExposureLabels.hiddenRowTitle(rowCount: 1, isAllDust: true)
+    private static let hiddenTitle = HiddenBalancesLabel.title(rowCount: 1, isAllDust: true)
     private static let syncedAt = Date(timeIntervalSinceReferenceDate: 800_000_000)
 
     private func seededAccount(_ container: ModelContainer) throws -> Account {

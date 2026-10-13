@@ -65,7 +65,7 @@ nonisolated struct AllAssetsHiddenRow: Equatable {
     let share: Decimal?
 
     var title: String {
-        ExposureLabels.hiddenRowTitle(rowCount: rowCount, isAllDust: isAllDust)
+        HiddenBalancesLabel.title(rowCount: rowCount, isAllDust: isAllDust)
     }
 
     init(rowCount: Int, isAllDust: Bool, value: Decimal, share: Decimal?) {
