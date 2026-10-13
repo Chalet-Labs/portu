@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ExposureSpotLiabilityCell<Row: ExposureRow>: View {
     let row: Row
+    var fractionDigits = 0
     @Environment(AppState.self) private var appState
 
     private var currencyCode: String {
@@ -12,12 +13,12 @@ struct ExposureSpotLiabilityCell<Row: ExposureRow>: View {
     var body: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 0)
-            Text(ExposureFormat.currency(row.spotAssets, fractionDigits: 0, currencyCode: currencyCode))
+            Text(ExposureFormat.currency(row.spotAssets, fractionDigits: fractionDigits, currencyCode: currencyCode))
                 .foregroundStyle(PortuTheme.dashboardText)
             Text("/")
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
             // Liabilities show positive, in the warning colour (A2, decided 2026-10-13).
-            Text(ExposureFormat.currency(row.liabilities, fractionDigits: 0, currencyCode: currencyCode))
+            Text(ExposureFormat.currency(row.liabilities, fractionDigits: fractionDigits, currencyCode: currencyCode))
                 .foregroundStyle(row.liabilities > 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSecondaryText)
         }
         .font(DashboardStyle.monoTableFont)

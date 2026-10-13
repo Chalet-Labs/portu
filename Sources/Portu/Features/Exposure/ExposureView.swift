@@ -328,7 +328,8 @@ private struct ExposureAssetRow: View {
     }
 }
 
-/// The hidden-balances line: its cells hold the hidden gross, debt and net, with no ratio.
+/// The hidden-balances line: its cells hold the hidden gross, debt and net, with no ratio. Its
+/// amounts are sums of dust, so they show cents (decided 2026-10-13).
 private struct ExposureHiddenTableRow: View {
     let row: ExposureHiddenRow
     let index: Int
@@ -339,10 +340,10 @@ private struct ExposureHiddenTableRow: View {
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 .exposureFirstColumn()
 
-            ExposureSpotLiabilityCell(row: row)
+            ExposureSpotLiabilityCell(row: row, fractionDigits: 2)
                 .frame(width: ExposureLayout.exposurePairColumnWidth, alignment: .trailing)
 
-            ExposureCurrencyCell(value: row.netExposure, fractionDigits: 0)
+            ExposureCurrencyCell(value: row.netExposure, fractionDigits: 2)
                 .frame(width: ExposureLayout.spotNetColumnWidth, alignment: .trailing)
 
             ExposureNetExposureCell(row: row, showsShare: false)

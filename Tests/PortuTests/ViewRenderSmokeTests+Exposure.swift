@@ -35,6 +35,30 @@ extension ViewRenderSmokeTests {
         #expect(Self.assetPill(texts) == ["Assets", "2"], "\(texts)")
     }
 
+    /// Decided 2026-10-13: the hidden line's spot, liabilities and Spot Net cells show cents, so
+    /// the $0.50 PEPE line reads "$ 0.50", not "$ 0". An ordinary row keeps whole units.
+    @Test(.renderedTextReadable) func `exposure hidden line shows its amounts with cents`() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let account = try #require(context.fetch(FetchDescriptor<Account>()).first)
+        insertDust(into: account, context: context)
+        try context.save()
+
+        let texts = try exposureTexts(container)
+        let hidden = ExposureLabels.hiddenRowTitle(rowCount: 1, isAllDust: true)
+        let assetTable = try #require(texts.firstIndex(of: "Exposure by asset"), "\(texts)")
+        let hiddenRow = try #require(texts.indices.last { $0 > assetTable && texts[$0] == hidden }, "\(texts)")
+        let ethRow = try #require(texts.indices.first { $0 > assetTable && texts[$0] == "ETH" }, "\(texts)")
+        let cents = { (value: Decimal) in ExposureFormat.currency(value, fractionDigits: 2) }
+        let whole = { (value: Decimal) in ExposureFormat.currency(value, fractionDigits: 0) }
+        let half = PortfolioValuationFixture.decimal("0.5")
+
+        // Spot / liabilities, then Spot Net.
+        #expect(Array(texts.dropFirst(hiddenRow + 1).prefix(4)) == [cents(half), "/", cents(0), cents(half)], "\(texts)")
+        // ETH: 2 × $3,050 live.
+        #expect(Array(texts.dropFirst(ethRow + 1).prefix(4)) == [whole(6100), "/", whole(0), whole(6100)], "\(texts)")
+    }
+
     /// Every active holding is dust: neither table has a visible row, and each shows its hidden
     /// line, not "No … exposure".
     @Test(.renderedTextReadable) func `exposure shows the hidden row when every row is hidden`() throws {
