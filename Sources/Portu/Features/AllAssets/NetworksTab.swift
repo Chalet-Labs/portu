@@ -13,7 +13,7 @@ struct NetworksTab: View {
     }
 
     var body: some View {
-        let data = AllAssetsFeature.networks(sources.allAssets(allTokens).context)
+        let data = AllAssetsFeature.networks(sources.allAssets(allTokens))
         Table(data.entries) {
             TableColumn("Network") { entry in
                 switch entry {

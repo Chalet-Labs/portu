@@ -184,13 +184,6 @@ struct NetworksTabData: Equatable {
     }
 }
 
-/// What the three tabs value: the active accounts' context and, for Platforms, the protocol name
-/// of each position that contributes an input.
-struct AllAssetsInputs {
-    let context: ValuationContext
-    let protocolNames: [UUID: String]
-}
-
 extension AllAssetsFeature {
     // MARK: - Assets
 

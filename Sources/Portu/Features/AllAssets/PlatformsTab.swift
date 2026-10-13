@@ -13,8 +13,7 @@ struct PlatformsTab: View {
     }
 
     var body: some View {
-        let inputs = sources.allAssets(allTokens)
-        let data = AllAssetsFeature.platforms(inputs.context, protocolNames: inputs.protocolNames)
+        let data = sources.platforms(allTokens)
         Table(data.entries) {
             TableColumn("Platform") { entry in
                 switch entry {

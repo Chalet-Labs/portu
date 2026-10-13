@@ -27,10 +27,10 @@ struct AssetsTab: View {
     // MARK: - Body
 
     var body: some View {
-        let inputs = sources.allAssets(
+        let context = sources.allAssets(
             allTokens,
             categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
-        let data = AllAssetsFeature.assets(inputs.context, searchText: store.allAssets.searchText)
+        let data = AllAssetsFeature.assets(context, searchText: store.allAssets.searchText)
         let entries = data.entries(sortedBy: sortColumn, ascending: sortAscending)
         VStack(spacing: 0) {
             toolbar(entries.compactMap(\.row))
