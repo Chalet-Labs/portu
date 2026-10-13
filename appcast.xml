@@ -3,6 +3,23 @@
     <channel>
         <title>Portu</title>
         <item>
+            <title>1.9.5</title>
+            <pubDate>Tue, 13 Oct 2026 09:25:09 +0000</pubDate>
+            <link>https://github.com/Chalet-Labs/portu</link>
+            <sparkle:version>35</sparkle:version>
+            <sparkle:shortVersionString>1.9.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## [1.9.5](https://github.com/Chalet-Labs/portu/compare/v1.9.4...v1.9.5) (2026-10-09)
+
+
+### Performance Improvements
+
+* predicate snapshot pruning queries and add time-series indexes ([#133](https://github.com/Chalet-Labs/portu/issues/133)) ([b0c7926](https://github.com/Chalet-Labs/portu/commit/b0c79265e98b4dd167a0de616521be76f46017bf)), closes [#Index](https://github.com/Chalet-Labs/portu/issues/Index) [#Index](https://github.com/Chalet-Labs/portu/issues/Index) [#99](https://github.com/Chalet-Labs/portu/issues/99)
+
+]]></description>
+            <enclosure url="https://github.com/Chalet-Labs/portu/releases/download/v1.9.5/Portu-1.9.5.dmg" length="13183452" type="application/octet-stream" sparkle:edSignature="g9Zt+Agz8E/sC0xTBwQ9Lutv8JzEa1lcK7Q0lPQCJwyTN7llEw+0fD5yK3SRYnvVKK+OAh83mHrc0Pms+JPSCA=="/>
+        </item>
+        <item>
             <title>1.9.4</title>
             <pubDate>Wed, 07 Oct 2026 23:12:56 +0000</pubDate>
             <link>https://github.com/Chalet-Labs/portu</link>
