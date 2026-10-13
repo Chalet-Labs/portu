@@ -11,6 +11,13 @@ struct PortfolioHealthGroupKey: Hashable {
     let name: String
 }
 
+extension PortfolioHealthGroupKey {
+    /// The group a valued token falls in.
+    init(_ token: ValuedToken) {
+        self.init(symbol: token.token.symbol, name: token.token.name)
+    }
+}
+
 struct AssetWeight: Equatable, Identifiable {
     let symbol: String
     let name: String

@@ -53,6 +53,74 @@ struct OverviewPollingSeamTests {
         #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []).isEmpty)
     }
 
+    /// Dust is judged on the displayed row (F2): two $0.60 ETH holdings form one visible $1.20 row,
+    /// whether they are valued from the live price or from a close newer than their sync.
+    @Test(arguments: [true, false])
+    func `polling keeps holdings that are dust alone but form a visible row`(isLive: Bool) {
+        let context = Fixture.context(
+            tokens: [
+                token(symbol: "ETH", coinGeckoId: "ethereum", amount: Fixture.decimal("0.0002"), usdValue: Fixture.decimal("0.5")),
+                token(symbol: "ETH", coinGeckoId: "ethereum", amount: Fixture.decimal("0.0002"), usdValue: Fixture.decimal("0.5"))
+            ],
+            settings: Self.hideBoth,
+            livePricesUSD: isLive ? ["ethereum": 3000] : [:],
+            historical: isLive ? .empty : HistoricalMarketPrices(closesUSD: ["ethereum": HistoricalClose(day: Fixture.day(1), price: 3000)]))
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == ["ethereum"])
+    }
+
+    /// Health groups by symbol and name, so two $0.60 USDC holdings under two price IDs are one
+    /// visible $1.20 Health row although each asset row is dust.
+    @Test func `polling keeps holdings that form a visible health row`() {
+        let context = Fixture.context(
+            tokens: [
+                token(symbol: "USDC", coinGeckoId: "usd-coin", amount: Fixture.decimal("0.6"), usdValue: Fixture.decimal("0.6")),
+                token(symbol: "USDC", coinGeckoId: "usd-coin-bridged", amount: Fixture.decimal("0.6"), usdValue: Fixture.decimal("0.6"))
+            ],
+            settings: Self.hideBoth,
+            livePricesUSD: ["usd-coin": 1, "usd-coin-bridged": 1])
+
+        #expect(Set(OverviewFeature.pricePollingIDs(context, watchlistIDs: [])) == ["usd-coin", "usd-coin-bridged"])
+    }
+
+    /// One onchain asset held twice at a $0.60 sync value each: the row is visible, so the holdings
+    /// are polled although each one alone is dust with no usable price.
+    @Test func `polling keeps sync valued holdings that form a visible row`() {
+        let asset = UUID()
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xSplit")
+        let context = Fixture.context(
+            tokens: [
+                token(assetId: asset, symbol: "SPLIT", amount: 1, usdValue: Fixture.decimal("0.6"), onchainIdentity: identity),
+                token(assetId: asset, symbol: "SPLIT", amount: 1, usdValue: Fixture.decimal("0.6"), onchainIdentity: identity)
+            ],
+            settings: Self.hideBoth)
+
+        #expect(OverviewFeature.pricePollingIDs(context, watchlistIDs: []) == [identity.historicalPriceID])
+    }
+
+    /// A row's dust check uses its larger side (F2), so a $5 supply against a $5 same-asset borrow
+    /// stays visible and polled. A lone $0.60 ETH stays dust although the ETH category slice, which
+    /// WETH fills, shows.
+    @Test func `polling judges each row by its larger side and never by its category`() {
+        let offset = Fixture.context(
+            tokens: [
+                token(symbol: "ETH", coinGeckoId: "ethereum", amount: Fixture.decimal("0.002"), usdValue: 5),
+                token(symbol: "ETH", coinGeckoId: "ethereum", role: .borrow, amount: Fixture.decimal("0.002"), usdValue: 5)
+            ],
+            settings: Self.hideBoth,
+            livePricesUSD: ["ethereum": 2500])
+        let lone = Fixture.context(
+            tokens: [
+                token(symbol: "ETH", coinGeckoId: "ethereum", amount: Fixture.decimal("0.0002"), usdValue: Fixture.decimal("0.6")),
+                token(symbol: "WETH", coinGeckoId: "weth", amount: Fixture.decimal("0.002"), usdValue: 5)
+            ],
+            settings: Self.hideBoth,
+            livePricesUSD: ["ethereum": 3000, "weth": 2500])
+
+        #expect(OverviewFeature.pricePollingIDs(offset, watchlistIDs: []) == ["ethereum"])
+        #expect(OverviewFeature.pricePollingIDs(lone, watchlistIDs: []) == ["weth"])
+    }
+
     /// Neither has a usable price, so only the counted check keeps them out: a reward valued from its
     /// sync value, and a zero amount.
     @Test func `polling skips an uncounted token`() {
@@ -200,6 +268,7 @@ struct OverviewPollingSeamTests {
     }
 
     private func token(
+        assetId: UUID = UUID(),
         symbol: String,
         coinGeckoId: String? = nil,
         role: TokenRole = .balance,
@@ -207,7 +276,7 @@ struct OverviewPollingSeamTests {
         usdValue: Decimal,
         onchainIdentity: OnchainTokenIdentity? = nil) -> TokenEntry {
         TokenEntry(
-            assetId: UUID(),
+            assetId: assetId,
             symbol: symbol,
             name: symbol,
             category: .major,

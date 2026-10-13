@@ -287,6 +287,15 @@ extension OverviewFeature {
         assetAggregateKey(for: token.token, priceID: token.priceID)
     }
 
+    /// The tokens in a visible Overview row (F2): the net asset rows, which hold every token the
+    /// tabs, Key Changes, the donut's asset rows and the watchlist show, and the Health groups.
+    static func visibleTokenIDs(_ tokens: [ValuedToken], settings: TokenDashboardSettings) -> Set<UUID> {
+        let assetRows = DashboardList(tokens, basis: .net, settings: settings) { assetRowKey($0) }.visibleRows
+        let healthRows = DashboardList(tokens, basis: .positiveNet, settings: settings) { PortfolioHealthGroupKey($0) }.visibleRows
+        return Set(assetRows.lazy.flatMap(\.tokens).map(\.tokenId))
+            .union(healthRows.lazy.flatMap(\.tokens).map(\.tokenId))
+    }
+
     /// A row is described by its shown holdings: counted, non-ignored positive tokens, else (a
     /// borrow-only row) every token it has.
     private static func assetRowInfo(_ rows: [DashboardRow<String>]) -> [String: AssetRowInfo] {
@@ -448,7 +457,7 @@ extension PortfolioHealthFeature {
         let valuation = context.valuation()
         let rate = context.usdToDisplayRate
         let list = DashboardList(valuation.tokens, basis: .positiveNet, settings: context.settings) {
-            PortfolioHealthGroupKey(symbol: $0.token.symbol, name: $0.token.name)
+            PortfolioHealthGroupKey($0)
         }
         let ranked = list.ranked { lhs, rhs in
             lhs.key.symbol != rhs.key.symbol ? lhs.key.symbol < rhs.key.symbol : lhs.key.name < rhs.key.name

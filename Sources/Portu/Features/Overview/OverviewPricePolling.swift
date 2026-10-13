@@ -10,7 +10,7 @@ extension OverviewFeature {
         portfolioLimit: Int = 25) -> [String] {
         let tokens = context.valuation().tokens
         let settings = context.settings
-        let visible = Set(DashboardList(tokens, basis: .net, settings: settings, groupedBy: \.tokenId).visibleRows.map(\.key))
+        let visible = visibleTokenIDs(tokens, settings: settings)
         let candidates = tokens.compactMap { token -> (id: String, priority: Decimal)? in
             guard
                 let priceID = token.priceID,
@@ -23,9 +23,10 @@ extension OverviewFeature {
         return rankedPollingIDs(candidates, watchlistIDs: watchlistIDs, portfolioLimit: portfolioLimit)
     }
 
-    /// A token with a usable price is polled while the dashboard shows it. One without (valued from
-    /// its sync value, or unpriced) is polled so it can get one, except, when `hideUnpriced` is on
-    /// and the asset is not `alwaysShow`, an onchain ID whose sync value is dust under `hideDust`.
+    /// A token is polled while the dashboard shows its row. One without a usable price (valued from
+    /// its sync value, or unpriced) is also polled so it can get one, except, when `hideUnpriced` is
+    /// on and the asset is not `alwaysShow`, an onchain ID whose own sync value is dust under
+    /// `hideDust`.
     private static func isPolled(
         _ token: ValuedToken,
         priceID: String,
@@ -35,7 +36,7 @@ extension OverviewFeature {
         case .manual, .live, .close:
             return isVisible
         case .sync, .unpriced:
-            guard !token.alwaysShow, settings.hideUnpriced else { return true }
+            guard !isVisible, !token.alwaysShow, settings.hideUnpriced else { return true }
             guard OnchainTokenIdentity(historicalPriceID: priceID) != nil else { return true }
             return !settings.hideDust || abs(token.token.usdValue) >= settings.dustThresholdUSD
         case .ignored:
