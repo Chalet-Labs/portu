@@ -99,15 +99,15 @@ struct OverviewHistoricalPriceChangeTests {
     /// fraction. Exact formula (V4): 15 × −0.2 / 0.8 = −3.75.
     @Test func `historical price changes backfill overview key changes when live changes are missing`() {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xProvider")
-        let context = OverviewValuationFixture.context(
+        let context = PortfolioValuationFixture.context(
             tokens: [token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: identity)],
-            historical: HistoricalMarketPrices(changes24h: [identity.historicalPriceID: OverviewValuationFixture.decimal("-0.2")]))
+            historical: HistoricalMarketPrices(changes24h: [identity.historicalPriceID: PortfolioValuationFixture.decimal("-0.2")]))
 
-        let rows = OverviewPositionProjection.tab(.keyChanges, context: context, positions: OverviewValuationFixture.positions)
+        let rows = OverviewPositionProjection.tab(.keyChanges, context: context, positions: PortfolioValuationFixture.positions)
             .groups.flatMap(\.tokens)
 
         #expect(rows.map(\.symbol) == ["ZAP"])
-        #expect(rows.map(\.change24h) == [OverviewValuationFixture.decimal("-3.75")])
+        #expect(rows.map(\.change24h) == [PortfolioValuationFixture.decimal("-3.75")])
     }
 
     private func token(

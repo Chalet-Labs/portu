@@ -8,7 +8,7 @@ struct PortfolioHealthPanel: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
     @Query private var allTokens: [PositionToken]
-    var sources = OverviewValuationSources()
+    var sources = ValuationSources()
     var categories = OverviewCategorySource()
 
     private var health: PortfolioHealthData {

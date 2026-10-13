@@ -2,7 +2,7 @@ import Foundation
 @testable import Portu
 import PortuCore
 
-/// One portfolio for the Overview seam specs (T2). The specs' expected numbers are worked out by
+/// One portfolio for the valuation seam specs (T2). The specs' expected numbers are worked out by
 /// hand from the values here, in USD.
 ///
 /// | Token | Position | Role | Amount | `usdValue` | Spec value (source) |
@@ -28,7 +28,7 @@ import PortuCore
 ///
 /// Gross 12,280.8, debt 1500.4, net 10,780.4, 24h change 1522.1. The watchlist adds bitcoin
 /// (live 60,000, 24h +10%) and dogecoin (close 0.2 only, 24h −20%), neither held.
-enum OverviewValuationFixture {
+enum PortfolioValuationFixture {
     /// 2025-10-06 00:00 UTC.
     static let today = Date(timeIntervalSince1970: 1_759_708_800)
 
@@ -166,8 +166,8 @@ enum OverviewValuationFixture {
     static func prices(
         livePricesUSD: [String: Decimal] = Self.livePricesUSD,
         liveChanges24h: [String: Decimal] = Self.liveChanges24h,
-        historical: HistoricalMarketPrices = Self.historical) -> OverviewPriceInputs {
-        OverviewPriceInputs(livePricesUSD: livePricesUSD, liveChanges24h: liveChanges24h, historical: historical)
+        historical: HistoricalMarketPrices = Self.historical) -> ValuationPriceInputs {
+        ValuationPriceInputs(livePricesUSD: livePricesUSD, liveChanges24h: liveChanges24h, historical: historical)
     }
 
     /// The seam input. Specs with their own tokens pass `inputs` and, when the shared books would
@@ -179,8 +179,8 @@ enum OverviewValuationFixture {
         inputs: [ValuationInput] = inputs,
         livePricesUSD: [String: Decimal] = Self.livePricesUSD,
         liveChanges24h: [String: Decimal] = Self.liveChanges24h,
-        historical: HistoricalMarketPrices = Self.historical) -> OverviewValuationContext {
-        OverviewValuationContext(
+        historical: HistoricalMarketPrices = Self.historical) -> ValuationContext {
+        ValuationContext(
             inputs: inputs.filter { !excludedAssets.contains($0.token.assetId) },
             overrides: overrides,
             mappings: mappings,
@@ -200,14 +200,14 @@ enum OverviewValuationFixture {
         rate: Decimal = 1,
         livePricesUSD: [String: Decimal] = [:],
         liveChanges24h: [String: Decimal] = [:],
-        historical: HistoricalMarketPrices = .empty) -> OverviewValuationContext {
-        OverviewValuationContext(
+        historical: HistoricalMarketPrices = .empty) -> ValuationContext {
+        ValuationContext(
             inputs: tokens.enumerated().map { ValuationInput(tokenId: uuid(5000 + $0), token: $1, position: position.context) },
             overrides: overrides,
             mappings: mappings,
             settings: settings,
             usdToDisplayRate: rate,
-            prices: OverviewPriceInputs(livePricesUSD: livePricesUSD, liveChanges24h: liveChanges24h, historical: historical))
+            prices: ValuationPriceInputs(livePricesUSD: livePricesUSD, liveChanges24h: liveChanges24h, historical: historical))
     }
 
     // MARK: - Builders

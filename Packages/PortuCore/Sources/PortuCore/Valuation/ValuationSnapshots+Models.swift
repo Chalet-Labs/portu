@@ -43,7 +43,6 @@ public extension TokenEntry {
 }
 
 public extension TokenIdentityMappingSnapshot {
-    @MainActor
     init(_ mapping: TokenIdentityMapping) {
         self.id = mapping.id
         self.canonicalKey = mapping.canonicalKey
@@ -55,7 +54,6 @@ public extension TokenIdentityMappingSnapshot {
 }
 
 public extension TokenPricingOverrideSnapshot {
-    @MainActor
     init(_ override: TokenPricingOverride) {
         self.init(
             id: override.id,

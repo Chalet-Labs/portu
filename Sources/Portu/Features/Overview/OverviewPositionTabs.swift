@@ -6,7 +6,7 @@ import SwiftUI
 struct OverviewPositionTabs: View {
     @Environment(AppState.self) private var appState
     @Query private var allPositions: [Position]
-    var sources = OverviewValuationSources()
+    var sources = ValuationSources()
     var categories = OverviewCategorySource()
 
     @State private var selectedTab: OverviewPositionTab = .keyChanges

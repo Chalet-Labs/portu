@@ -8,7 +8,7 @@ struct PriceWatchlist: View {
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
     @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
-    var sources = OverviewValuationSources()
+    var sources = ValuationSources()
     @State private var searchText = ""
 
     private var watchlistIDs: [String] {

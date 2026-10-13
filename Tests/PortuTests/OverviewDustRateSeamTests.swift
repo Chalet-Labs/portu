@@ -6,7 +6,7 @@ import Testing
 /// The dust threshold is USD and never scaled by the display rate (spec Terms, F2), and dust is
 /// judged on the displayed row after aggregation (F2), on every Overview list.
 struct OverviewDustRateSeamTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     /// $1.50 is above the $1 threshold although it shows as 0.75 at rate 0.5.
     @Test func `a token above the usd threshold stays visible at a rate that shows it below one`() {
@@ -64,7 +64,7 @@ struct OverviewDustRateSeamTests {
         #expect(health.hidden == nil)
     }
 
-    private static func stable(usdValue: Decimal, rate: Decimal) -> OverviewValuationContext {
+    private static func stable(usdValue: Decimal, rate: Decimal) -> ValuationContext {
         Fixture.context(
             tokens: [Fixture.token(UUID(), "SKY", "Sky Dollar", .stablecoin, coinGeckoId: "sky-dollar", amount: usdValue, usdValue: usdValue)],
             rate: rate,

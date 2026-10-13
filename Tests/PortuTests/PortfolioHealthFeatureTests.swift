@@ -56,7 +56,7 @@ struct PortfolioHealthWeightTests {
                 usdValue: 10000)
         ]
 
-        let weights = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens)).weights
+        let weights = PortfolioHealthFeature.health(PortfolioValuationFixture.context(tokens: tokens)).weights
 
         let first = try #require(weights.first, "Expected at least 3 weights")
         #expect(weights.count == 3)
@@ -90,7 +90,7 @@ struct PortfolioHealthWeightTests {
                 usdValue: 15000)
         ]
 
-        let weights = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens)).weights
+        let weights = PortfolioHealthFeature.health(PortfolioValuationFixture.context(tokens: tokens)).weights
         let first = try #require(weights.first, "Expected 1 weight for grouped ETH")
 
         #expect(weights.count == 1)
@@ -113,7 +113,7 @@ struct PortfolioHealthWeightTests {
         ]
         let prices: [String: Decimal] = ["bitcoin": 50000]
 
-        let weights = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens, livePricesUSD: prices)).weights
+        let weights = PortfolioHealthFeature.health(PortfolioValuationFixture.context(tokens: tokens, livePricesUSD: prices)).weights
         let first = try #require(weights.first, "Expected 1 weight for BTC")
 
         #expect(weights.count == 1)
@@ -134,7 +134,7 @@ struct PortfolioHealthWeightTests {
                 usdValue: 0)
         ]
 
-        let weights = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens)).weights
+        let weights = PortfolioHealthFeature.health(PortfolioValuationFixture.context(tokens: tokens)).weights
 
         #expect(weights.isEmpty)
     }
@@ -161,7 +161,7 @@ struct PortfolioHealthWeightTests {
                 usdValue: 9000)
         ]
 
-        let weights = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens)).weights
+        let weights = PortfolioHealthFeature.health(PortfolioValuationFixture.context(tokens: tokens)).weights
         let first = try #require(weights.first, "Expected 1 weight for ETH net")
 
         #expect(weights.count == 1)

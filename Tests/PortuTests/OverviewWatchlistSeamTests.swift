@@ -5,7 +5,7 @@ import Testing
 
 /// The Portfolio + Watchlist rows through the production seam on ad-hoc portfolios. Books are USD.
 struct OverviewWatchlistSeamTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     @Test func `watchlist merges the top holdings with the watched ids`() {
         let btc = UUID()
@@ -444,7 +444,7 @@ struct OverviewWatchlistSeamTests {
     }
 
     private func rows(
-        _ context: OverviewValuationContext,
+        _ context: ValuationContext,
         assets: [OverviewAssetCandidate] = [],
         watchlistIDs: [String] = [],
         portfolioLimit: Int = 10) -> [OverviewPriceRowData] {

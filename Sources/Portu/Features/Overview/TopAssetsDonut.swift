@@ -9,7 +9,7 @@ struct TopAssetsDonut: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
     @Query private var tokens: [PositionToken]
-    var sources = OverviewValuationSources()
+    var sources = ValuationSources()
     var categories = OverviewCategorySource()
 
     @State private var selectedMode: TopAssetMode = .assets

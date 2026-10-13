@@ -6,7 +6,7 @@ import SwiftUI
 struct OverviewTopBar: View {
     @Environment(AppState.self) private var appState
     @Query private var positions: [Position]
-    var sources = OverviewValuationSources()
+    var sources = ValuationSources()
 
     private var headline: OverviewHeadline {
         sources.headline(positions)

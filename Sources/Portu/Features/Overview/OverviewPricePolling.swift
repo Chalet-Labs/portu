@@ -5,7 +5,7 @@ extension OverviewFeature {
     /// The live-polling set: the top holdings by selection value, then the watchlist (S12). Values
     /// and usable prices come from the module; the selection and ranking rules are polling's own.
     static func pricePollingIDs(
-        _ context: OverviewValuationContext,
+        _ context: ValuationContext,
         watchlistIDs: [String],
         portfolioLimit: Int = 25) -> [String] {
         let tokens = context.valuation().tokens

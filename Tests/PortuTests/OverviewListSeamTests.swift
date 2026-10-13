@@ -6,7 +6,7 @@ import Testing
 /// T2 for the Overview lists fed the shared fixture: the position tabs, the Top Assets donut, the
 /// watchlist, Health and the polling candidates. Each list is checked against its A7 identity.
 struct OverviewListSeamTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     // MARK: - Position tabs
 

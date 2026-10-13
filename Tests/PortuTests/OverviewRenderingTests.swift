@@ -6,7 +6,7 @@ import Testing
 /// What the Overview renders from its seams: the hidden-balances line (F3), the 24h percentage
 /// (A4), the donut's chart and legend, the Health weight list and a tab's empty state.
 struct OverviewRenderingTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     private static func inputs(_ numbers: Set<Int>) -> [ValuationInput] {
         Fixture.inputs.filter { input in numbers.contains { Fixture.tokenID($0) == input.tokenId } }

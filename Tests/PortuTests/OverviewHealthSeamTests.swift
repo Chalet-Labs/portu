@@ -5,7 +5,7 @@ import Testing
 
 /// Health over every symbol + name group (S3): the concentration warnings and the chain count.
 struct OverviewHealthSeamTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     /// $300 with a $100 threshold: the $90 group is hidden dust, yet 30% of the portfolio.
     @Test func `concentration risks cover a hidden group`() {

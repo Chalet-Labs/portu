@@ -68,17 +68,16 @@ struct SidebarView: View {
 }
 
 // Owns every input the portfolio valuation reads (the position query here, the
-// rest through `OverviewValuationSources`). Parameterless
-// on purpose: when `SidebarView.body` re-evaluates on a navigation click
-// (`store.selectedSection`), the unchanged `SidebarPortfolioHeader()` value
-// lets SwiftUI skip this body, so the O(portfolio) valuation no longer runs
-// per click (issue #98, criterion 1). It still re-renders when its own
-// observed inputs change.
+// rest through `ValuationSources`). Parameterless on purpose: when
+// `SidebarView.body` re-evaluates on a navigation click (`store.selectedSection`),
+// the unchanged `SidebarPortfolioHeader()` value lets SwiftUI skip this body, so
+// the O(portfolio) valuation no longer runs per click (issue #98, criterion 1).
+// It still re-renders when its own observed inputs change.
 
 struct SidebarPortfolioHeader: View {
     @Environment(AppState.self) private var appState
     @Query private var positions: [Position]
-    var sources = OverviewValuationSources()
+    var sources = ValuationSources()
 
     private var headline: OverviewHeadline {
         sources.headline(positions)

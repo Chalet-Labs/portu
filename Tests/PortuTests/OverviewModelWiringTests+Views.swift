@@ -9,7 +9,7 @@ import Testing
 
 /// The Overview views themselves, rendered over the in-memory store and read back through the
 /// accessibility tree, so a view that built its numbers some other way than through its
-/// `OverviewValuationSources` method would show other text.
+/// `ValuationSources` method would show other text.
 extension OverviewModelWiringTests {
     /// The mapping row values DEGEN at 100, ETH's +25% is only in `appState.priceChanges24h`, and
     /// the ignore row (second case) drops DEGEN.
@@ -117,7 +117,7 @@ extension OverviewModelWiringTests {
         let texts = try Self.texts(of: PortfolioHealthPanel(store: appStore), over: store, size: CGSize(width: 400, height: 400))
         let line = { (code: String) in
             OverviewPriceDisplay.hiddenBalancesLine(
-                value: OverviewValuationFixture.decimal("0.5") * Self.rate,
+                value: PortfolioValuationFixture.decimal("0.5") * Self.rate,
                 rowCount: 1,
                 isAllDust: true,
                 currencyCode: code)
