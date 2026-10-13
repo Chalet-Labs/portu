@@ -43,7 +43,6 @@
 		1C3D5ABCB44A8943B1616804 /* UpdaterBroadcasterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B3BE994FBAACFD30F314A7 /* UpdaterBroadcasterTests.swift */; };
 		1C646ADBE502DF61DC1D87F5 /* AppFeatureUSDPriceBookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8FFB0F3522D8BA81E0BA30B /* AppFeatureUSDPriceBookTests.swift */; };
 		1D028AD6799683303A6E3CAF /* AppFeaturePollingIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0325C954E51F2A70088FD92 /* AppFeaturePollingIdentityTests.swift */; };
-		1E79DC643C20CDD7E9979C48 /* ExposureDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10445ACEF7333821C887456C /* ExposureDashboard.swift */; };
 		211B5E82901D61B34623FCF5 /* SnapshotIndexMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 704336B84095A1B179938BC5 /* SnapshotIndexMigrationTests.swift */; };
 		225B9560EE490E4AD49C03F2 /* AppDependencies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AAB6958F228996FEDEDC07A /* AppDependencies.swift */; };
 		230FDDF90C3B1EB88AF0981C /* APIKeysViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68FADFCF9394107370CEE271 /* APIKeysViewModel.swift */; };
@@ -180,6 +179,7 @@
 		A24CD1B033AF05A8F10DC179 /* SyncEngineSnapshotRetentionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7737310B4FEA582940D4E0 /* SyncEngineSnapshotRetentionTests.swift */; };
 		A313659184D0B2AB9D697C01 /* AllAssetsSeamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86C5C8B946FC7CA06DAE1005 /* AllAssetsSeamTests.swift */; };
 		A35C63CA04BB8C5120387630 /* CurrencyConversionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC518B3873316129E9EE329 /* CurrencyConversionClient.swift */; };
+		A458D857CF78D8A39F70C846 /* ExposureDashboardData.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C01135E3F19E09DBF37DD8 /* ExposureDashboardData.swift */; };
 		A50DC572E3368D154DFB79B2 /* PortfolioHealthPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95F1EDADED217BABCD15C10 /* PortfolioHealthPanel.swift */; };
 		A51FC33657CECBF2A58A548C /* ExchangeCredentialRollbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA599260DC6621A1136C4E3A /* ExchangeCredentialRollbackTests.swift */; };
 		A53307EFF266FA209E6AEBDD /* SyncEngineScopedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1159F8509C86C08B1C489415 /* SyncEngineScopedTests.swift */; };
@@ -195,7 +195,6 @@
 		B0707B1F26AEE433FF971240 /* PortfolioAnalyticsFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D371F61690CB468F79B57512 /* PortfolioAnalyticsFeatureTests.swift */; };
 		B0C7EF78282E58C9FF84D11B /* OverviewFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7514F4EF1D675DEFD3D00B80 /* OverviewFeature.swift */; };
 		B15A829AC4BE771ECBA38995 /* TokenSettingsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF501A47E70AF0FF687F80D9 /* TokenSettingsRow.swift */; };
-		B20C5F008144723070453C36 /* ExposureSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BDCD2E7AB5E238E29197697 /* ExposureSummaryTests.swift */; };
 		B2AC965DB09157C02C4393EF /* ModelContainerFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75DA968F02800DC976D92003 /* ModelContainerFactoryTests.swift */; };
 		B2C1E26E10C54A65C07325A1 /* PerformanceLoadIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 046E97FD21BA985765DBBA5D /* PerformanceLoadIdentityTests.swift */; };
 		B8FE2EBF4BEE1F3222A93E12 /* PortfolioAnalyticsScopeFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A606EADF3771CA970FF7C619 /* PortfolioAnalyticsScopeFactory.swift */; };
@@ -220,6 +219,7 @@
 		CBB2399EDE69E054EDEFED12 /* SyncEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C652E9A00074B7A22943B6A7 /* SyncEngine.swift */; };
 		CBEBBF56CF7B53911166E1EB /* OverviewListSeamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BEF11C19E73F3EC445C42E6 /* OverviewListSeamTests.swift */; };
 		CD386ED4D0CD3C53DA44FD80 /* UpdaterSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1AD33ED9590B6094AA51DE /* UpdaterSettingsUITests.swift */; };
+		CD990876A3CFB77041A5534B /* ExposureDashboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8861E3ED43F6CF0F522E2E7 /* ExposureDashboardTests.swift */; };
 		CFC30415788A774E28D05A82 /* SyncEngineLegacyAccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C098AACD3A503135E31467D1 /* SyncEngineLegacyAccountTests.swift */; };
 		CFE9060530486693BFF3461C /* AssetPositionsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F756C31F93737292F0F09AB /* AssetPositionsTable.swift */; };
 		D06FF041CE44B377F45B4B2C /* PortfolioAnalyticsCacheWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C5C5749654501CDBB8A418 /* PortfolioAnalyticsCacheWriter.swift */; };
@@ -307,7 +307,6 @@
 		0D263D1546F411E47E784464 /* HistoricalLatestCloseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalLatestCloseTests.swift; sourceTree = "<group>"; };
 		0E0CB6C78BB61C0495E26363 /* GeneralSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsView.swift; sourceTree = "<group>"; };
 		0EAC58974A38F9BBB88E00AE /* LegacyEnumHistoricalPrice.store */ = {isa = PBXFileReference; path = LegacyEnumHistoricalPrice.store; sourceTree = "<group>"; };
-		10445ACEF7333821C887456C /* ExposureDashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExposureDashboard.swift; sourceTree = "<group>"; };
 		1159F8509C86C08B1C489415 /* SyncEngineScopedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineScopedTests.swift; sourceTree = "<group>"; };
 		1439A6AFF1671C8CD649E9C3 /* PerformanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceView.swift; sourceTree = "<group>"; };
 		15BE11056007D20DF11E4F73 /* PortfolioAnalyticsCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAnalyticsCacheTests.swift; sourceTree = "<group>"; };
@@ -416,7 +415,6 @@
 		68FADFCF9394107370CEE271 /* APIKeysViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeysViewModel.swift; sourceTree = "<group>"; };
 		6935F5F9A743434D65A06333 /* OverviewHistoricalPriceChangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewHistoricalPriceChangeTests.swift; sourceTree = "<group>"; };
 		6B4DA9144050F8397802E51D /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
-		6BDCD2E7AB5E238E29197697 /* ExposureSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExposureSummaryTests.swift; sourceTree = "<group>"; };
 		6C27FC49CD62739285B3191B /* PerformanceDataClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceDataClient.swift; sourceTree = "<group>"; };
 		6C46DC75D0866A55E3AE6B63 /* UpdatesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatesSettingsView.swift; sourceTree = "<group>"; };
 		6E73BD66578FD9C7009C3632 /* DashboardStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardStyle.swift; sourceTree = "<group>"; };
@@ -517,6 +515,7 @@
 		CD844541D34035B9A3D430E6 /* PerformanceFeature+ValueChange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PerformanceFeature+ValueChange.swift"; sourceTree = "<group>"; };
 		CE195F7AB40875584C25F26D /* ExposureSeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExposureSeamTests.swift; sourceTree = "<group>"; };
 		CFB3823EC1EBEAAB21D842FD /* AppFeatureActionEquatableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureActionEquatableTests.swift; sourceTree = "<group>"; };
+		D0C01135E3F19E09DBF37DD8 /* ExposureDashboardData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExposureDashboardData.swift; sourceTree = "<group>"; };
 		D16B731CA40BA9F8605DCB78 /* PerformancePageHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformancePageHeader.swift; sourceTree = "<group>"; };
 		D3539209B8431690D9850A7F /* ModelContainerFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerFactory.swift; sourceTree = "<group>"; };
 		D371F61690CB468F79B57512 /* PortfolioAnalyticsFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAnalyticsFeatureTests.swift; sourceTree = "<group>"; };
@@ -555,6 +554,7 @@
 		F694EE203BEF1CB7608A00BE /* PortfolioHealthFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHealthFeatureTests.swift; sourceTree = "<group>"; };
 		F709EE1D55A2C734A3B4FE8A /* AssetLookupCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetLookupCache.swift; sourceTree = "<group>"; };
 		F7BAFB203A38FB670CBECFED /* PortuTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PortuTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F8861E3ED43F6CF0F522E2E7 /* ExposureDashboardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExposureDashboardTests.swift; sourceTree = "<group>"; };
 		F8FFB0F3522D8BA81E0BA30B /* AppFeatureUSDPriceBookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureUSDPriceBookTests.swift; sourceTree = "<group>"; };
 		F9B3B9925066BD3C245A16EA /* HistoricalPriceBackfillClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillClient.swift; sourceTree = "<group>"; };
 		FA314118C60FC003FA3C6117 /* AddAccountSheetCredentialLoading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddAccountSheetCredentialLoading.swift; sourceTree = "<group>"; };
@@ -748,7 +748,7 @@
 			isa = PBXGroup;
 			children = (
 				EBCD8DF9A40E87470C168B21 /* ExposureCells.swift */,
-				10445ACEF7333821C887456C /* ExposureDashboard.swift */,
+				D0C01135E3F19E09DBF37DD8 /* ExposureDashboardData.swift */,
 				AA0F997F49008BE7A368532C /* ExposureFeature.swift */,
 				6FDADF527210BF4564D3AD76 /* ExposureView.swift */,
 				87AA4BBA6AE5D2E58CD2BF59 /* ValuationSources+Exposure.swift */,
@@ -887,10 +887,10 @@
 				3BA60071A304587735578219 /* DebugServerTests.swift */,
 				B2ED9DEF3DC327EB98AD8CBC /* DisplayCurrencyPreferenceTests.swift */,
 				FA599260DC6621A1136C4E3A /* ExchangeCredentialRollbackTests.swift */,
+				F8861E3ED43F6CF0F522E2E7 /* ExposureDashboardTests.swift */,
 				2900A801C5F8F01CEBC99503 /* ExposureFeatureTests.swift */,
 				098FBEE1F3EEF68ED0D1F0F8 /* ExposurePollingSeamTests.swift */,
 				CE195F7AB40875584C25F26D /* ExposureSeamTests.swift */,
-				6BDCD2E7AB5E238E29197697 /* ExposureSummaryTests.swift */,
 				0D263D1546F411E47E784464 /* HistoricalLatestCloseTests.swift */,
 				1BF3531455DB02B3CD05FBBA /* HistoricalMarketPricesProviderTests.swift */,
 				7674696086937331A79F61C2 /* HistoricalPortfolioEstimatorTests.swift */,
@@ -1179,7 +1179,7 @@
 				850A770966CD9B0BF9905DD5 /* DisplayCurrencyPreference.swift in Sources */,
 				00B310F5BCFFD8B2B9FA759E /* ExchangeCredentialSnapshot.swift in Sources */,
 				6B29C704D2A50D541BE721D5 /* ExposureCells.swift in Sources */,
-				1E79DC643C20CDD7E9979C48 /* ExposureDashboard.swift in Sources */,
+				A458D857CF78D8A39F70C846 /* ExposureDashboardData.swift in Sources */,
 				D4B37B7013275E0393B345B1 /* ExposureFeature.swift in Sources */,
 				83245BEC701E64C1A764211B /* ExposureView.swift in Sources */,
 				FC9E6D44EAC2FB43F1A36D36 /* GeneralSettingsView.swift in Sources */,
@@ -1317,10 +1317,10 @@
 				81C6E52FD35E2CB7C82CFC36 /* DebugServerTests.swift in Sources */,
 				F6442824A5D51C861186C713 /* DisplayCurrencyPreferenceTests.swift in Sources */,
 				A51FC33657CECBF2A58A548C /* ExchangeCredentialRollbackTests.swift in Sources */,
+				CD990876A3CFB77041A5534B /* ExposureDashboardTests.swift in Sources */,
 				0EFD203BDC0E8ED8778488C4 /* ExposureFeatureTests.swift in Sources */,
 				9B5D45049B9BA75671165D16 /* ExposurePollingSeamTests.swift in Sources */,
 				841A55637CBA6814A1633A4D /* ExposureSeamTests.swift in Sources */,
-				B20C5F008144723070453C36 /* ExposureSummaryTests.swift in Sources */,
 				358C300CA60FEC426E09EAED /* HTTPParserTests.swift in Sources */,
 				77AE4B3C82D8CAFB6862B76D /* HistoricalLatestCloseTests.swift in Sources */,
 				D2645D13F16B93CEE1E86247 /* HistoricalMarketPricesProviderTests.swift in Sources */,
