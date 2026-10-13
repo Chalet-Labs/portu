@@ -135,7 +135,9 @@ enum ExposureFormat {
         return "\(prefix)\(currencyPrefix(currencyCode)) \(number(absoluteValue, fractionDigits: fractionDigits))"
     }
 
-    static func percent(_ value: Decimal, fractionDigits: Int) -> String {
+    /// `nil` shows "—".
+    static func percent(_ value: Decimal?, fractionDigits: Int) -> String {
+        guard let value else { return "—" }
         let percentValue = NSDecimalNumber(decimal: value * 100).doubleValue
         return percentValue.formatted(.number
             .locale(locale)

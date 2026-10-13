@@ -4,7 +4,8 @@ import PortuCore
 protocol ExposureRow: Identifiable, Equatable {
     var spotAssets: Decimal { get }
     var liabilities: Decimal { get }
-    var shareOfSpot: Decimal { get }
+    /// The row's net over the Spot total, a ratio rather than a share (F4); `nil` shows "—".
+    var shareOfSpot: Decimal? { get }
 }
 
 extension ExposureRow {
@@ -19,7 +20,7 @@ nonisolated struct CategoryExposure: ExposureRow {
     let semanticRole: PortfolioCategorySemanticRole
     let spotAssets: Decimal
     let liabilities: Decimal
-    let shareOfSpot: Decimal
+    let shareOfSpot: Decimal?
 
     init(
         id: String,
@@ -27,7 +28,7 @@ nonisolated struct CategoryExposure: ExposureRow {
         semanticRole: PortfolioCategorySemanticRole = .normal,
         spotAssets: Decimal,
         liabilities: Decimal,
-        shareOfSpot: Decimal = 0) {
+        shareOfSpot: Decimal? = 0) {
         self.id = id
         self.name = name
         self.semanticRole = semanticRole
@@ -45,7 +46,7 @@ nonisolated struct AssetExposure: ExposureRow {
     let spotAssets: Decimal
     let liabilities: Decimal
     let logoURL: String?
-    let shareOfSpot: Decimal
+    let shareOfSpot: Decimal?
 
     init(
         id: UUID,
@@ -55,7 +56,7 @@ nonisolated struct AssetExposure: ExposureRow {
         spotAssets: Decimal,
         liabilities: Decimal,
         logoURL: String? = nil,
-        shareOfSpot: Decimal = 0) {
+        shareOfSpot: Decimal? = 0) {
         self.id = id
         self.symbol = symbol
         self.category = category
@@ -67,21 +68,48 @@ nonisolated struct AssetExposure: ExposureRow {
     }
 }
 
+/// The 2×2 summary (S4), in the display currency.
 struct ExposureSummary: Equatable {
+    /// Gross assets.
     let totalSpot: Decimal
+    /// Debt, as a positive amount.
     let totalLiabilities: Decimal
+    /// Spot − Liabilities: the Overview net total.
+    let netTotal: Decimal
+    /// The net of everything outside the stablecoin category.
     let netExposure: Decimal
+    /// `netExposure` over the Spot total; `nil` shows "—".
+    let netExposureShare: Decimal?
 }
 
 struct ExposureDashboardData: Equatable {
+    /// The visible rows, in display order.
     let categoryRows: [CategoryExposure]
     let assetRows: [AssetExposure]
+    /// Each table's hidden-balances line; `nil` when the table hides nothing.
+    let categoryHidden: ExposureHiddenRow?
+    let assetHidden: ExposureHiddenRow?
     let summary: ExposureSummary
     let pollingIDs: [String]
+
+    /// The category table as shown: the visible rows, then the hidden line.
+    var categoryEntries: [ExposureTableEntry<CategoryExposure>] {
+        ExposureTableEntry.entries(categoryRows, hidden: categoryHidden)
+    }
+
+    /// The asset table as shown: the visible rows, then the hidden line.
+    var assetEntries: [ExposureTableEntry<AssetExposure>] {
+        ExposureTableEntry.entries(assetRows, hidden: assetHidden)
+    }
 }
 
 enum ExposureLabels {
     static let assetCountPillTitle = "Assets"
+
+    /// The hidden line's first cell (F3): "small" when every hidden row is dust.
+    static func hiddenRowTitle(rowCount: Int, isAllDust: Bool) -> String {
+        "\(rowCount) \(isAllDust ? "small" : "hidden") \(rowCount == 1 ? "balance" : "balances")"
+    }
 }
 
 enum ExposureFeature {
@@ -326,6 +354,8 @@ enum ExposureFeature {
         return ExposureDashboardData(
             categoryRows: categoryRows,
             assetRows: assetRows,
+            categoryHidden: nil,
+            assetHidden: nil,
             summary: summary,
             pollingIDs: Array(pollingIDs).sorted())
     }
@@ -377,12 +407,17 @@ enum ExposureFeature {
     }
 
     static func computeSummary(from categories: [CategoryExposure]) -> ExposureSummary {
-        ExposureSummary(
-            totalSpot: categories.reduce(0) { $0 + $1.spotAssets },
-            totalLiabilities: categories.reduce(0) { $0 + $1.liabilities },
-            netExposure: categories
-                .filter { $0.semanticRole != .stablecoin }
-                .reduce(0) { $0 + $1.netExposure })
+        let totalSpot = categories.reduce(0) { $0 + $1.spotAssets }
+        let totalLiabilities = categories.reduce(0) { $0 + $1.liabilities }
+        let netExposure = categories
+            .filter { $0.semanticRole != .stablecoin }
+            .reduce(0) { $0 + $1.netExposure }
+        return ExposureSummary(
+            totalSpot: totalSpot,
+            totalLiabilities: totalLiabilities,
+            netTotal: totalSpot - totalLiabilities,
+            netExposure: netExposure,
+            netExposureShare: shareOfSpot(netExposure: netExposure, totalSpot: totalSpot))
     }
 
     static func pricePollingIDs(

@@ -10,55 +10,19 @@ struct ExposureView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    var sources = ValuationSources()
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
-    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
-
-    private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(
-            allTokens,
-            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
-        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
-    }
-
-    private var mappedTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.applyIdentityMappings(
-            to: tokenEntries,
-            mappings: mappingSnapshots,
-            overrides: overrideSnapshots)
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
-    }
 
     var body: some View {
-        let data = ExposureFeature.computeDashboardData(
-            tokens: mappedTokenEntries,
-            prices: displayPrices,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
+        let data = sources.exposure(
+            allTokens,
+            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules),
+            liveDisplayPrices: store.liveDisplayPrices,
+            historicalDisplayPrices: historicalDisplayPrices)
 
         return ScrollView {
             VStack(alignment: .leading, spacing: ExposureLayout.sectionSpacing) {
@@ -94,12 +58,6 @@ struct ExposureView: View {
                     appState.onSyncRequested?()
                 }
         }
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: store.liveDisplayPrices,
-            historical: historicalDisplayPrices)
     }
 }
 
@@ -145,11 +103,6 @@ private struct ExposureSummaryGrid: View {
             count: 2)
     }
 
-    private var netExposureShare: Decimal {
-        guard summary.totalSpot > 0 else { return 0 }
-        return summary.netExposure / summary.totalSpot
-    }
-
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: ExposureLayout.cardSpacing) {
             ExposureSummaryCard(title: "Spot total") {
@@ -166,7 +119,7 @@ private struct ExposureSummaryGrid: View {
                     .foregroundStyle(PortuTheme.dashboardGold)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
-                Text("\(ExposureFormat.percent(netExposureShare, fractionDigits: 2)) of spot total")
+                Text("\(ExposureFormat.percent(summary.netExposureShare, fractionDigits: 2)) of spot total")
                     .font(.caption2)
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
             }
