@@ -122,8 +122,7 @@ struct TokenSettingsRowView: View {
 
     private var valueSummary: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            // U4: an unpriced row's source badge is its caption, and it shows no value.
-            if let value = row.value, row.status != .unpriced {
+            if let value = row.value {
                 Text(TokenSettingsFormat.currency(value, currency: row.currency))
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(row.status == .notCounted ? SettingsDesign.secondaryText : SettingsDesign.primaryText)

@@ -150,7 +150,8 @@ struct TokenSettingsFeatureTests {
         let result = settingsResult(tokens: [local], livePricesUSD: [identity.historicalPriceID: 1])
 
         let row = try #require(result.rows.first)
-        #expect(row.value == 0)
+        // U4: an unpriced row is listed with no value.
+        #expect(row.value == nil)
         #expect(row.pricingSource == .unpriced)
         #expect(row.status == .unpriced)
     }

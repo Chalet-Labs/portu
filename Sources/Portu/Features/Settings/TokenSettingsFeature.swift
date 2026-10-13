@@ -30,7 +30,7 @@ struct TokenSettingsRow: Equatable, Identifiable {
     let name: String
     /// Σ role-signed amounts of the counted tokens.
     let amount: Decimal
-    /// Σ contributions; `nil` for an ignored asset, which is listed with no value.
+    /// Σ contributions; `nil` for an ignored or unpriced asset, which is listed with no value.
     let value: Decimal?
     let portfolioCategory: PortfolioCategorySnapshot
     /// `nil` (shown "—") when no counted token decides a source.

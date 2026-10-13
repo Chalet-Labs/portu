@@ -43,7 +43,7 @@ struct TokenSettingsSeamTests {
     /// S8: one row per asset over the active accounts, never only the visible ones, valued by the
     /// module. Number changes → Token Settings: "Values, sources and statuses come from the shared
     /// valuation" (sync-only, closes, mappings), "Ignored rows show no value", "Rewards no longer add
-    /// to an asset", "Supply and borrow are priced per token".
+    /// to an asset", "Supply and borrow are priced per token". BAD is unpriced, so it has no value (U4).
     @Test func `every asset is listed with the module's value`() {
         let rows = Self.rowsByAsset(Self.result(Fixture.context()))
         let expected: [UUID: Decimal?] = [
@@ -54,7 +54,7 @@ struct TokenSettingsSeamTests {
             Fixture.AssetID.manual: 100,
             Fixture.AssetID.link: 160,
             Fixture.AssetID.uni: 70,
-            Fixture.AssetID.bad: 0,
+            Fixture.AssetID.bad: nil,
             Fixture.AssetID.tiny: Fixture.decimal("0.3"),
             Fixture.AssetID.degen: 100,
             Fixture.AssetID.otc: 250,
@@ -129,6 +129,18 @@ struct TokenSettingsSeamTests {
         #expect(scam?.status == .ignored)
         #expect(scam.map { $0.value == nil } == true)
         #expect(scam.map { $0.pricingSource == nil } == true)
+    }
+
+    /// U4: a counted, unpriced row shows no value, so it sorts with the ignored row after every valued
+    /// row, the USDT borrow's negative value included. BAD and SCAM then tie on symbol.
+    @Test func `an unpriced row has no value and sorts last`() {
+        let result = Self.result(Fixture.context())
+        let bad = Self.rowsByAsset(result)[Fixture.AssetID.bad]
+
+        #expect(bad?.status == .unpriced)
+        #expect(bad?.pricingSource == .unpriced)
+        #expect(bad.map { $0.value == nil } == true)
+        #expect(result.rows.suffix(3).map(\.assetId) == [Fixture.AssetID.usdt, Fixture.AssetID.bad, Fixture.AssetID.scam])
     }
 
     /// S8 and U4: an asset with no counted token is Not Counted, valued Σ contributions = 0, with no
@@ -277,7 +289,8 @@ struct TokenSettingsAssetsParityTests {
             let row = try #require(settingsRows[asset.id])
             let status = try #require(statuses[asset.id])
             let source = asset.source.flatMap { Self.sources[$0] } ?? (status == .unpriced ? .unpriced : nil)
-            #expect(row.value == asset.value, "\(asset.symbol)")
+            // U4: the Assets tab values an unpriced row at 0; Token Settings shows it with no value.
+            #expect(row.value == (status == .unpriced ? nil : asset.value), "\(asset.symbol)")
             #expect(row.pricingSource == source, "\(asset.symbol)")
             #expect(row.status == status, "\(asset.symbol)")
         }
