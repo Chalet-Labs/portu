@@ -81,6 +81,29 @@ extension ViewRenderSmokeTests {
         #expect(texts.count { $0 == TokenSettingsLabels.notCounted } == 2, "\(texts)")
     }
 
+    /// U4: a counted, unpriced row shows its Unpriced caption and no value. NOPE has no price ID and
+    /// no sync value, so it sorts last, after ETH and USDC.
+    @Test(.renderedTextReadable) func `an unpriced token settings row shows no value`() throws {
+        let container = try makeContainer()
+        let account = try #require(container.mainContext.fetch(FetchDescriptor<Account>()).first)
+        let unpriced = Asset(symbol: "NOPE", name: "No Price", category: .other)
+        container.mainContext.insert(unpriced)
+        container.mainContext.insert(Position(
+            positionType: .idle,
+            chain: .ethereum,
+            tokens: [PositionToken(role: .balance, amount: 1, usdValue: 0, asset: unpriced)],
+            account: account,
+            syncedAt: Date(timeIntervalSinceReferenceDate: 800_000_000)))
+        try container.mainContext.save()
+
+        let texts = try tokenSettingsTexts(TokenSettingsView(), container: container) { $0.contains("NOPE") }
+        let unpricedRow = Array(texts.drop { $0 != "NOPE" })
+
+        #expect(unpricedRow.first == "NOPE", "\(texts)")
+        #expect(unpricedRow.contains(TokenPricingSource.unpriced.rawValue), "\(texts)")
+        #expect(!unpricedRow.contains(TokenSettingsFormat.currency(0, currency: .default)), "\(texts)")
+    }
+
     /// Renders tall enough for every row, with the settings on a fresh defaults suite, and reads the
     /// text while that suite still exists, spinning the run loop until `isReady` or two seconds pass.
     private func tokenSettingsTexts(
