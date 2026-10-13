@@ -9,14 +9,6 @@ enum TokenPricingSource: String, CaseIterable, Equatable {
     case unpriced = "Unpriced"
 }
 
-enum TokenVisibilityStatus: String, Equatable {
-    case visible = "Visible"
-    case dust = "Dust"
-    case ignored = "Ignored"
-    case alwaysShow = "Always Show"
-    case unpriced = "Unpriced"
-}
-
 enum TokenSettingsFilter: String, CaseIterable, Equatable, Identifiable {
     case all = "All"
     case unpriced = "Unpriced"
@@ -108,19 +100,6 @@ enum TokenSettingsFeature {
 
     static func overridesByAssetId(_ overrides: [TokenPricingOverrideSnapshot]) -> [UUID: TokenPricingOverrideSnapshot] {
         TokenPricingOverrideFeature.overridesByAssetId(overrides)
-    }
-
-    static func applyPriceOverrides(
-        to tokens: [TokenEntry],
-        overrides: [TokenPricingOverrideSnapshot]) -> [TokenEntry] {
-        let overrideMap = overridesByAssetId(overrides)
-        return tokens.map { token in
-            guard let override = overrideMap[token.assetId] else { return token }
-            return tokenEntry(
-                from: token,
-                coinGeckoId: resolvedCoinGeckoID(token: token, override: override),
-                usdValue: token.usdValue)
-        }
     }
 
     static func applyIdentityMappings(
@@ -222,44 +201,10 @@ enum TokenSettingsFeature {
         currency: FiatCurrency = .default,
         limit: Int = displayLimit) -> TokenSettingsResult {
         let overrideMap = TokenPricingOverrideFeature.overridesByAssetId(context.overrides)
-        let rows = AllAssetsFeature.assetList(context.valuation(), settings: context.settings).rows.compactMap { row in
-            TokenSettingsRow(row, override: overrideMap[row.key], currency: currency, rate: context.usdToDisplayRate)
-        }
-        return present(rows, filter: filter, searchText: searchText, limit: limit)
-    }
-
-    static func rows(
-        tokens: [TokenEntry],
-        prices: [String: Decimal],
-        overrides: [TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults,
-        filter: TokenSettingsFilter,
-        searchText: String,
-        currency: FiatCurrency = .default,
-        usdToDisplayRate: Decimal = 1,
-        limit: Int = displayLimit) -> TokenSettingsResult {
-        let overrideMap = overridesByAssetId(overrides)
-        // Live prices arrive already in the display currency; manual overrides and the dust
-        // threshold are canonical USD. Convert those so every row value shares one currency.
-        let rate = usdToDisplayRate > 0 ? usdToDisplayRate : 1
-        let rows = aggregateTokens(tokens).map { token in
-            makeRow(
-                token: token,
-                prices: prices,
-                override: overrideMap[token.assetId],
-                settings: settings,
-                currency: currency,
-                usdToDisplayRate: rate)
-        }
-        return present(rows, filter: filter, searchText: searchText, limit: limit)
-    }
-
-    private static func present(
-        _ rows: [TokenSettingsRow],
-        filter: TokenSettingsFilter,
-        searchText: String,
-        limit: Int) -> TokenSettingsResult {
-        let searchedRows = rows
+        let searchedRows = AllAssetsFeature.assetList(context.valuation(), settings: context.settings).rows
+            .compactMap { row in
+                TokenSettingsRow(row, override: overrideMap[row.key], currency: currency, rate: context.usdToDisplayRate)
+            }
             .filter { row in
                 matchesSearch(row: row, searchText: searchText)
             }
@@ -288,111 +233,6 @@ enum TokenSettingsFeature {
         token: TokenEntry,
         override: TokenPricingOverrideSnapshot?) -> String? {
         TokenPricingOverrideFeature.resolvedPriceID(token: token, override: override)
-    }
-
-    private static func aggregateTokens(_ tokens: [TokenEntry]) -> [TokenEntry] {
-        var aggregates: [UUID: TokenSettingsAggregate] = [:]
-        for token in tokens {
-            if var aggregate = aggregates[token.assetId] {
-                aggregate.add(token)
-                aggregates[token.assetId] = aggregate
-            } else {
-                aggregates[token.assetId] = TokenSettingsAggregate(token)
-            }
-        }
-        return aggregates.values.map { aggregate in
-            tokenEntry(
-                from: aggregate.base,
-                coinGeckoId: aggregate.coinGeckoId,
-                onchainIdentity: aggregate.onchainIdentity,
-                amount: aggregate.netAmount,
-                usdValue: aggregate.netUSDValue,
-                logoURL: aggregate.logoURL)
-        }
-    }
-
-    private static func makeRow(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings,
-        currency: FiatCurrency = .default,
-        usdToDisplayRate: Decimal = 1) -> TokenSettingsRow {
-        let value = resolvedDisplayValue(
-            token: token,
-            prices: prices,
-            override: override,
-            usdToDisplayRate: usdToDisplayRate)
-        let source = pricingSource(token: token, prices: prices, override: override)
-        let status = visibilityStatus(
-            value: value,
-            override: override,
-            settings: settings,
-            usdToDisplayRate: usdToDisplayRate)
-        let isIgnored = override?.isIgnored == true
-
-        return TokenSettingsRow(
-            assetId: token.assetId,
-            symbol: token.symbol,
-            name: token.name,
-            amount: token.amount,
-            value: value ?? 0,
-            portfolioCategory: token.portfolioCategory,
-            pricingSource: source,
-            status: rowStatus(status),
-            alwaysShow: override?.alwaysShow == true && !isIgnored,
-            isIgnored: isIgnored,
-            coinGeckoId: resolvedCoinGeckoID(token: token, override: override),
-            logoURL: token.logoURL,
-            currency: currency,
-            override: override)
-    }
-
-    private static func pricingSource(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?) -> TokenPricingSource {
-        if sanitizedManualPrice(override?.manualPriceUSD) != nil {
-            return .manual
-        }
-        if
-            let priceID = resolvedPriceID(token: token, override: override),
-            let price = prices[priceID],
-            isPlausible(price: price, priceID: priceID, token: token) {
-            return .live
-        }
-        return .unpriced
-    }
-
-    private static func visibilityStatus(
-        value: Decimal?,
-        override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings,
-        usdToDisplayRate: Decimal) -> TokenVisibilityStatus {
-        if override?.isIgnored == true {
-            return .ignored
-        }
-        if override?.alwaysShow == true {
-            return .alwaysShow
-        }
-        guard let value else {
-            return .unpriced
-        }
-        // `value` is in the display currency, so scale the USD threshold to match.
-        if absolute(value) < normalizedThreshold(settings.minimumDashboardValue) * usdToDisplayRate {
-            return .dust
-        }
-        return .visible
-    }
-
-    /// The status the legacy classification implies: an always-shown row reads as priced.
-    private static func rowStatus(_ status: TokenVisibilityStatus) -> RowStatus {
-        switch status {
-        case .ignored: .ignored
-        case .unpriced: .unpriced
-        case .dust: .dust
-        case .visible, .alwaysShow: .priced
-        }
     }
 
     private static func counts(for rows: [TokenSettingsRow]) -> TokenSettingsCounts {

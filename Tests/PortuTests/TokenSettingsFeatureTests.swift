@@ -103,14 +103,12 @@ struct TokenSettingsFeatureTests {
                 coinGeckoIdOverride: "new-map")
         ]
 
-        let entries = TokenSettingsFeature.applyPriceOverrides(to: [mapped], overrides: overrides)
         let result = settingsResult(
             tokens: [mapped],
             overrides: overrides,
             livePricesUSD: ["old-map": 1, "new-map": 2])
 
         let row = try #require(result.rows.first)
-        #expect(entries.first?.coinGeckoId == "new-map")
         #expect(row.value == 7)
         #expect(row.pricingSource == .manual)
         #expect(row.status == .priced)
