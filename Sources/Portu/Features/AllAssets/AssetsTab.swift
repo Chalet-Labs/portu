@@ -158,6 +158,7 @@ struct AssetsTab: View {
                             .font(.caption2)
                             .foregroundStyle(PortuTheme.dashboardGold)
                             .help("Sync-time price -- no live data")
+                            .accessibilityLabel("Sync-time price")
                     }
                 }
                 .frame(width: 132, alignment: .trailing)

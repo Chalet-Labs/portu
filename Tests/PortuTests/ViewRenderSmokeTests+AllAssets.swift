@@ -110,6 +110,40 @@ extension ViewRenderSmokeTests {
         #expect(nope?.contains(", —, ") == true, "\(texts)")
     }
 
+    /// AGENT-DECIDED 9: the clock marks a sync-time price only, never a live or manual one.
+    @Test(.renderedTextReadable) func `assets show the clock for sync prices only`() throws {
+        let container = try makeContainer()
+        let account = try seededAccount(container)
+        let synced = Asset(symbol: "SYNCED", name: "Synced Token", category: .other)
+        let manual = Asset(symbol: "MANUAL", name: "Manual Token", category: .other)
+        container.mainContext.insert(synced)
+        container.mainContext.insert(manual)
+        container.mainContext.insert(TokenPricingOverride(assetId: manual.id, manualPriceUSD: 20))
+        container.mainContext.insert(Position(
+            positionType: .idle,
+            chain: .ethereum,
+            tokens: [
+                PositionToken(role: .balance, amount: 10, usdValue: 500, asset: synced),
+                PositionToken(role: .balance, amount: 10, usdValue: 100, asset: manual)
+            ],
+            account: account,
+            syncedAt: Self.syncedAt))
+        try container.mainContext.save()
+
+        let texts = try assetsTexts(container, hideUnpriced: true)
+        let row = { (symbol: String) in texts.first { $0.hasPrefix("\(symbol), ") } }
+
+        let syncedRow = try #require(row("SYNCED"), "\(texts)")
+        let manualRow = try #require(row("MANUAL"), "\(texts)")
+        let ethRow = try #require(row("ETH"), "\(texts)")
+        let clock = "Sync-time price"
+
+        #expect(!syncedRow.contains(", —, "), "\(texts)")
+        #expect(syncedRow.contains(clock), "\(texts)")
+        #expect(!manualRow.contains(clock), "\(texts)")
+        #expect(!ethRow.contains(clock), "\(texts)")
+    }
+
     @Test(.renderedTextReadable) func `assets show the hidden row when every row is hidden`() throws {
         let container = try makeContainer()
         try seededAccount(container).isActive = false
