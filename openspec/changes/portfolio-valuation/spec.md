@@ -610,7 +610,7 @@ The PR (b) description lists the commits in order and every intentional number c
   - The manual-price count and filter read the override.
   - An ignored row shows "—" as its source, as does a not-counted row (V5 gives neither a source).
   - An ignored asset's Ignored badge, no-value rule, count and filter win over its F1 status, so an ignored reward-only asset counts as Ignored, not Not counted.
-  - Rows sort by value, descending. Rows with no value (ignored, unpriced) come last. Ties break by symbol, then asset ID.
+  - Counted rows with a value sort first, by value descending, ties by symbol, then asset ID. The rows that do not count come after every counted row, in one trailing group ordered by symbol, then asset ID: ignored and unpriced rows, which have no value, and not-counted rows, whose own value counts nowhere.
   - The view builds its context with `ValuationContext.activeAccounts` from its own override and mapping queries, rather than through `ValuationSources`. It already owns the override query and the dashboard settings for its writers.
   - `SettingsView` mounts `HistoricalPricesProvider`, so the Settings window sees closes (S8). Until the I2 cleanup strips the provider's display-currency work, every Settings tab pays for it.
 - **Accounts:** the tooltip shows on every account, converted at the current rate.
