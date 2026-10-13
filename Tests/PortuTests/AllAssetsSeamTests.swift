@@ -342,6 +342,12 @@ struct AllAssetsPlatformsSeamTests {
         #expect(data.total == -50)
     }
 
+    /// F4: a missing share reads "—", a share reads to 0.1%.
+    @Test func `share text`() {
+        #expect(AllAssetsFormat.share(nil) == "—")
+        #expect(AllAssetsFormat.share(Fixture.decimal("0.952")) == Fixture.decimal("0.952").formatted(.percent.precision(.fractionLength(1))))
+    }
+
     /// AGENT-DECIDED 8: the name is the lowest protocol name of the platform's positions; equal
     /// balances order by name, then key. A dust platform puts a hidden line under them.
     @Test func `platform names and ties are deterministic`() {

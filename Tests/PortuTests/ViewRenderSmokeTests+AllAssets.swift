@@ -62,6 +62,27 @@ extension ViewRenderSmokeTests {
         #expect(rows.first?.dropFirst().first == AllAssetsFormat.share(1), "\(rows)")
     }
 
+    /// F4: a $20,000 borrow puts the list total below zero, so every share cell reads "—".
+    @Test(.renderedTextReadable) func `platforms show no shares when the total is not positive`() throws {
+        let container = try makeContainer()
+        let usdc = try #require(container.mainContext.fetch(FetchDescriptor<Asset>()).first { $0.symbol == "USDC" })
+        let account = try seededAccount(container)
+        container.mainContext.insert(Position(
+            positionType: .lending,
+            chain: .ethereum,
+            protocolId: "compound",
+            protocolName: "Compound",
+            tokens: [PositionToken(role: .borrow, amount: 20000, usdValue: 20000, asset: usdc)],
+            account: account,
+            syncedAt: Self.syncedAt))
+        try container.mainContext.save()
+
+        let rows = try tableRows(PlatformsTab(), container: container)
+
+        #expect(rows.count == 3, "\(rows)")
+        #expect(rows.allSatisfy { $0.dropFirst().first == "—" }, "\(rows)")
+    }
+
     /// With Hide unpriced off, an unpriced token shows "—" for its price; the dust row is hidden
     /// after every visible row.
     @Test(.renderedTextReadable) func `assets end with their hidden balances row`() throws {
