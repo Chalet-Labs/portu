@@ -59,6 +59,56 @@ extension ViewRenderSmokeTests {
         #expect(Array(texts.dropFirst(ethRow + 1).prefix(4)) == [whole(6100), "/", whole(0), whole(6100)], "\(texts)")
     }
 
+    /// S4's 2×2 summary over the seeded store: Spot is ETH 2 × $3,050 + USDC $4,000, Liabilities the
+    /// $500 USDC borrow, shown positive (A2), and Net exposure leaves out the stablecoin. The USDC row
+    /// shows its borrow unsigned too.
+    @Test(.renderedTextReadable) func `exposure summary cards and a borrow read unsigned`() throws {
+        let texts = try exposureTexts(makeContainer())
+        let cents = { (value: Decimal) in ExposureFormat.currency(value, fractionDigits: 2) }
+        let whole = { (value: Decimal) in ExposureFormat.currency(value, fractionDigits: 0) }
+        let assetTable = try #require(texts.firstIndex(of: "Exposure by asset"), "\(texts)")
+        let usdcRow = try #require(texts.indices.first { $0 > assetTable && texts[$0] == "USDC" }, "\(texts)")
+
+        #expect(Self.card("Spot total", texts) == [cents(10100)], "\(texts)")
+        #expect(Self.card("Liabilities", texts) == [cents(500)], "\(texts)")
+        #expect(Self.card("Net total", texts) == [cents(9600)], "\(texts)")
+        let share = ExposureFormat.percent(Decimal(6100) / Decimal(10100), fractionDigits: 2)
+        #expect(Self.card(Self.netExposureTitle, texts, count: 2) == [cents(6100), "\(share) of spot total"], "\(texts)")
+        // Spot / liabilities, then Spot Net.
+        #expect(Array(texts.dropFirst(usdcRow + 1).prefix(4)) == [whole(4000), "/", whole(500), whole(3500)], "\(texts)")
+    }
+
+    /// Decided 2026-10-13: with no spot at all, "% of spot" reads "—", on the row and on the Net
+    /// exposure card. The only active holding is a $100 USDC borrow.
+    @Test(.renderedTextReadable) func `exposure shows no ratio when spot is not positive`() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let seeded = try #require(context.fetch(FetchDescriptor<Account>()).first)
+        let usdc = try #require(context.fetch(FetchDescriptor<Asset>()).first { $0.symbol == "USDC" })
+        seeded.isActive = false
+        let account = Account(name: "Borrow Wallet", kind: .wallet, dataSource: .zerion)
+        context.insert(account)
+        context.insert(Position(
+            positionType: .lending,
+            chain: .ethereum,
+            protocolId: "aave-v3",
+            protocolName: "Aave V3",
+            tokens: [PositionToken(role: .borrow, amount: 100, usdValue: 100, asset: usdc)],
+            account: account,
+            syncedAt: Date(timeIntervalSinceReferenceDate: 800_000_000)))
+        try context.save()
+
+        let texts = try exposureTexts(container)
+        let cents = { (value: Decimal) in ExposureFormat.currency(value, fractionDigits: 2) }
+        let whole = { (value: Decimal) in ExposureFormat.currency(value, fractionDigits: 0) }
+        let assetTable = try #require(texts.firstIndex(of: "Exposure by asset"), "\(texts)")
+        let usdcRow = try #require(texts.indices.first { $0 > assetTable && texts[$0] == "USDC" }, "\(texts)")
+
+        // Spot / liabilities, Spot Net, Net Exposure, then "% of spot".
+        #expect(Array(texts.dropFirst(usdcRow + 1).prefix(6)) == [whole(0), "/", whole(100), whole(-100), cents(-100), "—"], "\(texts)")
+        #expect(Self.card(Self.netExposureTitle, texts, count: 2) == [cents(0), "— of spot total"], "\(texts)")
+    }
+
     /// Every active holding is dust: neither table has a visible row, and each shows its hidden
     /// line, not "No … exposure".
     @Test(.renderedTextReadable) func `exposure shows the hidden row when every row is hidden`() throws {
@@ -79,6 +129,13 @@ extension ViewRenderSmokeTests {
         #expect(!texts.contains("No category exposure"), "\(texts)")
         #expect(!texts.contains("No asset exposure"), "\(texts)")
         #expect(Self.assetPill(texts) == ["Assets", "0"], "\(texts)")
+    }
+
+    private static let netExposureTitle = "Net exposure (excl. stablecoins)"
+
+    /// The texts a summary card shows after its title.
+    private static func card(_ title: String, _ texts: [String], count: Int = 1) -> [String] {
+        Array(texts.drop { $0 != title }.dropFirst().prefix(count))
     }
 
     /// The Assets pill's title and count, in tree order.
