@@ -23,7 +23,6 @@ nonisolated struct AssetRowData: Identifiable, Equatable {
     let value: Decimal
     /// The source of the row's lead token; the clock marks a sync-time price.
     let source: ValuationSource?
-    let hasLivePrice: Bool
 
     init(
         id: UUID,
@@ -45,29 +44,6 @@ nonisolated struct AssetRowData: Identifiable, Equatable {
         self.price = price
         self.value = value
         self.source = source
-        self.hasLivePrice = source == .live
-    }
-
-    init(
-        id: UUID,
-        symbol: String,
-        name: String,
-        category: AssetCategory,
-        portfolioCategory: PortfolioCategorySnapshot? = nil,
-        netAmount: Decimal,
-        price: Decimal,
-        value: Decimal,
-        hasLivePrice: Bool) {
-        self.init(
-            id: id,
-            symbol: symbol,
-            name: name,
-            category: category,
-            portfolioCategory: portfolioCategory,
-            netAmount: netAmount,
-            price: price,
-            value: value,
-            source: hasLivePrice ? .live : .sync)
     }
 }
 
@@ -88,20 +64,6 @@ extension AssetRowData {
             value: row.displayValue(rate: rate),
             source: pricing.source)
     }
-}
-
-/// Accumulator for aggregating token amounts per asset.
-struct AssetAccumulator {
-    var symbol: String
-    var name: String
-    var category: AssetCategory
-    var portfolioCategory: PortfolioCategorySnapshot = PortfolioCategoryDefaults.fallbackCategory
-    var coinGeckoId: String?
-    var onchainIdentity: OnchainTokenIdentity?
-    var positive: Decimal = 0
-    var borrow: Decimal = 0
-    var positiveUSD: Decimal = 0
-    var borrowUSD: Decimal = 0
 }
 
 // MARK: - AllAssetsFeature
@@ -134,75 +96,6 @@ struct AllAssetsFeature {
     }
 
     // MARK: - Pure Functions
-
-    /// Aggregate token entries into display rows, merging live prices where available.
-    static func aggregateRows(
-        tokens: [TokenEntry],
-        prices: [String: Decimal],
-        fallbackUSDToDisplayRate: Decimal = 1) -> [AssetRowData] {
-        var assetTokens: [UUID: AssetAccumulator] = [:]
-
-        for token in tokens {
-            if token.role.isReward {
-                continue
-            }
-
-            var entry = assetTokens[token.assetId] ?? AssetAccumulator(
-                symbol: token.symbol, name: token.name, category: token.category,
-                portfolioCategory: token.portfolioCategory,
-                coinGeckoId: token.coinGeckoId,
-                onchainIdentity: token.onchainIdentity)
-            entry.coinGeckoId = entry.coinGeckoId ?? token.coinGeckoId
-            entry.onchainIdentity = entry.onchainIdentity ?? token.onchainIdentity
-
-            if token.role.isBorrow {
-                entry.borrow += token.amount
-                entry.borrowUSD += token.usdValue
-            } else if token.role.isPositive {
-                entry.positive += token.amount
-                entry.positiveUSD += token.usdValue
-            }
-            assetTokens[token.assetId] = entry
-        }
-
-        return assetTokens.map { assetId, entry in
-            let netAmount = entry.positive - entry.borrow
-            let priceID = TokenIdentityMappingFeature.priceID(
-                coinGeckoId: entry.coinGeckoId,
-                onchainIdentity: entry.onchainIdentity)
-            let livePrice = priceID.flatMap { prices[$0] }
-            let hasLive = livePrice != nil
-
-            let price: Decimal
-            let value: Decimal
-
-            if let livePrice {
-                price = livePrice
-                value = netAmount * livePrice
-            } else {
-                // Sync-time fallback: weighted average price
-                if entry.positive > 0 {
-                    price = (entry.positiveUSD / entry.positive) * fallbackUSDToDisplayRate
-                } else if entry.borrow > 0 {
-                    price = (entry.borrowUSD / entry.borrow) * fallbackUSDToDisplayRate
-                } else {
-                    price = 0
-                }
-                value = (entry.positiveUSD - entry.borrowUSD) * fallbackUSDToDisplayRate
-            }
-
-            return AssetRowData(
-                id: assetId,
-                symbol: entry.symbol,
-                name: entry.name,
-                category: entry.category,
-                portfolioCategory: entry.portfolioCategory,
-                netAmount: netAmount,
-                price: price,
-                value: value,
-                hasLivePrice: hasLive)
-        }
-    }
 
     /// Filter rows by search text (case-insensitive match on symbol or name).
     static func filterRows(

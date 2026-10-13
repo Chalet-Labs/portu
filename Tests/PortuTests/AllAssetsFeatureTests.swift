@@ -1,5 +1,3 @@
-// swiftlint:disable file_length
-
 import ComposableArchitecture
 import Foundation
 @testable import Portu
@@ -308,7 +306,7 @@ struct AssetRowAggregationTests {
                 netAmount: 1,
                 price: 60000,
                 value: 60000,
-                hasLivePrice: true),
+                source: .live),
             AssetRowData(
                 id: UUID(),
                 symbol: "ETH",
@@ -317,7 +315,7 @@ struct AssetRowAggregationTests {
                 netAmount: 10,
                 price: 3000,
                 value: 30000,
-                hasLivePrice: true)
+                source: .live)
         ]
 
         let filtered = AllAssetsFeature.filterRows(rows, searchText: "btc")
@@ -336,7 +334,7 @@ struct AssetRowAggregationTests {
                 netAmount: 1,
                 price: 60000,
                 value: 60000,
-                hasLivePrice: true),
+                source: .live),
             AssetRowData(
                 id: UUID(),
                 symbol: "ETH",
@@ -345,7 +343,7 @@ struct AssetRowAggregationTests {
                 netAmount: 10,
                 price: 3000,
                 value: 30000,
-                hasLivePrice: true)
+                source: .live)
         ]
 
         let filtered = AllAssetsFeature.filterRows(rows, searchText: "ether")
@@ -364,7 +362,7 @@ struct AssetRowAggregationTests {
                 netAmount: 1,
                 price: 60000,
                 value: 60000,
-                hasLivePrice: true),
+                source: .live),
             AssetRowData(
                 id: UUID(),
                 symbol: "ETH",
@@ -373,48 +371,12 @@ struct AssetRowAggregationTests {
                 netAmount: 10,
                 price: 3000,
                 value: 30000,
-                hasLivePrice: true)
+                source: .live)
         ]
 
         let filtered = AllAssetsFeature.filterRows(rows, searchText: "")
 
         #expect(filtered.count == 2)
-    }
-
-    // MARK: - AssetAccumulator
-
-    @Test func `accumulator struct stores all fields`() {
-        let acc = AssetAccumulator(
-            symbol: "BTC",
-            name: "Bitcoin",
-            category: .major,
-            coinGeckoId: "bitcoin",
-            positive: Decimal(1.5),
-            borrow: Decimal(0.3),
-            positiveUSD: Decimal(90000),
-            borrowUSD: Decimal(18000))
-
-        #expect(acc.symbol == "BTC")
-        #expect(acc.name == "Bitcoin")
-        #expect(acc.category == .major)
-        #expect(acc.coinGeckoId == "bitcoin")
-        #expect(acc.positive == Decimal(1.5))
-        #expect(acc.borrow == Decimal(0.3))
-        #expect(acc.positiveUSD == Decimal(90000))
-        #expect(acc.borrowUSD == Decimal(18000))
-    }
-
-    @Test func `accumulator defaults numeric fields to zero`() {
-        let acc = AssetAccumulator(
-            symbol: "ETH",
-            name: "Ethereum",
-            category: .defi)
-
-        #expect(acc.positive == 0)
-        #expect(acc.borrow == 0)
-        #expect(acc.positiveUSD == 0)
-        #expect(acc.borrowUSD == 0)
-        #expect(acc.coinGeckoId == nil)
     }
 
     // MARK: - CSV Generation
@@ -429,7 +391,7 @@ struct AssetRowAggregationTests {
                 netAmount: 1.5,
                 price: 60000,
                 value: 90000,
-                hasLivePrice: true)
+                source: .live)
         ]
 
         let csv = AllAssetsFeature.generateCSV(from: rows)
