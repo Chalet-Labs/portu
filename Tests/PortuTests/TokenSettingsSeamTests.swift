@@ -239,3 +239,47 @@ struct TokenSettingsSeamTests {
         #expect(result.counts.all == 120)
     }
 }
+
+/// S5 (last bullet) and T2: for the same inputs, an Assets-tab row and its Token Settings row show
+/// the same value, source and status. Both lists show every row here (`showAll`), so the dust and
+/// unpriced rows (DAI, TINY, the USDT borrow, BAD) are compared too. A reward-only asset is listed
+/// only on Token Settings, as Not Counted; the ignored SCAM row only there, as Ignored.
+struct TokenSettingsAssetsParityTests {
+    private typealias Fixture = PortfolioValuationFixture
+
+    private static let rewardOnly = ValuationInput(
+        tokenId: Fixture.uuid(9600),
+        token: Fixture.token(Fixture.uuid(9601), "RWD", "Reward Only", .other, coinGeckoId: "solana", role: .reward, amount: 1, usdValue: 150),
+        position: Fixture.PositionSlot.lido.context)
+
+    private static let sources: [ValuationSource: TokenPricingSource] = [
+        .manual: .manual,
+        .live: .live,
+        .close: .close,
+        .sync: .syncTime
+    ]
+
+    @Test(arguments: [Decimal(1), Fixture.decimal("0.9")])
+    func `an assets row equals its token settings row`(rate: Decimal) throws {
+        let context = Fixture.context(rate: rate, settings: .showAll, inputs: Fixture.inputs + [Self.rewardOnly])
+        let assets = AllAssetsFeature.assets(context, searchText: "").rows
+        let statuses = Dictionary(uniqueKeysWithValues: AllAssetsFeature.assetList(context.valuation(), settings: context.settings)
+            .rows.map { ($0.key, $0.status) })
+        let settingsRows = Dictionary(uniqueKeysWithValues: TokenSettingsFeature.result(context, filter: .all, searchText: "", limit: .max)
+            .rows.map { ($0.assetId, $0) })
+
+        #expect(assets.count == 14)
+        #expect(settingsRows.count == 16)
+        #expect(Set(assets.map(\.id)) == Set(settingsRows.values.filter { !$0.isIgnored && $0.status != .notCounted }.map(\.assetId)))
+        #expect(settingsRows[Self.rewardOnly.token.assetId]?.status == .notCounted)
+        #expect(settingsRows[Fixture.AssetID.scam]?.isIgnored == true)
+        for asset in assets {
+            let row = try #require(settingsRows[asset.id])
+            let status = try #require(statuses[asset.id])
+            let source = asset.source.flatMap { Self.sources[$0] } ?? (status == .unpriced ? .unpriced : nil)
+            #expect(row.value == asset.value, "\(asset.symbol)")
+            #expect(row.pricingSource == source, "\(asset.symbol)")
+            #expect(row.status == status, "\(asset.symbol)")
+        }
+    }
+}
