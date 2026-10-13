@@ -5,11 +5,8 @@ import SwiftUI
 
 struct PlatformsTab: View {
     @Environment(AppState.self) private var appState
-    @Query private var allPositions: [Position]
-
-    private var positions: [Position] {
-        allPositions.filter { $0.account?.isActive == true }
-    }
+    var sources = ValuationSources()
+    @Query private var allTokens: [PositionToken]
 
     struct PlatformInput {
         let chain: String?
@@ -78,32 +75,30 @@ struct PlatformsTab: View {
         return rows
     }
 
-    private var rows: [PlatformRow] {
-        Self.computeRows(from: positions.map {
-            PlatformInput(
-                chain: $0.chain?.rawValue,
-                protocolId: $0.protocolId,
-                protocolName: $0.protocolName,
-                positionType: $0.positionType,
-                netValue: $0.netUSDValue * appState.currentUSDToDisplayRate)
-        })
-    }
-
     private var currencyCode: String {
         appState.currencyCode
     }
 
     var body: some View {
-        Table(rows) {
-            TableColumn("Platform") { row in Text(row.name).fontWeight(.medium).foregroundStyle(PortuTheme.dashboardText) }
-            TableColumn("Share %") { row in
-                Text(row.sharePercent, format: .percent.precision(.fractionLength(1)))
+        let inputs = sources.allAssets(allTokens)
+        let data = AllAssetsFeature.platforms(inputs.context, protocolNames: inputs.protocolNames)
+        Table(data.entries) {
+            TableColumn("Platform") { entry in
+                switch entry {
+                case let .row(row):
+                    Text(row.name).fontWeight(.medium).foregroundStyle(PortuTheme.dashboardText)
+                case let .hidden(line):
+                    Text(line.title).foregroundStyle(PortuTheme.dashboardSecondaryText)
+                }
+            }
+            TableColumn("Share %") { entry in
+                Text(AllAssetsFormat.share(entry.row?.share ?? entry.hidden?.share))
                     .font(DashboardStyle.monoTableFont)
             }
-            TableColumn("# Networks") { row in Text("\(row.networkCount)") }
-            TableColumn("# Positions") { row in Text("\(row.positionCount)") }
-            TableColumn("Balance") { row in
-                Text(row.balance, format: .currency(code: currencyCode))
+            TableColumn("# Networks") { entry in Text(entry.row.map { "\($0.networkCount)" } ?? "") }
+            TableColumn("# Positions") { entry in Text(entry.row.map { "\($0.positionCount)" } ?? "") }
+            TableColumn("Balance") { entry in
+                Text(entry.row?.balance ?? entry.hidden?.value ?? 0, format: .currency(code: currencyCode))
                     .font(DashboardStyle.monoTableFont)
             }
         }

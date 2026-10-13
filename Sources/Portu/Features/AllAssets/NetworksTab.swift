@@ -5,11 +5,8 @@ import SwiftUI
 
 struct NetworksTab: View {
     @Environment(AppState.self) private var appState
-    @Query private var allPositions: [Position]
-
-    private var positions: [Position] {
-        allPositions.filter { $0.account?.isActive == true }
-    }
+    var sources = ValuationSources()
+    @Query private var allTokens: [PositionToken]
 
     struct NetworkRow: Identifiable {
         let id: String
@@ -62,26 +59,28 @@ struct NetworksTab: View {
         return rows
     }
 
-    private var rows: [NetworkRow] {
-        Self.computeRows(from: positions.map {
-            (chain: $0.chain?.rawValue, netUSDValue: $0.netUSDValue * appState.currentUSDToDisplayRate)
-        })
-    }
-
     private var currencyCode: String {
         appState.currencyCode
     }
 
     var body: some View {
-        Table(rows) {
-            TableColumn("Network") { row in Text(row.name).fontWeight(.medium).foregroundStyle(PortuTheme.dashboardText) }
-            TableColumn("Share %") { row in
-                Text(row.sharePercent, format: .percent.precision(.fractionLength(1)))
+        let data = AllAssetsFeature.networks(sources.allAssets(allTokens).context)
+        Table(data.entries) {
+            TableColumn("Network") { entry in
+                switch entry {
+                case let .row(row):
+                    Text(row.name).fontWeight(.medium).foregroundStyle(PortuTheme.dashboardText)
+                case let .hidden(line):
+                    Text(line.title).foregroundStyle(PortuTheme.dashboardSecondaryText)
+                }
+            }
+            TableColumn("Share %") { entry in
+                Text(AllAssetsFormat.share(entry.row?.share ?? entry.hidden?.share))
                     .font(DashboardStyle.monoTableFont)
             }
-            TableColumn("# Positions") { row in Text("\(row.positionCount)") }
-            TableColumn("Balance") { row in
-                Text(row.usdBalance, format: .currency(code: currencyCode))
+            TableColumn("# Positions") { entry in Text(entry.row.map { "\($0.positionCount)" } ?? "") }
+            TableColumn("Balance") { entry in
+                Text(entry.row?.balance ?? entry.hidden?.value ?? 0, format: .currency(code: currencyCode))
                     .font(DashboardStyle.monoTableFont)
             }
         }

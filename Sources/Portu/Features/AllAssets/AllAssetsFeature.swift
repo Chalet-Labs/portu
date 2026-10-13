@@ -11,16 +11,42 @@ enum AssetTab: String, CaseIterable, Equatable, Hashable {
 }
 
 /// Row data for asset table display (nonisolated for Sendable KeyPaths).
-nonisolated struct AssetRowData: Identifiable {
+nonisolated struct AssetRowData: Identifiable, Equatable {
     let id: UUID
     let symbol: String
     let name: String
     let category: AssetCategory
     let portfolioCategory: PortfolioCategorySnapshot
     let netAmount: Decimal
-    let price: Decimal
+    /// The V5 unit price; `nil` (shown "—") when nothing in the row is valued.
+    let price: Decimal?
     let value: Decimal
+    /// The source of the row's lead token; the clock marks a sync-time price.
+    let source: ValuationSource?
     let hasLivePrice: Bool
+
+    init(
+        id: UUID,
+        symbol: String,
+        name: String,
+        category: AssetCategory,
+        portfolioCategory: PortfolioCategorySnapshot? = nil,
+        netAmount: Decimal,
+        price: Decimal?,
+        value: Decimal,
+        source: ValuationSource?) {
+        self.id = id
+        self.symbol = symbol
+        self.name = name
+        self.category = category
+        self.portfolioCategory = portfolioCategory
+            ?? PortfolioCategoryResolver.defaults.resolve(symbol: symbol, legacyCategory: category)
+        self.netAmount = netAmount
+        self.price = price
+        self.value = value
+        self.source = source
+        self.hasLivePrice = source == .live
+    }
 
     init(
         id: UUID,
@@ -32,16 +58,16 @@ nonisolated struct AssetRowData: Identifiable {
         price: Decimal,
         value: Decimal,
         hasLivePrice: Bool) {
-        self.id = id
-        self.symbol = symbol
-        self.name = name
-        self.category = category
-        self.portfolioCategory = portfolioCategory
-            ?? PortfolioCategoryResolver.defaults.resolve(symbol: symbol, legacyCategory: category)
-        self.netAmount = netAmount
-        self.price = price
-        self.value = value
-        self.hasLivePrice = hasLivePrice
+        self.init(
+            id: id,
+            symbol: symbol,
+            name: name,
+            category: category,
+            portfolioCategory: portfolioCategory,
+            netAmount: netAmount,
+            price: price,
+            value: value,
+            source: hasLivePrice ? .live : .sync)
     }
 }
 
@@ -177,7 +203,8 @@ struct AllAssetsFeature {
         }
         let header = "Symbol,Name,Category,Net Amount,Price,Value"
         let lines = rows.map { row in
-            "\(csv(row.symbol)),\(csv(row.name)),\(csv(row.portfolioCategory.name)),\(row.netAmount),\(row.price),\(row.value)"
+            let price = row.price.map { "\($0)" } ?? ""
+            return "\(csv(row.symbol)),\(csv(row.name)),\(csv(row.portfolioCategory.name)),\(row.netAmount),\(price),\(row.value)"
         }
         return ([header] + lines).joined(separator: "\n")
     }

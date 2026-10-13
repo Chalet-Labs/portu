@@ -10,60 +10,16 @@ struct AssetsTab: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    var sources = ValuationSources()
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
 
     @State private var exportError: String?
     @State private var sortColumn: AssetSortColumn = .value
     @State private var sortAscending = false
-
-    /// Map @Query tokens to lightweight entries, aggregate with live prices, filter, sort.
-    /// Does the full pass every call, so `body` runs it once and hands the result down.
-    private func buildRows() -> [AssetRowData] {
-        let entries = TokenEntry.fromActiveTokens(
-            allTokens,
-            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
-
-        let dashboardEntries = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: entries,
-            prices: displayPrices,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            usdToDisplayRate: appState.currentUSDToDisplayRate)
-        let aggregated = AllAssetsFeature.aggregateRows(
-            tokens: dashboardEntries,
-            prices: displayPrices,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-        let filtered = AllAssetsFeature.filterRows(aggregated, searchText: store.allAssets.searchText)
-        return sortRows(filtered)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: store.liveDisplayPrices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
-    }
 
     private var currencyCode: String {
         appState.selectedCurrency.displayCode
@@ -72,10 +28,18 @@ struct AssetsTab: View {
     // MARK: - Body
 
     var body: some View {
-        let rows = buildRows()
+        let inputs = sources.allAssets(
+            allTokens,
+            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
+        let data = AllAssetsFeature.assets(
+            inputs.context,
+            searchText: store.allAssets.searchText,
+            liveDisplayPrices: store.liveDisplayPrices,
+            historicalDisplayPrices: historicalDisplayPrices)
+        let entries = data.entries(sortedBy: sortColumn, ascending: sortAscending)
         VStack(spacing: 0) {
-            toolbar(rows)
-            assetTable(rows)
+            toolbar(entries.compactMap(\.row))
+            assetTable(entries)
         }
         .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
         .alert("Export Failed", isPresented: Binding(get: { exportError != nil }, set: {
@@ -112,14 +76,14 @@ struct AssetsTab: View {
 
     // MARK: - Table
 
-    private func assetTable(_ rows: [AssetRowData]) -> some View {
+    private func assetTable(_ entries: [AllAssetsTableEntry<AssetRowData>]) -> some View {
         VStack(spacing: 0) {
             assetTableHeader
 
             Divider()
                 .overlay(PortuTheme.dashboardStroke)
 
-            if rows.isEmpty {
+            if entries.isEmpty {
                 ContentUnavailableView(
                     "No assets",
                     systemImage: "bitcoinsign.circle",
@@ -129,8 +93,13 @@ struct AssetsTab: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                            assetRow(row, index: index)
+                        ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                            switch entry {
+                            case let .row(row):
+                                assetRow(row, index: index)
+                            case let .hidden(line):
+                                hiddenRow(line, index: index)
+                            }
                         }
                     }
                 }
@@ -181,8 +150,14 @@ struct AssetsTab: View {
 
                 HStack(spacing: 4) {
                     Spacer(minLength: 0)
-                    Text(row.price, format: .currency(code: currencyCode))
-                        .font(DashboardStyle.monoTableFont)
+                    if let price = row.price {
+                        Text(price, format: .currency(code: currencyCode))
+                            .font(DashboardStyle.monoTableFont)
+                    } else {
+                        Text("—")
+                            .font(DashboardStyle.monoTableFont)
+                            .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    }
                     if !row.hasLivePrice {
                         Image(systemName: "clock")
                             .font(.caption2)
@@ -203,6 +178,24 @@ struct AssetsTab: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    /// The hidden-balances line: the last row, its value in the Value column.
+    private func hiddenRow(_ line: AllAssetsHiddenRow, index: Int) -> some View {
+        HStack(spacing: 12) {
+            Text(line.title)
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text(line.value, format: .currency(code: currencyCode))
+                .font(DashboardStyle.monoTableFont)
+                .foregroundStyle(line.value < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSecondaryText)
+                .frame(width: 140, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .frame(height: PortuTheme.dashboardTableRowHeight + 8)
+        .background(index.isMultiple(of: 2) ? Color.clear : PortuTheme.dashboardPanelElevatedBackground.opacity(0.45))
     }
 
     private func sortHeader(
@@ -244,46 +237,6 @@ struct AssetsTab: View {
         }
     }
 
-    private func sortRows(_ rows: [AssetRowData]) -> [AssetRowData] {
-        rows.sorted { lhs, rhs in
-            let result = compare(lhs, rhs, by: sortColumn)
-            if result == .orderedSame {
-                return lhs.symbol.localizedCaseInsensitiveCompare(rhs.symbol) == .orderedAscending
-            }
-            return sortAscending ? result == .orderedAscending : result == .orderedDescending
-        }
-    }
-
-    private func compare(
-        _ lhs: AssetRowData,
-        _ rhs: AssetRowData,
-        by column: AssetSortColumn) -> ComparisonResult {
-        switch column {
-        case .symbol:
-            lhs.symbol.localizedCaseInsensitiveCompare(rhs.symbol)
-        case .name:
-            lhs.name.localizedCaseInsensitiveCompare(rhs.name)
-        case .category:
-            lhs.portfolioCategory.name.localizedCaseInsensitiveCompare(rhs.portfolioCategory.name)
-        case .netAmount:
-            compare(lhs.netAmount, rhs.netAmount)
-        case .price:
-            compare(lhs.price, rhs.price)
-        case .value:
-            compare(lhs.value, rhs.value)
-        }
-    }
-
-    private func compare(_ lhs: Decimal, _ rhs: Decimal) -> ComparisonResult {
-        if lhs < rhs {
-            return .orderedAscending
-        }
-        if lhs > rhs {
-            return .orderedDescending
-        }
-        return .orderedSame
-    }
-
     // MARK: - CSV Export
 
     private func exportCSV(_ rows: [AssetRowData]) {
@@ -298,24 +251,6 @@ struct AssetsTab: View {
             } catch {
                 exportError = error.localizedDescription
             }
-        }
-    }
-}
-
-private enum AssetSortColumn {
-    case symbol
-    case name
-    case category
-    case netAmount
-    case price
-    case value
-
-    var defaultAscending: Bool {
-        switch self {
-        case .symbol, .name, .category:
-            true
-        case .netAmount, .price, .value:
-            false
         }
     }
 }
