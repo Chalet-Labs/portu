@@ -4,7 +4,8 @@ import PortuCore
 extension TokenSettingsRow {
     /// An asset row in the display currency. Every token of the row shares one asset, so its
     /// symbol, name, category and override come from any of them; ignore applies to all of them.
-    /// Ignored and unpriced rows have no value (U4).
+    /// Ignored and unpriced rows have no value; a not-counted row shows its tokens' own value, which
+    /// counts nowhere (U4, S8).
     init?(
         _ row: DashboardRow<UUID>,
         override: TokenPricingOverrideSnapshot?,
@@ -17,7 +18,7 @@ extension TokenSettingsRow {
             symbol: token.symbol,
             name: token.name,
             amount: row.totals.netAmount,
-            value: isIgnored || row.status == .unpriced ? nil : row.displayValue(rate: rate),
+            value: Self.value(of: row, isIgnored: isIgnored, rate: rate),
             portfolioCategory: token.portfolioCategory,
             pricingSource: isIgnored ? nil : TokenPricingSource(row.pricing.source, status: row.status),
             status: row.status,
@@ -27,6 +28,20 @@ extension TokenSettingsRow {
             logoURL: token.logoURL,
             currency: currency,
             override: override)
+    }
+
+    private static func value(of row: DashboardRow<UUID>, isIgnored: Bool, rate: Decimal) -> Decimal? {
+        if isIgnored {
+            return nil
+        }
+        switch row.status {
+        case .notCounted:
+            return row.tokens.reduce(0) { $0 + $1.display(rate: rate).value }
+        case .ignored, .unpriced:
+            return nil
+        case .dust, .priced:
+            return row.displayValue(rate: rate)
+        }
     }
 }
 

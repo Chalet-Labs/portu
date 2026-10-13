@@ -143,8 +143,9 @@ struct TokenSettingsSeamTests {
         #expect(result.rows.suffix(3).map(\.assetId) == [Fixture.AssetID.usdt, Fixture.AssetID.bad, Fixture.AssetID.scam])
     }
 
-    /// S8 and U4: an asset with no counted token is Not Counted, valued Σ contributions = 0, with no
-    /// source. Number changes → Token Settings: "A reward-only or zero-amount asset is Not counted".
+    /// S8 and U4: an asset with no counted token is Not Counted, with no source. It shows its tokens'
+    /// own value (5 × $10 for the reward, 0 for the empty balance) and counts 0 (S8 as amended).
+    /// Number changes → Token Settings: "A reward-only or zero-amount asset is Not counted".
     @Test func `a reward-only or zero-amount asset is not counted`() {
         let reward = Self.token(1, coinGeckoId: "reward-coin", role: .reward, amount: 5, usdValue: 50)
         let empty = Self.token(2, coinGeckoId: "empty-coin", amount: 0)
@@ -155,11 +156,30 @@ struct TokenSettingsSeamTests {
         #expect(result.rows.count == 2)
         for assetId in [reward.assetId, empty.assetId] {
             #expect(rows[assetId]?.status == .notCounted)
-            #expect(rows[assetId]?.value == 0)
             #expect(rows[assetId].map { $0.pricingSource == nil } == true)
         }
+        #expect(rows[reward.assetId]?.value == 50)
+        #expect(rows[empty.assetId]?.value == 0)
         #expect(result.counts.notCounted == 2)
         #expect(Set(Self.result(context, filter: .notCounted).rows.map(\.assetId)) == [reward.assetId, empty.assetId])
+    }
+
+    /// S8 as amended: a reward-only asset shows its reward's own value at the display rate, 1 BTC ×
+    /// $60,000 × 0.9, yet sorts with the rows that do not count, after every counted row, by symbol:
+    /// BAD, RWD, SCAM. Its value would otherwise put it first.
+    @Test func `a not-counted row shows its own value and sorts with the rows that do not count`() throws {
+        let reward = ValuationInput(
+            tokenId: Fixture.uuid(9700),
+            token: Fixture.token(Fixture.uuid(9701), "RWD", "Reward Only", .other, coinGeckoId: "bitcoin", role: .reward, amount: 1, usdValue: 50000),
+            position: Fixture.PositionSlot.lido.context)
+        let context = Fixture.context(rate: Fixture.decimal("0.9"), inputs: Fixture.inputs + [reward])
+        let result = Self.result(context)
+        let row = try #require(Self.rowsByAsset(result)[reward.token.assetId])
+
+        #expect(row.status == .notCounted)
+        #expect(row.value == 54000)
+        #expect(result.counts.notCounted == 1)
+        #expect(result.rows.suffix(4).map(\.assetId) == [Fixture.AssetID.usdt, Fixture.AssetID.bad, reward.token.assetId, Fixture.AssetID.scam])
     }
 
     /// U4 and AGENT-DECIDED 3: ignore beats not counted on the badge, the count and the filter, even

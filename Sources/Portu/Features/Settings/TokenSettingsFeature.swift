@@ -30,7 +30,8 @@ struct TokenSettingsRow: Equatable, Identifiable {
     let name: String
     /// Σ role-signed amounts of the counted tokens.
     let amount: Decimal
-    /// Σ contributions; `nil` for an ignored or unpriced asset, which is listed with no value.
+    /// Σ contributions; `nil` for an ignored or unpriced asset, which is listed with no value. A
+    /// not-counted asset shows its tokens' unsigned value instead, which counts nowhere.
     let value: Decimal?
     let portfolioCategory: PortfolioCategorySnapshot
     /// `nil` (shown "—") when no counted token decides a source.
@@ -274,10 +275,13 @@ enum TokenSettingsFeature {
             || (row.coinGeckoId?.localizedCaseInsensitiveContains(query) ?? false)
     }
 
-    /// Value descending, rows with no value last; then symbol, then asset ID.
+    /// Counted rows with a value first, by value descending; then the rows that do not count (ignored,
+    /// unpriced, not counted). Ties and the trailing group: symbol, then asset ID.
     private static func sortRows(_ lhs: TokenSettingsRow, _ rhs: TokenSettingsRow) -> Bool {
-        if lhs.value != rhs.value {
-            switch (lhs.value, rhs.value) {
+        let lhsValue = sortValue(lhs)
+        let rhsValue = sortValue(rhs)
+        if lhsValue != rhsValue {
+            switch (lhsValue, rhsValue) {
             case let (lhs?, rhs?): return lhs > rhs
             case (nil, _): return false
             case (_, nil): return true
@@ -288,6 +292,11 @@ enum TokenSettingsFeature {
             return symbolOrder == .orderedAscending
         }
         return lhs.assetId.uuidString < rhs.assetId.uuidString
+    }
+
+    /// A not-counted row's value counts nowhere, so it does not rank.
+    private static func sortValue(_ row: TokenSettingsRow) -> Decimal? {
+        row.status == .notCounted ? nil : row.value
     }
 
     static func dashboardAdjustedToken(
