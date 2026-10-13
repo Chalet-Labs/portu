@@ -199,7 +199,7 @@ extension OverviewModelWiringTests {
         return images
     }
 
-    private static func accessibilityTexts(_ element: Any) -> [String] {
+    static func accessibilityTexts(_ element: Any) -> [String] {
         let object = element as AnyObject
         var texts: [String] = []
         if let value = (element as? NSObject)?.value(forKey: "accessibilityValue") as? String, !value.isEmpty {
