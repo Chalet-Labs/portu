@@ -5,68 +5,11 @@ import SwiftUI
 
 struct OverviewTopBar: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var positions: [Position]
-    @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
-    private var tokenPricingOverrides: [TokenPricingOverride]
-    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
+    var sources = OverviewValuationSources()
 
-    /// Only positions from active accounts
-    private var activePositions: [Position] {
-        positions.filter { $0.account?.isActive == true }
-    }
-
-    private var totalValue: Decimal {
-        OverviewFeature.portfolioTotalValue(
-            tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
-            prices: displayPrices,
-            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
-            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var change24h: Decimal {
-        OverviewPriceChangeFeature.portfolioChange24h(
-            tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
-            prices: displayPrices,
-            changes24h: priceChanges24h,
-            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
-            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var priceChanges24h: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
-            live: appState.priceChanges24h,
-            historical: historicalPriceChanges24h)
-    }
-
-    private func changePct(totalValue: Decimal, change24h: Decimal) -> Decimal {
-        let prev = totalValue - change24h
-        guard prev != 0 else { return 0 }
-        return change24h / prev
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
+    private var headline: OverviewHeadline {
+        sources.headline(positions)
     }
 
     private var currencyCode: String {
@@ -74,12 +17,10 @@ struct OverviewTopBar: View {
     }
 
     var body: some View {
-        let currentTotalValue = totalValue
-        let currentChange24h = change24h
-        let currentChangePct = changePct(totalValue: currentTotalValue, change24h: currentChange24h)
+        let currentHeadline = headline
 
         VStack(alignment: .leading, spacing: 18) {
-            Text(OverviewPriceDisplay.currency(currentTotalValue, currencyCode: currencyCode))
+            Text(OverviewPriceDisplay.currency(currentHeadline.total, currencyCode: currencyCode))
                 .font(DashboardStyle.heroValueFont)
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
@@ -87,26 +28,28 @@ struct OverviewTopBar: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {
-                    Text(OverviewPriceDisplay.currency(currentChange24h, currencyCode: currencyCode))
+                    Text(OverviewPriceDisplay.currency(currentHeadline.change24h, currencyCode: currencyCode))
                         .lineLimit(1)
                     Spacer()
                     Text("\(currencyCode) change 24h")
                         .foregroundStyle(PortuTheme.dashboardTertiaryText)
                         .lineLimit(1)
                 }
-                .foregroundStyle(PortuTheme.changeColor(for: currentChange24h))
+                .foregroundStyle(PortuTheme.changeColor(for: currentHeadline.change24h))
 
                 HStack(spacing: 4) {
-                    Image(systemName: currentChangePct >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                        .font(.caption2)
-                    Text(currentChangePct, format: .percent.precision(.fractionLength(2)))
+                    if let changePercentage = currentHeadline.changePercentage {
+                        Image(systemName: changePercentage >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                            .font(.caption2)
+                    }
+                    Text(OverviewPriceDisplay.changePercentage(currentHeadline.changePercentage))
                         .lineLimit(1)
                     Spacer()
                     Text("% change 24h")
                         .foregroundStyle(PortuTheme.dashboardTertiaryText)
                         .lineLimit(1)
                 }
-                .foregroundStyle(PortuTheme.changeColor(for: currentChangePct))
+                .foregroundStyle(PortuTheme.changeColor(for: currentHeadline.changePercentage ?? 0))
             }
             .font(.system(size: 13, weight: .medium, design: .monospaced))
         }

@@ -96,9 +96,7 @@ enum TokenSettingsFeature {
     static let displayLimit = 100
 
     static func overridesByAssetId(_ overrides: [TokenPricingOverrideSnapshot]) -> [UUID: TokenPricingOverrideSnapshot] {
-        Dictionary(overrides.map { ($0.assetId, $0) }, uniquingKeysWith: { lhs, rhs in
-            lhs.id.uuidString < rhs.id.uuidString ? lhs : rhs
-        })
+        TokenPricingOverrideFeature.overridesByAssetId(overrides)
     }
 
     static func applyPriceOverrides(
@@ -243,21 +241,17 @@ enum TokenSettingsFeature {
             counts: counts)
     }
 
+    /// No identity mappings here, as before: the mapped CoinGecko ID only applies in PortuCore valuation.
     static func resolvedCoinGeckoID(
         token: TokenEntry,
         override: TokenPricingOverrideSnapshot?) -> String? {
-        normalizedCoinGeckoID(override?.coinGeckoIdOverride) ?? normalizedCoinGeckoID(token.coinGeckoId)
+        TokenPricingOverrideFeature.resolvedCoinGeckoID(token: token, override: override)
     }
 
     static func resolvedPriceID(
         token: TokenEntry,
         override: TokenPricingOverrideSnapshot?) -> String? {
-        if sanitizedManualPrice(override?.manualPriceUSD) != nil {
-            return nil
-        }
-        return TokenIdentityMappingFeature.priceID(
-            coinGeckoId: resolvedCoinGeckoID(token: token, override: override),
-            onchainIdentity: token.onchainIdentity)
+        TokenPricingOverrideFeature.resolvedPriceID(token: token, override: override)
     }
 
     private static func aggregateTokens(_ tokens: [TokenEntry]) -> [TokenEntry] {

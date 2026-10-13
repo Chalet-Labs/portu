@@ -2,37 +2,61 @@ import Foundation
 import PortuCore
 
 extension OverviewFeature {
+    /// The live-polling set: the top holdings by selection value, then the watchlist (S12). Values
+    /// and usable prices come from the module; the selection and ranking rules are polling's own.
     static func pricePollingIDs(
-        tokens: [TokenEntry],
-        prices: [String: Decimal] = [:],
+        _ context: OverviewValuationContext,
         watchlistIDs: [String],
-        overrides: [TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults,
-        portfolioLimit: Int = 25,
-        usdToDisplayRate: Decimal = 1) -> [String] {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        var candidates: [String: PollingIDCandidate] = [:]
-        var insertionIndex = 0
-        for token in tokens {
-            let override = overrideMap[token.assetId]
+        portfolioLimit: Int = 25) -> [String] {
+        let tokens = context.valuation().tokens
+        let settings = context.settings
+        let visible = visibleTokenIDs(tokens, settings: settings)
+        let candidates = tokens.compactMap { token -> (id: String, priority: Decimal)? in
             guard
-                let priceID = pollingPriceID(
-                    token: token,
-                    prices: prices,
-                    override: override,
-                    settings: settings,
-                    usdToDisplayRate: usdToDisplayRate)
-            else { continue }
+                let priceID = token.priceID,
+                let priority = token.selectionValue,
+                token.isCounted,
+                isPolled(token, priceID: priceID, isVisible: visible.contains(token.tokenId), settings: settings)
+            else { return nil }
+            return (priceID, priority)
+        }
+        return rankedPollingIDs(candidates, watchlistIDs: watchlistIDs, portfolioLimit: portfolioLimit)
+    }
+
+    /// A token is polled while the dashboard shows its row. One without a usable price (valued from
+    /// its sync value, or unpriced) is also polled so it can get one, except, when `hideUnpriced` is
+    /// on and the asset is not `alwaysShow`, an onchain ID whose own sync value is dust under
+    /// `hideDust`.
+    private static func isPolled(
+        _ token: ValuedToken,
+        priceID: String,
+        isVisible: Bool,
+        settings: TokenDashboardSettings) -> Bool {
+        switch token.source {
+        case .manual, .live, .close:
+            return isVisible
+        case .sync, .unpriced:
+            guard !isVisible, !token.alwaysShow, settings.hideUnpriced else { return true }
+            guard OnchainTokenIdentity(historicalPriceID: priceID) != nil else { return true }
+            return !settings.hideDust || abs(token.token.usdValue) >= settings.dustThresholdUSD
+        case .ignored:
+            return false
+        }
+    }
+
+    /// Sums each ID's priorities, keeps the `portfolioLimit` largest (ties by first appearance), then
+    /// appends the watchlist.
+    private static func rankedPollingIDs(
+        _ tokenCandidates: [(id: String, priority: Decimal)],
+        watchlistIDs: [String],
+        portfolioLimit: Int) -> [String] {
+        var candidates: [String: PollingIDCandidate] = [:]
+        for (insertionIndex, candidate) in tokenCandidates.enumerated() {
             upsertCandidate(
-                id: priceID,
-                priority: pollingPriority(
-                    token: token,
-                    prices: prices,
-                    override: override,
-                    fallbackUSDToDisplayRate: usdToDisplayRate),
+                id: candidate.id,
+                priority: candidate.priority,
                 insertionIndex: insertionIndex,
                 candidates: &candidates)
-            insertionIndex += 1
         }
 
         var result = candidates.values.sorted {
@@ -53,46 +77,6 @@ extension OverviewFeature {
         }
 
         return result
-    }
-
-    private static func pollingPriceID(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings,
-        usdToDisplayRate: Decimal) -> String? {
-        guard
-            let priceID = TokenSettingsFeature.resolvedPriceID(
-                token: token,
-                override: override)
-        else { return nil }
-
-        if
-            TokenSettingsFeature.isDashboardEligible(
-                token: token,
-                prices: prices,
-                override: override,
-                settings: settings,
-                usdToDisplayRate: usdToDisplayRate) {
-            return priceID
-        }
-
-        guard token.amount > 0 else { return nil }
-        guard token.role.isPositive || token.role.isBorrow else { return nil }
-        guard override?.isIgnored != true else { return nil }
-        guard
-            TokenSettingsFeature.resolvedValue(
-                token: token,
-                prices: prices,
-                override: override) == nil
-        else { return nil }
-        if OnchainTokenIdentity(historicalPriceID: priceID) != nil {
-            let threshold = normalizedThreshold(settings.minimumDashboardValue)
-            guard threshold == 0 || absolute(token.usdValue) >= threshold || settings.hideDust == false else {
-                return nil
-            }
-        }
-        return priceID
     }
 
     private struct PollingIDCandidate {
@@ -122,26 +106,5 @@ extension OverviewFeature {
 
     private static func normalizePollingID(_ id: String) -> String {
         OnchainTokenIdentity.normalizedHistoricalPriceID(id)
-    }
-
-    private static func pollingPriority(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?,
-        fallbackUSDToDisplayRate: Decimal) -> Decimal {
-        let value = OverviewPositionPricing.tokenValue(
-            token: token,
-            prices: prices,
-            override: override,
-            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-        return value == 0 ? absolute(token.usdValue * fallbackUSDToDisplayRate) : absolute(value)
-    }
-
-    private static func normalizedThreshold(_ value: Decimal) -> Decimal {
-        value < 0 ? 0 : value
-    }
-
-    private static func absolute(_ value: Decimal) -> Decimal {
-        value < 0 ? -value : value
     }
 }

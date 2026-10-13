@@ -67,76 +67,25 @@ struct SidebarView: View {
     }
 }
 
-// Owns every input the portfolio valuation reads (position, override, and
-// mapping queries; price/currency state; dashboard settings). Parameterless
+// Owns every input the portfolio valuation reads (the position query here, the
+// rest through `OverviewValuationSources`). Parameterless
 // on purpose: when `SidebarView.body` re-evaluates on a navigation click
 // (`store.selectedSection`), the unchanged `SidebarPortfolioHeader()` value
 // lets SwiftUI skip this body, so the O(portfolio) valuation no longer runs
 // per click (issue #98, criterion 1). It still re-renders when its own
 // observed inputs change.
 
-private struct SidebarPortfolioHeader: View {
+struct SidebarPortfolioHeader: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var positions: [Position]
-    @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
-    private var tokenPricingOverrides: [TokenPricingOverride]
-    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
+    var sources = OverviewValuationSources()
 
-    private var activePositions: [Position] {
-        positions.filter { $0.account?.isActive == true }
-    }
-
-    private var totalValue: Decimal {
-        OverviewFeature.portfolioTotalValue(
-            tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
-            prices: displayPrices,
-            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
-            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var change24h: Decimal {
-        OverviewPriceChangeFeature.portfolioChange24h(
-            tokens: TokenEntry.fromActiveTokens(activePositions.flatMap(\.tokens)),
-            prices: displayPrices,
-            changes24h: priceChanges24h,
-            overrides: tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init),
-            mappings: tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init),
-            settings: dashboardSettings,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var priceChanges24h: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
-            live: appState.priceChanges24h,
-            historical: historicalPriceChanges24h)
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
+    private var headline: OverviewHeadline {
+        sources.headline(positions)
     }
 
     var body: some View {
-        let totalValue = totalValue
-        let change24h = change24h
+        let currentHeadline = headline
         let currencyCode = appState.selectedCurrency.displayCode
 
         HStack(alignment: .top, spacing: 10) {
@@ -150,20 +99,32 @@ private struct SidebarPortfolioHeader: View {
             .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(OverviewPriceDisplay.currency(totalValue, currencyCode: currencyCode))
+                Text(OverviewPriceDisplay.currency(currentHeadline.total, currencyCode: currencyCode))
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
-                HStack(spacing: 4) {
-                    Text(OverviewPriceDisplay.currency(change24h, currencyCode: currencyCode))
-                    Text("24h")
+                Group {
+                    HStack(spacing: 4) {
+                        Text(OverviewPriceDisplay.currency(currentHeadline.change24h, currencyCode: currencyCode))
+                        Text("24h")
+                    }
+                    .foregroundStyle(currentHeadline.change24h < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSuccess)
+
+                    Text(OverviewPriceDisplay.changePercentage(currentHeadline.changePercentage))
+                        .foregroundStyle(percentageColor(currentHeadline.changePercentage))
                 }
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundStyle(change24h < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSuccess)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             }
         }
         .padding(.horizontal, 4)
+    }
+
+    private func percentageColor(_ percentage: Decimal?) -> Color {
+        guard let percentage else { return PortuTheme.dashboardTertiaryText }
+        return percentage < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSuccess
     }
 }
 

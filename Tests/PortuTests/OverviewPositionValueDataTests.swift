@@ -23,16 +23,13 @@ struct OverviewPositionValueDataTests {
         try seedAccount(in: context, positionType: .lending, protocolName: "Aave V3", includeBorrow: true)
         let positions = try context.fetch(FetchDescriptor<Position>())
 
-        let groups = OverviewPositionProjection.groups(
-            for: .borrowing,
-            positions: positions,
-            context: projectionContext())
+        let groups = tab(.borrowing, positions: positions).groups
 
         let group = try #require(groups.first)
         #expect(groups.count == 1)
         #expect(group.position.title == "Aave V3")
         #expect(group.tokens.map(\.symbol) == ["USDT"])
-        #expect(group.value == -500)
+        #expect(group.value == 500)
 
         // What the sync does mid-render: delete the positions this data came from.
         for position in positions {
@@ -44,22 +41,21 @@ struct OverviewPositionValueDataTests {
         #expect(group.position.title == "Aave V3")
         #expect(group.position.chain == .ethereum)
         #expect(group.tokens.map(\.symbol) == ["USDT"])
-        #expect(group.value == -500)
+        #expect(group.value == 500)
 
         render(OverviewPositionGroupCard(group: group, currencyCode: "USD"))
     }
 
-    @Test func `borrowed tokens subtract from the group total`() throws {
+    @Test func `the borrowing group total is its debt as a positive amount`() throws {
         let container = try makeContainer()
         let context = container.mainContext
         try seedAccount(in: context, positionType: .lending, protocolName: "Aave V3", includeBorrow: true)
         let positions = try context.fetch(FetchDescriptor<Position>())
-        let projection = projectionContext()
 
-        let borrowing = try #require(
-            OverviewPositionProjection.groups(for: .borrowing, positions: positions, context: projection).first)
-        // Only the borrow leg reaches this tab, so the total is negative.
-        #expect(borrowing.value == -500)
+        let borrowing = try #require(tab(.borrowing, positions: positions).groups.first)
+        // Only the borrow leg reaches this tab, and the tab shows debt as a positive amount.
+        #expect(borrowing.value == 500)
+        #expect(borrowing.basis == .debt)
     }
 
     @Test func `idle tabs exclude positions that are not idle`() throws {
@@ -68,10 +64,7 @@ struct OverviewPositionValueDataTests {
         try seedAccount(in: context, positionType: .lending, protocolName: "Aave V3", includeBorrow: false)
         let positions = try context.fetch(FetchDescriptor<Position>())
 
-        #expect(OverviewPositionProjection.groups(
-            for: .idleStables,
-            positions: positions,
-            context: projectionContext()).isEmpty)
+        #expect(tab(.idleStables, positions: positions).groups.isEmpty)
     }
 
     @Test func `idle stables tab titles wallet positions by account name`() throws {
@@ -80,11 +73,7 @@ struct OverviewPositionValueDataTests {
         try seedAccount(in: context, positionType: .idle, protocolName: nil, includeBorrow: false)
         let positions = try context.fetch(FetchDescriptor<Position>())
 
-        let group = try #require(
-            OverviewPositionProjection.groups(
-                for: .idleStables,
-                positions: positions,
-                context: projectionContext()).first)
+        let group = try #require(tab(.idleStables, positions: positions).groups.first)
 
         // No protocol name, so the account name is the fallback title.
         #expect(group.position.title == "Primary Wallet")
@@ -120,36 +109,22 @@ struct OverviewPositionValueDataTests {
         render(view)
     }
 
-    @Test func `mover ordering prefers larger absolute change then symbol`() {
-        // Larger magnitude wins regardless of sign.
-        #expect(OverviewPriceChangeFeature.isOrderedByChangeMagnitude(
-            lhsChange: -50, lhsSymbol: "ZZZ", rhsChange: 10, rhsSymbol: "AAA"))
-        #expect(!OverviewPriceChangeFeature.isOrderedByChangeMagnitude(
-            lhsChange: 10, lhsSymbol: "AAA", rhsChange: -50, rhsSymbol: "ZZZ"))
-        // Equal magnitude falls back to symbol order.
-        #expect(OverviewPriceChangeFeature.isOrderedByChangeMagnitude(
-            lhsChange: 10, lhsSymbol: "AAA", rhsChange: -10, rhsSymbol: "BBB"))
-        #expect(!OverviewPriceChangeFeature.isOrderedByChangeMagnitude(
-            lhsChange: -10, lhsSymbol: "BBB", rhsChange: 10, rhsSymbol: "AAA"))
-    }
-
     // MARK: - Fixtures
 
-    /// Permissive visibility so tests exercise projection and grouping, not thresholds.
-    private func projectionContext(
-        prices: [String: Decimal] = ["usd-coin": 1, "tether": 1],
-        changes24h: [String: Decimal] = [:]) -> OverviewPositionContext {
-        OverviewPositionContext(
-            prices: prices,
-            changes24h: changes24h,
-            overrideMap: [:],
-            mappingMap: [:],
-            categoryResolver: .defaults,
-            dashboardSettings: TokenDashboardSettings(
-                minimumDashboardValue: 0,
-                hideUnpriced: false,
-                hideDust: false),
-            fallbackUSDToDisplayRate: 1)
+    /// The production path: the model boundary, then the tab seam. Visibility is permissive so tests
+    /// exercise projection and grouping, not thresholds.
+    private func tab(_ tab: OverviewPositionTab, positions: [Position]) -> OverviewPositionTabData {
+        let projected = OverviewPositionProjection.inputs(from: positions, for: tab, categoryResolver: .defaults)
+        return OverviewPositionProjection.tab(
+            tab,
+            context: OverviewValuationContext(
+                inputs: projected.inputs,
+                overrides: [],
+                mappings: [],
+                settings: TokenDashboardSettings(minimumDashboardValue: 0, hideUnpriced: false, hideDust: false),
+                usdToDisplayRate: 1,
+                prices: OverviewPriceInputs(livePricesUSD: ["usd-coin": 1, "tether": 1])),
+            positions: projected.positions)
     }
 
     private func seedAccount(

@@ -205,7 +205,7 @@ struct SnapshotPrunerTests {
 }
 
 /// A seedable generator, so a failing random store can be rebuilt from its seed alone.
-private struct SplitMix64: RandomNumberGenerator {
+struct SplitMix64: RandomNumberGenerator {
     private var state: UInt64
 
     init(seed: UInt64) {

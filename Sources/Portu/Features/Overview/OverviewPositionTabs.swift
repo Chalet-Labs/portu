@@ -5,22 +5,9 @@ import SwiftUI
 
 struct OverviewPositionTabs: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var allPositions: [Position]
-    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
-    private var portfolioCategories: [PortfolioCategory]
-    @Query(sort: \CategorySymbolRule.normalizedSymbol)
-    private var categoryRules: [CategorySymbolRule]
-    @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
-    private var tokenPricingOverrides: [TokenPricingOverride]
-    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
+    var sources = OverviewValuationSources()
+    var categories = OverviewCategorySource()
 
     @State private var selectedTab: OverviewPositionTab = .keyChanges
 
@@ -54,19 +41,22 @@ struct OverviewPositionTabs: View {
 
     @ViewBuilder
     private var tabContent: some View {
-        let groups = OverviewPositionProjection.groups(
-            for: selectedTab,
-            positions: positions,
-            context: positionContext)
+        let data = tabData
+        let currencyCode = appState.selectedCurrency.displayCode
 
-        if groups.isEmpty {
+        if data.showsEmptyState {
             emptyState(selectedTab.emptyMessage)
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                ForEach(groups) { group in
-                    OverviewPositionGroupCard(
-                        group: group,
-                        currencyCode: appState.selectedCurrency.displayCode)
+                ForEach(data.groups) { group in
+                    OverviewPositionGroupCard(group: group, currencyCode: currencyCode)
+                }
+
+                // Groups with no visible row have no card; their rows end the tab in one line (S3).
+                if let hidden = data.hidden {
+                    OverviewHiddenBalancesLine(
+                        text: OverviewPriceDisplay.hiddenBalancesLine(hidden, basis: data.basis, currencyCode: currencyCode))
+                        .overviewPositionPanel()
                 }
             }
         }
@@ -103,53 +93,14 @@ struct OverviewPositionTabs: View {
     /// Built fresh on every body evaluation, including tab clicks.
     ///
     /// Deliberately not memoized (issue #98 residual, audited 2026-09-02):
-    /// the rebuild — two price-dictionary merges plus small-table maps and
-    /// resolver construction — is dominated by the per-tab `groups()`
-    /// projection that a tab click runs anyway. A staleness-free `@State`
-    /// cache key is buildable today (`PortfolioCategoryResolver` is
-    /// `Equatable`, with snapshot-based stored properties), but building and
-    /// comparing the key on every body would re-pay most of the rebuild it
-    /// avoids. If this ever shows up in Instruments, memoize keyed on those
-    /// resolver snapshots.
-    private var positionContext: OverviewPositionContext {
-        OverviewPositionContext(
-            prices: displayPrices,
-            changes24h: priceChanges24h,
-            overrideMap: overrideMap,
-            mappingMap: mappingMap,
-            categoryResolver: categoryResolver,
-            dashboardSettings: dashboardSettings,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var categoryResolver: PortfolioCategoryResolver {
-        PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
-    }
-
-    private var overrideMap: [UUID: TokenPricingOverrideSnapshot] {
-        TokenSettingsFeature.overridesByAssetId(tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
-    }
-
-    private var mappingMap: [OnchainTokenIdentity: TokenIdentityMappingSnapshot] {
-        TokenIdentityMappingFeature.mappingsByIdentity(tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init))
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var priceChanges24h: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
-            live: appState.priceChanges24h,
-            historical: historicalPriceChanges24h)
+    /// the rebuild — the valuation inputs, the USD price inputs, small-table
+    /// maps and resolver construction — is dominated by the per-tab projection that
+    /// a tab click runs anyway. A staleness-free `@State` cache key is buildable
+    /// today (`PortfolioCategoryResolver` is `Equatable`, with snapshot-based stored
+    /// properties), but building and comparing the key on every body would re-pay
+    /// most of the rebuild it avoids. If this ever shows up in Instruments, memoize
+    /// keyed on those resolver snapshots.
+    private var tabData: OverviewPositionTabData {
+        sources.positionTab(selectedTab, positions: positions, categoryResolver: categories.resolver)
     }
 }

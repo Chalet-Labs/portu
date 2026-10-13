@@ -1,4 +1,5 @@
 import Foundation
+import PortuCore
 import Synchronization
 
 enum OverviewPriceDisplay {
@@ -33,6 +34,35 @@ enum OverviewPriceDisplay {
     static func axisCurrency(_ value: Double, currencyCode: String = "USD") -> String {
         let sign = value < 0 ? "-\(currencyPrefix(currencyCode)) " : "\(currencyPrefix(currencyCode)) "
         return sign + standardNumber(abs(value), maximumFractionDigits: 0)
+    }
+
+    /// The hidden-balances line (F3) on a list's basis, e.g. "+ $ 3.2 in 4 small balances".
+    static func hiddenBalancesLine(
+        _ hidden: HiddenBalances,
+        basis: DashboardBasis,
+        currencyCode: String = "USD") -> String {
+        hiddenBalancesLine(
+            value: hidden.value(on: basis),
+            rowCount: hidden.rowCount,
+            isAllDust: hidden.isAllDust,
+            currencyCode: currencyCode)
+    }
+
+    static func hiddenBalancesLine(
+        value: Decimal,
+        rowCount: Int,
+        isAllDust: Bool,
+        currencyCode: String = "USD") -> String {
+        let sign = value < 0 ? "\u{2212}" : "+"
+        let kind = isAllDust ? "small" : "hidden"
+        let noun = rowCount == 1 ? "balance" : "balances"
+        return "\(sign) \(currency(abs(value), currencyCode: currencyCode)) in \(rowCount) \(kind) \(noun)"
+    }
+
+    /// A 24h change over the prior total, or "—" when there is none (A4).
+    static func changePercentage(_ fraction: Decimal?) -> String {
+        guard let fraction else { return "—" }
+        return fraction.formatted(.percent.locale(priceLocale).precision(.fractionLength(2)))
     }
 
     static func amount(_ value: Decimal) -> String {

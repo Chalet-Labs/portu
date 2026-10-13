@@ -43,6 +43,8 @@ struct AppStateBridgeTests {
 
         // AppState carries display-currency prices: the USD book at the store's rate.
         #expect(appState.prices == ["bitcoin": 44000])
+        // The USD book is bridged as stored, never scaled by the rate.
+        #expect(appState.livePricesUSD == ["bitcoin": 50000])
         #expect(appState.priceChanges24h == ["bitcoin": 2.5])
         #expect(appState.syncStatus == .syncing)
         #expect(appState.connectionStatus == .fetching)
@@ -99,6 +101,7 @@ struct AppStateBridgeTests {
         appState.bridge(from: store)
 
         #expect(appState.prices.isEmpty)
+        #expect(appState.livePricesUSD.isEmpty)
         #expect(appState.priceChanges24h.isEmpty)
         #expect(appState.syncStatus == .idle)
         #expect(appState.connectionStatus == .idle)
@@ -131,6 +134,7 @@ struct AppStateBridgeTests {
 
         // Continuous observation should propagate this
         #expect(appState.prices == ["bitcoin": 50000])
+        #expect(appState.livePricesUSD == ["bitcoin": 50000])
         #expect(appState.priceChanges24h == ["bitcoin": 2.5])
     }
 

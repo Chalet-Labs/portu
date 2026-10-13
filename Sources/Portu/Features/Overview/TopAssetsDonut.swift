@@ -8,86 +8,22 @@ import SwiftUI
 struct TopAssetsDonut: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var tokens: [PositionToken]
-    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
-    private var portfolioCategories: [PortfolioCategory]
-    @Query(sort: \CategorySymbolRule.normalizedSymbol)
-    private var categoryRules: [CategorySymbolRule]
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
-    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
+    var sources = OverviewValuationSources()
+    var categories = OverviewCategorySource()
 
     @State private var selectedMode: TopAssetMode = .assets
 
-    private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(
-            tokens,
-            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
-    }
-
-    private var dashboardTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: mappedTokenEntries,
-            prices: displayPrices,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            usdToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var mappedTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.applyIdentityMappings(
-            to: tokenEntries,
-            mappings: mappingSnapshots,
-            overrides: overrideSnapshots)
-    }
-
-    private var slices: [OverviewAssetSlice] {
-        switch selectedMode {
-        case .assets:
-            OverviewFeature.topAssetSlices(
-                from: dashboardTokenEntries,
-                prices: displayPrices,
-                overrides: overrideSnapshots,
-                limit: 5,
-                fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-        case .category:
-            OverviewFeature.categorySlices(
-                from: dashboardTokenEntries,
-                prices: displayPrices,
-                overrides: overrideSnapshots,
-                limit: 6,
-                fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-        }
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
-        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
+    private var topAssets: OverviewTopAssets {
+        sources.topAssets(
+            selectedMode,
+            tokens: tokens,
+            categoryResolver: categories.resolver)
     }
 
     var body: some View {
+        let current = topAssets
+
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 18) {
                 modeButton(.assets)
@@ -103,7 +39,7 @@ struct TopAssetsDonut: View {
                 .buttonStyle(.plain)
             }
 
-            if slices.isEmpty {
+            if current.isEmpty {
                 Text("No data")
                     .font(.caption)
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
@@ -111,39 +47,83 @@ struct TopAssetsDonut: View {
                     .frame(maxWidth: .infinity, minHeight: 180, alignment: .center)
             } else {
                 HStack(alignment: .center, spacing: 16) {
-                    Chart(slices) { slice in
-                        SectorMark(
-                            angle: .value("Value", slice.value),
-                            innerRadius: .ratio(0.58),
-                            angularInset: 1.4)
-                            .foregroundStyle(chartColor(index: slice.colorIndex))
-                    }
-                    .chartLegend(.hidden)
-                    .frame(width: 162, height: 162)
+                    chart(current)
+                        .frame(width: 162, height: 162)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(slices) { slice in
-                            HStack(spacing: 7) {
-                                legendMarker(for: slice)
-
-                                Text(slice.label)
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(PortuTheme.dashboardText)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-
-                                Text("\(slice.displayPercent)%")
-                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    legend(current)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
     }
+
+    private func chart(_ topAssets: OverviewTopAssets) -> some View {
+        Chart {
+            ForEach(topAssets.chartSlices) { slice in
+                SectorMark(
+                    angle: .value("Value", slice.value),
+                    innerRadius: .ratio(0.58),
+                    angularInset: 1.4)
+                    .foregroundStyle(chartColor(index: slice.colorIndex))
+            }
+
+            if let hiddenValue = topAssets.hiddenChartValue {
+                SectorMark(
+                    angle: .value("Value", hiddenValue),
+                    innerRadius: .ratio(0.58),
+                    angularInset: 1.4)
+                    .foregroundStyle(Self.hiddenColor)
+            }
+        }
+        .chartLegend(.hidden)
+    }
+
+    private func legend(_ topAssets: OverviewTopAssets) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(topAssets.slices) { slice in
+                HStack(spacing: 7) {
+                    legendMarker(for: slice)
+
+                    Text(slice.label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(PortuTheme.dashboardText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    legendPercent(slice.displayPercent)
+                }
+            }
+
+            // The F3 line is longer than the legend column, so it wraps instead of truncating.
+            if let hidden = topAssets.hidden {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Circle()
+                        .fill(Self.hiddenColor)
+                        .frame(width: 7, height: 7)
+
+                    Text(OverviewPriceDisplay.hiddenBalancesLine(
+                        hidden,
+                        basis: .gross,
+                        currencyCode: appState.selectedCurrency.displayCode))
+                        .font(.system(size: 11))
+                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    legendPercent(topAssets.hiddenDisplayPercent)
+                }
+            }
+        }
+    }
+
+    private func legendPercent(_ percent: Int?) -> some View {
+        Text(percent.map { "\($0)%" } ?? "—")
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .foregroundStyle(PortuTheme.dashboardSecondaryText)
+            .lineLimit(1)
+    }
+
+    private static let hiddenColor = PortuTheme.dashboardTertiaryText
 
     private func chartColor(index: Int) -> Color {
         let colors: [Color] = [
@@ -197,7 +177,7 @@ enum TopAssetsDonutText {
     static let seeAllButtonTitle = "See all →"
 }
 
-private enum TopAssetMode {
+enum TopAssetMode {
     case assets
     case category
 

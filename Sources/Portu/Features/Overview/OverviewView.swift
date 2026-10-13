@@ -7,62 +7,16 @@ import SwiftUI
 struct OverviewView: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var allTokens: [PositionToken]
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
-    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
     @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
-
-    private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(allTokens)
-    }
-
-    private var mappedTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.applyIdentityMappings(
-            to: tokenEntries,
-            mappings: mappingSnapshots,
-            overrides: overrideSnapshots)
-    }
+    var sources = OverviewValuationSources()
 
     private var watchlistIDs: [String] {
         OverviewWatchlistStore.decode(watchlistRaw)
     }
 
     private var pricePollingIDs: [String] {
-        OverviewFeature.pricePollingIDs(
-            tokens: mappedTokenEntries,
-            prices: displayPrices,
-            watchlistIDs: watchlistIDs,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            usdToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
-        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
+        sources.pricePollingIDs(allTokens, watchlistIDs: watchlistIDs)
     }
 
     var body: some View {

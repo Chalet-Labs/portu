@@ -5,102 +5,22 @@ import SwiftUI
 
 struct PriceWatchlist: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalPriceChanges24h) private var historicalPriceChanges24h
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Query private var assets: [Asset]
     @Query private var tokens: [PositionToken]
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
-    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
-    private var portfolioCategories: [PortfolioCategory]
-    @Query(sort: \CategorySymbolRule.normalizedSymbol)
-    private var categoryRules: [CategorySymbolRule]
     @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
+    var sources = OverviewValuationSources()
     @State private var searchText = ""
-
-    private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(
-            tokens,
-            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
-    }
-
-    private var mappedTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.applyIdentityMappings(
-            to: tokenEntries,
-            mappings: mappingSnapshots,
-            overrides: overrideSnapshots)
-    }
-
-    private var dashboardTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: mappedTokenEntries,
-            prices: displayPrices,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            usdToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var assetCandidates: [OverviewAssetCandidate] {
-        OverviewAssetCandidate.fromAssets(assets, overrides: overrideSnapshots)
-    }
-
-    private var assetCandidatesByCoinGeckoId: [String: OverviewAssetCandidate] {
-        OverviewFeature.assetCandidatesByCoinGeckoId(from: assetCandidates)
-    }
 
     private var watchlistIDs: [String] {
         OverviewWatchlistStore.decode(watchlistRaw)
     }
 
     private var rows: [OverviewPriceRowData] {
-        OverviewFeature.priceRows(
-            tokens: dashboardTokenEntries,
-            assetsByCoinGeckoId: assetCandidatesByCoinGeckoId,
-            prices: displayPrices,
-            changes24h: priceChanges24h,
-            watchlistIDs: watchlistIDs,
-            overrides: overrideSnapshots,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: appState.prices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var priceChanges24h: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedChanges24h(
-            live: appState.priceChanges24h,
-            historical: historicalPriceChanges24h)
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
-        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
+        sources.watchlistRows(tokens, assets: assets, watchlistIDs: watchlistIDs)
     }
 
     private var matchingAssets: [OverviewAssetCandidate] {
-        OverviewFeature.watchlistSuggestions(
-            assets: assetCandidates,
-            watchlistIDs: watchlistIDs,
-            query: searchText)
+        sources.watchlistSuggestions(assets, watchlistIDs: watchlistIDs, query: searchText)
     }
 
     var body: some View {

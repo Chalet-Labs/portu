@@ -28,19 +28,17 @@ extension TokenSettingsFeature {
             syncedAt: token.syncedAt)
     }
 
+    /// Forwarders to the PortuCore valuation layer until their callers use it directly.
     static func normalizedCoinGeckoID(_ id: String?) -> String? {
-        guard let id else { return nil }
-        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.isEmpty ? nil : normalized
+        TokenIdentityMappingFeature.normalizedProviderID(id)
     }
 
     static func sanitizedManualPrice(_ price: Decimal?) -> Decimal? {
-        guard let price, price > 0 else { return nil }
-        return price
+        TokenPricingOverrideFeature.sanitizedManualPrice(price)
     }
 
     static func normalizedThreshold(_ value: Decimal) -> Decimal {
-        value < 0 ? 0 : value
+        TokenDashboardSettings.normalizedThreshold(value)
     }
 
     static func absolute(_ value: Decimal) -> Decimal {

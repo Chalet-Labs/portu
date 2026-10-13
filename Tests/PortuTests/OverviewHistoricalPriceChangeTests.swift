@@ -20,37 +20,6 @@ struct OverviewHistoricalPriceChangeTests {
         #expect(price == "$ <1e-8")
     }
 
-    @Test func `historical price cache derives latest daily price changes`() {
-        let id = "asset:base:0xabc"
-        let oldDay = Date(timeIntervalSince1970: 0)
-        let previousDay = Date(timeIntervalSince1970: 86400)
-        let latestDay = Date(timeIntervalSince1970: 172_800)
-
-        let changes = OverviewHistoricalPriceChangeFeature.changes24h(from: [
-            HistoricalPriceEntry(coinGeckoId: id, day: oldDay, usdPrice: 1),
-            HistoricalPriceEntry(coinGeckoId: id, day: previousDay, usdPrice: 2),
-            HistoricalPriceEntry(coinGeckoId: id, day: latestDay, usdPrice: 3),
-            HistoricalPriceEntry(coinGeckoId: "ignored", day: latestDay, usdPrice: 1)
-        ])
-
-        #expect(changes[id] == 0.5)
-        #expect(changes["ignored"] == nil)
-    }
-
-    @Test func `historical price cache normalizes legacy zapper ids to canonical asset ids`() {
-        let previousDay = Date(timeIntervalSince1970: 86400)
-        let latestDay = Date(timeIntervalSince1970: 172_800)
-        let canonicalID = "asset:base:0xabc"
-
-        let changes = OverviewHistoricalPriceChangeFeature.changes24h(from: [
-            HistoricalPriceEntry(coinGeckoId: "zapper:base:0xabc", day: previousDay, usdPrice: 2),
-            HistoricalPriceEntry(coinGeckoId: "zapper:base:0xabc", day: latestDay, usdPrice: 3)
-        ])
-
-        #expect(changes[canonicalID] == 0.5)
-        #expect(changes["zapper:base:0xabc"] == nil)
-    }
-
     @Test func `latest historical prices prefer newest row and canonicalize onchain ids`() {
         let oldDay = Date(timeIntervalSince1970: 0)
         let latestDay = Date(timeIntervalSince1970: 172_800)
@@ -126,67 +95,19 @@ struct OverviewHistoricalPriceChangeTests {
         #expect(merged["asset:base:0xabc"] == 3)
     }
 
-    @Test func `historical price change query starts at utc day two days before now`() {
-        let now = Date(timeIntervalSince1970: 172_800 + 43200)
-
-        let startDate = OverviewHistoricalPriceChangeFeature.queryStartDate(now: now)
-
-        #expect(startDate == Date(timeIntervalSince1970: 0))
-    }
-
+    /// No live price or change: the token is valued from its sync value and moved by the historical
+    /// fraction. Exact formula (V4): 15 × −0.2 / 0.8 = −3.75.
     @Test func `historical price changes backfill overview key changes when live changes are missing`() {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xProvider")
-        let token = token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: identity)
-        let changes24h = OverviewHistoricalPriceChangeFeature.mergedChanges24h(
-            live: [:],
-            historical: [identity.historicalPriceID: -0.20])
+        let context = OverviewValuationFixture.context(
+            tokens: [token(symbol: "ZAP", amount: 3, usdValue: 15, onchainIdentity: identity)],
+            historical: HistoricalMarketPrices(changes24h: [identity.historicalPriceID: OverviewValuationFixture.decimal("-0.2")]))
 
-        let changes = OverviewPriceChangeFeature.keyChangeTokens(
-            tokens: [token],
-            prices: [:],
-            changes24h: changes24h,
-            overrides: [],
-            mappings: [])
+        let rows = OverviewPositionProjection.tab(.keyChanges, context: context, positions: OverviewValuationFixture.positions)
+            .groups.flatMap(\.tokens)
 
-        #expect(changes.map(\.token.symbol) == ["ZAP"])
-        #expect(changes.map(\.change) == [-3])
-    }
-
-    @Test func `portfolio change can ignore dashboard dust outliers`() {
-        let dustIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xDust")
-        let visibleIdentity = OnchainTokenIdentity(chain: .base, contractAddress: "0xVisible")
-        let dust = token(symbol: "DUST", amount: 1, usdValue: 0.25, onchainIdentity: dustIdentity)
-        let visible = token(symbol: "VISIBLE", amount: 2, usdValue: 10, onchainIdentity: visibleIdentity)
-
-        let change = OverviewPriceChangeFeature.portfolioChange24h(
-            tokens: [dust, visible],
-            prices: [:],
-            changes24h: [
-                dustIdentity.historicalPriceID: 1_000_000_000,
-                visibleIdentity.historicalPriceID: 0.10
-            ],
-            overrides: [],
-            mappings: [],
-            settings: .defaults)
-
-        #expect(change == 1)
-    }
-
-    @Test func `portfolio change scales the dust threshold by the display rate`() throws {
-        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xToken")
-        let live = token(symbol: "LIVE", amount: 1, usdValue: 0, onchainIdentity: identity)
-        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
-
-        let change = try OverviewPriceChangeFeature.portfolioChange24h(
-            tokens: [live],
-            prices: [identity.historicalPriceID: #require(Decimal(string: "0.6"))],
-            changes24h: [identity.historicalPriceID: #require(Decimal(string: "0.5"))],
-            overrides: [],
-            mappings: [],
-            settings: settings,
-            fallbackUSDToDisplayRate: #require(Decimal(string: "0.5")))
-
-        #expect(change == Decimal(string: "0.3"))
+        #expect(rows.map(\.symbol) == ["ZAP"])
+        #expect(rows.map(\.change24h) == [OverviewValuationFixture.decimal("-3.75")])
     }
 
     private func token(

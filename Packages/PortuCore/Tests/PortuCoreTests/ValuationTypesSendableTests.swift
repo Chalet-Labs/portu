@@ -9,6 +9,7 @@ struct ValuationTypesSendableTests {
         requireSendable(TokenPricingOverrideSnapshot.self)
         requireSendable(TokenIdentityMappingSnapshot.self)
         requireSendable(HistoricalClose.self)
+        requireSendable(HistoricalMarketPrices.self)
     }
 
     @Test func `historical close keeps its day and price`() {

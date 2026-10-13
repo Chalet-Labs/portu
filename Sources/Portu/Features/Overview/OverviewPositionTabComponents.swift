@@ -44,6 +44,8 @@ struct OverviewPositionMeta: Identifiable, Equatable {
 /// Pricing is resolved by `OverviewPositionProjection` rather than re-derived per row
 /// by view closures. Both the crash safety and the cost saving come from the same
 /// property: nothing here needs to be recomputed while a body is being evaluated.
+/// `value` and `change24h` are on the tab's basis: a borrow row shows its debt, and its change is
+/// positive when the debt grows.
 struct OverviewPositionTokenData: Identifiable, Equatable {
     let id: UUID
     let entry: TokenEntry
@@ -66,48 +68,29 @@ struct OverviewPositionTokenData: Identifiable, Equatable {
     var amount: Decimal {
         entry.amount
     }
-
-    /// Borrowed tokens are liabilities, so they subtract from position totals.
-    var signedValue: Decimal {
-        role.isBorrow ? -value : value
-    }
-
-    var signedChange24h: Decimal {
-        role.isBorrow ? -change24h : change24h
-    }
 }
 
-/// A position and its qualifying tokens, ready to render.
+/// A position and its qualifying tokens, ready to render. The group's list ends with its own
+/// hidden-balances line (F3), so its total and 24h change, the module's over the group, cover the
+/// hidden rows too. Money is in the display currency and on the tab's basis: positive debt for
+/// Borrowing (S3).
 struct OverviewPositionGroupData: Identifiable, Equatable {
     let position: OverviewPositionMeta
     let tokens: [OverviewPositionTokenData]
+    let basis: DashboardBasis
+    /// The group's rows the display filter hides; `nil` when none are.
+    let hidden: HiddenBalances?
+    /// Σ visible rows + the hidden line.
+    let value: Decimal
+    let change24h: Decimal
 
     var id: UUID {
         position.id
     }
 
-    var value: Decimal {
-        tokens.reduce(.zero) { $0 + $1.signedValue }
-    }
-
-    var change24h: Decimal {
-        tokens.reduce(.zero) { $0 + $1.signedChange24h }
-    }
-}
-
-enum OverviewPositionVisibility {
-    static func isVisible(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        overrideMap: [UUID: TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings,
-        usdToDisplayRate: Decimal = 1) -> Bool {
-        TokenSettingsFeature.isDashboardEligible(
-            token: token,
-            prices: prices,
-            override: overrideMap[token.assetId],
-            settings: settings,
-            usdToDisplayRate: usdToDisplayRate)
+    /// A growing debt is a loss.
+    var changeTone: OverviewPositionChangeTone {
+        OverviewPositionChangeTone.tone(isDebt: basis == .debt, change: change24h)
     }
 }
 
@@ -128,12 +111,13 @@ struct OverviewPositionGroupCard: View {
                         position: group.position,
                         currencyCode: currencyCode)
                 }
+
+                if let hidden = group.hidden {
+                    OverviewHiddenBalancesLine(
+                        text: OverviewPriceDisplay.hiddenBalancesLine(hidden, basis: group.basis, currencyCode: currencyCode))
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(PortuTheme.dashboardPanelElevatedBackground.opacity(0.65)))
+            .overviewPositionPanel()
         }
     }
 
@@ -158,7 +142,7 @@ struct OverviewPositionGroupCard: View {
 
             Text(OverviewPriceDisplay.currency(group.change24h, currencyCode: currencyCode))
                 .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(group.change24h >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
+                .foregroundStyle(group.changeTone.color)
                 .lineLimit(1)
         }
         .padding(.bottom, 8)
@@ -179,6 +163,37 @@ struct OverviewPositionGroupCard: View {
         .foregroundStyle(PortuTheme.dashboardTertiaryText)
         .lineLimit(1)
         .padding(.bottom, 8)
+    }
+}
+
+/// The hidden-balances line (F3) that ends a position list.
+struct OverviewHiddenBalancesLine: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "eye.slash")
+                .font(.system(size: 11))
+                .foregroundStyle(PortuTheme.dashboardTertiaryText)
+            Text(text)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+    }
+}
+
+extension View {
+    /// The elevated panel a position group's rows sit on.
+    @MainActor
+    func overviewPositionPanel() -> some View {
+        padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(PortuTheme.dashboardPanelElevatedBackground.opacity(0.65)))
     }
 }
 

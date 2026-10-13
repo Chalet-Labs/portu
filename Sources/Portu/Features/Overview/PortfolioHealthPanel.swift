@@ -6,96 +6,41 @@ import SwiftUI
 
 struct PortfolioHealthPanel: View {
     let store: StoreOf<AppFeature>
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    @Environment(AppState.self) private var appState
     @Query private var allTokens: [PositionToken]
-    @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
-    private var portfolioCategories: [PortfolioCategory]
-    @Query(sort: \CategorySymbolRule.normalizedSymbol)
-    private var categoryRules: [CategorySymbolRule]
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
+    var sources = OverviewValuationSources()
+    var categories = OverviewCategorySource()
 
-    private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(
+    private var health: PortfolioHealthData {
+        sources.health(
             allTokens,
-            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
-    }
-
-    private var dashboardTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: tokenEntries,
-            prices: displayPrices,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            usdToDisplayRate: store.currentUSDToDisplayRate)
-    }
-
-    private var weights: [AssetWeight] {
-        PortfolioHealthFeature.computeAssetWeights(
-            tokens: dashboardTokenEntries,
-            prices: displayPrices,
-            fallbackUSDToDisplayRate: store.currentUSDToDisplayRate)
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: store.liveDisplayPrices,
-            historical: historicalDisplayPrices)
-    }
-
-    private var metrics: DiversificationMetrics {
-        let chainCount = Set(allTokens.compactMap { $0.position?.chain }).count
-        return PortfolioHealthFeature.computeDiversificationMetrics(
-            tokens: dashboardTokenEntries, weights: weights, chainCount: chainCount)
-    }
-
-    private var riskLevel: RiskLevel {
-        PortfolioHealthFeature.classifyRiskLevel(metrics: metrics)
-    }
-
-    private var risks: [ConcentrationRisk] {
-        PortfolioHealthFeature.computeConcentrationRisks(weights: weights, threshold: Decimal(string: "0.25")!)
-    }
-
-    private var displayedWeights: [AssetWeight] {
-        store.portfolioHealth.showAllAssets ? weights : Array(weights.prefix(5))
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
+            categoryResolver: categories.resolver)
     }
 
     var body: some View {
+        let currentHealth = health
+        let riskLevel = PortfolioHealthFeature.classifyRiskLevel(metrics: currentHealth.metrics)
+        let risks = currentHealth.concentrationRisks
+        let weightList = currentHealth.weightList(showAll: store.portfolioHealth.showAllAssets)
+
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Portfolio Health")
                     .font(DashboardStyle.sectionTitleFont)
                     .foregroundStyle(PortuTheme.dashboardText)
                 Spacer()
-                riskBadge
+                riskBadge(riskLevel)
             }
 
-            metricsRow
+            metricsRow(currentHealth.metrics)
 
             if !risks.isEmpty {
-                concentrationWarnings
+                concentrationWarnings(risks)
             }
 
-            weightsList
+            weightsList(weightList)
 
-            if weights.count > 5 {
+            if currentHealth.weights.count > PortfolioHealthWeightList.previewCount {
                 Button(store.portfolioHealth.showAllAssets ? "Show Top 5" : "Show All") {
                     store.send(.portfolioHealth(.showAllAssetsToggled))
                 }
@@ -106,7 +51,7 @@ struct PortfolioHealthPanel: View {
         }
     }
 
-    private var riskBadge: some View {
+    private func riskBadge(_ riskLevel: RiskLevel) -> some View {
         Text(riskLevel.label)
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 8)
@@ -116,7 +61,7 @@ struct PortfolioHealthPanel: View {
             .clipShape(Capsule())
     }
 
-    private var metricsRow: some View {
+    private func metricsRow(_ metrics: DiversificationMetrics) -> some View {
         HStack(spacing: 16) {
             metricItem("Assets", "\(metrics.assetCount)")
             metricItem("Chains", "\(metrics.chainCount)")
@@ -136,7 +81,7 @@ struct PortfolioHealthPanel: View {
         }
     }
 
-    private var concentrationWarnings: some View {
+    private func concentrationWarnings(_ risks: [ConcentrationRisk]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(risks) { risk in
                 HStack(spacing: 4) {
@@ -151,27 +96,49 @@ struct PortfolioHealthPanel: View {
         }
     }
 
-    private var weightsList: some View {
+    private func weightsList(_ list: PortfolioHealthWeightList) -> some View {
         VStack(spacing: 4) {
-            ForEach(displayedWeights) { weight in
+            ForEach(list.rows) { row in
                 HStack {
-                    Text(weight.symbol)
+                    Text(row.weight.symbol)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(PortuTheme.dashboardText)
                         .frame(width: 50, alignment: .leading)
                     GeometryReader { geo in
                         RoundedRectangle(cornerRadius: 2)
                             .fill(PortuTheme.dashboardGoldMuted)
-                            .frame(width: max(4, geo.size.width * CGFloat(truncating: weight.percentage as NSDecimalNumber)))
+                            .frame(width: max(4, geo.size.width * CGFloat(truncating: row.weight.percentage as NSDecimalNumber)))
                     }
                     .frame(height: 8)
-                    Text(weight.percentage.formatted(.percent.precision(.fractionLength(1))))
+                    shareText(row.share)
+                }
+            }
+
+            if let hidden = list.hidden {
+                HStack {
+                    Text(OverviewPriceDisplay.hiddenBalancesLine(hidden, basis: .positiveNet, currencyCode: currencyCode))
                         .font(.caption2)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                        .frame(width: 40, alignment: .trailing)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    shareText(list.hiddenShare)
                 }
             }
         }
+    }
+
+    private func shareText(_ share: Decimal?) -> some View {
+        Text(share.map { $0.formatted(.percent.precision(.fractionLength(1))) } ?? "—")
+            .font(.caption2)
+            .foregroundStyle(PortuTheme.dashboardSecondaryText)
+            .frame(width: 40, alignment: .trailing)
+    }
+
+    /// `AppState`'s currency, like the rate the hidden line is converted at, so the two always match.
+    private var currencyCode: String {
+        appState.selectedCurrency.displayCode
     }
 }
 

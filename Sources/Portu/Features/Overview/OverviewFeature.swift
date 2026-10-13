@@ -1,5 +1,3 @@
-// swiftlint:disable file_length
-
 import Foundation
 import PortuCore
 
@@ -10,11 +8,6 @@ struct OverviewAssetCandidate: Equatable, Identifiable {
     let category: AssetCategory
     let coinGeckoId: String
     let logoURL: String?
-
-    @MainActor
-    static func fromAssets(_ assets: [Asset]) -> [OverviewAssetCandidate] {
-        fromAssets(assets, overrides: [])
-    }
 
     @MainActor
     static func fromAssets(
@@ -63,7 +56,8 @@ struct OverviewAssetSlice: Equatable, Identifiable {
     let id: String
     let label: String
     let value: Decimal
-    let displayPercent: Int
+    /// `nil` shows "—" (F4: the list total is not positive).
+    let displayPercent: Int?
     let colorIndex: Int
     let logoURL: String?
 }
@@ -152,10 +146,9 @@ enum OverviewWatchlistStore {
     }
 }
 
-// swiftlint:disable:next type_body_length
 enum OverviewFeature {
-    private static let assetResidualSliceID = "asset-residual"
-    private static let categoryResidualSliceID = "category-residual"
+    static let assetResidualSliceID = "asset-residual"
+    static let categoryResidualSliceID = "category-residual"
     private static let reservedMarketSymbols: [String: Set<String>] = [
         "BTC": ["bitcoin"],
         "ETH": ["ether", "ethereum"],
@@ -165,107 +158,6 @@ enum OverviewFeature {
         "SOL": ["solana"],
         "BNB": ["bnb", "binance coin"]
     ]
-
-    private struct AssetAggregate {
-        let key: String
-        var assetIds: Set<UUID>
-        var symbol: String
-        var name: String
-        var category: AssetCategory
-        var portfolioCategory: PortfolioCategorySnapshot
-        var coinGeckoId: String?
-        var priceID: String?
-        var value: Decimal
-        var amount: Decimal
-        var logoURL: String?
-
-        var fallbackPrice: Decimal? {
-            guard amount > 0 else { return nil }
-            return value / amount
-        }
-
-        var assetId: UUID {
-            guard let id = assetIds.min(by: { $0.uuidString < $1.uuidString }) else {
-                preconditionFailure("AssetAggregate requires at least one asset id")
-            }
-            return id
-        }
-
-        var rowID: String {
-            assetIds.count == 1 ? assetId.uuidString : key
-        }
-    }
-
-    static func topAssetSlices(
-        from tokens: [TokenEntry],
-        prices: [String: Decimal],
-        overrides: [TokenPricingOverrideSnapshot] = [],
-        limit: Int = 5,
-        fallbackUSDToDisplayRate: Decimal = 1) -> [OverviewAssetSlice] {
-        let aggregates = sortedAssetAggregates(
-            from: tokens,
-            prices: prices,
-            overrides: overrides,
-            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-        let visibleCount = max(limit, 0)
-        var sliceInputs = aggregates.prefix(visibleCount).map {
-            SliceInput(id: $0.rowID, label: $0.symbol, value: $0.value, logoURL: $0.logoURL)
-        }
-
-        let otherValue = aggregates.dropFirst(visibleCount).reduce(Decimal.zero) { $0 + $1.value }
-        if otherValue > 0 {
-            sliceInputs.append(SliceInput(id: assetResidualSliceID, label: "other", value: otherValue, logoURL: nil))
-        }
-
-        return makeSlices(from: sliceInputs)
-    }
-
-    static func categorySlices(
-        from tokens: [TokenEntry],
-        prices: [String: Decimal],
-        overrides: [TokenPricingOverrideSnapshot] = [],
-        limit: Int = 6,
-        fallbackUSDToDisplayRate: Decimal = 1) -> [OverviewAssetSlice] {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        var values: [PortfolioCategorySnapshot: Decimal] = [:]
-        for token in tokens where token.role.isPositive {
-            values[token.portfolioCategory, default: 0] += resolvedValue(
-                for: token,
-                prices: prices,
-                override: overrideMap[token.assetId],
-                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-        }
-
-        let sortedValues = values
-            .filter { $0.value > 0 }
-            .sorted {
-                if $0.value != $1.value {
-                    return $0.value > $1.value
-                }
-                if $0.key.sortOrder != $1.key.sortOrder {
-                    return $0.key.sortOrder < $1.key.sortOrder
-                }
-                let nameOrder = $0.key.name.localizedStandardCompare($1.key.name)
-                if nameOrder != .orderedSame {
-                    return nameOrder == .orderedAscending
-                }
-                return $0.key.id.uuidString < $1.key.id.uuidString
-            }
-
-        let visibleCount = max(limit, 0)
-        var inputs = sortedValues
-            .prefix(visibleCount)
-            .map { category, value in
-                SliceInput(id: category.id.uuidString, label: category.name, value: value, logoURL: nil)
-            }
-
-        let otherValue = sortedValues.dropFirst(visibleCount).reduce(Decimal.zero) { $0 + $1.value }
-        if otherValue > 0 {
-            inputs.append(SliceInput(id: categoryResidualSliceID, label: "other", value: otherValue, logoURL: nil))
-        }
-
-        return makeSlices(from: inputs)
-    }
 
     static func assetCandidatesByCoinGeckoId(
         from assets: [OverviewAssetCandidate]) -> [String: OverviewAssetCandidate] {
@@ -312,214 +204,14 @@ enum OverviewFeature {
             .map(\.self)
     }
 
-    static func portfolioTotalValue(
-        tokens: [TokenEntry],
-        prices: [String: Decimal],
-        overrides: [TokenPricingOverrideSnapshot],
-        mappings: [TokenIdentityMappingSnapshot],
-        settings: TokenDashboardSettings = .defaults,
-        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
-        let mappedTokens = TokenSettingsFeature.applyIdentityMappings(
-            to: tokens,
-            mappings: mappings,
-            overrides: overrides)
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-
-        return mappedTokens.reduce(Decimal.zero) { total, token in
-            guard
-                let value = portfolioTotalDisplayValue(
-                    for: token,
-                    prices: prices,
-                    override: overrideMap[token.assetId],
-                    settings: settings,
-                    fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-            else {
-                return total
-            }
-            if token.role.isBorrow {
-                return total - value
-            }
-            return token.role.isPositive ? total + value : total
-        }
-    }
-
-    static func priceRows(
-        tokens: [TokenEntry],
-        assets: [OverviewAssetCandidate],
-        prices: [String: Decimal],
-        changes24h: [String: Decimal],
-        watchlistIDs: [String],
-        overrides: [TokenPricingOverrideSnapshot] = [],
-        portfolioLimit: Int = 10,
-        fallbackUSDToDisplayRate: Decimal = 1) -> [OverviewPriceRowData] {
-        priceRows(
-            tokens: tokens,
-            assetsByCoinGeckoId: assetCandidatesByCoinGeckoId(from: assets),
-            prices: prices,
-            changes24h: changes24h,
-            watchlistIDs: watchlistIDs,
-            overrides: overrides,
-            portfolioLimit: portfolioLimit,
-            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-    }
-
-    static func priceRows(
-        tokens: [TokenEntry],
-        assetsByCoinGeckoId: [String: OverviewAssetCandidate],
-        prices: [String: Decimal],
-        changes24h: [String: Decimal],
-        watchlistIDs: [String],
-        overrides: [TokenPricingOverrideSnapshot] = [],
-        portfolioLimit: Int = 10,
-        fallbackUSDToDisplayRate: Decimal = 1) -> [OverviewPriceRowData] {
-        let watchlist = OverviewWatchlistStore.normalizedUniqueIDs(watchlistIDs)
-        let watchlistSet = Set(watchlist)
-
-        var rows: [OverviewPriceRowData] = []
-        var seenRowIDs: Set<String> = []
-        var portfolioCoinGeckoIDs: Set<String> = []
-
-        for aggregate in sortedAssetAggregates(
-            from: tokens,
-            prices: prices,
-            overrides: overrides,
-            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-            .prefix(max(portfolioLimit, 0)) {
-            let priceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(aggregate.priceID)
-            let coinGeckoId = TokenIdentityMappingFeature.nonOnchainPriceID(priceID)
-            let rowID = aggregate.rowID
-            guard !seenRowIDs.contains(rowID) else {
-                continue
-            }
-            seenRowIDs.insert(rowID)
-            if let coinGeckoId {
-                portfolioCoinGeckoIDs.insert(coinGeckoId)
-            }
-            rows.append(OverviewPriceRowData(
-                id: rowID,
-                assetId: aggregate.assetId,
-                symbol: aggregate.symbol,
-                name: aggregate.name,
-                coinGeckoId: coinGeckoId,
-                price: displayPrice(for: aggregate, prices: prices),
-                change24h: priceID.flatMap { changes24h[$0] },
-                isWatchlisted: coinGeckoId.map { watchlistSet.contains($0) } ?? false,
-                logoURL: aggregate.logoURL))
-        }
-
-        for coinGeckoId in watchlist where !portfolioCoinGeckoIDs.contains(coinGeckoId) && !seenRowIDs.contains(coinGeckoId) {
-            seenRowIDs.insert(coinGeckoId)
-            if let asset = assetsByCoinGeckoId[coinGeckoId] {
-                rows.append(OverviewPriceRowData(
-                    id: coinGeckoId,
-                    assetId: asset.id,
-                    symbol: asset.symbol,
-                    name: asset.name,
-                    coinGeckoId: coinGeckoId,
-                    price: prices[coinGeckoId],
-                    change24h: changes24h[coinGeckoId],
-                    isWatchlisted: true,
-                    logoURL: asset.logoURL))
-            } else {
-                rows.append(OverviewPriceRowData(
-                    id: coinGeckoId,
-                    assetId: nil,
-                    symbol: coinGeckoId,
-                    name: coinGeckoId,
-                    coinGeckoId: coinGeckoId,
-                    price: prices[coinGeckoId],
-                    change24h: changes24h[coinGeckoId],
-                    isWatchlisted: true,
-                    logoURL: nil))
-            }
-        }
-
-        return rows
-    }
-
-    private struct SliceInput {
+    struct SliceInput {
         let id: String
         let label: String
         let value: Decimal
         let logoURL: String?
     }
 
-    private static func makeSlices(from inputs: [SliceInput]) -> [OverviewAssetSlice] {
-        let percentages = displayPercentages(for: inputs.map(\.value))
-        return zip(inputs.indices, inputs).map { index, input in
-            OverviewAssetSlice(
-                id: input.id,
-                label: input.label,
-                value: input.value,
-                displayPercent: percentages[index],
-                colorIndex: index,
-                logoURL: input.logoURL)
-        }
-    }
-
-    private static func sortedAssetAggregates(
-        from tokens: [TokenEntry],
-        prices: [String: Decimal],
-        overrides: [TokenPricingOverrideSnapshot] = [],
-        fallbackUSDToDisplayRate: Decimal = 1) -> [AssetAggregate] {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        var aggregates: [String: AssetAggregate] = [:]
-
-        for token in tokens where token.role.isPositive {
-            let override = overrideMap[token.assetId]
-            let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override)
-            let key = assetAggregateKey(for: token, priceID: priceID)
-            var aggregate = aggregates[key] ?? AssetAggregate(
-                key: key,
-                assetIds: [token.assetId],
-                symbol: displayLabel(symbol: token.symbol, name: token.name, priceID: priceID),
-                name: token.name,
-                category: token.category,
-                portfolioCategory: token.portfolioCategory,
-                coinGeckoId: OverviewWatchlistStore.normalizedID(token.coinGeckoId)
-                    ?? TokenIdentityMappingFeature.nonOnchainPriceID(priceID),
-                priceID: priceID,
-                value: 0,
-                amount: 0,
-                logoURL: token.logoURL)
-            aggregate.assetIds.insert(token.assetId)
-            aggregate.coinGeckoId = aggregate.coinGeckoId
-                ?? OverviewWatchlistStore.normalizedID(token.coinGeckoId)
-                ?? TokenIdentityMappingFeature.nonOnchainPriceID(priceID)
-            aggregate.priceID = aggregate.priceID ?? priceID
-            aggregate.logoURL = aggregate.logoURL ?? token.logoURL
-            aggregate.value += resolvedValue(
-                for: token,
-                prices: prices,
-                override: override,
-                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-            if token.amount > 0 {
-                aggregate.amount += token.amount
-            }
-            aggregates[key] = aggregate
-        }
-
-        return aggregates.values
-            .filter { $0.value > 0 }
-            .sorted {
-                if $0.value == $1.value {
-                    let symbolOrder = $0.symbol.localizedStandardCompare($1.symbol)
-                    if symbolOrder != .orderedSame {
-                        return symbolOrder == .orderedAscending
-                    }
-
-                    let nameOrder = $0.name.localizedStandardCompare($1.name)
-                    if nameOrder != .orderedSame {
-                        return nameOrder == .orderedAscending
-                    }
-
-                    return $0.rowID < $1.rowID
-                }
-                return $0.value > $1.value
-            }
-    }
-
-    private static func assetAggregateKey(
+    static func assetAggregateKey(
         for token: TokenEntry,
         priceID: String?) -> String {
         let normalizedSymbol = token.symbol.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -538,118 +230,7 @@ enum OverviewFeature {
         return candidate.symbol < existing.symbol
     }
 
-    private static func resolvedValue(
-        for token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?,
-        fallbackUSDToDisplayRate: Decimal) -> Decimal {
-        let liveOrManualValue = OverviewPositionPricing.tokenValue(
-            token: token,
-            prices: prices,
-            override: override,
-            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-        guard liveOrManualValue == 0 else { return liveOrManualValue }
-
-        // Mirrors portfolioTotalDisplayValue's sync-time fallback: a token with a
-        // resolvable priceID whose live price hasn't arrived yet still contributes
-        // its last-known sync value, so dashboard rows/slices don't drop it while
-        // prices are loading — matching the portfolio total, which already does.
-        // Only applies when the price is genuinely absent, not when one arrived
-        // but was rejected as implausible; those must stay excluded.
-        guard
-            let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override),
-            prices[priceID] == nil
-        else {
-            return 0
-        }
-        return token.usdValue * fallbackUSDToDisplayRate
-    }
-
-    private static func portfolioTotalDisplayValue(
-        for token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings,
-        fallbackUSDToDisplayRate: Decimal) -> Decimal? {
-        guard token.amount > 0 else { return nil }
-        guard token.role.isPositive || token.role.isBorrow else { return nil }
-        guard override?.isIgnored != true else { return nil }
-
-        let liveOrManualValue = OverviewPositionPricing.tokenValue(
-            token: token,
-            prices: prices,
-            override: override,
-            fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-        if liveOrManualValue != 0 {
-            guard
-                override?.alwaysShow == true ||
-                passesDashboardThreshold(
-                    value: liveOrManualValue,
-                    settings: settings,
-                    fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-            else {
-                return nil
-            }
-            return liveOrManualValue
-        }
-
-        guard TokenSettingsFeature.resolvedValue(token: token, prices: prices, override: override) == nil else {
-            return nil
-        }
-        // A resolvable priceID whose price hasn't arrived yet still falls back to the
-        // sync-time value; one that arrived but was rejected as implausible must stay
-        // excluded, matching resolvedValue's fallback above.
-        guard
-            let priceID = TokenSettingsFeature.resolvedPriceID(token: token, override: override),
-            prices[priceID] == nil
-        else {
-            return override?.alwaysShow == true ? 0 : nil
-        }
-        let fallbackValue = token.usdValue * fallbackUSDToDisplayRate
-        guard fallbackValue != 0 else {
-            return override?.alwaysShow == true || !settings.hideUnpriced ? 0 : nil
-        }
-        guard
-            override?.alwaysShow == true ||
-            passesDashboardThreshold(
-                value: fallbackValue,
-                settings: settings,
-                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-        else {
-            return nil
-        }
-        return fallbackValue
-    }
-
-    private static func passesDashboardThreshold(
-        value: Decimal,
-        settings: TokenDashboardSettings,
-        fallbackUSDToDisplayRate: Decimal) -> Bool {
-        let magnitude = value < 0 ? -value : value
-        // `value` is already in the display currency, so the USD threshold must be scaled
-        // by the same rate to stay comparable.
-        if magnitude < normalizedThreshold(settings.minimumDashboardValue) * fallbackUSDToDisplayRate {
-            return !settings.hideDust
-        }
-        return true
-    }
-
-    private static func displayPrice(
-        for aggregate: AssetAggregate,
-        prices: [String: Decimal]) -> Decimal? {
-        guard let priceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(aggregate.priceID) else {
-            return aggregate.fallbackPrice
-        }
-        guard let price = prices[priceID] else { return nil }
-        if
-            OnchainTokenIdentity(historicalPriceID: priceID) == nil
-            || OverviewPositionPricing.isPlausible(price: price, amount: aggregate.amount, usdValue: aggregate.value) {
-            return price
-        }
-        return aggregate.fallbackPrice
-    }
-
-    private static func displayLabel(
+    static func displayLabel(
         symbol: String,
         name: String,
         priceID: String?) -> String {
@@ -669,26 +250,5 @@ enum OverviewFeature {
             return trimmedSymbol
         }
         return trimmedName
-    }
-
-    private static func displayPercentages(for values: [Decimal]) -> [Int] {
-        let total = values.reduce(Decimal.zero, +)
-        guard total > 0 else { return Array(repeating: 0, count: values.count) }
-
-        var percentages = values.map { value in
-            let ratio = NSDecimalNumber(decimal: value / total).doubleValue
-            return Int((ratio * 100).rounded())
-        }
-
-        let residual = 100 - percentages.reduce(0, +)
-        if residual != 0, let residualIndex = values.indices.max(by: { values[$0] < values[$1] }) {
-            percentages[residualIndex] += residual
-        }
-
-        return percentages
-    }
-
-    private static func normalizedThreshold(_ value: Decimal) -> Decimal {
-        max(0, value)
     }
 }
