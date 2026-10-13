@@ -9,7 +9,6 @@ import UniformTypeIdentifiers
 struct AssetsTab: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     var sources = ValuationSources()
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
@@ -31,11 +30,7 @@ struct AssetsTab: View {
         let inputs = sources.allAssets(
             allTokens,
             categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
-        let data = AllAssetsFeature.assets(
-            inputs.context,
-            searchText: store.allAssets.searchText,
-            liveDisplayPrices: store.liveDisplayPrices,
-            historicalDisplayPrices: historicalDisplayPrices)
+        let data = AllAssetsFeature.assets(inputs.context, searchText: store.allAssets.searchText)
         let entries = data.entries(sortedBy: sortColumn, ascending: sortAscending)
         VStack(spacing: 0) {
             toolbar(entries.compactMap(\.row))
@@ -158,7 +153,7 @@ struct AssetsTab: View {
                             .font(DashboardStyle.monoTableFont)
                             .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     }
-                    if !row.hasLivePrice {
+                    if row.source == .sync {
                         Image(systemName: "clock")
                             .font(.caption2)
                             .foregroundStyle(PortuTheme.dashboardGold)

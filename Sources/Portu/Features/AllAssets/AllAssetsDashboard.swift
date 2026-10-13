@@ -194,27 +194,22 @@ struct AllAssetsInputs {
 extension AllAssetsFeature {
     // MARK: - Assets
 
-    /// The Assets tab. `liveDisplayPrices` and `historicalDisplayPrices` are today's display books,
-    /// which the tab still prices from.
-    static func assets(
-        _ context: ValuationContext,
-        searchText: String,
-        liveDisplayPrices: [String: Decimal] = [:],
-        historicalDisplayPrices: [String: Decimal] = [:]) -> AssetsTabData {
-        let prices = OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: liveDisplayPrices,
-            historical: historicalDisplayPrices)
-        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: context.inputs.map(\.token),
-            prices: prices,
-            overrides: context.overrides,
-            settings: context.settings,
-            usdToDisplayRate: context.usdToDisplayRate)
-        let rows = aggregateRows(tokens: eligible, prices: prices, fallbackUSDToDisplayRate: context.usdToDisplayRate)
+    /// One net row per asset (AGENT-DECIDED 5), every row kept, ignored and not-counted ones
+    /// included. Token Settings lists the same rows.
+    static func assetList(_ valuation: PortfolioValuation, settings: TokenDashboardSettings) -> DashboardList<UUID> {
+        DashboardList(valuation.tokens, basis: .net, settings: settings) { $0.token.assetId }
+    }
+
+    /// The Assets tab: the visible asset rows the search matches and, while the search box is
+    /// empty, the hidden line (U2). The search never changes the line's numbers or the total.
+    static func assets(_ context: ValuationContext, searchText: String) -> AssetsTabData {
+        let rate = context.usdToDisplayRate
+        let list = assetList(context.valuation(), settings: context.settings)
+        let rows = list.visibleRows.compactMap { AssetRowData($0, rate: rate) }
         return AssetsTabData(
             rows: filterRows(rows, searchText: searchText),
-            hidden: nil,
-            total: rows.reduce(Decimal.zero) { $0 + $1.value })
+            hidden: searchText.isEmpty ? AllAssetsHiddenRow(list.hidden, rate: rate, share: nil) : nil,
+            total: list.displayTotal(rate: rate))
     }
 
     /// The user's sort; equal rows by symbol, then asset ID. A missing price sorts lowest.
@@ -264,56 +259,86 @@ extension AllAssetsFeature {
 
     // MARK: - Platforms and Networks
 
-    /// The Platforms tab, from each active position's stored sync-time total.
+    /// The Platforms tab: a net list per protocol (A7) with largest-remainder shares that include
+    /// the hidden line (F4). `protocolNames` maps a position ID to its protocol name.
     static func platforms(_ context: ValuationContext, protocolNames: [UUID: String] = [:]) -> PlatformsTabData {
-        let positions = syncTotals(context)
-        let rows = PlatformsTab.computeRows(from: positions.map { position, value in
-            PlatformsTab.PlatformInput(
-                chain: position.chain?.rawValue,
-                protocolId: position.protocolId,
-                protocolName: protocolNames[position.positionId],
-                positionType: position.positionType,
-                netValue: value)
-        })
-        return PlatformsTabData(
-            rows: rows.map { row in
-                PlatformRowData(
-                    id: row.id == "__idle__" ? .idle : (row.id == "__unknown__" ? .unknown : .protocolID(row.id)),
-                    name: row.name,
-                    share: row.sharePercent,
-                    networkCount: row.networkCount,
-                    positionCount: row.positionCount,
-                    balance: row.balance)
-            },
-            hidden: nil,
-            total: positions.reduce(Decimal.zero) { $0 + $1.value })
-    }
-
-    /// The Networks tab, from each active position's stored sync-time total.
-    static func networks(_ context: ValuationContext) -> NetworksTabData {
-        let positions = syncTotals(context)
-        let rows = NetworksTab.computeRows(from: positions.map { position, value in
-            (chain: position.chain?.rawValue, netUSDValue: value)
-        })
-        return NetworksTabData(
-            rows: rows.map { row in
-                NetworkRowData(
-                    id: Chain(rawValue: row.id),
-                    name: row.name,
-                    share: row.sharePercent,
-                    positionCount: row.positionCount,
-                    balance: row.usdBalance)
-            },
-            hidden: nil,
-            total: positions.reduce(Decimal.zero) { $0 + $1.value })
-    }
-
-    /// Each position's raw sync-time total (A6, today's `netUSDValue`), in the display currency.
-    private static func syncTotals(_ context: ValuationContext) -> [(position: PositionContext, value: Decimal)] {
-        let valuation = PortfolioValuation(inputs: context.inputs, market: ValuationPriceInputs().market)
-        return valuation.totals { $0.position }.map { position, totals in
-            (position, totals.display(rate: context.usdToDisplayRate).syncTotal)
+        let rate = context.usdToDisplayRate
+        let list = DashboardList(context.valuation().tokens, basis: .net, settings: context.settings) {
+            PlatformKey($0.position)
         }
+        var names: [PlatformKey: String] = [:]
+        for row in list.rows {
+            names[row.key] = row.tokens.compactMap { protocolNames[$0.position.positionId] }.min(by: isOrderedBefore)
+                ?? row.key.fallbackName
+        }
+        let ranked = list.ranked { lhs, rhs in
+            isOrderedBefore(names[lhs.key] ?? "", lhs.key.sortKey, names[rhs.key] ?? "", rhs.key.sortKey)
+        }
+        let shares = ranked.shares()
+        return PlatformsTabData(
+            rows: zip(ranked.rows, rowShares(shares, count: ranked.rows.count)).map { row, share in
+                let held = heldTokens(row)
+                return PlatformRowData(
+                    id: row.key,
+                    name: names[row.key] ?? row.key.fallbackName,
+                    share: share,
+                    networkCount: Set(held.map(\.position.chain)).count,
+                    positionCount: Set(held.map(\.position.positionId)).count,
+                    balance: row.displayValue(rate: rate))
+            },
+            hidden: AllAssetsHiddenRow(ranked.hidden, rate: rate, share: shares?.hidden),
+            total: ranked.displayTotal(rate: rate))
+    }
+
+    /// The Networks tab: a net list per chain (A7) with largest-remainder shares that include the
+    /// hidden line (F4).
+    static func networks(_ context: ValuationContext) -> NetworksTabData {
+        let rate = context.usdToDisplayRate
+        let list = DashboardList(context.valuation().tokens, basis: .net, settings: context.settings) {
+            $0.position.chain
+        }
+        let ranked = list.ranked { lhs, rhs in
+            isOrderedBefore(networkName(lhs.key), lhs.key?.rawValue ?? "", networkName(rhs.key), rhs.key?.rawValue ?? "")
+        }
+        let shares = ranked.shares()
+        return NetworksTabData(
+            rows: zip(ranked.rows, rowShares(shares, count: ranked.rows.count)).map { row, share in
+                NetworkRowData(
+                    id: row.key,
+                    name: networkName(row.key),
+                    share: share,
+                    positionCount: Set(heldTokens(row).map(\.position.positionId)).count,
+                    balance: row.displayValue(rate: rate))
+            },
+            hidden: AllAssetsHiddenRow(ranked.hidden, rate: rate, share: shares?.hidden),
+            total: ranked.displayTotal(rate: rate))
+    }
+
+    private static func networkName(_ chain: Chain?) -> String {
+        chain?.rawValue.capitalized ?? "Off-chain / Custodial"
+    }
+
+    /// The tokens "# Positions" and "# Networks" count: counted and not ignored (AGENT-DECIDED 8).
+    private static func heldTokens(_ row: DashboardRow<some Hashable & Sendable>) -> [ValuedToken] {
+        row.tokens.filter { $0.isCounted && !$0.isIgnored }
+    }
+
+    /// Each row's share, or "—" for every row when the list shows none.
+    private static func rowShares(_ shares: ListShares?, count: Int) -> [Decimal?] {
+        shares.map { $0.rows.map(Optional.some) } ?? Array(repeating: nil, count: count)
+    }
+
+    /// Equal balances: name in localized standard order, then key.
+    private static func isOrderedBefore(_ lhsName: String, _ lhsKey: String, _ rhsName: String, _ rhsKey: String) -> Bool {
+        if lhsName != rhsName {
+            return isOrderedBefore(lhsName, rhsName)
+        }
+        return lhsKey < rhsKey
+    }
+
+    private static func isOrderedBefore(_ lhs: String, _ rhs: String) -> Bool {
+        let order = lhs.localizedStandardCompare(rhs)
+        return order == .orderedSame ? lhs < rhs : order == .orderedAscending
     }
 }
 

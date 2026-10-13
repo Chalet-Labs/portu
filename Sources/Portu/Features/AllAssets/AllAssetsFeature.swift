@@ -71,6 +71,25 @@ nonisolated struct AssetRowData: Identifiable, Equatable {
     }
 }
 
+extension AssetRowData {
+    /// An asset row in the display currency. Every token of the row shares one asset, so its
+    /// symbol, name and categories come from any of them.
+    init?(_ row: DashboardRow<UUID>, rate: Decimal) {
+        guard let token = row.tokens.first?.token else { return nil }
+        let pricing = row.pricing.display(rate: rate)
+        self.init(
+            id: row.key,
+            symbol: token.symbol,
+            name: token.name,
+            category: token.category,
+            portfolioCategory: token.portfolioCategory,
+            netAmount: row.totals.netAmount,
+            price: pricing.price,
+            value: row.displayValue(rate: rate),
+            source: pricing.source)
+    }
+}
+
 /// Accumulator for aggregating token amounts per asset.
 struct AssetAccumulator {
     var symbol: String

@@ -22,10 +22,8 @@ extension ViewRenderSmokeTests {
         let names = rows.compactMap(\.first)
 
         #expect(names.contains("Aave V3"), "\(rows)")
-        withKnownIssue("Today's Platforms tab has no hidden row") {
-            #expect(names.last == Self.hiddenTitle, "\(rows)")
-            #expect(rows.last?.dropFirst().first == AllAssetsFormat.share(0), "\(rows)")
-        }
+        #expect(names.last == Self.hiddenTitle, "\(rows)")
+        #expect(rows.last?.dropFirst().first == AllAssetsFormat.share(0), "\(rows)")
     }
 
     @Test(.renderedTextReadable) func `platforms show the hidden row when every row is hidden`() throws {
@@ -35,11 +33,9 @@ extension ViewRenderSmokeTests {
 
         let rows = try tableRows(PlatformsTab(), container: container)
 
-        withKnownIssue("Today's Platforms tab has no hidden row") {
-            #expect(rows.count == 1, "\(rows)")
-            #expect(rows.first?.first == Self.hiddenTitle, "\(rows)")
-            #expect(rows.first?.dropFirst().first == AllAssetsFormat.share(1), "\(rows)")
-        }
+        #expect(rows.count == 1, "\(rows)")
+        #expect(rows.first?.first == Self.hiddenTitle, "\(rows)")
+        #expect(rows.first?.dropFirst().first == AllAssetsFormat.share(1), "\(rows)")
     }
 
     @Test(.renderedTextReadable) func `networks end with their hidden balances row`() throws {
@@ -50,10 +46,8 @@ extension ViewRenderSmokeTests {
         let names = rows.compactMap(\.first)
 
         #expect(names.contains("Ethereum"), "\(rows)")
-        withKnownIssue("Today's Networks tab has no hidden row") {
-            #expect(names == ["Ethereum", Self.hiddenTitle], "\(rows)")
-            #expect(rows.last?.dropFirst().first == AllAssetsFormat.share(0), "\(rows)")
-        }
+        #expect(names == ["Ethereum", Self.hiddenTitle], "\(rows)")
+        #expect(rows.last?.dropFirst().first == AllAssetsFormat.share(0), "\(rows)")
     }
 
     @Test(.renderedTextReadable) func `networks show the hidden row when every row is hidden`() throws {
@@ -63,11 +57,9 @@ extension ViewRenderSmokeTests {
 
         let rows = try tableRows(NetworksTab(), container: container)
 
-        withKnownIssue("Today's Networks tab has no hidden row") {
-            #expect(rows.count == 1, "\(rows)")
-            #expect(rows.first?.first == Self.hiddenTitle, "\(rows)")
-            #expect(rows.first?.dropFirst().first == AllAssetsFormat.share(1), "\(rows)")
-        }
+        #expect(rows.count == 1, "\(rows)")
+        #expect(rows.first?.first == Self.hiddenTitle, "\(rows)")
+        #expect(rows.first?.dropFirst().first == AllAssetsFormat.share(1), "\(rows)")
     }
 
     /// With Hide unpriced off, an unpriced token shows "—" for its price; the dust row is hidden
@@ -93,10 +85,8 @@ extension ViewRenderSmokeTests {
         let nope = texts.first { $0.hasPrefix("NOPE, ") }
 
         #expect(nope != nil, "\(texts)")
-        withKnownIssue("Today's Assets tab has no hidden row and prices an unpriced row at 0") {
-            #expect(texts.indices.last { texts[$0] == Self.hiddenTitle }.map { $0 > lastAsset } == true, "\(texts)")
-            #expect(nope?.contains(", —, ") == true, "\(texts)")
-        }
+        #expect(texts.indices.last { texts[$0] == Self.hiddenTitle }.map { $0 > lastAsset } == true, "\(texts)")
+        #expect(nope?.contains(", —, ") == true, "\(texts)")
     }
 
     @Test(.renderedTextReadable) func `assets show the hidden row when every row is hidden`() throws {
@@ -106,10 +96,8 @@ extension ViewRenderSmokeTests {
 
         let texts = try assetsTexts(container, hideUnpriced: true)
 
-        withKnownIssue("Today's Assets tab shows its empty state") {
-            #expect(texts.contains(Self.hiddenTitle), "\(texts)")
-            #expect(!texts.contains("No assets"), "\(texts)")
-        }
+        #expect(texts.contains(Self.hiddenTitle), "\(texts)")
+        #expect(!texts.contains("No assets"), "\(texts)")
     }
 
     private static let hiddenTitle = ExposureLabels.hiddenRowTitle(rowCount: 1, isAllDust: true)

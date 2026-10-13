@@ -70,25 +70,23 @@ struct AllAssetsAssetsSeamTests {
         let data = AllAssetsFeature.assets(Fixture.context(), searchText: "")
         let values = Dictionary(uniqueKeysWithValues: data.rows.map { ($0.id, $0.value) })
 
-        withKnownIssue("Today's pricing values the Assets tab from the display books") {
-            #expect(values == [
-                Fixture.AssetID.usdc: 1000,
-                Fixture.AssetID.eth: 7500,
-                Fixture.AssetID.pepe: 10,
-                Fixture.AssetID.manual: 100,
-                Fixture.AssetID.link: 160,
-                Fixture.AssetID.uni: 70,
-                Fixture.AssetID.tiny: Fixture.decimal("0.3"),
-                Fixture.AssetID.degen: 100,
-                Fixture.AssetID.otc: 250,
-                Fixture.AssetID.sol: 1500,
-                Fixture.AssetID.arb: 90
-            ])
-            let eth = data.rows.first { $0.id == Fixture.AssetID.eth }
-            #expect(eth?.netAmount == Fixture.decimal("2.5"))
-            #expect(eth?.price == 3000)
-            #expect(eth?.source == .live)
-        }
+        #expect(values == [
+            Fixture.AssetID.usdc: 1000,
+            Fixture.AssetID.eth: 7500,
+            Fixture.AssetID.pepe: 10,
+            Fixture.AssetID.manual: 100,
+            Fixture.AssetID.link: 160,
+            Fixture.AssetID.uni: 70,
+            Fixture.AssetID.tiny: Fixture.decimal("0.3"),
+            Fixture.AssetID.degen: 100,
+            Fixture.AssetID.otc: 250,
+            Fixture.AssetID.sol: 1500,
+            Fixture.AssetID.arb: 90
+        ])
+        let eth = data.rows.first { $0.id == Fixture.AssetID.eth }
+        #expect(eth?.netAmount == Fixture.decimal("2.5"))
+        #expect(eth?.price == 3000)
+        #expect(eth?.source == .live)
     }
 
     /// V5 and AGENT-DECIDED 9: each row's price and source; the clock marks `.sync` only.
@@ -98,20 +96,18 @@ struct AllAssetsAssetsSeamTests {
             rows.first { $0.id == id }
         }
 
-        withKnownIssue("Today's pricing has no manual, close or mapped source") {
-            #expect(row(Fixture.AssetID.manual)?.price == 2)
-            #expect(row(Fixture.AssetID.manual)?.source == .manual)
-            #expect(row(Fixture.AssetID.link)?.price == 16)
-            #expect(row(Fixture.AssetID.link)?.source == .close)
-            #expect(row(Fixture.AssetID.degen)?.price == Fixture.decimal("0.01"))
-            #expect(row(Fixture.AssetID.degen)?.source == .live)
-            #expect(row(Fixture.AssetID.uni)?.price == 7)
-            #expect(row(Fixture.AssetID.uni)?.source == .sync)
-            #expect(row(Fixture.AssetID.otc)?.price == 50)
-            #expect(row(Fixture.AssetID.otc)?.source == .sync)
-            // The reward is not counted, so SOL's price is its stake's.
-            #expect(row(Fixture.AssetID.sol)?.price == 150)
-        }
+        #expect(row(Fixture.AssetID.manual)?.price == 2)
+        #expect(row(Fixture.AssetID.manual)?.source == .manual)
+        #expect(row(Fixture.AssetID.link)?.price == 16)
+        #expect(row(Fixture.AssetID.link)?.source == .close)
+        #expect(row(Fixture.AssetID.degen)?.price == Fixture.decimal("0.01"))
+        #expect(row(Fixture.AssetID.degen)?.source == .live)
+        #expect(row(Fixture.AssetID.uni)?.price == 7)
+        #expect(row(Fixture.AssetID.uni)?.source == .sync)
+        #expect(row(Fixture.AssetID.otc)?.price == 50)
+        #expect(row(Fixture.AssetID.otc)?.source == .sync)
+        // The reward is not counted, so SOL's price is its stake's.
+        #expect(row(Fixture.AssetID.sol)?.price == 150)
     }
 
     /// A7 and F3: the hidden line holds DAI, BAD and the USDT borrow; visible rows + the line = the
@@ -121,12 +117,10 @@ struct AllAssetsAssetsSeamTests {
         let data = AllAssetsFeature.assets(context, searchText: "")
         let visible = data.rows.reduce(Decimal.zero) { $0 + $1.value }
 
-        withKnownIssue("Today's Assets tab has no hidden line and values from the display books") {
-            #expect(data.hidden == AllAssetsHiddenRow(rowCount: 3, isAllDust: false, value: Fixture.decimal("0.1"), share: nil))
-            #expect(visible == Fixture.decimal("10780.3"))
-            #expect(data.total == Fixture.decimal("10780.4"))
-            #expect(data.total == OverviewFeature.headline(context).total)
-        }
+        #expect(data.hidden == AllAssetsHiddenRow(rowCount: 3, isAllDust: false, value: Fixture.decimal("0.1"), share: nil))
+        #expect(visible == Fixture.decimal("10780.3"))
+        #expect(data.total == Fixture.decimal("10780.4"))
+        #expect(data.total == OverviewFeature.headline(context).total)
     }
 
     /// F2.3: with Hide unpriced off, BAD shows with no price and value 0; only dust is hidden.
@@ -135,12 +129,10 @@ struct AllAssetsAssetsSeamTests {
         let data = AllAssetsFeature.assets(Fixture.context(settings: settings), searchText: "")
         let bad = data.rows.first { $0.id == Fixture.AssetID.bad }
 
-        withKnownIssue("Today's pricing shows an unpriced row at price 0") {
-            #expect(bad?.price == nil)
-            #expect(bad?.value == 0)
-            #expect(bad?.source == nil)
-            #expect(data.hidden == AllAssetsHiddenRow(rowCount: 2, isAllDust: true, value: Fixture.decimal("0.1"), share: nil))
-        }
+        #expect(bad?.price == nil)
+        #expect(bad?.value == 0)
+        #expect(bad?.source == nil)
+        #expect(data.hidden == AllAssetsHiddenRow(rowCount: 2, isAllDust: true, value: Fixture.decimal("0.1"), share: nil))
     }
 
     /// T1 units and F2: the rate is applied once; the dust threshold stays a USD amount. At rate 2
@@ -150,13 +142,11 @@ struct AllAssetsAssetsSeamTests {
         let data = AllAssetsFeature.assets(Fixture.context(rate: 2), searchText: "")
         let eth = data.rows.first { $0.id == Fixture.AssetID.eth }
 
-        withKnownIssue("Today's pricing values the Assets tab from the display books") {
-            #expect(eth?.value == 15000)
-            #expect(eth?.price == 6000)
-            #expect(!data.rows.contains { $0.id == Fixture.AssetID.dai })
-            #expect(data.hidden?.value == Fixture.decimal("0.2"))
-            #expect(data.total == Fixture.decimal("21560.8"))
-        }
+        #expect(eth?.value == 15000)
+        #expect(eth?.price == 6000)
+        #expect(!data.rows.contains { $0.id == Fixture.AssetID.dai })
+        #expect(data.hidden?.value == Fixture.decimal("0.2"))
+        #expect(data.total == Fixture.decimal("21560.8"))
     }
 
     /// U2: a search narrows the rows and drops the hidden line; clearing it brings the line back.
@@ -168,12 +158,10 @@ struct AllAssetsAssetsSeamTests {
 
         #expect(searched.hidden == nil)
         #expect(searched.total == cleared.total)
-        withKnownIssue("Today's Assets tab has no hidden line and values from the display books") {
-            #expect(searched.rows.map(\.symbol) == ["ETH"])
-            #expect(cleared.hidden?.rowCount == 3)
-            #expect(cleared.entries(sortedBy: .value, ascending: false).last?.hidden == cleared.hidden)
-            #expect(searched.total == Fixture.decimal("10780.4"))
-        }
+        #expect(searched.rows.map(\.symbol) == ["ETH"])
+        #expect(cleared.hidden?.rowCount == 3)
+        #expect(cleared.entries(sortedBy: .value, ascending: false).last?.hidden == cleared.hidden)
+        #expect(searched.total == Fixture.decimal("10780.4"))
     }
 
     /// U2: the hidden line is appended after any user sort.
@@ -183,10 +171,8 @@ struct AllAssetsAssetsSeamTests {
         let entries = data.entries(sortedBy: column, ascending: ascending)
 
         #expect(entries.dropLast().allSatisfy { $0.row != nil })
-        withKnownIssue("Today's Assets tab has no hidden line") {
-            #expect(entries.count == data.rows.count + 1)
-            #expect(entries.last?.hidden != nil)
-        }
+        #expect(entries.count == data.rows.count + 1)
+        #expect(entries.last?.hidden != nil)
     }
 
     /// F3: a portfolio of dust only has no visible row and a non-empty hidden line.
@@ -197,13 +183,11 @@ struct AllAssetsAssetsSeamTests {
         ])
         let data = AllAssetsFeature.assets(context, searchText: "")
 
-        withKnownIssue("Today's Assets tab drops dust without a hidden line") {
-            #expect(data.rows.isEmpty)
-            #expect(data.entries(sortedBy: .value, ascending: false) == [
-                .hidden(AllAssetsHiddenRow(rowCount: 2, isAllDust: true, value: Fixture.decimal("0.8"), share: nil))
-            ])
-            #expect(data.total == Fixture.decimal("0.8"))
-        }
+        #expect(data.rows.isEmpty)
+        #expect(data.entries(sortedBy: .value, ascending: false) == [
+            .hidden(AllAssetsHiddenRow(rowCount: 2, isAllDust: true, value: Fixture.decimal("0.8"), share: nil))
+        ])
+        #expect(data.total == Fixture.decimal("0.8"))
     }
 
     /// AGENT-DECIDED 9: a missing price exports as an empty cell.
@@ -238,40 +222,38 @@ struct AllAssetsPlatformsSeamTests {
         let context = Fixture.context()
         let data = AllAssetsFeature.platforms(context, protocolNames: Seam.protocolNames)
 
-        withKnownIssue("Today's Platforms tab sums the stored sync totals") {
-            #expect(data.rows == [
-                PlatformRowData(
-                    id: .idle,
-                    name: "Idle / Wallet",
-                    share: Fixture.decimal("0.714"),
-                    networkCount: 2,
-                    positionCount: 2,
-                    balance: Fixture.decimal("7690.8")),
-                PlatformRowData(
-                    id: .protocolID("lido"),
-                    name: "Lido",
-                    share: Fixture.decimal("0.139"),
-                    networkCount: 1,
-                    positionCount: 1,
-                    balance: 1500),
-                PlatformRowData(
-                    id: .protocolID("aave-v3"),
-                    name: "Aave V3",
-                    share: Fixture.decimal("0.139"),
-                    networkCount: 1,
-                    positionCount: 1,
-                    balance: Fixture.decimal("1499.6")),
-                PlatformRowData(
-                    id: .protocolID("arbitrum-vesting"),
-                    name: "Arbitrum Vesting",
-                    share: Fixture.decimal("0.008"),
-                    networkCount: 1,
-                    positionCount: 1,
-                    balance: 90)
-            ])
-            #expect(data.total == Fixture.decimal("10780.4"))
-            #expect(data.total == OverviewFeature.headline(context).total)
-        }
+        #expect(data.rows == [
+            PlatformRowData(
+                id: .idle,
+                name: "Idle / Wallet",
+                share: Fixture.decimal("0.714"),
+                networkCount: 2,
+                positionCount: 2,
+                balance: Fixture.decimal("7690.8")),
+            PlatformRowData(
+                id: .protocolID("lido"),
+                name: "Lido",
+                share: Fixture.decimal("0.139"),
+                networkCount: 1,
+                positionCount: 1,
+                balance: 1500),
+            PlatformRowData(
+                id: .protocolID("aave-v3"),
+                name: "Aave V3",
+                share: Fixture.decimal("0.139"),
+                networkCount: 1,
+                positionCount: 1,
+                balance: Fixture.decimal("1499.6")),
+            PlatformRowData(
+                id: .protocolID("arbitrum-vesting"),
+                name: "Arbitrum Vesting",
+                share: Fixture.decimal("0.008"),
+                networkCount: 1,
+                positionCount: 1,
+                balance: 90)
+        ])
+        #expect(data.total == Fixture.decimal("10780.4"))
+        #expect(data.total == OverviewFeature.headline(context).total)
         #expect(data.hidden == nil)
     }
 
@@ -284,11 +266,9 @@ struct AllAssetsPlatformsSeamTests {
         let shares = data.rows.map(\.share)
 
         #expect(data.rows.count == 121)
-        withKnownIssue("Today's shares add the whole residual to the largest row") {
-            #expect(shares.first == Fixture.decimal("0.952"))
-            #expect(shares.filter { $0 == Fixture.decimal("0.001") }.count == 48)
-            #expect(shares.dropFirst().filter { $0 == 0 }.count == 72)
-        }
+        #expect(shares.first == Fixture.decimal("0.952"))
+        #expect(shares.filter { $0 == Fixture.decimal("0.001") }.count == 48)
+        #expect(shares.dropFirst().filter { $0 == 0 }.count == 72)
         #expect(shares.compactMap(\.self).reduce(Decimal.zero, +) == 1)
     }
 
@@ -302,14 +282,12 @@ struct AllAssetsPlatformsSeamTests {
         let data = AllAssetsFeature.platforms(Seam.context(inputs))
         let shares = data.rows.map(\.share)
 
-        withKnownIssue("Today's Platforms tab has no hidden line") {
-            #expect(data.rows.count == 120)
-            #expect(shares.first == Fixture.decimal("0.952"))
-            #expect(shares.filter { $0 == Fixture.decimal("0.001") }.count == 48)
-            #expect(shares.dropFirst().filter { $0 == 0 }.count == 71)
-            #expect(data.hidden == AllAssetsHiddenRow(rowCount: 100, isAllDust: true, value: 40, share: 0))
-            #expect(data.total == 100_000)
-        }
+        #expect(data.rows.count == 120)
+        #expect(shares.first == Fixture.decimal("0.952"))
+        #expect(shares.filter { $0 == Fixture.decimal("0.001") }.count == 48)
+        #expect(shares.dropFirst().filter { $0 == 0 }.count == 71)
+        #expect(data.hidden == AllAssetsHiddenRow(rowCount: 100, isAllDust: true, value: 40, share: 0))
+        #expect(data.total == 100_000)
     }
 
     /// F4: rows and the hidden line sum to 100%. Rounding the visible rows alone would show 65.2%
@@ -322,15 +300,13 @@ struct AllAssetsPlatformsSeamTests {
             Seam.input(4, protocolID: "dust-b", usdValue: Fixture.decimal("0.4"))
         ]))
 
-        withKnownIssue("Today's Platforms tab has no hidden line") {
-            #expect(data.rows.map(\.share) == [Fixture.decimal("0.6"), Fixture.decimal("0.32")])
-            #expect(data.hidden == AllAssetsHiddenRow(
-                rowCount: 2,
-                isAllDust: true,
-                value: Fixture.decimal("0.8"),
-                share: Fixture.decimal("0.08")))
-            #expect(data.entries.last?.hidden?.share == Fixture.decimal("0.08"))
-        }
+        #expect(data.rows.map(\.share) == [Fixture.decimal("0.6"), Fixture.decimal("0.32")])
+        #expect(data.hidden == AllAssetsHiddenRow(
+            rowCount: 2,
+            isAllDust: true,
+            value: Fixture.decimal("0.8"),
+            share: Fixture.decimal("0.08")))
+        #expect(data.entries.last?.hidden?.share == Fixture.decimal("0.08"))
     }
 
     /// F1: a looped lending platform ($50,000 supplied against $49,999.20 borrowed) is not dust,
@@ -347,12 +323,10 @@ struct AllAssetsPlatformsSeamTests {
 
         let loop = try #require(data.rows.first { $0.id == .protocolID("loop") })
         #expect(loop.balance == Fixture.decimal("0.8"))
-        withKnownIssue("Today's Platforms tab has no display filter") {
-            #expect(data.rows.map(\.id) == [.protocolID("loop")])
-            #expect(data.hidden?.rowCount == 1)
-            #expect(data.hidden?.value == Fixture.decimal("0.5"))
-            #expect(data.total == Fixture.decimal("1.3"))
-        }
+        #expect(data.rows.map(\.id) == [.protocolID("loop")])
+        #expect(data.hidden?.rowCount == 1)
+        #expect(data.hidden?.value == Fixture.decimal("0.5"))
+        #expect(data.total == Fixture.decimal("1.3"))
     }
 
     /// F4: a list whose total is not positive shows "—" for every share. Number changes → All
@@ -364,10 +338,8 @@ struct AllAssetsPlatformsSeamTests {
         ]))
 
         #expect(data.rows.count == 2)
-        withKnownIssue("Today's shares divide by a negative total") {
-            #expect(data.rows.allSatisfy { $0.share == nil })
-            #expect(data.total == -50)
-        }
+        #expect(data.rows.allSatisfy { $0.share == nil })
+        #expect(data.total == -50)
     }
 
     /// AGENT-DECIDED 8: the name is the lowest protocol name of the platform's positions; equal
@@ -390,12 +362,10 @@ struct AllAssetsPlatformsSeamTests {
 
         for order in [inputs, inputs.reversed()] {
             let data = AllAssetsFeature.platforms(Seam.context(order), protocolNames: names)
-            withKnownIssue("Today's names are first-seen and ties keep query order") {
-                #expect(data.rows.map(\.name) == ["Aave", "Beta", "Beta", "nameless"])
-                #expect(data.rows.map(\.id) == [.protocolID("aave-v3"), .protocolID("alpha"), .protocolID("zeta"), .protocolID("nameless")])
-                #expect(data.rows.first?.positionCount == 2)
-                #expect(data.hidden?.rowCount == 1)
-            }
+            #expect(data.rows.map(\.name) == ["Aave", "Beta", "Beta", "nameless"])
+            #expect(data.rows.map(\.id) == [.protocolID("aave-v3"), .protocolID("alpha"), .protocolID("zeta"), .protocolID("nameless")])
+            #expect(data.rows.first?.positionCount == 2)
+            #expect(data.hidden?.rowCount == 1)
         }
     }
 }
@@ -413,16 +383,14 @@ struct AllAssetsNetworksSeamTests {
         let context = Fixture.context()
         let data = AllAssetsFeature.networks(context)
 
-        withKnownIssue("Today's Networks tab sums the stored sync totals") {
-            #expect(data.rows == [
-                NetworkRowData(id: .ethereum, name: "Ethereum", share: Fixture.decimal("0.82"), positionCount: 2, balance: Fixture.decimal("8840.4")),
-                NetworkRowData(id: .solana, name: "Solana", share: Fixture.decimal("0.139"), positionCount: 1, balance: 1500),
-                NetworkRowData(id: .degen, name: "Degen", share: Fixture.decimal("0.033"), positionCount: 1, balance: 350),
-                NetworkRowData(id: .arbitrum, name: "Arbitrum", share: Fixture.decimal("0.008"), positionCount: 1, balance: 90)
-            ])
-            #expect(data.total == Fixture.decimal("10780.4"))
-            #expect(data.total == OverviewFeature.headline(context).total)
-        }
+        #expect(data.rows == [
+            NetworkRowData(id: .ethereum, name: "Ethereum", share: Fixture.decimal("0.82"), positionCount: 2, balance: Fixture.decimal("8840.4")),
+            NetworkRowData(id: .solana, name: "Solana", share: Fixture.decimal("0.139"), positionCount: 1, balance: 1500),
+            NetworkRowData(id: .degen, name: "Degen", share: Fixture.decimal("0.033"), positionCount: 1, balance: 350),
+            NetworkRowData(id: .arbitrum, name: "Arbitrum", share: Fixture.decimal("0.008"), positionCount: 1, balance: 90)
+        ])
+        #expect(data.total == Fixture.decimal("10780.4"))
+        #expect(data.total == OverviewFeature.headline(context).total)
         #expect(data.hidden == nil)
     }
 
@@ -438,15 +406,13 @@ struct AllAssetsNetworksSeamTests {
 
         let offChain = data.rows.first { $0.id == nil }
         #expect(offChain?.name == "Off-chain / Custodial")
-        withKnownIssue("Today's Networks tab has no hidden line") {
-            #expect(data.rows.map(\.id) == [.ethereum, nil])
-            #expect(data.rows.map(\.share) == [Fixture.decimal("0.6"), Fixture.decimal("0.32")])
-            #expect(data.hidden == AllAssetsHiddenRow(
-                rowCount: 2,
-                isAllDust: true,
-                value: Fixture.decimal("0.8"),
-                share: Fixture.decimal("0.08")))
-        }
+        #expect(data.rows.map(\.id) == [.ethereum, nil])
+        #expect(data.rows.map(\.share) == [Fixture.decimal("0.6"), Fixture.decimal("0.32")])
+        #expect(data.hidden == AllAssetsHiddenRow(
+            rowCount: 2,
+            isAllDust: true,
+            value: Fixture.decimal("0.8"),
+            share: Fixture.decimal("0.08")))
     }
 }
 
@@ -466,11 +432,9 @@ struct AllAssetsTotalsTests {
         let context = Fixture.context(rate: Fixture.decimal("0.9"), settings: settings)
         let headline = OverviewFeature.headline(context).total
 
-        withKnownIssue("Today's tabs value differently from the Overview") {
-            #expect(AllAssetsFeature.assets(context, searchText: "").total == headline)
-            #expect(AllAssetsFeature.assets(context, searchText: "sol").total == headline)
-            #expect(AllAssetsFeature.platforms(context, protocolNames: AllAssetsSeamFixture.protocolNames).total == headline)
-            #expect(AllAssetsFeature.networks(context).total == headline)
-        }
+        #expect(AllAssetsFeature.assets(context, searchText: "").total == headline)
+        #expect(AllAssetsFeature.assets(context, searchText: "sol").total == headline)
+        #expect(AllAssetsFeature.platforms(context, protocolNames: AllAssetsSeamFixture.protocolNames).total == headline)
+        #expect(AllAssetsFeature.networks(context).total == headline)
     }
 }
