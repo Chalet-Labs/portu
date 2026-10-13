@@ -85,6 +85,14 @@ struct SettingsTabTests {
         #expect(TokenDashboardSettings.hideUnpricedTitle == "Hide unpriced")
     }
 
+    /// S8: the filter hides rows and never changes a total.
+    @Test func `hide unpriced subtitle says it hides rows and keeps totals`() {
+        withKnownIssue("The subtitle still says the toggle changes totals") {
+            #expect(TokenDashboardSettings.hideUnpricedSubtitle
+                == "Hide tokens without a resolved price from dashboard lists. Totals never change.")
+        }
+    }
+
     @Test func `category settings labels use configurable portfolio categories`() {
         let names = PortfolioCategoryDefaults.categorySnapshots.map(\.name)
 

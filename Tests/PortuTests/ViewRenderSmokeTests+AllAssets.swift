@@ -237,7 +237,9 @@ extension ViewRenderSmokeTests {
         }
     }
 
-    private static func accessibilityLabels(_ element: Any) -> [String] {
+    /// Each element's label, else its value, in tree order. Safe on `List` and `Table` rows, which
+    /// raise on a key-value read of `accessibilityValue`.
+    static func accessibilityLabels(_ element: Any) -> [String] {
         let object = element as AnyObject
         var texts: [String] = []
         if let text = accessibilityString("accessibilityLabel", of: object) ?? accessibilityString("accessibilityValue", of: object) {
