@@ -16,9 +16,7 @@ struct ValuationRowStateTests {
             overrides: [Fixture.ignore(ignoredReward)])
 
         #expect(valuation.tokens.map(\.source) == [.ignored, .unpriced, .unpriced, .live])
-        withKnownIssue {
-            #expect(valuation.tokens.map(\.rowState) == [.ignored, .notCounted, .unpriced, .counted])
-        }
+        #expect(valuation.tokens.map(\.rowState) == [.ignored, .notCounted, .unpriced, .counted])
     }
 
     @Test func `reward with a live price is not counted and keeps its value`() throws {
@@ -29,9 +27,7 @@ struct ValuationRowStateTests {
         #expect(token.source == .live)
         #expect(token.value == 300)
         #expect(token.contribution == 0)
-        withKnownIssue {
-            #expect(token.rowState == .notCounted)
-        }
+        #expect(token.rowState == .notCounted)
     }
 
     @Test(arguments: [Decimal(0), Decimal(-1)])
@@ -41,9 +37,7 @@ struct ValuationRowStateTests {
 
         let valued = try #require(valuation.tokens.first)
         #expect(valued.value == 0)
-        withKnownIssue {
-            #expect(valued.rowState == .notCounted)
-        }
+        #expect(valued.rowState == .notCounted)
     }
 
     @Test func `ignored token that would be unpriced is ignored`() throws {
@@ -52,9 +46,7 @@ struct ValuationRowStateTests {
 
         let valued = try #require(valuation.tokens.first)
         #expect(valued.value == 0)
-        withKnownIssue {
-            #expect(valued.rowState == .ignored)
-        }
+        #expect(valued.rowState == .ignored)
     }
 
     @Test func `ignored reward is ignored`() throws {
@@ -66,9 +58,7 @@ struct ValuationRowStateTests {
 
         let valued = try #require(valuation.tokens.first)
         #expect(valued.value == 0)
-        withKnownIssue {
-            #expect(valued.rowState == .ignored)
-        }
+        #expect(valued.rowState == .ignored)
     }
 
     @Test func `counted borrow shows a negative contribution`() throws {
@@ -78,9 +68,7 @@ struct ValuationRowStateTests {
         let valued = try #require(valuation.tokens.first)
         #expect(valued.value == 1500)
         #expect(valued.contribution == -1500)
-        withKnownIssue {
-            #expect(valued.rowState == .counted)
-        }
+        #expect(valued.rowState == .counted)
     }
 
     @Test func `implausible onchain live price leaves the row unpriced`() throws {
@@ -92,9 +80,7 @@ struct ValuationRowStateTests {
 
         let valued = try #require(valuation.tokens.first)
         #expect(valued.source == .unpriced)
-        withKnownIssue {
-            #expect(valued.rowState == .unpriced)
-        }
+        #expect(valued.rowState == .unpriced)
     }
 
     @Test func `show all keeps dust and unpriced rows visible with no hidden line`() {
@@ -112,9 +98,7 @@ struct ValuationRowStateTests {
         #expect(TokenDashboardSettings.showAll.minimumDashboardValue == TokenDashboardSettings.defaultMinimumDashboardValue)
         #expect(list.rows.map(\.status) == [.dust, .unpriced, .priced, .ignored, .notCounted])
         #expect(list.rows.filter { !$0.status.isDashboardRow }.allSatisfy { !$0.isVisible })
-        withKnownIssue {
-            #expect(Set(list.visibleRows.map(\.key)) == [dust.assetId, unpriced.assetId, priced.assetId])
-            #expect(list.hidden.isEmpty)
-        }
+        #expect(Set(list.visibleRows.map(\.key)) == [dust.assetId, unpriced.assetId, priced.assetId])
+        #expect(list.hidden.isEmpty)
     }
 }

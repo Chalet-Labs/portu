@@ -89,7 +89,11 @@ public struct ValuedToken: Equatable, Sendable {
     /// How a token-level row shows this token (All Positions, Asset Detail, the Token Settings
     /// badges).
     public var rowState: TokenRowState {
-        isIgnored ? .counted : .ignored
+        if isIgnored {
+            return .ignored
+        }
+        guard isCounted else { return .notCounted }
+        return isValued ? .counted : .unpriced
     }
 
     /// What polling ranks by and backfill gates on (S12): the value, or `|usdValue|` when the value

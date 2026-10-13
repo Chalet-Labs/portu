@@ -10,7 +10,7 @@ public struct TokenDashboardSettings: Equatable, Sendable {
     public static let defaultMinimumDashboardValue: Decimal = 1
     public static let defaults = TokenDashboardSettings()
     /// For lists that never hide a row: dust and unpriced rows stay visible.
-    public static let showAll = TokenDashboardSettings()
+    public static let showAll = TokenDashboardSettings(hideUnpriced: false, hideDust: false)
 
     public var minimumDashboardValue: Decimal
     public var hideUnpriced: Bool
