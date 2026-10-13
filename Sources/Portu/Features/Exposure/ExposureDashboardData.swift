@@ -87,14 +87,9 @@ nonisolated struct ExposureHiddenRow: ExposureRow {
     var title: String {
         HiddenBalancesLabel.title(rowCount: rowCount, isAllDust: isAllDust)
     }
+}
 
-    init(rowCount: Int, isAllDust: Bool, spotAssets: Decimal, liabilities: Decimal) {
-        self.rowCount = rowCount
-        self.isAllDust = isAllDust
-        self.spotAssets = spotAssets
-        self.liabilities = liabilities
-    }
-
+nonisolated extension ExposureHiddenRow {
     /// The display-currency line of a list's hidden rows; `nil` when nothing is hidden.
     init?(_ hidden: HiddenBalances, rate: Decimal) {
         guard !hidden.isEmpty else { return nil }

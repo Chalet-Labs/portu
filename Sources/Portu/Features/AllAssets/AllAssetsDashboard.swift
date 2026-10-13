@@ -67,14 +67,9 @@ nonisolated struct AllAssetsHiddenRow: Equatable {
     var title: String {
         HiddenBalancesLabel.title(rowCount: rowCount, isAllDust: isAllDust)
     }
+}
 
-    init(rowCount: Int, isAllDust: Bool, value: Decimal, share: Decimal?) {
-        self.rowCount = rowCount
-        self.isAllDust = isAllDust
-        self.value = value
-        self.share = share
-    }
-
+nonisolated extension AllAssetsHiddenRow {
     /// The display-currency line of a list's hidden rows; `nil` when nothing is hidden.
     init?(_ hidden: HiddenBalances, rate: Decimal, share: Decimal?) {
         guard !hidden.isEmpty else { return nil }
