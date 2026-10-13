@@ -225,6 +225,26 @@ struct ExposureSeamTests {
         #expect(data.assetHidden == nil)
     }
 
+    /// The category table groups by the resolved portfolio category, not the stored one: ETH stored
+    /// as Other and WETH stored as DeFi share the ETH row, and UNI alone keeps DeFi.
+    @Test func `assets with different stored categories fold into their resolved category row`() throws {
+        let data = ExposureFeature.dashboard(Fixture.context(
+            tokens: [
+                Fixture.token(Self.eth, "ETH", "Ethereum", .other, coinGeckoId: "ethereum", amount: Fixture.decimal("0.04"), usdValue: 100),
+                Fixture.token(Self.weth, "WETH", "Wrapped Ether", .defi, coinGeckoId: "weth", amount: Fixture.decimal("0.02"), usdValue: 50),
+                Fixture.token(Self.uni, "UNI", "Uniswap", .defi, coinGeckoId: "uniswap", amount: 5, usdValue: 25)
+            ],
+            livePricesUSD: ["ethereum": 2500, "weth": 2500, "uniswap": 5]))
+
+        #expect(data.categoryRows.map(\.name) == ["ETH", "DeFi"])
+        let eth = try #require(data.categoryRows.first)
+        let defi = try #require(data.categoryRows.last)
+        #expect(eth.spotAssets == 150)
+        #expect(defi.spotAssets == 25)
+        #expect(data.assetRows.map(\.symbol) == ["ETH", "WETH", "UNI"])
+        Self.expectTablesReconcile(data)
+    }
+
     /// A reward-only asset has no counted token: no row and no hidden line on either table, and it
     /// counts nothing.
     @Test func `a reward only asset has no row`() {
@@ -321,6 +341,8 @@ struct ExposureSeamTests {
     private static let loop = Fixture.uuid(708)
     private static let lost = Fixture.uuid(709)
     private static let reward = Fixture.uuid(710)
+    private static let weth = Fixture.uuid(711)
+    private static let uni = Fixture.uuid(712)
 
     /// $50,000 USDC held and $10,000 borrowed, $20,000 DAI supplied, a $0.50 USDT dust balance and
     /// 1 ETH.

@@ -31,6 +31,8 @@ extension ViewRenderSmokeTests {
         #expect(hiddenRows.count == 2, "\(texts)")
         #expect(hiddenRows.first.map { $0 > lastCategoryRow && $0 < assetTable } == true, "\(texts)")
         #expect(hiddenRows.last.map { $0 > lastAssetRow } == true, "\(texts)")
+        // The pill counts ETH and USDC, not the hidden line.
+        #expect(Self.assetPill(texts) == ["Assets", "2"], "\(texts)")
     }
 
     /// Every active holding is dust: neither table has a visible row, and each shows its hidden
@@ -52,6 +54,12 @@ extension ViewRenderSmokeTests {
         #expect(texts.filter { $0 == hidden }.count == 2, "\(texts)")
         #expect(!texts.contains("No category exposure"), "\(texts)")
         #expect(!texts.contains("No asset exposure"), "\(texts)")
+        #expect(Self.assetPill(texts) == ["Assets", "0"], "\(texts)")
+    }
+
+    /// The Assets pill's title and count, in tree order.
+    private static func assetPill(_ texts: [String]) -> [String] {
+        Array(texts.drop { $0 != ExposureLabels.assetCountPillTitle }.prefix(2))
     }
 
     private func insertDust(into account: Account, context: ModelContext) {
@@ -75,21 +83,13 @@ extension ViewRenderSmokeTests {
         let appState = AppState()
         appState.bridge(from: store)
         let size = CGSize(width: 1400, height: 2400)
-
-        let hostingView = NSHostingView(rootView: ExposureView(store: store)
-            .modelContainer(container)
-            .environment(appState)
-            .defaultAppStorage(defaults)
-            .frame(width: size.width, height: size.height))
-        hostingView.frame = CGRect(origin: .zero, size: size)
-        let window = NSWindow(contentRect: hostingView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        window.contentView = hostingView
-        window.layoutIfNeeded()
-        hostingView.layoutSubtreeIfNeeded()
-        hostingView.displayIfNeeded()
-        Self.exposureWindows.append(window)
+        let hostingView = render(
+            ExposureView(store: store)
+                .modelContainer(container)
+                .environment(appState)
+                .defaultAppStorage(defaults)
+                .frame(width: size.width, height: size.height),
+            size: size)
         return OverviewModelWiringTests.accessibilityTexts(hostingView)
     }
-
-    private static var exposureWindows: [NSWindow] = []
 }

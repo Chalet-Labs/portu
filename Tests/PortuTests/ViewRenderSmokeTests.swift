@@ -410,9 +410,10 @@ struct ViewRenderSmokeTests {
         let batch = UUID(uuidString: "00000000-0000-0000-0000-0000000000B1")!
     }
 
+    @discardableResult
     func render(
         _ view: some View,
-        size: CGSize = CGSize(width: 1400, height: 900)) {
+        size: CGSize = CGSize(width: 1400, height: 900)) -> NSView {
         let hostingView = NSHostingView(rootView: view)
         hostingView.frame = CGRect(origin: .zero, size: size)
 
@@ -431,6 +432,7 @@ struct ViewRenderSmokeTests {
         if Self.retainedWindows.count > Self.maxRetainedWindows {
             Self.retainedWindows.removeFirst(Self.retainedWindows.count - Self.maxRetainedWindows)
         }
+        return hostingView
     }
 
     enum OverviewRenderSize: CaseIterable {
