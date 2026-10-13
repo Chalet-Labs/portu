@@ -79,7 +79,8 @@ enum ExposureFeature {
     }
 
     /// What an asset row shows besides its values: its counted, non-ignored tokens, else (an
-    /// unpriced or borrow-only row) any of its tokens.
+    /// unpriced or borrow-only row) any of its tokens. The tokens share one asset, so any of them
+    /// names it; the logo is the one of the lowest token ID that has one, whatever the query order.
     private struct AssetRowInfo {
         let id: UUID
         let symbol: String
@@ -87,11 +88,14 @@ enum ExposureFeature {
 
         init?(_ row: DashboardRow<UUID>) {
             let held = row.tokens.filter { $0.isCounted && !$0.isIgnored }
-            let tokens = (held.isEmpty ? row.tokens : held).map(\.token)
+            let tokens = held.isEmpty ? row.tokens : held
             guard let first = tokens.first else { return nil }
             self.id = row.key
-            self.symbol = first.symbol
-            self.logoURL = tokens.lazy.compactMap(\.logoURL).first
+            self.symbol = first.token.symbol
+            self.logoURL = tokens
+                .filter { $0.token.logoURL != nil }
+                .min { $0.tokenId.uuidString < $1.tokenId.uuidString }?
+                .token.logoURL
         }
     }
 

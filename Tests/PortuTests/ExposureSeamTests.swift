@@ -29,6 +29,32 @@ struct ExposureSeamTests {
         #expect(summary.netExposureShare == Fixture.decimal("9780.3") / Fixture.decimal("12280.8"))
     }
 
+    /// An asset row's logo is the one of its lowest token ID that has a logo, so it does not follow
+    /// the unsorted query order.
+    @Test func `an asset row's logo does not depend on the token order`() {
+        let assetId = Fixture.uuid(9810)
+        let inputs = [(9811, "https://logo/first.png"), (9812, "https://logo/second.png")].map { number, logo in
+            ValuationInput(
+                tokenId: Fixture.uuid(number),
+                token: TokenEntry(
+                    assetId: assetId,
+                    symbol: "LOGO",
+                    name: "Logo Coin",
+                    category: .other,
+                    coinGeckoId: "logo-coin",
+                    role: .balance,
+                    amount: 1,
+                    usdValue: 50,
+                    logoURL: logo),
+                position: Fixture.PositionSlot.wallet.context)
+        }
+        let logos = [inputs, inputs.reversed()].map { inputs in
+            ExposureFeature.dashboard(Fixture.context(inputs: inputs)).assetRows.first { $0.id == assetId }?.logoURL
+        }
+
+        #expect(logos == ["https://logo/first.png", "https://logo/first.png"])
+    }
+
     /// Mostly stablecoins, with a stablecoin borrow: they count in Spot, Liabilities and the Net
     /// total, never in Net exposure. Three stablecoin assets fold into one category row.
     @Test func `a stablecoin heavy portfolio keeps its stablecoins out of net exposure only`() throws {
