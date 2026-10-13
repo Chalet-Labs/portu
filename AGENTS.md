@@ -64,7 +64,7 @@ The app target in `Sources/Portu/` imports all three packages and contains featu
 - The app target does not use default MainActor isolation because it is incompatible with TCA.
 - PortuNetwork providers are `actor` types and run off the main thread.
 - DTOs and enums must be plain `Sendable` for cross-isolation safety.
-- SwiftData `@Model` types are implicitly `@MainActor`.
+- SwiftData `@Model` instances are read only on the actor that owns their `ModelContext` (the main actor for views, the `@ModelActor` for background fetchers).
 
 ## Testing
 
