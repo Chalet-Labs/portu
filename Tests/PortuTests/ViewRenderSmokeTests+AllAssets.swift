@@ -149,11 +149,12 @@ extension ViewRenderSmokeTests {
     }
 
     /// Renders a tab tall enough to lay out every row, with the dashboard settings on a fresh
-    /// defaults suite.
-    private func renderTab(
+    /// defaults suite, and reads it while that suite still exists: `Table` builds its cells lazily.
+    private func renderTab<Result>(
         _ view: some View,
         container: ModelContainer,
-        hideUnpriced: Bool = true) throws -> NSView {
+        hideUnpriced: Bool = true,
+        read: (NSView) throws -> Result) throws -> Result {
         let suiteName = "ViewRenderSmokeTests.allAssets.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -162,24 +163,26 @@ extension ViewRenderSmokeTests {
         let appState = AppState()
         appState.bridge(from: store)
         let size = CGSize(width: 1400, height: 1600)
-        return render(
+        let hostingView = render(
             view
                 .modelContainer(container)
                 .environment(appState)
                 .defaultAppStorage(defaults)
                 .frame(width: size.width, height: size.height),
             size: size)
+        return try read(hostingView)
     }
 
     /// The text of each `Table` row, cell by cell. `Table` keeps its cells out of the accessibility
     /// tree, so they are read from the table view itself.
     private func tableRows(_ view: some View, container: ModelContainer) throws -> [[String]] {
-        let hostingView = try renderTab(view, container: container)
-        let table = try #require(Self.tableView(in: hostingView))
-        return (0 ..< table.numberOfRows).map { row in
-            (0 ..< table.numberOfColumns).map { column in
-                table.view(atColumn: column, row: row, makeIfNecessary: true)
-                    .map { OverviewModelWiringTests.accessibilityTexts($0).joined(separator: " ") } ?? ""
+        try renderTab(view, container: container) { hostingView in
+            let table = try #require(Self.tableView(in: hostingView))
+            return (0 ..< table.numberOfRows).map { row in
+                (0 ..< table.numberOfColumns).map { column in
+                    table.view(atColumn: column, row: row, makeIfNecessary: true)
+                        .map { OverviewModelWiringTests.accessibilityTexts($0).joined(separator: " ") } ?? ""
+                }
             }
         }
     }
@@ -195,8 +198,9 @@ extension ViewRenderSmokeTests {
     /// label joining its cells ("ETH, Ethereum, …"); a plain text reads as its value.
     private func assetsTexts(_ container: ModelContainer, hideUnpriced: Bool) throws -> [String] {
         let store = makeStore(section: .allAssets)
-        let hostingView = try renderTab(AssetsTab(store: store), container: container, hideUnpriced: hideUnpriced)
-        return Self.accessibilityLabels(hostingView)
+        return try renderTab(AssetsTab(store: store), container: container, hideUnpriced: hideUnpriced) {
+            Self.accessibilityLabels($0)
+        }
     }
 
     private static func accessibilityLabels(_ element: Any) -> [String] {
