@@ -5,14 +5,16 @@ import SwiftUI
 struct SettingsView: View {
     let store: StoreOf<AppFeature>
     let secretStore: any SecretStore
-    @State private var selectedTab: SettingsTab? = .general
+    @State private var selectedTab: SettingsTab?
     @State private var searchText = ""
 
     init(
         store: StoreOf<AppFeature>,
-        secretStore: any SecretStore = PortuApp.makeSecretStore()) {
+        secretStore: any SecretStore = PortuApp.makeSecretStore(),
+        initialTab: SettingsTab = .general) {
         self.store = store
         self.secretStore = secretStore
+        _selectedTab = State(initialValue: initialTab)
     }
 
     private var allVisibleTabs: [SettingsTab] {

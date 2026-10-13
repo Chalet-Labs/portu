@@ -115,10 +115,12 @@ struct TokenSettingsRowView: View {
 
     private var valueSummary: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text(TokenSettingsFormat.currency(row.value, currency: row.currency))
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(SettingsDesign.primaryText)
-                .lineLimit(1)
+            if let value = row.value {
+                Text(TokenSettingsFormat.currency(value, currency: row.currency))
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(SettingsDesign.primaryText)
+                    .lineLimit(1)
+            }
             Text(TokenSettingsFormat.decimal(row.amount))
                 .font(.caption2)
                 .foregroundStyle(SettingsDesign.secondaryText)
@@ -128,7 +130,7 @@ struct TokenSettingsRowView: View {
 
     private var pricingBadge: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text(row.pricingSource.rawValue)
+            Text(row.pricingSource?.rawValue ?? "—")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(sourceColor)
                 .padding(.horizontal, 6)
@@ -279,9 +281,10 @@ struct TokenSettingsRowView: View {
     private var sourceColor: Color {
         switch row.pricingSource {
         case .live: SettingsDesign.successBadgeText
-        case .syncTime: SettingsDesign.accentPrimary
+        case .close, .syncTime: SettingsDesign.accentPrimary
         case .manual: SettingsDesign.tokenTeal
         case .unpriced: SettingsDesign.warningOrange
+        case nil: SettingsDesign.secondaryText
         }
     }
 }

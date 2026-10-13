@@ -3,6 +3,7 @@ import PortuCore
 
 enum TokenPricingSource: String, CaseIterable, Equatable {
     case live = "Live"
+    case close = "Close"
     case syncTime = "Sync-time"
     case manual = "Manual"
     case unpriced = "Unpriced"
@@ -21,6 +22,7 @@ enum TokenSettingsFilter: String, CaseIterable, Equatable, Identifiable {
     case unpriced = "Unpriced"
     case belowThreshold = "Below Threshold"
     case ignored = "Ignored"
+    case notCounted = "Not Counted"
     case manualPrice = "Manual Price"
     case mappedPriceSource = "Mapped Price Source"
 
@@ -36,10 +38,17 @@ struct TokenSettingsRow: Equatable, Identifiable {
     let name: String
     let amount: Decimal
     let price: Decimal
-    let value: Decimal
+    /// `nil` for an ignored asset, which is listed with no value.
+    let value: Decimal?
     let portfolioCategory: PortfolioCategorySnapshot
-    let pricingSource: TokenPricingSource
+    /// `nil` (shown "—") when no counted token decides a source.
+    let pricingSource: TokenPricingSource?
     let visibilityStatus: TokenVisibilityStatus
+    /// F1, independent of the toggles; `alwaysShow` is its own flag.
+    let status: RowStatus
+    let alwaysShow: Bool
+    /// The asset's override ignores it. It beats every status for the badge, the count and the filter.
+    let isIgnored: Bool
     let coinGeckoId: String?
     let logoURL: String?
     /// Currency the `price` and `value` are denominated in (the display currency).
@@ -52,10 +61,13 @@ struct TokenSettingsRow: Equatable, Identifiable {
         name: String,
         amount: Decimal,
         price: Decimal,
-        value: Decimal,
+        value: Decimal?,
         portfolioCategory: PortfolioCategorySnapshot,
-        pricingSource: TokenPricingSource,
+        pricingSource: TokenPricingSource?,
         visibilityStatus: TokenVisibilityStatus,
+        status: RowStatus,
+        alwaysShow: Bool,
+        isIgnored: Bool,
         coinGeckoId: String?,
         logoURL: String?,
         currency: FiatCurrency = .default,
@@ -70,6 +82,9 @@ struct TokenSettingsRow: Equatable, Identifiable {
         self.portfolioCategory = portfolioCategory
         self.pricingSource = pricingSource
         self.visibilityStatus = visibilityStatus
+        self.status = status
+        self.alwaysShow = alwaysShow
+        self.isIgnored = isIgnored
         self.coinGeckoId = coinGeckoId
         self.logoURL = logoURL
         self.currency = currency
@@ -82,6 +97,7 @@ struct TokenSettingsCounts: Equatable {
     let unpriced: Int
     let belowThreshold: Int
     let ignored: Int
+    let notCounted: Int
     let manualPrice: Int
     let mappedPriceSource: Int
 }
@@ -201,6 +217,28 @@ enum TokenSettingsFeature {
         return true
     }
 
+    /// The Token Settings list over the active accounts' context: every asset row, never only the
+    /// visible ones, then the search, the filter and the cap. Live prices still come from the
+    /// display-currency book the screen read before.
+    static func result(
+        _ context: ValuationContext,
+        filter: TokenSettingsFilter,
+        searchText: String,
+        currency: FiatCurrency = .default,
+        limit: Int = displayLimit,
+        displayPrices: [String: Decimal] = [:]) -> TokenSettingsResult {
+        rows(
+            tokens: context.inputs.map(\.token),
+            prices: displayPrices,
+            overrides: context.overrides,
+            settings: context.settings,
+            filter: filter,
+            searchText: searchText,
+            currency: currency,
+            usdToDisplayRate: context.usdToDisplayRate,
+            limit: limit)
+    }
+
     static func rows(
         tokens: [TokenEntry],
         prices: [String: Decimal],
@@ -298,6 +336,7 @@ enum TokenSettingsFeature {
             override: override,
             settings: settings,
             usdToDisplayRate: usdToDisplayRate)
+        let isIgnored = override?.isIgnored == true
 
         return TokenSettingsRow(
             assetId: token.assetId,
@@ -309,6 +348,9 @@ enum TokenSettingsFeature {
             portfolioCategory: token.portfolioCategory,
             pricingSource: source,
             visibilityStatus: status,
+            status: rowStatus(status),
+            alwaysShow: override?.alwaysShow == true && !isIgnored,
+            isIgnored: isIgnored,
             coinGeckoId: resolvedCoinGeckoID(token: token, override: override),
             logoURL: token.logoURL,
             currency: currency,
@@ -352,28 +394,42 @@ enum TokenSettingsFeature {
         return .visible
     }
 
+    /// The status the legacy classification implies: an always-shown row reads as priced.
+    private static func rowStatus(_ status: TokenVisibilityStatus) -> RowStatus {
+        switch status {
+        case .ignored: .ignored
+        case .unpriced: .unpriced
+        case .dust: .dust
+        case .visible, .alwaysShow: .priced
+        }
+    }
+
     private static func counts(for rows: [TokenSettingsRow]) -> TokenSettingsCounts {
         TokenSettingsCounts(
             all: rows.count,
-            unpriced: rows.count(where: { $0.visibilityStatus == .unpriced }),
-            belowThreshold: rows.count(where: { $0.visibilityStatus == .dust }),
-            ignored: rows.count(where: { $0.visibilityStatus == .ignored }),
-            manualPrice: rows.count(where: { $0.pricingSource == .manual }),
-            mappedPriceSource: rows.count(where: { normalizedCoinGeckoID($0.override?.coinGeckoIdOverride) != nil }))
+            unpriced: rows.count(where: { matchesFilter(row: $0, filter: .unpriced) }),
+            belowThreshold: rows.count(where: { matchesFilter(row: $0, filter: .belowThreshold) }),
+            ignored: rows.count(where: { matchesFilter(row: $0, filter: .ignored) }),
+            notCounted: rows.count(where: { matchesFilter(row: $0, filter: .notCounted) }),
+            manualPrice: rows.count(where: { matchesFilter(row: $0, filter: .manualPrice) }),
+            mappedPriceSource: rows.count(where: { matchesFilter(row: $0, filter: .mappedPriceSource) }))
     }
 
+    /// Ignore comes first, as on token-level rows: an ignored asset is never also Not Counted.
     private static func matchesFilter(row: TokenSettingsRow, filter: TokenSettingsFilter) -> Bool {
         switch filter {
         case .all:
             true
         case .unpriced:
-            row.visibilityStatus == .unpriced
+            !row.isIgnored && row.status == .unpriced
         case .belowThreshold:
-            row.visibilityStatus == .dust
+            !row.isIgnored && row.status == .dust
         case .ignored:
-            row.visibilityStatus == .ignored
+            row.isIgnored
+        case .notCounted:
+            !row.isIgnored && row.status == .notCounted
         case .manualPrice:
-            row.pricingSource == .manual
+            sanitizedManualPrice(row.override?.manualPriceUSD) != nil
         case .mappedPriceSource:
             normalizedCoinGeckoID(row.override?.coinGeckoIdOverride) != nil
         }
@@ -387,15 +443,20 @@ enum TokenSettingsFeature {
             || (row.coinGeckoId?.localizedCaseInsensitiveContains(query) ?? false)
     }
 
+    /// Value descending, rows with no value last; then symbol, then asset ID.
     private static func sortRows(_ lhs: TokenSettingsRow, _ rhs: TokenSettingsRow) -> Bool {
-        if lhs.value == rhs.value {
-            let symbolOrder = lhs.symbol.localizedStandardCompare(rhs.symbol)
-            if symbolOrder != .orderedSame {
-                return symbolOrder == .orderedAscending
+        if lhs.value != rhs.value {
+            switch (lhs.value, rhs.value) {
+            case let (lhs?, rhs?): return lhs > rhs
+            case (nil, _): return false
+            case (_, nil): return true
             }
-            return lhs.assetId.uuidString < rhs.assetId.uuidString
         }
-        return lhs.value > rhs.value
+        let symbolOrder = lhs.symbol.localizedStandardCompare(rhs.symbol)
+        if symbolOrder != .orderedSame {
+            return symbolOrder == .orderedAscending
+        }
+        return lhs.assetId.uuidString < rhs.assetId.uuidString
     }
 
     static func dashboardAdjustedToken(

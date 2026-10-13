@@ -10,6 +10,7 @@ private let tokenSettingsLogger = Logger(
 struct TokenSettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
+    @Environment(\.historicalMarketPrices) private var historical
     @Query private var positionTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
@@ -17,6 +18,7 @@ struct TokenSettingsView: View {
     private var categoryRules: [CategorySymbolRule]
     @Query(sort: [SortDescriptor(\TokenPricingOverride.updatedAt, order: .reverse)])
     private var overrides: [TokenPricingOverride]
+    @Query private var mappings: [TokenIdentityMapping]
 
     @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
     private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
@@ -79,29 +81,27 @@ struct TokenSettingsView: View {
             hideDust: hideDust)
     }
 
-    private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(positionTokens, categoryResolver: categoryResolver)
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        overrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
     private var categoryResolver: PortfolioCategoryResolver {
         PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules)
     }
 
+    /// No 24h figure is shown, so the live fractions are not read.
     private func makeResult() -> TokenSettingsResult {
-        TokenSettingsFeature.rows(
-            tokens: tokenEntries,
-            prices: appState.prices,
-            overrides: overrideSnapshots,
+        let context = ValuationContext.activeAccounts(
+            positionTokens,
+            overrides: overrides,
+            mappings: mappings,
             settings: settings,
+            categoryResolver: categoryResolver,
+            usdToDisplayRate: appState.currentUSDToDisplayRate,
+            prices: .live(appState, historical: historical, includingLiveChanges: false))
+        return TokenSettingsFeature.result(
+            context,
             filter: selectedFilter,
             searchText: searchText,
             currency: appState.selectedCurrency,
-            usdToDisplayRate: appState.currentUSDToDisplayRate,
-            limit: TokenSettingsFeature.displayLimit)
+            limit: TokenSettingsFeature.displayLimit,
+            displayPrices: appState.prices)
     }
 
     private var dashboardControls: some View {
