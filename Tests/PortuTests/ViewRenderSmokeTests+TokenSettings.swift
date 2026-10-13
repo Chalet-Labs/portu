@@ -36,10 +36,8 @@ extension ViewRenderSmokeTests {
         }
 
         #expect(texts.contains("CLS"), "\(texts)")
-        withKnownIssue("The Settings window has no historical provider and the tab prices through the legacy rows") {
-            #expect(texts.contains(value), "\(texts)")
-            #expect(Array(texts.drop { $0 != "CLS" }).contains(TokenPricingSource.close.rawValue), "\(texts)")
-        }
+        #expect(texts.contains(value), "\(texts)")
+        #expect(Array(texts.drop { $0 != "CLS" }).contains(TokenPricingSource.close.rawValue), "\(texts)")
     }
 
     /// S8 and T4: an ignored asset stays listed, greyed, with its Ignored badge, "—" as its source and
@@ -54,11 +52,9 @@ extension ViewRenderSmokeTests {
         let ethRow = Array(texts.drop { $0 != "ETH" })
 
         #expect(ethRow.first == "ETH", "\(texts)")
-        withKnownIssue("Token Settings still shows an ignored row's value") {
-            #expect(ethRow.contains("Ignored"), "\(texts)")
-            #expect(ethRow.contains("—"), "\(texts)")
-            #expect(!texts.contains(TokenSettingsFormat.currency(6100, currency: .default)), "\(texts)")
-        }
+        #expect(ethRow.contains(TokenSettingsLabels.ignored), "\(texts)")
+        #expect(ethRow.contains("—"), "\(texts)")
+        #expect(!texts.contains(TokenSettingsFormat.currency(6100, currency: .default)), "\(texts)")
     }
 
     /// U4: a reward-only asset carries the Not counted badge, and the counts bar a Not counted chip.
@@ -81,10 +77,8 @@ extension ViewRenderSmokeTests {
         let rewardRow = Array(texts.drop { $0 != "RWD" })
 
         #expect(rewardRow.first == "RWD", "\(texts)")
-        withKnownIssue("Token Settings has no Not counted badge") {
-            #expect(rewardRow.contains("Not counted"), "\(texts)")
-            #expect(texts.count { $0 == "Not counted" } == 2, "\(texts)")
-        }
+        #expect(rewardRow.contains(TokenSettingsLabels.notCounted), "\(texts)")
+        #expect(texts.count { $0 == TokenSettingsLabels.notCounted } == 2, "\(texts)")
     }
 
     /// Renders tall enough for every row, with the settings on a fresh defaults suite, and reads the

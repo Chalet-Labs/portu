@@ -54,13 +54,20 @@ struct TokenSettingsRowView: View {
         VStack(alignment: .leading, spacing: 8) {
             // Tier 1: Identity <---> Value / Amount + Pricing Source + Expand
             HStack(alignment: .center, spacing: 10) {
-                tokenIdentity
+                Group {
+                    tokenIdentity
 
-                Spacer(minLength: 12)
+                    Spacer(minLength: 12)
 
-                valueSummary
+                    if let statusTag = TokenSettingsStatusTag(row) {
+                        statusTag
+                    }
 
-                pricingBadge
+                    valueSummary
+
+                    pricingBadge
+                }
+                .opacity(row.isIgnored ? 0.5 : 1)
 
                 expandButton
             }
@@ -118,7 +125,7 @@ struct TokenSettingsRowView: View {
             if let value = row.value {
                 Text(TokenSettingsFormat.currency(value, currency: row.currency))
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(SettingsDesign.primaryText)
+                    .foregroundStyle(row.status == .notCounted ? SettingsDesign.secondaryText : SettingsDesign.primaryText)
                     .lineLimit(1)
             }
             Text(TokenSettingsFormat.decimal(row.amount))
@@ -287,6 +294,38 @@ struct TokenSettingsRowView: View {
         case nil: SettingsDesign.secondaryText
         }
     }
+}
+
+/// U4: an ignored asset is tagged Ignored, whatever its F1 status; one with no counted token is
+/// tagged Not counted.
+private struct TokenSettingsStatusTag: View {
+    let title: String
+
+    init?(_ row: TokenSettingsRow) {
+        if row.isIgnored {
+            self.title = TokenSettingsLabels.ignored
+        } else if row.status == .notCounted {
+            self.title = TokenSettingsLabels.notCounted
+        } else {
+            return nil
+        }
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(SettingsDesign.secondaryText)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .overlay(
+                Capsule()
+                    .stroke(SettingsDesign.cardStroke, lineWidth: 1))
+    }
+}
+
+enum TokenSettingsLabels {
+    static let ignored = "Ignored"
+    static let notCounted = "Not counted"
 }
 
 private struct TokenSettingsLogo: View {

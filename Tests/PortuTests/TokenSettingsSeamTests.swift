@@ -64,28 +64,24 @@ struct TokenSettingsSeamTests {
             Fixture.AssetID.scam: nil
         ]
 
-        withKnownIssue("Token Settings still prices through the legacy rows") {
-            #expect(rows.mapValues(\.value) == expected)
-            #expect(rows[Fixture.AssetID.eth]?.amount == Fixture.decimal("2.5"))
-            // The reward is not counted, so SOL's amount is its stake's.
-            #expect(rows[Fixture.AssetID.sol]?.amount == 10)
-        }
+        #expect(rows.mapValues(\.value) == expected)
+        #expect(rows[Fixture.AssetID.eth]?.amount == Fixture.decimal("2.5"))
+        // The reward is not counted, so SOL's amount is its stake's.
+        #expect(rows[Fixture.AssetID.sol]?.amount == 10)
     }
 
     /// V5 and AGENT-DECIDED 11: the lead token's source, a close source, and "—" for an ignored row.
     @Test func `sources follow V5`() {
         let rows = Self.rowsByAsset(Self.result(Fixture.context()))
 
-        withKnownIssue("Token Settings still prices through the legacy rows") {
-            #expect(rows[Fixture.AssetID.manual]?.pricingSource == .manual)
-            #expect(rows[Fixture.AssetID.usdc]?.pricingSource == .live)
-            #expect(rows[Fixture.AssetID.degen]?.pricingSource == .live)
-            #expect(rows[Fixture.AssetID.link]?.pricingSource == .close)
-            #expect(rows[Fixture.AssetID.uni]?.pricingSource == .syncTime)
-            #expect(rows[Fixture.AssetID.otc]?.pricingSource == .syncTime)
-            #expect(rows[Fixture.AssetID.bad]?.pricingSource == .unpriced)
-            #expect(rows[Fixture.AssetID.scam].map { $0.pricingSource == nil } == true)
-        }
+        #expect(rows[Fixture.AssetID.manual]?.pricingSource == .manual)
+        #expect(rows[Fixture.AssetID.usdc]?.pricingSource == .live)
+        #expect(rows[Fixture.AssetID.degen]?.pricingSource == .live)
+        #expect(rows[Fixture.AssetID.link]?.pricingSource == .close)
+        #expect(rows[Fixture.AssetID.uni]?.pricingSource == .syncTime)
+        #expect(rows[Fixture.AssetID.otc]?.pricingSource == .syncTime)
+        #expect(rows[Fixture.AssetID.bad]?.pricingSource == .unpriced)
+        #expect(rows[Fixture.AssetID.scam].map { $0.pricingSource == nil } == true)
     }
 
     /// F1 with alwaysShow as its own flag (AGENT-DECIDED 11). Number changes → Token Settings: "An
@@ -111,18 +107,16 @@ struct TokenSettingsSeamTests {
             Fixture.AssetID.scam: .ignored
         ]
 
-        withKnownIssue("Token Settings still prices through the legacy rows") {
-            #expect(rows.mapValues(\.status) == expected)
-            #expect(Set(result.rows.filter(\.alwaysShow).map(\.assetId)) == [Fixture.AssetID.tiny])
-            #expect(result.counts == TokenSettingsCounts(
-                all: 15,
-                unpriced: 1,
-                belowThreshold: 3,
-                ignored: 1,
-                notCounted: 0,
-                manualPrice: 1,
-                mappedPriceSource: 0))
-        }
+        #expect(rows.mapValues(\.status) == expected)
+        #expect(Set(result.rows.filter(\.alwaysShow).map(\.assetId)) == [Fixture.AssetID.tiny])
+        #expect(result.counts == TokenSettingsCounts(
+            all: 15,
+            unpriced: 1,
+            belowThreshold: 3,
+            ignored: 1,
+            notCounted: 0,
+            manualPrice: 1,
+            mappedPriceSource: 0))
     }
 
     /// S8 and T4: the ignored row stays listed, with status ignored, no value and no source.
@@ -132,11 +126,9 @@ struct TokenSettingsSeamTests {
 
         #expect(scam?.isIgnored == true)
         #expect(Self.result(Fixture.context(), filter: .ignored).rows.map(\.assetId) == [Fixture.AssetID.scam])
-        withKnownIssue("Token Settings still prices through the legacy rows") {
-            #expect(scam?.status == .ignored)
-            #expect(scam.map { $0.value == nil } == true)
-            #expect(scam.map { $0.pricingSource == nil } == true)
-        }
+        #expect(scam?.status == .ignored)
+        #expect(scam.map { $0.value == nil } == true)
+        #expect(scam.map { $0.pricingSource == nil } == true)
     }
 
     /// S8 and U4: an asset with no counted token is Not Counted, valued Σ contributions = 0, with no
@@ -149,15 +141,13 @@ struct TokenSettingsSeamTests {
         let rows = Self.rowsByAsset(result)
 
         #expect(result.rows.count == 2)
-        withKnownIssue("Token Settings still prices through the legacy rows") {
-            for assetId in [reward.assetId, empty.assetId] {
-                #expect(rows[assetId]?.status == .notCounted)
-                #expect(rows[assetId]?.value == 0)
-                #expect(rows[assetId].map { $0.pricingSource == nil } == true)
-            }
-            #expect(result.counts.notCounted == 2)
-            #expect(Set(Self.result(context, filter: .notCounted).rows.map(\.assetId)) == [reward.assetId, empty.assetId])
+        for assetId in [reward.assetId, empty.assetId] {
+            #expect(rows[assetId]?.status == .notCounted)
+            #expect(rows[assetId]?.value == 0)
+            #expect(rows[assetId].map { $0.pricingSource == nil } == true)
         }
+        #expect(result.counts.notCounted == 2)
+        #expect(Set(Self.result(context, filter: .notCounted).rows.map(\.assetId)) == [reward.assetId, empty.assetId])
     }
 
     /// U4 and AGENT-DECIDED 3: ignore beats not counted on the badge, the count and the filter, even
@@ -175,10 +165,8 @@ struct TokenSettingsSeamTests {
         #expect(result.counts.ignored == 1)
         #expect(result.counts.notCounted == 0)
         #expect(Self.result(context, filter: .notCounted).rows.isEmpty)
-        withKnownIssue("Token Settings still prices through the legacy rows") {
-            #expect(row?.status == .notCounted)
-            #expect(row.map { $0.value == nil } == true)
-        }
+        #expect(row?.status == .notCounted)
+        #expect(row.map { $0.value == nil } == true)
     }
 
     /// F1: the filter value is the larger of gross and debt, so a hedged asset with a $0.50 net is
@@ -189,10 +177,8 @@ struct TokenSettingsSeamTests {
         let context = Fixture.context(tokens: [supply, borrow], livePricesUSD: ["hedged-coin": 100])
         let row = Self.result(context).rows.first
 
-        withKnownIssue("Token Settings still prices through the legacy rows") {
-            #expect(row?.status == .priced)
-            #expect(row?.value == Fixture.decimal("0.5"))
-        }
+        #expect(row?.status == .priced)
+        #expect(row?.value == Fixture.decimal("0.5"))
     }
 
     /// T1 units: USD prices go through the rate once, and the dust threshold stays $1 at any rate.
@@ -209,15 +195,13 @@ struct TokenSettingsSeamTests {
             livePricesUSD: ["small-coin": Fixture.decimal("0.8"), "above-coin": Fixture.decimal("1.5"), "live-coin": 5])
         let rows = Self.rowsByAsset(Self.result(context))
 
-        withKnownIssue("Token Settings still prices through the legacy rows") {
-            #expect(rows[small.assetId]?.value == Fixture.decimal("0.4"))
-            #expect(rows[small.assetId]?.status == .dust)
-            #expect(rows[above.assetId]?.value == Fixture.decimal("0.75"))
-            #expect(rows[above.assetId]?.status == .priced)
-            #expect(rows[manual.assetId]?.value == 10)
-            #expect(rows[live.assetId]?.value == Fixture.decimal("7.5"))
-            #expect(rows[live.assetId]?.pricingSource == .live)
-        }
+        #expect(rows[small.assetId]?.value == Fixture.decimal("0.4"))
+        #expect(rows[small.assetId]?.status == .dust)
+        #expect(rows[above.assetId]?.value == Fixture.decimal("0.75"))
+        #expect(rows[above.assetId]?.status == .priced)
+        #expect(rows[manual.assetId]?.value == 10)
+        #expect(rows[live.assetId]?.value == Fixture.decimal("7.5"))
+        #expect(rows[live.assetId]?.pricingSource == .live)
     }
 
     /// AGENT-DECIDED 11: the manual-price count and filter read the override, so an ignored asset with

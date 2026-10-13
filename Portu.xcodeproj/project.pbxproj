@@ -261,6 +261,7 @@
 		F293A6B74EE8B7AC2D04F822 /* CurrencyConversionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37E2A3E671D1FD2E10EB6F2F /* CurrencyConversionContext.swift */; };
 		F3113DE9EBAB60809E13BCE8 /* DebugServerTCATests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA21DD6AE3692FD31222B94D /* DebugServerTCATests.swift */; };
 		F324375BCB6BF7F020DD8418 /* ConcurrentFailureLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BB1DDA1DAA05711E1112663 /* ConcurrentFailureLog.swift */; };
+		F3DEF20D0698D9C8324CB5AC /* TokenSettingsFeature+Rows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B7FE9B27D4FED8093683323 /* TokenSettingsFeature+Rows.swift */; };
 		F4403C41A6D97B5EB2DCC95C /* ReleaseAutomationAppcastTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D0708A3CAD107615F1558A8 /* ReleaseAutomationAppcastTests.swift */; };
 		F63018E91353B31B5904583A /* OverviewDustRateSeamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A869D8D4099A6D34ABCD5A7C /* OverviewDustRateSeamTests.swift */; };
 		F6442824A5D51C861186C713 /* DisplayCurrencyPreferenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2ED9DEF3DC327EB98AD8CBC /* DisplayCurrencyPreferenceTests.swift */; };
@@ -363,6 +364,7 @@
 		3AAFE42584C56DC967627234 /* PortfolioCategoryWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioCategoryWriter.swift; sourceTree = "<group>"; };
 		3B1C47C3140CABD3A082439E /* CategorySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategorySettingsView.swift; sourceTree = "<group>"; };
 		3B7737310B4FEA582940D4E0 /* SyncEngineSnapshotRetentionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineSnapshotRetentionTests.swift; sourceTree = "<group>"; };
+		3B7FE9B27D4FED8093683323 /* TokenSettingsFeature+Rows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TokenSettingsFeature+Rows.swift"; sourceTree = "<group>"; };
 		3BA60071A304587735578219 /* DebugServerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugServerTests.swift; sourceTree = "<group>"; };
 		3C33F5785494BB479A75F7E0 /* PortfolioAnalyticsScopeFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioAnalyticsScopeFactoryTests.swift; sourceTree = "<group>"; };
 		3DB98DDCA90C6372DFE14AC8 /* ValuationSources+AllAssets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ValuationSources+AllAssets.swift"; sourceTree = "<group>"; };
@@ -839,6 +841,7 @@
 				7866868ACC3675760E807169 /* TokenSettingsAggregate.swift */,
 				97271DF343FF3BCB2234A40D /* TokenSettingsFeature.swift */,
 				8391D55809DB666FE792AD77 /* TokenSettingsFeature+Helpers.swift */,
+				3B7FE9B27D4FED8093683323 /* TokenSettingsFeature+Rows.swift */,
 				AF501A47E70AF0FF687F80D9 /* TokenSettingsRow.swift */,
 				3E6FF9588E006CC2658730D6 /* TokenSettingsView.swift */,
 				6C46DC75D0866A55E3AE6B63 /* UpdatesSettingsView.swift */,
@@ -1255,6 +1258,7 @@
 				446DB5318394D5247E6A5316 /* TokenPricingOverrideWriter.swift in Sources */,
 				D6029E2BDCA1E820C3C19471 /* TokenSettingsAggregate.swift in Sources */,
 				50A832CF14AB57672831ACD4 /* TokenSettingsFeature+Helpers.swift in Sources */,
+				F3DEF20D0698D9C8324CB5AC /* TokenSettingsFeature+Rows.swift in Sources */,
 				3E9FAAECCAB6AD25EDF404CE /* TokenSettingsFeature.swift in Sources */,
 				B15A829AC4BE771ECBA38995 /* TokenSettingsRow.swift in Sources */,
 				E5C3228B97C0A91C005A2783 /* TokenSettingsView.swift in Sources */,

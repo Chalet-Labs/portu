@@ -100,8 +100,7 @@ struct TokenSettingsView: View {
             filter: selectedFilter,
             searchText: searchText,
             currency: appState.selectedCurrency,
-            limit: TokenSettingsFeature.displayLimit,
-            displayPrices: appState.prices)
+            limit: TokenSettingsFeature.displayLimit)
     }
 
     private var dashboardControls: some View {
@@ -293,7 +292,8 @@ private struct TokenSettingsCountsBar: View {
             count("All", counts.all)
             count("Unpriced", counts.unpriced)
             count("Dust", counts.belowThreshold)
-            count("Ignored", counts.ignored)
+            count(TokenSettingsLabels.ignored, counts.ignored)
+            count(TokenSettingsLabels.notCounted, counts.notCounted)
             count("Manual", counts.manualPrice)
             count("Mapped", counts.mappedPriceSource)
         }

@@ -36,14 +36,13 @@ struct TokenSettingsRow: Equatable, Identifiable {
     let assetId: UUID
     let symbol: String
     let name: String
+    /// Σ role-signed amounts of the counted tokens.
     let amount: Decimal
-    let price: Decimal
-    /// `nil` for an ignored asset, which is listed with no value.
+    /// Σ contributions; `nil` for an ignored asset, which is listed with no value.
     let value: Decimal?
     let portfolioCategory: PortfolioCategorySnapshot
     /// `nil` (shown "—") when no counted token decides a source.
     let pricingSource: TokenPricingSource?
-    let visibilityStatus: TokenVisibilityStatus
     /// F1, independent of the toggles; `alwaysShow` is its own flag.
     let status: RowStatus
     let alwaysShow: Bool
@@ -51,7 +50,7 @@ struct TokenSettingsRow: Equatable, Identifiable {
     let isIgnored: Bool
     let coinGeckoId: String?
     let logoURL: String?
-    /// Currency the `price` and `value` are denominated in (the display currency).
+    /// Currency the `value` is denominated in (the display currency).
     let currency: FiatCurrency
     let override: TokenPricingOverrideSnapshot?
 
@@ -60,11 +59,9 @@ struct TokenSettingsRow: Equatable, Identifiable {
         symbol: String,
         name: String,
         amount: Decimal,
-        price: Decimal,
         value: Decimal?,
         portfolioCategory: PortfolioCategorySnapshot,
         pricingSource: TokenPricingSource?,
-        visibilityStatus: TokenVisibilityStatus,
         status: RowStatus,
         alwaysShow: Bool,
         isIgnored: Bool,
@@ -77,11 +74,9 @@ struct TokenSettingsRow: Equatable, Identifiable {
         self.symbol = symbol
         self.name = name
         self.amount = amount
-        self.price = price
         self.value = value
         self.portfolioCategory = portfolioCategory
         self.pricingSource = pricingSource
-        self.visibilityStatus = visibilityStatus
         self.status = status
         self.alwaysShow = alwaysShow
         self.isIgnored = isIgnored
@@ -217,26 +212,20 @@ enum TokenSettingsFeature {
         return true
     }
 
-    /// The Token Settings list over the active accounts' context: every asset row, never only the
-    /// visible ones, then the search, the filter and the cap. Live prices still come from the
-    /// display-currency book the screen read before.
+    /// The Token Settings list over the active accounts' context: the module's asset rows (the
+    /// Assets tab's list), every row and never only the visible ones, then the search, the filter
+    /// and the cap. The counts cover every row the search matches.
     static func result(
         _ context: ValuationContext,
         filter: TokenSettingsFilter,
         searchText: String,
         currency: FiatCurrency = .default,
-        limit: Int = displayLimit,
-        displayPrices: [String: Decimal] = [:]) -> TokenSettingsResult {
-        rows(
-            tokens: context.inputs.map(\.token),
-            prices: displayPrices,
-            overrides: context.overrides,
-            settings: context.settings,
-            filter: filter,
-            searchText: searchText,
-            currency: currency,
-            usdToDisplayRate: context.usdToDisplayRate,
-            limit: limit)
+        limit: Int = displayLimit) -> TokenSettingsResult {
+        let overrideMap = TokenPricingOverrideFeature.overridesByAssetId(context.overrides)
+        let rows = AllAssetsFeature.assetList(context.valuation(), settings: context.settings).rows.compactMap { row in
+            TokenSettingsRow(row, override: overrideMap[row.key], currency: currency, rate: context.usdToDisplayRate)
+        }
+        return present(rows, filter: filter, searchText: searchText, limit: limit)
     }
 
     static func rows(
@@ -253,7 +242,7 @@ enum TokenSettingsFeature {
         // Live prices arrive already in the display currency; manual overrides and the dust
         // threshold are canonical USD. Convert those so every row value shares one currency.
         let rate = usdToDisplayRate > 0 ? usdToDisplayRate : 1
-        let searchedRows = aggregateTokens(tokens).map { token in
+        let rows = aggregateTokens(tokens).map { token in
             makeRow(
                 token: token,
                 prices: prices,
@@ -262,10 +251,19 @@ enum TokenSettingsFeature {
                 currency: currency,
                 usdToDisplayRate: rate)
         }
-        .filter { row in
-            matchesSearch(row: row, searchText: searchText)
-        }
-        .sorted(by: sortRows)
+        return present(rows, filter: filter, searchText: searchText, limit: limit)
+    }
+
+    private static func present(
+        _ rows: [TokenSettingsRow],
+        filter: TokenSettingsFilter,
+        searchText: String,
+        limit: Int) -> TokenSettingsResult {
+        let searchedRows = rows
+            .filter { row in
+                matchesSearch(row: row, searchText: searchText)
+            }
+            .sorted(by: sortRows)
 
         let counts = counts(for: searchedRows)
         let filteredRows = searchedRows.filter { row in
@@ -320,11 +318,6 @@ enum TokenSettingsFeature {
         settings: TokenDashboardSettings,
         currency: FiatCurrency = .default,
         usdToDisplayRate: Decimal = 1) -> TokenSettingsRow {
-        let price = resolvedDisplayPrice(
-            token: token,
-            prices: prices,
-            override: override,
-            usdToDisplayRate: usdToDisplayRate)
         let value = resolvedDisplayValue(
             token: token,
             prices: prices,
@@ -343,11 +336,9 @@ enum TokenSettingsFeature {
             symbol: token.symbol,
             name: token.name,
             amount: token.amount,
-            price: price ?? 0,
             value: value ?? 0,
             portfolioCategory: token.portfolioCategory,
             pricingSource: source,
-            visibilityStatus: status,
             status: rowStatus(status),
             alwaysShow: override?.alwaysShow == true && !isIgnored,
             isIgnored: isIgnored,

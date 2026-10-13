@@ -46,23 +46,17 @@ struct TokenSettingsFeatureTests {
         #expect(eligible.map(\.symbol) == ["VISIBLE"])
     }
 
-    @Test func `settings rows treat sync time value without live or manual price as unpriced`() throws {
+    /// Flipped: a sync-only token is valued at its sync value with the Sync-time source (spec S8,
+    /// V1.5). Number changes → Token Settings: "sync-only tokens are valued with the Sync-time source".
+    @Test func `settings rows value a token with no live or manual price at its sync value`() throws {
         let syncOnly = token(symbol: "SYNC", amount: 2, usdValue: 1000)
 
-        let result = TokenSettingsFeature.rows(
-            tokens: [syncOnly],
-            prices: [:],
-            overrides: [],
-            settings: .defaults,
-            filter: .all,
-            searchText: "",
-            limit: 100)
+        let result = settingsResult(tokens: [syncOnly])
 
         let row = try #require(result.rows.first)
-        #expect(row.price == 0)
-        #expect(row.value == 0)
-        #expect(row.pricingSource == .unpriced)
-        #expect(row.visibilityStatus == .unpriced)
+        #expect(row.value == 1000)
+        #expect(row.pricingSource == .syncTime)
+        #expect(row.status == .priced)
     }
 
     @Test func `manual price and always show make low value tokens dashboard eligible`() {
@@ -110,21 +104,17 @@ struct TokenSettingsFeatureTests {
         ]
 
         let entries = TokenSettingsFeature.applyPriceOverrides(to: [mapped], overrides: overrides)
-        let result = TokenSettingsFeature.rows(
+        let result = settingsResult(
             tokens: [mapped],
-            prices: ["old-map": 1, "new-map": 2],
             overrides: overrides,
-            settings: .defaults,
-            filter: .all,
-            searchText: "",
-            limit: 100)
+            livePricesUSD: ["old-map": 1, "new-map": 2])
 
         let row = try #require(result.rows.first)
         #expect(entries.first?.coinGeckoId == "new-map")
-        #expect(row.price == decimal("3.50"))
         #expect(row.value == 7)
         #expect(row.pricingSource == .manual)
-        #expect(row.visibilityStatus == .visible)
+        #expect(row.status == .priced)
+        #expect(row.coinGeckoId == "new-map")
     }
 
     @Test func `identity mappings apply coingecko ids without writing user overrides`() {
@@ -147,69 +137,24 @@ struct TokenSettingsFeatureTests {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
         let local = token(symbol: "LOCAL", amount: 2, usdValue: 0, onchainIdentity: identity)
 
-        let result = TokenSettingsFeature.rows(
-            tokens: [local],
-            prices: [identity.historicalPriceID: decimal("1.50")],
-            overrides: [],
-            settings: .defaults,
-            filter: .all,
-            searchText: "",
-            limit: 100)
+        let result = settingsResult(tokens: [local], livePricesUSD: [identity.historicalPriceID: decimal("1.50")])
 
         let row = try #require(result.rows.first)
-        #expect(row.price == decimal("1.50"))
         #expect(row.value == 3)
         #expect(row.pricingSource == .live)
-        #expect(row.visibilityStatus == .visible)
+        #expect(row.status == .priced)
     }
 
     @Test func `settings rows treat implausible onchain live prices as unpriced`() throws {
         let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0x000000000000000000000000000000000000dead")
         let local = token(symbol: "LOCAL", amount: 1_000_000_000_000_000_000, usdValue: 5, onchainIdentity: identity)
 
-        let result = TokenSettingsFeature.rows(
-            tokens: [local],
-            prices: [identity.historicalPriceID: 1],
-            overrides: [],
-            settings: .defaults,
-            filter: .all,
-            searchText: "",
-            limit: 100)
+        let result = settingsResult(tokens: [local], livePricesUSD: [identity.historicalPriceID: 1])
 
         let row = try #require(result.rows.first)
-        #expect(row.price == 0)
         #expect(row.value == 0)
         #expect(row.pricingSource == .unpriced)
-        #expect(row.visibilityStatus == .unpriced)
-    }
-
-    @Test func `settings rows apply search and cap displayed matches to one hundred`() {
-        let tokens = (0 ..< 120).map { index in
-            token(
-                assetId: uuid(index),
-                symbol: String(format: "ROW%03d", index),
-                coinGeckoId: "row-\(index)",
-                amount: 1,
-                usdValue: 2)
-        }
-        let prices = Dictionary(uniqueKeysWithValues: tokens.compactMap { token in
-            token.coinGeckoId.map { ($0, Decimal(2)) }
-        })
-
-        let result = TokenSettingsFeature.rows(
-            tokens: tokens,
-            prices: prices,
-            overrides: [],
-            settings: .defaults,
-            filter: .all,
-            searchText: "row",
-            limit: 100)
-
-        #expect(result.totalMatches == 120)
-        #expect(result.rows.count == 100)
-        #expect(result.rows.first?.symbol == "ROW000")
-        #expect(result.rows.last?.symbol == "ROW099")
-        #expect(result.counts.all == 120)
+        #expect(row.status == .unpriced)
     }
 
     @Test func `settings filters classify rows by pricing and override state`() {
@@ -227,37 +172,26 @@ struct TokenSettingsFeatureTests {
         ]
         let tokens = [priced, unpriced, dust, ignored, manual, mapped]
 
-        let all = TokenSettingsFeature.rows(
-            tokens: tokens,
-            prices: ["priced": 2, "dust": 0.25, "ignored": 10, "new-map": 3],
-            overrides: overrides,
-            settings: .defaults,
-            filter: .all,
-            searchText: "",
-            limit: 100)
+        let prices: [String: Decimal] = ["priced": 2, "dust": 0.25, "ignored": 10, "new-map": 3]
+        let all = settingsResult(tokens: tokens, overrides: overrides, livePricesUSD: prices)
 
-        let statuses = Dictionary(uniqueKeysWithValues: all.rows.map { ($0.symbol, $0.visibilityStatus) })
-        #expect(statuses["PRICED"] == .visible)
+        // The status is F1's RowStatus (AGENT-DECIDED 11): Visible reads Priced.
+        let statuses = Dictionary(uniqueKeysWithValues: all.rows.map { ($0.symbol, $0.status) })
+        #expect(statuses["PRICED"] == .priced)
         #expect(statuses["UNPRICED"] == .unpriced)
         #expect(statuses["DUST"] == .dust)
         #expect(statuses["IGNORED"] == .ignored)
-        #expect(statuses["MANUAL"] == .visible)
-        #expect(statuses["MAPPED"] == .visible)
+        #expect(statuses["MANUAL"] == .priced)
+        #expect(statuses["MAPPED"] == .priced)
         #expect(all.counts.all == 6)
         #expect(all.counts.unpriced == 1)
         #expect(all.counts.belowThreshold == 1)
         #expect(all.counts.ignored == 1)
+        #expect(all.counts.notCounted == 0)
         #expect(all.counts.manualPrice == 1)
         #expect(all.counts.mappedPriceSource == 1)
 
-        let manualRows = TokenSettingsFeature.rows(
-            tokens: tokens,
-            prices: ["priced": 2, "dust": 0.25, "ignored": 10, "new-map": 3],
-            overrides: overrides,
-            settings: .defaults,
-            filter: .manualPrice,
-            searchText: "",
-            limit: 100)
+        let manualRows = settingsResult(tokens: tokens, overrides: overrides, livePricesUSD: prices, filter: .manualPrice)
 
         #expect(manualRows.rows.map(\.symbol) == ["MANUAL"])
     }
@@ -276,14 +210,7 @@ struct TokenSettingsFeatureTests {
             amount: 1,
             usdValue: 3500)
 
-        let result = TokenSettingsFeature.rows(
-            tokens: [eth],
-            prices: ["ethereum": 3500],
-            overrides: [],
-            settings: .defaults,
-            filter: .all,
-            searchText: "",
-            limit: 100)
+        let result = settingsResult(tokens: [eth], livePricesUSD: ["ethereum": 3500])
 
         let row = try #require(result.rows.first)
         #expect(row.portfolioCategory == category)
@@ -306,19 +233,11 @@ struct TokenSettingsFeatureTests {
             amount: 2,
             usdValue: 6000)
 
-        let result = TokenSettingsFeature.rows(
-            tokens: [supplied, borrowed],
-            prices: ["ethereum": 3000],
-            overrides: [],
-            settings: .defaults,
-            filter: .all,
-            searchText: "",
-            limit: 100)
+        let result = settingsResult(tokens: [supplied, borrowed], livePricesUSD: ["ethereum": 3000])
 
         let row = try #require(result.rows.first)
         #expect(result.rows.count == 1)
         #expect(row.amount == 8)
-        #expect(row.price == 3000)
         #expect(row.value == 24000)
     }
 
@@ -368,69 +287,70 @@ struct TokenSettingsFeatureTests {
         let manual = token(symbol: "MAN", amount: 2, usdValue: 0)
         let override = TokenPricingOverrideSnapshot(assetId: manual.assetId, manualPriceUSD: 10)
 
-        let result = TokenSettingsFeature.rows(
-            tokens: [manual],
-            prices: [:],
-            overrides: [override],
-            settings: .defaults,
-            filter: .all,
-            searchText: "",
-            currency: .eur,
-            usdToDisplayRate: decimal("0.9"),
-            limit: 100)
+        let result = settingsResult(tokens: [manual], overrides: [override], rate: decimal("0.9"), currency: .eur)
 
         let row = try #require(result.rows.first)
         #expect(row.pricingSource == .manual)
         #expect(row.currency == .eur)
-        #expect(row.price == decimal("9"))
         #expect(row.value == decimal("18"))
     }
 
-    @Test func `settings rows keep live display currency prices untouched`() throws {
+    /// Flipped: the live book is USD and goes through the rate once (spec I1, T1). Number changes →
+    /// Token Settings: "Values, sources and statuses come from the shared valuation".
+    @Test func `settings rows convert live usd prices into the display currency once`() throws {
         let live = token(symbol: "LIV", coinGeckoId: "liv", amount: 3, usdValue: 0)
 
-        let result = TokenSettingsFeature.rows(
-            tokens: [live],
-            prices: ["liv": decimal("5")],
-            overrides: [],
-            settings: .defaults,
-            filter: .all,
-            searchText: "",
-            currency: .eur,
-            usdToDisplayRate: decimal("0.9"),
-            limit: 100)
+        let result = settingsResult(tokens: [live], livePricesUSD: ["liv": decimal("5")], rate: decimal("0.9"), currency: .eur)
 
         let row = try #require(result.rows.first)
         #expect(row.pricingSource == .live)
         #expect(row.currency == .eur)
-        #expect(row.price == decimal("5"))
-        #expect(row.value == decimal("15"))
+        #expect(row.value == decimal("13.5"))
     }
 
-    @Test func `settings dust threshold scales with the display rate`() throws {
+    /// Flipped: the dust threshold is a USD amount, never scaled by the rate (spec T1, F2.4), so a
+    /// $0.75 token is dust at any display rate.
+    @Test func `settings dust threshold stays usd at any display rate`() throws {
         let small = token(symbol: "SML", coinGeckoId: "sml", amount: 1, usdValue: 0)
         let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
 
-        let result = TokenSettingsFeature.rows(
+        let result = settingsResult(
             tokens: [small],
-            prices: ["sml": decimal("0.75")],
-            overrides: [],
             settings: settings,
-            filter: .all,
-            searchText: "",
-            currency: .eur,
-            usdToDisplayRate: decimal("0.5"),
-            limit: 100)
+            livePricesUSD: ["sml": decimal("0.75")],
+            rate: decimal("0.5"),
+            currency: .eur)
 
         let row = try #require(result.rows.first)
-        #expect(row.value == decimal("0.75"))
-        #expect(row.visibilityStatus == .visible)
+        #expect(row.value == decimal("0.375"))
+        #expect(row.status == .dust)
     }
 
     @Test func `currency formatter uses the display currency symbol`() {
         #expect(TokenSettingsFormat.currency(decimal("12.5"), currency: .usd) == "$ 12.5")
         #expect(TokenSettingsFormat.currency(decimal("12.5"), currency: .eur) == "€ 12.5")
         #expect(TokenSettingsFormat.currency(decimal("12.5"), currency: .chf) == "CHF 12.5")
+    }
+
+    /// The Token Settings seam over ad-hoc tokens in one wallet.
+    private func settingsResult(
+        tokens: [TokenEntry],
+        overrides: [TokenPricingOverrideSnapshot] = [],
+        settings: TokenDashboardSettings = .defaults,
+        livePricesUSD: [String: Decimal] = [:],
+        rate: Decimal = 1,
+        currency: FiatCurrency = .default,
+        filter: TokenSettingsFilter = .all) -> TokenSettingsResult {
+        TokenSettingsFeature.result(
+            PortfolioValuationFixture.context(
+                tokens: tokens,
+                overrides: overrides,
+                settings: settings,
+                rate: rate,
+                livePricesUSD: livePricesUSD),
+            filter: filter,
+            searchText: "",
+            currency: currency)
     }
 
     private func token(
