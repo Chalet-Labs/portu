@@ -63,7 +63,7 @@ enum ExposureTableEntry<Row: ExposureRow>: Identifiable, Equatable {
     }
 }
 
-extension ExposureFeature {
+enum ExposureFeature {
     /// The Exposure page from one valuation of the context: a category table and an asset table,
     /// each a net list whose rows carry spot, liabilities and net (A7) and end with the table's
     /// hidden line; the summary over every valued token; and the polled IDs (S12).
@@ -86,7 +86,6 @@ extension ExposureFeature {
                 return CategoryExposure(
                     id: row.key.id.uuidString,
                     name: row.key.name,
-                    semanticRole: row.key.semanticRole,
                     spotAssets: totals.gross,
                     liabilities: totals.debt,
                     shareOfSpot: categories.ratio(of: row, to: .gross))
@@ -97,8 +96,6 @@ extension ExposureFeature {
                 return AssetExposure(
                     id: row.key,
                     symbol: info.symbol,
-                    category: info.category,
-                    portfolioCategory: info.portfolioCategory,
                     spotAssets: totals.gross,
                     liabilities: totals.debt,
                     logoURL: info.logoURL,
@@ -148,8 +145,6 @@ extension ExposureFeature {
     private struct AssetRowInfo {
         let id: UUID
         let symbol: String
-        let category: AssetCategory
-        let portfolioCategory: PortfolioCategorySnapshot
         let logoURL: String?
 
         init?(_ row: DashboardRow<UUID>) {
@@ -158,8 +153,6 @@ extension ExposureFeature {
             guard let first = tokens.first else { return nil }
             self.id = row.key
             self.symbol = first.symbol
-            self.category = first.category
-            self.portfolioCategory = first.portfolioCategory
             self.logoURL = tokens.lazy.compactMap(\.logoURL).first
         }
     }

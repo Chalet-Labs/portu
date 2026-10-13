@@ -10,7 +10,7 @@ extension EnvironmentValues {
 }
 
 /// Publishes the stored historical prices to the content: the USD closes and fractions valuation
-/// reads, and the display-currency closes Assets, Exposure and Performance still read.
+/// reads, and the display-currency closes Assets and Performance still read.
 struct HistoricalPricesProvider<Content: View>: View {
     @Environment(AppState.self) private var appState
 
