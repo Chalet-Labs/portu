@@ -218,6 +218,7 @@ extension OverviewFeature {
             watchlist,
             tokens: tokens,
             assets: assets,
+            context: context,
             ignoredAssets: ignoredAssets))
         for coinGeckoId in watchlist where !skipped.contains(coinGeckoId) && !seenRowIDs.contains(coinGeckoId) {
             seenRowIDs.insert(coinGeckoId)
@@ -240,20 +241,28 @@ extension OverviewFeature {
 
     /// The user ignores an asset, not a coin: a watched coin is hidden only when at least one asset
     /// is priced under it and every such asset is ignored. Priced under it are the asset candidates
-    /// carrying the ID and the assets of held tokens whose non-onchain price ID is the ID (identity
-    /// mappings included). `ignoredAssets` follows the module's rule for which override applies.
+    /// carrying the ID and the assets of valued tokens, ignored ones included, whose non-onchain
+    /// market price ID is the ID (identity mappings included; a manual price changes the value, not
+    /// the coin). `ignoredAssets` follows the module's rule for which override applies.
     private static func ignoredWatchlistIDs(
         _ watchlist: [String],
         tokens: [ValuedToken],
         assets: [OverviewAssetCandidate],
+        context: OverviewValuationContext,
         ignoredAssets: Set<UUID>) -> Set<String> {
+        let overrides = TokenPricingOverrideFeature.overridesByAssetId(context.overrides)
+        let mappings = TokenIdentityMappingFeature.mappingsByIdentity(context.mappings)
         var pricedAssets: [String: Set<UUID>] = [:]
         for asset in assets {
             guard let coinGeckoId = OverviewWatchlistStore.normalizedID(asset.coinGeckoId) else { continue }
             pricedAssets[coinGeckoId, default: []].insert(asset.id)
         }
         for token in tokens {
-            guard let coinGeckoId = TokenIdentityMappingFeature.nonOnchainPriceID(token.priceID) else { continue }
+            let marketPriceID = TokenPricingOverrideFeature.marketPriceID(
+                token: token.token,
+                override: overrides[token.token.assetId],
+                mappingsByIdentity: mappings)
+            guard let coinGeckoId = TokenIdentityMappingFeature.nonOnchainPriceID(marketPriceID) else { continue }
             pricedAssets[coinGeckoId, default: []].insert(token.token.assetId)
         }
         return Set(watchlist.filter { coinGeckoId in

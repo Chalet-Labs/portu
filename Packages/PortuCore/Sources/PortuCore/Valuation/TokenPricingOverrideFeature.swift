@@ -43,7 +43,16 @@ public enum TokenPricingOverrideFeature {
         if sanitizedManualPrice(override?.manualPriceUSD) != nil {
             return nil
         }
-        return TokenIdentityMappingFeature.priceID(
+        return marketPriceID(token: token, override: override, mappingsByIdentity: mappingsByIdentity)
+    }
+
+    /// The ID the market quotes the token under, whatever its manual price: a manual price changes
+    /// the value, not the coin.
+    public static func marketPriceID(
+        token: TokenEntry,
+        override: TokenPricingOverrideSnapshot?,
+        mappingsByIdentity: [OnchainTokenIdentity: TokenIdentityMappingSnapshot] = [:]) -> String? {
+        TokenIdentityMappingFeature.priceID(
             coinGeckoId: resolvedCoinGeckoID(token: token, override: override, mappingsByIdentity: mappingsByIdentity),
             onchainIdentity: token.onchainIdentity)
     }

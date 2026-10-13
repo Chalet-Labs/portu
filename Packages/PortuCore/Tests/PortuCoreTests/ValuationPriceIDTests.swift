@@ -96,6 +96,24 @@ struct ValuationPriceIDTests {
         #expect(TokenPricingOverrideFeature.resolvedPriceID(token: token, override: Fixture.manual(token, price: 5)) == nil)
     }
 
+    /// A manual price changes the value, not the coin: the market price ID still resolves by I3,
+    /// mappings included, and a platform chain keeps its onchain ID over the mapped one.
+    @Test(arguments: [(Chain.degen, true), (Chain.ethereum, false)])
+    func `market price id ignores the manual price`(chain: Chain, isMapped: Bool) {
+        let identity = Fixture.onchain(chain, "0xfeed")
+        let token = Fixture.token(onchainIdentity: identity)
+        let mappings = TokenIdentityMappingFeature.mappingsByIdentity([
+            TokenIdentityMappingSnapshot(identity: identity, coinGeckoId: "mapped-id")
+        ])
+        let override = Fixture.manual(token, price: 5)
+
+        #expect(TokenPricingOverrideFeature.resolvedPriceID(token: token, override: override, mappingsByIdentity: mappings) == nil)
+        #expect(TokenPricingOverrideFeature.marketPriceID(
+            token: token,
+            override: override,
+            mappingsByIdentity: mappings) == (isMapped ? "mapped-id" : identity.historicalPriceID))
+    }
+
     @Test(arguments: [(Decimal?.none, Decimal?.none), (0, nil), (-3, nil), (4, 4)])
     func `manual prices that are not positive are discarded`(price: Decimal?, kept: Decimal?) {
         #expect(TokenPricingOverrideFeature.sanitizedManualPrice(price) == kept)

@@ -352,17 +352,57 @@ struct OverviewWatchlistSeamTests {
         #expect(rows(context, watchlistIDs: ["degen-base"]).isEmpty)
     }
 
+    /// A manual price changes the value, not the coin: the ignored DEGEN (mapped to `degen-base`) and
+    /// the ignored native ETH are still priced under their market IDs, so the ignore hides the coin.
+    @Test(arguments: [
+        (OnchainTokenIdentity(chain: .degen, contractAddress: "0xDegen"), "degen-base"),
+        (OnchainTokenIdentity.native(on: .arbitrum), "ethereum")
+    ])
+    func `watchlist hides a watched coin that only an ignored manually priced holding prices`(
+        identity: OnchainTokenIdentity,
+        coinGeckoId: String) {
+        let holding = UUID()
+        let degen = OnchainTokenIdentity(chain: .degen, contractAddress: "0xDegen")
+        let context = Fixture.context(
+            tokens: [token(assetId: holding, symbol: "HOLD", amount: 10, usdValue: 95, onchainIdentity: identity)],
+            overrides: [TokenPricingOverrideSnapshot(assetId: holding, manualPriceUSD: 2, isIgnored: true)],
+            mappings: [TokenIdentityMappingSnapshot(identity: degen, coinGeckoId: "degen-base")],
+            livePricesUSD: [coinGeckoId: Fixture.decimal("0.01")])
+
+        #expect(rows(context, watchlistIDs: [coinGeckoId]).isEmpty)
+    }
+
+    /// On a chain with a CoinGecko platform the market ID stays the onchain one (I3), so a mapping
+    /// to the watched coin does not tie the ignored holding to it.
+    @Test func `watchlist keeps a watched coin a manually priced platform chain holding is only mapped to`() {
+        let holding = UUID()
+        let identity = OnchainTokenIdentity(chain: .ethereum, contractAddress: "0xMapped")
+        let context = Fixture.context(
+            tokens: [token(assetId: holding, symbol: "MAP", amount: 10, usdValue: 95, onchainIdentity: identity)],
+            overrides: [TokenPricingOverrideSnapshot(assetId: holding, manualPriceUSD: 2, isIgnored: true)],
+            mappings: [TokenIdentityMappingSnapshot(identity: identity, coinGeckoId: "mapped-coin")],
+            livePricesUSD: ["mapped-coin": 3])
+
+        #expect(rows(context, watchlistIDs: ["mapped-coin"]).map(\.coinGeckoId) == ["mapped-coin"])
+    }
+
     /// The only asset candidate under `degen-base` is ignored, but a non-ignored DEGEN holding outside
-    /// the top held rows is priced under it through its mapping, so the watched coin stays.
-    @Test func `watchlist shows a watched coin a non ignored mapped holding prices`() {
+    /// the top held rows is priced under it through its mapping, so the watched coin stays. A manual
+    /// price on the holding (second case) does not change the coin it is priced under.
+    @Test(arguments: [nil, Fixture.decimal("0.001")])
+    func `watchlist shows a watched coin a non ignored mapped holding prices`(manualPrice: Decimal?) {
         let ignored = UUID()
+        let degen = UUID()
         let identity = OnchainTokenIdentity(chain: .degen, contractAddress: "0xDegen")
         let context = Fixture.context(
             tokens: [
                 token(symbol: "BTC", coinGeckoId: "bitcoin", amount: Fixture.decimal("0.1"), usdValue: 7000),
-                token(symbol: "DEGEN", amount: 10000, usdValue: 95, onchainIdentity: identity)
+                token(assetId: degen, symbol: "DEGEN", amount: 10000, usdValue: 95, onchainIdentity: identity)
             ],
-            overrides: [TokenPricingOverrideSnapshot(assetId: ignored, isIgnored: true)],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: ignored, isIgnored: true),
+                TokenPricingOverrideSnapshot(assetId: degen, manualPriceUSD: manualPrice)
+            ],
             mappings: [TokenIdentityMappingSnapshot(identity: identity, coinGeckoId: "degen-base")],
             livePricesUSD: ["bitcoin": 70000, "degen-base": Fixture.decimal("0.01")])
 
