@@ -49,7 +49,8 @@
   3. a chain with no CoinGecko platform: the CoinGecko ID if there is one, else the onchain price ID
   4. no onchain identity: the CoinGecko ID
 - The module never tries another ID when the resolved one has no price. Solana contract case is preserved.
-- A manual price makes the price ID irrelevant.
+- A manual price makes the price ID irrelevant to the valuation.
+- The **market price ID** (`TokenPricingOverrideFeature.marketPriceID`) resolves the same way but disregards a manual price: a manual price changes the value, not the coin. The S3 watchlist ignore rule uses it.
 
 ## Per-token valuation
 
@@ -263,7 +264,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
   - A watched coin that is not held shows its live price, else its latest close, × rate, plus its merged fraction.
   - Ignored assets are excluded from the held rows **and** from the watched coins. Decided 2026-10-12.
     - The user ignores an asset, not a coin. A watched coin is hidden only when at least one asset is priced under its ID and **every** asset priced under it is ignored, even when it is on the watchlist.
-    - Priced under the ID: every asset whose CoinGecko ID (override applied) is that ID, and the asset of every held token whose resolved non-onchain price ID is that ID (identity mappings included).
+    - Priced under the ID: every asset whose CoinGecko ID (override applied) is that ID, and the asset of every valued token, ignored ones included, whose non-onchain market price ID (I3, identity mappings included) is that ID.
     - Ignored follows the override that applies to the asset (lowest override ID wins), as in valuation.
     - Example: native USDC and bridged USDC.e are both priced under `usd-coin`. Ignoring USDC.e keeps a watched `usd-coin`; ignoring both hides it.
     - A shown watched coin describes the preferred non-ignored asset whose CoinGecko ID is its ID. Only when every such asset is ignored (the coin shows through a held, non-ignored token, e.g. a mapped one) does it fall back to the preferred asset, as before.
@@ -342,6 +343,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - **Selection value:** the module value, or `|usdValue|` when the module value is 0 (`ValuedToken.selectionValue`). Polling ranks by it (`OverviewFeature.pricePollingIDs`); backfill uses it for eligibility (`HistoricalPriceBackfillFeature.shouldIncludeToken`) and keeps its own price-ID ordering.
 - **Polling:**
   - It keeps today's rank-by-value top N plus the watchlist.
+  - A token is a candidate while it is in a visible row (F2) of the net asset-row list, which holds every token the tabs, Key Changes, the donut and the watchlist show, or of the Health list. Outside every such row, only the branch below for tokens with no usable price keeps it. Category slices, the headline, the cards and the hidden line never make a token a candidate.
   - Two copies exist: Overview's (PR a) and Exposure's `dashboardPollingPriceID`, which migrates with Exposure in PR (b).
   - The branch that keeps unpriced onchain IDs in the set stays. A token with an implausible onchain live price stays ranked by its sync value and stays polled, so it can recover.
   - Its ranking semantics belong to #101.
