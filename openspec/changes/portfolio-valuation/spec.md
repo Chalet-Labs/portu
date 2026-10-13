@@ -291,7 +291,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - Rows are sums of contributions per asset, per protocol and per chain. They stop reading `Position.netUSDValue`.
 - Each tab's total equals the Overview net total.
 - Platforms and Networks gain the display filter and the hidden line, as dashboards under rule 3.
-- For an asset with at least one counted token, the Assets row value equals the Token Settings row value.
+- For an asset with at least one counted token, the Assets row value equals the Token Settings row value. The one exception is an unpriced row: the Assets tab values it at 0, while Token Settings shows no value (U4).
 
 ### S6: All Positions (PR b)
 - A card is Σ its tokens' contributions. A section is Σ its cards. A filter-sidebar option is Σ its cards.
@@ -312,7 +312,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - Token Settings uses the **active-accounts** valuation input, like the Assets tab.
 - Each position token is valued by the module. Nothing is netted before pricing.
 - **A row:**
-  - value: Σ its tokens' contributions
+  - value: Σ its tokens' contributions. Following U4, an unpriced row shows no value, and a not-counted row shows its tokens' own value, muted, while counting 0.
   - source: V5
   - status: F1, plus alwaysShow
 - Rows with no counted token (reward-only) show the status **notCounted**.
@@ -430,8 +430,8 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - **Name collisions** the PR lists (not `Position` reads):
   - `StagedPosition.netUSDValue`
   - `HistoricalEstimateSnapshotEntry.netUSDValue`
-  - the `NetworksTab` tuple
-  - the Token Settings aggregate
+
+  PR (b) removes the two other collisions: the `NetworksTab` tuple and the Token Settings aggregate.
 
 ### G3: Verification gate (#116)
 - `just test-packages`
@@ -593,20 +593,26 @@ The PR (b) description lists the commits in order and every intentional number c
   - Liabilities show as a positive amount, on the card and in the row cells (A2).
   - "% of spot" shows "—" when Spot ≤ 0.
   - The Assets pill counts visible rows.
+  - The hidden line's first cell reads "N small balances" (all dust) or "N hidden balances". Its amounts sit in the spot, liabilities and net cells, shown with cents, and it has no "% of spot".
 - **Platforms and Networks:**
   - "# Positions" and "# Networks" count counted, non-ignored tokens.
-  - A platform's name is its lowest non-nil `protocolName`.
+  - A platform's name is its lowest non-nil `protocolName`. A platform with none shows its protocol ID; it used to show "Unknown", which could repeat across rows.
   - Ties break by name, then by key.
   - No total row is rendered.
+  - The hidden line has its label in the first cell, its value, and its share in the Share cell. Its count cells are empty.
 - **Assets tab:**
-  - The clock badge marks the *sync* source only, and a missing price shows "—".
+  - The clock badge marks the *sync* source only, and a missing price shows "—". The badge is labelled "Sync-time price" for VoiceOver.
   - CSV exports the visible rows, with an empty cell for a missing price.
+  - The hidden line's label spans Symbol and Name. Only its Value cell is filled.
 - **Token Settings:**
   - Its status is `RowStatus`, with `alwaysShow` as a separate flag.
   - It gains a *close* source.
   - The manual-price count and filter read the override.
-  - An ignored row shows "—" as its source.
-  - `SettingsView` mounts `HistoricalPricesProvider`, so the Settings window sees closes (S8).
+  - An ignored row shows "—" as its source, as does a not-counted row (V5 gives neither a source).
+  - An ignored asset's Ignored badge, no-value rule, count and filter win over its F1 status, so an ignored reward-only asset counts as Ignored, not Not counted.
+  - Rows sort by value, descending. Rows with no value (ignored, unpriced) come last. Ties break by symbol, then asset ID.
+  - The view builds its context with `ValuationContext.activeAccounts` from its own override and mapping queries, rather than through `ValuationSources`. It already owns the override query and the dashboard settings for its writers.
+  - `SettingsView` mounts `HistoricalPricesProvider`, so the Settings window sees closes (S8). Until the I2 cleanup strips the provider's display-currency work, every Settings tab pays for it.
 - **Accounts:** the tooltip shows on every account, converted at the current rate.
 - **Asset Detail:**
   - Active accounts only.
