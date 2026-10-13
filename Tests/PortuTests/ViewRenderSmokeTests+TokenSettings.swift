@@ -49,12 +49,12 @@ extension ViewRenderSmokeTests {
         try container.mainContext.save()
 
         let texts = try tokenSettingsTexts(TokenSettingsView(), container: container) { $0.contains("ETH") }
-        let ethRow = Array(texts.drop { $0 != "ETH" })
+        let ethRow = Self.rowTexts(texts, symbol: "ETH")
 
         #expect(ethRow.first == "ETH", "\(texts)")
         #expect(ethRow.contains(TokenSettingsLabels.ignored), "\(texts)")
         #expect(ethRow.contains("—"), "\(texts)")
-        #expect(!texts.contains(TokenSettingsFormat.currency(6100, currency: .default)), "\(texts)")
+        #expect(!ethRow.contains { $0.hasPrefix(Self.currencyPrefix) }, "\(ethRow)")
     }
 
     /// U4: a reward-only asset carries the Not counted badge, and the counts bar a Not counted chip.
@@ -97,11 +97,47 @@ extension ViewRenderSmokeTests {
         try container.mainContext.save()
 
         let texts = try tokenSettingsTexts(TokenSettingsView(), container: container) { $0.contains("NOPE") }
-        let unpricedRow = Array(texts.drop { $0 != "NOPE" })
+        let unpricedRow = Self.rowTexts(texts, symbol: "NOPE")
 
         #expect(unpricedRow.first == "NOPE", "\(texts)")
         #expect(unpricedRow.contains(TokenPricingSource.unpriced.rawValue), "\(texts)")
-        #expect(!unpricedRow.contains(TokenSettingsFormat.currency(0, currency: .default)), "\(texts)")
+        #expect(!unpricedRow.contains { $0.hasPrefix(Self.currencyPrefix) }, "\(unpricedRow)")
+    }
+
+    /// S8: the tab lists the active accounts only. OFF is held by an archived account alone, and its
+    /// sync value would price it, so it would show up on any all-accounts input.
+    @Test(.renderedTextReadable) func `token settings leaves out tokens held only by inactive accounts`() throws {
+        let container = try makeContainer()
+        let archived = Account(name: "Archived Wallet", kind: .wallet, dataSource: .zerion, isActive: false)
+        let offline = Asset(symbol: "OFF", name: "Archived Coin", category: .other)
+        container.mainContext.insert(archived)
+        container.mainContext.insert(offline)
+        container.mainContext.insert(Position(
+            positionType: .idle,
+            chain: .ethereum,
+            tokens: [PositionToken(role: .balance, amount: 1, usdValue: 50, asset: offline)],
+            account: archived,
+            syncedAt: Date(timeIntervalSinceReferenceDate: 800_000_000)))
+        try container.mainContext.save()
+
+        let texts = try tokenSettingsTexts(TokenSettingsView(), container: container) {
+            $0.contains("ETH") && $0.contains("USDC")
+        }
+
+        #expect(texts.contains("ETH"), "\(texts)")
+        #expect(texts.contains("USDC"), "\(texts)")
+        #expect(!texts.contains("OFF"), "\(texts)")
+        #expect(!texts.contains("Archived Coin"), "\(texts)")
+    }
+
+    /// The value line is the only text the row formats with the currency symbol; the amount has none.
+    private static let currencyPrefix = "\(FiatCurrency.default.symbol) "
+
+    /// One row's texts: from its symbol up to the next seeded row's symbol.
+    private static func rowTexts(_ texts: [String], symbol: String) -> [String] {
+        let rowSymbols: Set = ["ETH", "USDC", "NOPE", "RWD", "CLS"]
+        let row = texts.drop { $0 != symbol }
+        return [String](row.prefix(1)) + row.dropFirst().prefix { !rowSymbols.contains($0) }
     }
 
     /// Renders tall enough for every row, with the settings on a fresh defaults suite, and reads the
