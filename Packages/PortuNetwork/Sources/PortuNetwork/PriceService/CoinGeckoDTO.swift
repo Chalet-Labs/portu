@@ -164,8 +164,10 @@ nonisolated struct CoinGeckoOnchainTokenMapResponse {
                 chain: Optional(chain),
                 contractAddress: Optional(address))?
                 .contractAddress
-            let normalizedCoinGeckoID = coinGeckoID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard let normalizedAddress, !normalizedCoinGeckoID.isEmpty else {
+            guard
+                let normalizedAddress,
+                let normalizedCoinGeckoID = TokenIdentityMappingFeature.normalizedProviderID(coinGeckoID)
+            else {
                 continue
             }
             result[normalizedAddress] = normalizedCoinGeckoID
