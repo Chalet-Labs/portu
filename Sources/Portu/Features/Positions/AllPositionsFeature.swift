@@ -32,23 +32,19 @@ enum AllPositionsFeature {
     static let walletProtocolName = "Wallet"
 
     /// The page seam: cards, sections and sidebar options from one valuation of the active accounts'
-    /// inputs (A7: net basis; a section and a sidebar option are each Σ their cards).
-    ///
-    /// Transitional: cards and rows still price from `legacyDisplayPrices`, the display-currency
-    /// live book keyed by the raw CoinGecko ID, else the sync value; sections and options still sum
-    /// each card's sync-time total (A6, today's stored `netUSDValue`).
+    /// inputs (A7: net basis). A card is Σ its tokens' contributions; a section and a sidebar option
+    /// are each Σ their cards, summed in USD and converted once. No row is ever hidden.
     static func page(
         _ context: ValuationContext,
         cards infos: [AllPositionsCardInfo],
-        filter: AllPositionsFilter,
-        legacyDisplayPrices: [String: Decimal] = [:]) -> AllPositionsPage {
+        filter: AllPositionsFilter) -> AllPositionsPage {
         let valuation = context.valuation()
         let rate = context.usdToDisplayRate
         let tokensByCard = Dictionary(grouping: valuation.tokens, by: \.position.positionId)
         let totalsByCard = valuation.totals(groupedBy: \.position.positionId)
         let cardTotal = { (info: AllPositionsCardInfo) in totalsByCard[info.id] ?? .zero }
         let sum = { (infos: [AllPositionsCardInfo]) in
-            infos.map(cardTotal).reduce(ValuationTotals.zero, +).display(rate: rate).syncTotal
+            infos.map(cardTotal).reduce(ValuationTotals.zero, +).display(rate: rate).net
         }
 
         let shown = infos.filter(filter.matches)
@@ -60,28 +56,17 @@ enum AllPositionsFeature {
                     title: sectionTitle(type),
                     total: sum(infos),
                     cards: infos.map { info in
-                        let tokens = tokensByCard[info.id] ?? []
-                        return AllPositionsCard(
+                        AllPositionsCard(
                             id: info.id,
                             title: info.protocolName ?? info.positionType.rawValue.capitalized,
                             chain: info.chain,
                             healthFactor: info.healthFactor,
-                            total: tokens.reduce(Decimal.zero) {
-                                $0 + legacySignedValue($1.token, prices: legacyDisplayPrices, rate: rate)
-                            },
-                            rows: tokens.map { token in
-                                AllPositionsRow(
-                                    id: token.tokenId,
-                                    role: token.token.role,
-                                    symbol: token.token.symbol,
-                                    amount: token.token.amount,
-                                    state: .counted,
-                                    value: legacyValue(token.token, prices: legacyDisplayPrices, rate: rate))
-                            })
+                            total: cardTotal(info).display(rate: rate).net,
+                            rows: (tokensByCard[info.id] ?? []).map { row($0, rate: rate) })
                     })
             }
 
-        var typeOptions = [AllPositionsTypeOption(type: nil, label: "All", total: valuation.totals.display(rate: rate).syncTotal)]
+        var typeOptions = [AllPositionsTypeOption(type: nil, label: "All", total: valuation.totals.display(rate: rate).net)]
         for type in PositionType.allCases {
             let ofType = infos.filter { $0.positionType == type }
             guard !ofType.isEmpty else { continue }
@@ -140,21 +125,21 @@ enum AllPositionsFeature {
         return ""
     }
 
-    // MARK: - Transitional
-
-    private static func legacyValue(_ token: TokenEntry, prices: [String: Decimal], rate: Decimal) -> Decimal {
-        if let price = token.coinGeckoId.flatMap({ prices[$0] }) {
-            return token.amount * price
+    /// U4: a counted row shows its signed contribution, a not-counted one (a reward or an amount
+    /// ≤ 0) its own unsigned value; an unpriced or ignored row has no value.
+    private static func row(_ token: ValuedToken, rate: Decimal) -> AllPositionsRow {
+        let shown = token.display(rate: rate)
+        let value: Decimal? = switch token.rowState {
+        case .counted: shown.contribution
+        case .notCounted: shown.value
+        case .unpriced, .ignored: nil
         }
-        return token.usdValue * rate
-    }
-
-    private static func legacySignedValue(_ token: TokenEntry, prices: [String: Decimal], rate: Decimal) -> Decimal {
-        let value = legacyValue(token, prices: prices, rate: rate)
-        return switch token.role {
-        case .borrow: -value
-        case .reward: 0
-        case .balance, .supply, .stake, .lpToken: value
-        }
+        return AllPositionsRow(
+            id: token.tokenId,
+            role: token.token.role,
+            symbol: token.token.symbol,
+            amount: token.token.amount,
+            state: token.rowState,
+            value: value)
     }
 }

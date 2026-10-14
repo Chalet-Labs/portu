@@ -16,7 +16,7 @@ struct AllPositionsView: View {
     }
 
     var body: some View {
-        let page = sources.allPositions(allPositions, filter: filter, legacyDisplayPrices: appState.prices)
+        let page = sources.allPositions(allPositions, filter: filter)
         HSplitView {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {

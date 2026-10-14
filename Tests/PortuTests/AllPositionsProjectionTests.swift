@@ -81,12 +81,10 @@ struct AllPositionsProjectionTests {
             filter: .all)
 
         #expect(page.sections.map(\.type) == [.idle])
-        withKnownIssue("All Positions still sums the stored sync-time totals") {
-            #expect(page.sections.map(\.total) == [3050])
-            #expect(page.sections.flatMap(\.cards).map(\.total) == [3050])
-            #expect(page.sections.flatMap(\.cards).flatMap(\.rows).map(\.value) == [3050])
-            #expect(page.protocolOptions.map(\.total) == [3050])
-        }
+        #expect(page.sections.map(\.total) == [3050])
+        #expect(page.sections.flatMap(\.cards).map(\.total) == [3050])
+        #expect(page.sections.flatMap(\.cards).flatMap(\.rows).map(\.value) == [3050])
+        #expect(page.protocolOptions.map(\.total) == [3050])
     }
 
     private static func context(_ inputs: [ValuationInput], livePricesUSD: [String: Decimal] = [:]) -> ValuationContext {

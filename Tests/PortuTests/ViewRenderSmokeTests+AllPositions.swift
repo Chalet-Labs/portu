@@ -39,12 +39,10 @@ extension ViewRenderSmokeTests {
         try #require(texts.contains("RWD"), "\(texts)")
         try #require(texts.contains("NOPE"), "\(texts)")
         let borrowIndex = try #require(borrow, "\(texts)")
-        withKnownIssue("All Positions rows still show the display-book value, unsigned, with no state") {
-            #expect(Self.rowTexts(texts, after: "SCAM") == [TokenRowLabels.ignored, amount(1000)], "\(texts)")
-            #expect(Self.rowTexts(texts, after: "RWD") == [TokenRowLabels.notCounted, amount(5), currency(5)], "\(texts)")
-            #expect(Self.rowTexts(texts, after: "NOPE") == [amount(1), TokenRowLabels.unpriced], "\(texts)")
-            #expect(Array(texts.dropFirst(borrowIndex + 2).prefix(2)) == [amount(500), currency(-500)], "\(texts)")
-        }
+        #expect(Self.rowTexts(texts, after: "SCAM") == [TokenRowLabels.ignored, amount(1000)], "\(texts)")
+        #expect(Self.rowTexts(texts, after: "RWD") == [TokenRowLabels.notCounted, amount(5), currency(5)], "\(texts)")
+        #expect(Self.rowTexts(texts, after: "NOPE") == [amount(1), TokenRowLabels.unpriced], "\(texts)")
+        #expect(Array(texts.dropFirst(borrowIndex + 2).prefix(2)) == [amount(500), currency(-500)], "\(texts)")
     }
 
     /// The texts after a row's symbol, up to the next row's role label, section title or the

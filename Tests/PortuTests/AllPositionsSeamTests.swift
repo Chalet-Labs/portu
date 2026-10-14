@@ -105,9 +105,7 @@ struct AllPositionsSeamTests {
             Fixture.PositionID.scamWallet: 0
         ]
 
-        withKnownIssue("All Positions cards still price from the display book") {
-            #expect(Seam.cardTotals(page) == expected)
-        }
+        #expect(Seam.cardTotals(page) == expected)
     }
 
     /// S6, A7: a section is Σ its cards; sections in type order, cards in input order.
@@ -121,10 +119,8 @@ struct AllPositionsSeamTests {
             [Fixture.PositionID.lido],
             [Fixture.PositionID.vesting]
         ])
-        withKnownIssue("All Positions sections still sum the stored sync-time totals") {
-            #expect(page.sections.map(\.total) == [Fixture.decimal("7690.8"), Fixture.decimal("1499.6"), 1500, 90])
-            #expect(Seam.sectionsSumTheirCards(page))
-        }
+        #expect(page.sections.map(\.total) == [Fixture.decimal("7690.8"), Fixture.decimal("1499.6"), 1500, 90])
+        #expect(Seam.sectionsSumTheirCards(page))
     }
 
     /// S6, A7: under a protocol filter a section is Σ its **shown** cards. A second lending
@@ -152,12 +148,10 @@ struct AllPositionsSeamTests {
         #expect(aaveOnly.sections.map { $0.cards.map(\.id) } == [[Fixture.PositionID.aave]])
         #expect(lending?.cards.map(\.id) == [Fixture.PositionID.aave, compound.positionId])
         #expect(walletLending.sections.isEmpty)
-        withKnownIssue("All Positions sections still sum the stored sync-time totals") {
-            #expect(aaveOnly.sections.map(\.total) == [Fixture.decimal("1499.6")])
-            #expect(lending?.total == Fixture.decimal("1699.6"))
-            #expect(Seam.sectionsSumTheirCards(aaveOnly))
-            #expect(Seam.sectionsSumTheirCards(unfiltered))
-        }
+        #expect(aaveOnly.sections.map(\.total) == [Fixture.decimal("1499.6")])
+        #expect(lending?.total == Fixture.decimal("1699.6"))
+        #expect(Seam.sectionsSumTheirCards(aaveOnly))
+        #expect(Seam.sectionsSumTheirCards(unfiltered))
     }
 
     /// S6, A7: a sidebar option is Σ its cards, and "All" is the Overview headline total over the
@@ -171,16 +165,14 @@ struct AllPositionsSeamTests {
         #expect(page.typeOptions.map(\.label) == ["All", "Idle", "Lending", "Staking", "Vesting"])
         #expect(filtered.typeOptions == page.typeOptions)
         #expect(filtered.protocolOptions == page.protocolOptions)
-        withKnownIssue("All Positions sidebar options still sum the stored sync-time totals") {
-            // Lido's $1,500 now outranks Aave V3's $1,499.60.
-            #expect(page.protocolOptions.map(\.filter) == [.none, .specific("lido"), .specific("aave-v3"), .specific("arbitrum-vesting")])
-            #expect(page.protocolOptions.map(\.name) == ["Wallet", "Lido", "Aave V3", "Arbitrum Vesting"])
-            #expect(page.typeOptions.first?.total == OverviewFeature.headline(context).total)
-            #expect(page.typeOptions.map(\.total) == [
-                Fixture.decimal("10780.4"), Fixture.decimal("7690.8"), Fixture.decimal("1499.6"), 1500, 90
-            ])
-            #expect(page.protocolOptions.map(\.total) == [Fixture.decimal("7690.8"), 1500, Fixture.decimal("1499.6"), 90])
-        }
+        // Lido's $1,500 now outranks Aave V3's $1,499.60.
+        #expect(page.protocolOptions.map(\.filter) == [.none, .specific("lido"), .specific("aave-v3"), .specific("arbitrum-vesting")])
+        #expect(page.protocolOptions.map(\.name) == ["Wallet", "Lido", "Aave V3", "Arbitrum Vesting"])
+        #expect(page.typeOptions.first?.total == OverviewFeature.headline(context).total)
+        #expect(page.typeOptions.map(\.total) == [
+            Fixture.decimal("10780.4"), Fixture.decimal("7690.8"), Fixture.decimal("1499.6"), 1500, 90
+        ])
+        #expect(page.protocolOptions.map(\.total) == [Fixture.decimal("7690.8"), 1500, Fixture.decimal("1499.6"), 90])
     }
 
     /// The sidebar orders equal totals by name, then protocol ID, and names an option after the
@@ -232,9 +224,7 @@ struct AllPositionsSeamTests {
         ]
 
         #expect(Set(Seam.rows(page).keys) == Set(Fixture.inputs.map(\.tokenId)))
-        withKnownIssue("All Positions rows still show the display-book value, unsigned") {
-            #expect(Seam.rows(page) == expected)
-        }
+        #expect(Seam.rows(page) == expected)
     }
 
     /// From the retired PositionGroupValue test: supply 2 and borrow 1 ETH at live 3100, plus a
@@ -251,27 +241,23 @@ struct AllPositionsSeamTests {
         let page = Seam.page(context, cards: [Seam.card(.wallet)])
         let rows = page.sections.flatMap(\.cards).flatMap(\.rows).map { Seam.RowValue(state: $0.state, value: $0.value) }
 
-        withKnownIssue("All Positions cards still price from the display book") {
-            #expect(Seam.cardTotals(page) == [Fixture.PositionID.wallet: 3100])
-            #expect(rows == [
-                Seam.RowValue(state: .counted, value: 6200),
-                Seam.RowValue(state: .counted, value: -3100),
-                Seam.RowValue(state: .notCounted, value: 31000),
-                Seam.RowValue(state: .notCounted, value: 0)
-            ])
-        }
+        #expect(Seam.cardTotals(page) == [Fixture.PositionID.wallet: 3100])
+        #expect(rows == [
+            Seam.RowValue(state: .counted, value: 6200),
+            Seam.RowValue(state: .counted, value: -3100),
+            Seam.RowValue(state: .notCounted, value: 31000),
+            Seam.RowValue(state: .notCounted, value: 0)
+        ])
     }
 
     /// The display rate is applied once, to the module's USD results: at 0.5 every figure halves.
     @Test func `the display rate is applied once`() {
         let page = Seam.page(Fixture.context(rate: Fixture.decimal("0.5")))
 
-        withKnownIssue("All Positions still sums the stored sync-time totals") {
-            #expect(page.typeOptions.first?.total == Fixture.decimal("5390.2"))
-            #expect(Seam.cardTotals(page)[Fixture.PositionID.aave] == Fixture.decimal("749.8"))
-            #expect(page.sections.map(\.total) == [Fixture.decimal("3845.4"), Fixture.decimal("749.8"), 750, 45])
-            #expect(Seam.rows(page)[Fixture.tokenID(13)] == Seam.RowValue(state: .counted, value: -750))
-            #expect(Seam.rows(page)[Fixture.tokenID(16)] == Seam.RowValue(state: .notCounted, value: 75))
-        }
+        #expect(page.typeOptions.first?.total == Fixture.decimal("5390.2"))
+        #expect(Seam.cardTotals(page)[Fixture.PositionID.aave] == Fixture.decimal("749.8"))
+        #expect(page.sections.map(\.total) == [Fixture.decimal("3845.4"), Fixture.decimal("749.8"), 750, 45])
+        #expect(Seam.rows(page)[Fixture.tokenID(13)] == Seam.RowValue(state: .counted, value: -750))
+        #expect(Seam.rows(page)[Fixture.tokenID(16)] == Seam.RowValue(state: .notCounted, value: 75))
     }
 }
