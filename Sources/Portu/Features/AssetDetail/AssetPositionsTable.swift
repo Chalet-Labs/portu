@@ -1,27 +1,13 @@
-import ComposableArchitecture
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
+/// The asset's token rows (U4): a counted token shows its signed contribution, a not-counted one its
+/// own value, muted and tagged; an unpriced one a caption and an ignored one a badge, neither with a
+/// value. An ignored row is greyed.
 struct AssetPositionsTable: View {
-    let assetId: UUID
-    let store: StoreOf<AppFeature>
-
-    @Environment(AppState.self) private var appState
-    @Query private var allTokens: [PositionToken]
-
-    private var rows: [PositionRowData] {
-        let entries = PositionTokenEntry.fromActiveTokens(allTokens, assetId: assetId)
-        return AssetDetailFeature.aggregatePositionRows(
-            tokens: entries,
-            prices: store.liveDisplayPrices,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var currencyCode: String {
-        appState.currencyCode
-    }
+    let rows: [AssetPositionRow]
+    let currencyCode: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -30,28 +16,62 @@ struct AssetPositionsTable: View {
                 .foregroundStyle(PortuTheme.dashboardText)
 
             Table(rows) {
-                TableColumn("Account") { row in Text(row.accountName).foregroundStyle(PortuTheme.dashboardText) }
-                    .width(min: 80, ideal: 120)
-                TableColumn("Platform") { row in Text(row.platformName) }
+                TableColumn("Account") { row in
+                    Text(row.accountName).foregroundStyle(PortuTheme.dashboardText).greyedIfIgnored(row)
+                }
+                .width(min: 80, ideal: 120)
+                TableColumn("Platform") { row in Text(row.platformName).greyedIfIgnored(row) }
                     .width(min: 80, ideal: 100)
                 TableColumn("Context") { row in
-                    CapsuleBadge(row.context)
+                    CapsuleBadge(row.context).greyedIfIgnored(row)
                 }
                 .width(min: 60, ideal: 80)
-                TableColumn("Network") { row in Text(row.network) }
+                TableColumn("Network") { row in Text(row.network).greyedIfIgnored(row) }
                     .width(min: 60, ideal: 80)
                 TableColumn("Amount") { row in
-                    Text(row.amount, format: .number.precision(.fractionLength(2 ... 8)))
+                    Text(AssetDetailFormat.amount(row.amount))
                         .font(DashboardStyle.monoTableFont)
+                        .greyedIfIgnored(row)
                 }
                 .width(min: 80, ideal: 100)
                 TableColumn("Balance") { row in
-                    Text(row.usdBalance, format: .currency(code: currencyCode))
-                        .font(DashboardStyle.monoTableFont)
+                    AssetPositionBalanceCell(row: row, currencyCode: currencyCode)
                 }
                 .width(min: 80, ideal: 100)
             }
             .dashboardTable()
         }
+    }
+}
+
+private struct AssetPositionBalanceCell: View {
+    let row: AssetPositionRow
+    let currencyCode: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            switch row.state {
+            case .ignored: CapsuleBadge(TokenRowLabels.ignored)
+            case .notCounted: CapsuleBadge(TokenRowLabels.notCounted)
+            case .counted, .unpriced: EmptyView()
+            }
+
+            if let value = row.value {
+                Text(AssetDetailFormat.currency(value, code: currencyCode))
+                    .font(DashboardStyle.monoTableFont)
+                    .foregroundStyle(row.state == .counted ? PortuTheme.dashboardText : PortuTheme.dashboardTertiaryText)
+            } else if row.state == .unpriced {
+                Text(TokenRowLabels.unpriced)
+                    .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardTertiaryText)
+            }
+        }
+        .greyedIfIgnored(row)
+    }
+}
+
+private extension View {
+    func greyedIfIgnored(_ row: AssetPositionRow) -> some View {
+        opacity(row.state == .ignored ? 0.5 : 1)
     }
 }

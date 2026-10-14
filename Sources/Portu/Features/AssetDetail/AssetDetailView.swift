@@ -10,8 +10,11 @@ struct AssetDetailView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
+    var sources = ValuationSources()
     @Query private var assets: [Asset]
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
+    /// Every token in the store: `Asset` has no inverse relationship, and a predicate through
+    /// `asset?.id` is the optional chaining AGENTS.md bans, so the projection filters in Swift once.
+    @Query private var tokens: [PositionToken]
 
     init(assetId: UUID, store: StoreOf<AppFeature>) {
         self.assetId = assetId
@@ -31,26 +34,26 @@ struct AssetDetailView: View {
         assets.first { $0.id == assetId }
     }
 
-    private var historicalPriceCoinGeckoId: String? {
-        guard let asset else { return nil }
-        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(
-            tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init))
-        return AssetDetailFeature.effectiveHistoricalCoinGeckoID(
+    /// The chart's cache key, mapping-blind as the backfill writer's read path expects.
+    private func historicalPriceCoinGeckoId(_ asset: AssetDetailAsset) -> String? {
+        AssetDetailFeature.effectiveHistoricalCoinGeckoID(
             assetCoinGeckoId: asset.coinGeckoId,
-            onchainIdentity: OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract),
-            override: overridesByAssetId[assetId])
+            onchainIdentity: asset.onchainIdentity,
+            override: TokenPricingOverrideFeature.overridesByAssetId(sources.overrideSnapshots)[asset.id])
     }
 
     private var currencyCode: String {
-        appState.selectedCurrency.displayCode
+        appState.currencyCode
     }
 
     var body: some View {
         if let asset {
+            let projection = AssetDetailProjection(asset, tokens: tokens)
+            let page = sources.assetDetail(projection, legacyDisplayPrices: store.liveDisplayPrices)
             HSplitView {
                 ScrollView {
                     VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
-                        DashboardPageHeader(asset.name, subtitle: asset.symbol) {
+                        DashboardPageHeader(projection.asset.name, subtitle: projection.asset.symbol) {
                             Button {
                                 dismiss()
                                 store.send(.sectionSelected(.allAssets))
@@ -60,21 +63,17 @@ struct AssetDetailView: View {
                             .dashboardControl()
                         }
 
-                        if
-                            let info = AssetDetailFeature.headerPriceInfo(
-                                coinGeckoId: historicalPriceCoinGeckoId,
-                                prices: store.liveDisplayPrices,
-                                changes24h: store.priceChanges24h) {
+                        if let header = page.header, let price = header.price {
                             DashboardCard {
                                 HStack(alignment: .firstTextBaseline) {
                                     DashboardMetricBlock(
                                         title: "Price",
-                                        value: info.price.formatted(.currency(code: currencyCode)))
+                                        value: AssetDetailFormat.currency(price, code: currencyCode))
                                     Spacer()
-                                    if let change = info.change24h {
+                                    if let change = header.fraction24h {
                                         HStack(spacing: 4) {
                                             Image(systemName: change >= 0 ? "arrow.up.right" : "arrow.down.right")
-                                            Text(change, format: .percent.precision(.fractionLength(2)))
+                                            Text(AssetDetailFormat.change(change))
                                         }
                                         .font(.system(size: 13, weight: .semibold, design: .monospaced))
                                         .foregroundStyle(change >= 0 ? PortuTheme.dashboardSuccess : PortuTheme.dashboardWarning)
@@ -83,11 +82,11 @@ struct AssetDetailView: View {
                             }
                         }
 
-                        AssetPriceChart(assetId: assetId, coinGeckoId: historicalPriceCoinGeckoId, store: store)
+                        AssetPriceChart(assetId: assetId, coinGeckoId: historicalPriceCoinGeckoId(projection.asset), store: store)
                             .dashboardCard()
-                        AssetHoldingsSummary(assetId: assetId, store: store)
+                        AssetHoldingsSummary(holdings: page.holdings, currencyCode: currencyCode)
                             .dashboardCard()
-                        AssetPositionsTable(assetId: assetId, store: store)
+                        AssetPositionsTable(rows: page.rows, currencyCode: currencyCode)
                             .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
                     }
                     .padding(DashboardStyle.pagePadding)
