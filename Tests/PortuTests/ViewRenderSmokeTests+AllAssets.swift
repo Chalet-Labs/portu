@@ -221,7 +221,7 @@ extension ViewRenderSmokeTests {
         }
     }
 
-    private static func tableView(in view: NSView) -> NSTableView? {
+    static func tableView(in view: NSView) -> NSTableView? {
         if let table = view as? NSTableView {
             return table
         }
