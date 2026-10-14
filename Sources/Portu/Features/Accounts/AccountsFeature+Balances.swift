@@ -10,16 +10,16 @@ struct AccountBalance: Equatable {
 }
 
 extension AccountsFeature {
-    /// Every account's balance from its own tokens, active or not (S9). The balance is still the
-    /// sync-time total (A6), which is what the stored position totals hold. An account with no
-    /// input is absent; it reads as zero.
+    /// Every account's balance: Σ the contributions of its own tokens, active or not (S9, A7). The
+    /// provider total is the sync-time total (A6) beside it. An account with no input is absent; it
+    /// reads as zero.
     static func balances(_ context: ValuationContext) -> [UUID: AccountBalance] {
         let byAccount = context.valuation().totals(groupedBy: { $0.position.accountId })
         var balances: [UUID: AccountBalance] = [:]
         for (accountId, totals) in byAccount {
             guard let accountId else { continue }
             let display = totals.display(rate: context.usdToDisplayRate)
-            balances[accountId] = AccountBalance(balance: display.syncTotal, providerTotal: display.syncTotal)
+            balances[accountId] = AccountBalance(balance: display.net, providerTotal: display.syncTotal)
         }
         return balances
     }

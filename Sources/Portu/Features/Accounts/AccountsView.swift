@@ -256,6 +256,7 @@ struct AccountsView: View {
                     .lineLimit(1)
             }
         }
+        .help(AccountsFormat.providerTotalHelp(row.providerTotal, code: currencyCode))
     }
 
     @ViewBuilder

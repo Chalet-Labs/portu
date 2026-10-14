@@ -63,13 +63,11 @@ struct AccountsSeamTests {
     @Test func `each account's balance is the sum of its own tokens' contributions`() {
         let balances = Seam.balances()
 
-        withKnownIssue("the balance is still the sync-time total") {
-            #expect(balances.mapValues(\.balance) == [
-                Fixture.mainAccount: Fixture.decimal("10430.4"),
-                Fixture.degenAccount: 350,
-                Seam.inactiveAccount: 3090
-            ])
-        }
+        #expect(balances.mapValues(\.balance) == [
+            Fixture.mainAccount: Fixture.decimal("10430.4"),
+            Fixture.degenAccount: 350,
+            Seam.inactiveAccount: 3090
+        ])
         #expect(balances.mapValues(\.providerTotal) == [
             Fixture.mainAccount: Fixture.decimal("64999.4"),
             Fixture.degenAccount: 345,
@@ -87,10 +85,8 @@ struct AccountsSeamTests {
 
         #expect(active.count == 2)
         #expect(headline.total == Fixture.decimal("10780.4") * rate)
-        withKnownIssue("the balance is still the sync-time total") {
-            #expect(active.reduce(0, +) == headline.total)
-            #expect(balances[Seam.inactiveAccount]?.balance == 3090 * rate)
-        }
+        #expect(active.reduce(0, +) == headline.total)
+        #expect(balances[Seam.inactiveAccount]?.balance == 3090 * rate)
     }
 
     /// "Number changes → Accounts": ignored tokens count 0. The provider total keeps them (A6 has
@@ -99,9 +95,7 @@ struct AccountsSeamTests {
         let scam = Fixture.token(Fixture.AssetID.scam, "SCAM", "Scam Token", .other, coinGeckoId: "scam-token", amount: 1000, usdValue: 50000)
         let balances = Seam.balances(inputs: [Seam.lone(scam, account: Fixture.mainAccount)])
 
-        withKnownIssue("the balance is still the sync-time total") {
-            #expect(balances[Fixture.mainAccount]?.balance == 0)
-        }
+        #expect(balances[Fixture.mainAccount]?.balance == 0)
         #expect(balances[Fixture.mainAccount]?.providerTotal == 50000)
     }
 
@@ -112,9 +106,7 @@ struct AccountsSeamTests {
             Fixture.AssetID.bad, "BAD", "Bad Price", .other, onchainIdentity: Fixture.badIdentity, amount: 100, usdValue: 5000)
         let balances = Seam.balances(inputs: [Seam.lone(bad, account: Fixture.mainAccount)])
 
-        withKnownIssue("the balance is still the sync-time total") {
-            #expect(balances[Fixture.mainAccount]?.balance == 0)
-        }
+        #expect(balances[Fixture.mainAccount]?.balance == 0)
         #expect(balances[Fixture.mainAccount]?.providerTotal == 5000)
     }
 
@@ -124,9 +116,7 @@ struct AccountsSeamTests {
         let btc = Fixture.token(Fixture.uuid(16), "BTC", "Bitcoin", .major, coinGeckoId: "bitcoin", amount: Fixture.decimal("0.5"), usdValue: 0)
         let balances = Seam.balances(inputs: [Seam.lone(btc, account: Seam.exchangeAccount)])
 
-        withKnownIssue("the balance is still the sync-time total") {
-            #expect(balances[Seam.exchangeAccount]?.balance == 30000)
-        }
+        #expect(balances[Seam.exchangeAccount]?.balance == 30000)
         #expect(balances[Seam.exchangeAccount]?.providerTotal == 0)
     }
 
@@ -141,9 +131,7 @@ struct AccountsSeamTests {
 
         #expect(synced[Fixture.mainAccount]?.providerTotal == Fixture.decimal("58499.46"))
         #expect(manual[Seam.manualAccount]?.providerTotal == 2610)
-        withKnownIssue("the balance is still the sync-time total") {
-            #expect(manual[Seam.manualAccount]?.balance == 2700)
-        }
+        #expect(manual[Seam.manualAccount]?.balance == 2700)
 
         let help = AccountsFormat.providerTotalHelp(2610, code: "USD")
         #expect(AccountsFormat.providerTotalLabel == "Provider total at last sync")
@@ -171,8 +159,6 @@ struct AccountsSeamTests {
 
         #expect(balances[inactive.id] == AccountBalance(balance: 60000 * rate, providerTotal: 60000 * rate))
         #expect(balances[active.id]?.providerTotal == 5895 * rate)
-        withKnownIssue("the balance is still the sync-time total") {
-            #expect(balances[active.id]?.balance == 6100 * rate)
-        }
+        #expect(balances[active.id]?.balance == 6100 * rate)
     }
 }

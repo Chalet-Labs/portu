@@ -31,10 +31,8 @@ extension ViewRenderSmokeTests {
         let help = { (value: Decimal) in AccountsFormat.providerTotalHelp(value, code: code) }
 
         try #require(cells.count == 2, "\(cells)")
-        withKnownIssue("the balance is still the sync-time total, with no tooltip") {
-            #expect(cells.map(\.texts) == [[currency(3050)], [currency(9600)]], "\(cells)")
-            #expect(cells.map(\.help) == [help(3000), help(9500)], "\(cells)")
-        }
+        #expect(cells.map(\.texts) == [[currency(3050)], [currency(9600)]], "\(cells)")
+        #expect(cells.map(\.help) == [help(3000), help(9500)], "\(cells)")
     }
 
     struct BalanceCell: Equatable {
