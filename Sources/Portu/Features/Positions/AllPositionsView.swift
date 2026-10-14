@@ -5,39 +5,18 @@ import SwiftUI
 
 struct AllPositionsView: View {
     @Environment(AppState.self) private var appState
+    var sources = ValuationSources()
     @Query private var allPositions: [Position]
 
-    private var positions: [Position] {
-        allPositions.filter { $0.account?.isActive == true }
-    }
-
-    @State private var filterType: PositionType? = nil
-    @State private var filterProtocol: ProtocolFilter = .all
+    @State private var filter = AllPositionsFilter.all
     @State private var showAddSheet = false
 
-    private var filteredPositions: [Position] {
-        positions.filter { pos in
-            if let ft = filterType, pos.positionType != ft {
-                return false
-            }
-            if !filterProtocol.matches(pos.protocolId) {
-                return false
-            }
-            return true
-        }
-    }
-
-    /// Group positions: first by type, then by protocolId
-    private var groupedByType: [(PositionType, [Position])] {
-        Dictionary(grouping: filteredPositions, by: \.positionType)
-            .sorted { $0.key.rawValue < $1.key.rawValue }
-    }
-
     private var currencyCode: String {
-        appState.selectedCurrency.displayCode
+        appState.currencyCode
     }
 
     var body: some View {
+        let page = sources.allPositions(allPositions, filter: filter, legacyDisplayPrices: appState.prices)
         HSplitView {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
@@ -50,20 +29,18 @@ struct AllPositionsView: View {
                         .dashboardControl()
                     }
 
-                    ForEach(groupedByType, id: \.0) { type, positions in
+                    ForEach(page.sections) { section in
                         Section {
-                            ForEach(positions, id: \.id) { pos in
-                                PositionGroupView(position: pos)
+                            ForEach(section.cards) { card in
+                                PositionGroupView(card: card, currencyCode: currencyCode)
                             }
                         } header: {
                             HStack {
-                                Text(typeSectionTitle(type))
+                                Text(section.title)
                                     .font(DashboardStyle.sectionTitleFont)
                                     .foregroundStyle(PortuTheme.dashboardText)
                                 Spacer()
-                                let total = positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
-                                    * appState.currentUSDToDisplayRate
-                                Text(total, format: .currency(code: currencyCode))
+                                Text(AllPositionsFormat.currency(section.total, code: currencyCode))
                                     .font(.system(size: 13, design: .monospaced))
                                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                             }
@@ -80,23 +57,13 @@ struct AllPositionsView: View {
             }
 
             PositionFilterSidebar(
-                positions: positions,
-                selectedType: $filterType,
-                selectedProtocol: $filterProtocol)
+                typeOptions: page.typeOptions,
+                protocolOptions: page.protocolOptions,
+                currencyCode: currencyCode,
+                selectedType: $filter.type,
+                selectedProtocol: $filter.protocolFilter)
                 .frame(minWidth: 200, idealWidth: 250, maxWidth: 300)
         }
         .dashboardPage()
-    }
-
-    private func typeSectionTitle(_ type: PositionType) -> String {
-        switch type {
-        case .idle: "Idle"
-        case .lending: "Lending"
-        case .liquidityPool: "Liquidity Pools"
-        case .staking: "Staking"
-        case .farming: "Farming"
-        case .vesting: "Vesting"
-        case .other: "Other"
-        }
     }
 }

@@ -3,76 +3,83 @@ import PortuUI
 import SwiftUI
 
 struct PositionGroupView: View {
-    let position: Position
-    @Environment(AppState.self) private var appState
+    let card: AllPositionsCard
+    let currencyCode: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                if let name = position.protocolName {
-                    Text(name).font(DashboardStyle.sectionTitleFont)
-                } else {
-                    Text(position.positionType.rawValue.capitalized).font(DashboardStyle.sectionTitleFont)
-                }
+                Text(card.title).font(DashboardStyle.sectionTitleFont)
 
-                if let chain = position.chain {
+                if let chain = card.chain {
                     CapsuleBadge(chain.rawValue.capitalized)
                 }
 
                 Spacer()
 
-                if let hf = position.healthFactor {
+                if let hf = card.healthFactor {
                     Label("HF: \(hf, specifier: "%.2f")", systemImage: "heart.text.square")
                         .font(.caption)
                         .foregroundStyle(hf < 1.2 ? .red : hf < 1.5 ? .orange : .green)
                 }
 
-                // Net value (signed), computed from live prices to match token rows.
-                let headerTotal = PositionGroupValue.headerTotal(
-                    for: position.tokens,
-                    livePrices: appState.prices,
-                    fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-                Text(headerTotal, format: .currency(code: currencyCode))
+                Text(AllPositionsFormat.currency(card.total, code: currencyCode))
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(PortuTheme.changeColor(for: headerTotal))
+                    .foregroundStyle(PortuTheme.changeColor(for: card.total))
             }
 
-            ForEach(position.tokens, id: \.id) { token in
-                HStack {
-                    Text(token.role.displayLabel)
-                        .font(.caption)
-                        .foregroundStyle(token.role.displayColor)
-
-                    Text(token.asset?.symbol ?? "???")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(PortuTheme.dashboardText)
-
-                    Spacer()
-
-                    Text(token.amount, format: .number.precision(.fractionLength(2 ... 6)))
-                        .font(DashboardStyle.monoTableFont)
-                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
-
-                    let value = tokenValue(token)
-                    Text(value, format: .currency(code: currencyCode))
-                        .font(DashboardStyle.monoTableFont)
-                        .foregroundStyle(PortuTheme.dashboardText)
-                        .frame(width: 100, alignment: .trailing)
-                }
+            ForEach(card.rows) { row in
+                PositionTokenRowView(row: row, currencyCode: currencyCode)
             }
         }
         .dashboardCard(horizontalPadding: 12, verticalPadding: 10)
     }
+}
 
-    private var currencyCode: String {
-        appState.selectedCurrency.displayCode
-    }
+/// A token row (U4): a counted token shows its signed contribution, a not-counted one its own value,
+/// muted and tagged; an unpriced one a caption and an ignored one a badge, neither with a value.
+struct PositionTokenRowView: View {
+    let row: AllPositionsRow
+    let currencyCode: String
 
-    private func tokenValue(_ token: PositionToken) -> Decimal {
-        AssetValueFormatter.displayValue(
-            for: token,
-            livePrices: appState.prices,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
+    var body: some View {
+        HStack {
+            Text(row.role.displayLabel)
+                .font(.caption)
+                .foregroundStyle(row.role.displayColor)
+
+            Text(row.symbol)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(PortuTheme.dashboardText)
+
+            switch row.state {
+            case .ignored: CapsuleBadge(TokenRowLabels.ignored)
+            case .notCounted: CapsuleBadge(TokenRowLabels.notCounted)
+            case .counted, .unpriced: EmptyView()
+            }
+
+            Spacer()
+
+            Text(AllPositionsFormat.amount(row.amount))
+                .font(DashboardStyle.monoTableFont)
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+
+            Group {
+                if let value = row.value {
+                    Text(AllPositionsFormat.currency(value, code: currencyCode))
+                        .font(DashboardStyle.monoTableFont)
+                        .foregroundStyle(row.state == .counted ? PortuTheme.dashboardText : PortuTheme.dashboardTertiaryText)
+                } else if row.state == .unpriced {
+                    Text(TokenRowLabels.unpriced)
+                        .font(.caption)
+                        .foregroundStyle(PortuTheme.dashboardTertiaryText)
+                } else {
+                    Color.clear.frame(height: 1)
+                }
+            }
+            .frame(width: 100, alignment: .trailing)
+        }
+        .opacity(row.state == .ignored ? 0.5 : 1)
     }
 }
 

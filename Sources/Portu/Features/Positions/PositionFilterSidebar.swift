@@ -3,44 +3,11 @@ import PortuUI
 import SwiftUI
 
 struct PositionFilterSidebar: View {
-    let positions: [Position]
+    let typeOptions: [AllPositionsTypeOption]
+    let protocolOptions: [AllPositionsProtocolOption]
+    let currencyCode: String
     @Binding var selectedType: PositionType?
     @Binding var selectedProtocol: ProtocolFilter
-    @Environment(AppState.self) private var appState
-
-    private var typeFilters: [(PositionType?, String, Decimal)] {
-        var result: [(PositionType?, String, Decimal)] = [
-            (nil, "All", displayValue(positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }))
-        ]
-        for type in PositionType.allCases {
-            let matching = positions.filter { $0.positionType == type }
-            guard !matching.isEmpty else { continue }
-            let total = displayValue(matching.reduce(Decimal.zero) { $0 + $1.netUSDValue })
-            result.append((type, type.rawValue.capitalized, total))
-        }
-        return result
-    }
-
-    private var protocolFilters: [(id: String, name: String, value: Decimal)] {
-        var byProtocol: [String: (name: String, value: Decimal)] = [:]
-        for pos in positions {
-            let id = pos.protocolId ?? "__none__"
-            let name = pos.protocolName ?? "Wallet"
-            var entry = byProtocol[id] ?? (name, 0)
-            entry.value += displayValue(pos.netUSDValue)
-            byProtocol[id] = entry
-        }
-        return byProtocol.map { (id: $0.key, name: $0.value.name, value: $0.value.value) }
-            .sorted { $0.value > $1.value }
-    }
-
-    private var currencyCode: String {
-        appState.selectedCurrency.displayCode
-    }
-
-    private func displayValue(_ usdValue: Decimal) -> Decimal {
-        usdValue * appState.currentUSDToDisplayRate
-    }
 
     var body: some View {
         ScrollView {
@@ -53,15 +20,15 @@ struct PositionFilterSidebar: View {
                     Text("Position Type")
                         .font(DashboardStyle.labelFont)
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    ForEach(typeFilters, id: \.1) { type, label, total in
+                    ForEach(typeOptions) { option in
                         Button {
-                            selectedType = type
+                            selectedType = option.type
                         } label: {
                             HStack {
-                                Text(label)
-                                    .foregroundStyle(selectedType == type ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
+                                Text(option.label)
+                                    .foregroundStyle(selectedType == option.type ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                                 Spacer()
-                                Text(total, format: .currency(code: currencyCode))
+                                Text(AllPositionsFormat.currency(option.total, code: currencyCode))
                                     .font(.caption)
                                     .foregroundStyle(PortuTheme.dashboardTertiaryText)
                             }
@@ -87,16 +54,15 @@ struct PositionFilterSidebar: View {
                     }
                     .buttonStyle(.plain)
 
-                    ForEach(protocolFilters, id: \.id) { filter in
-                        let filterValue: ProtocolFilter = filter.id == "__none__" ? .none : .specific(filter.id)
+                    ForEach(protocolOptions) { option in
                         Button {
-                            selectedProtocol = filterValue
+                            selectedProtocol = option.filter
                         } label: {
                             HStack {
-                                Text(filter.name)
-                                    .foregroundStyle(selectedProtocol == filterValue ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
+                                Text(option.name)
+                                    .foregroundStyle(selectedProtocol == option.filter ? PortuTheme.dashboardText : PortuTheme.dashboardSecondaryText)
                                 Spacer()
-                                Text(filter.value, format: .currency(code: currencyCode))
+                                Text(AllPositionsFormat.currency(option.total, code: currencyCode))
                                     .font(.caption)
                                     .foregroundStyle(PortuTheme.dashboardTertiaryText)
                             }
