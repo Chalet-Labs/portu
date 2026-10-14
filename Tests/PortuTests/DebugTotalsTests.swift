@@ -204,12 +204,10 @@
 
             let response = try totals(store)
 
-            withKnownIssue {
-                #expect(response.statusCode == 200)
-                #expect(response.json["valuedTotalUSD"] as? Double == headline.total.jsonDouble)
-                #expect(response.json["rawSyncTotalUSD"] as? Double == 54965)
-                #expect(response.json.keys.sorted() == ["rawSyncTotalUSD", "valuedTotalUSD"])
-            }
+            #expect(response.statusCode == 200)
+            #expect(response.json["valuedTotalUSD"] as? Double == headline.total.jsonDouble)
+            #expect(response.json["rawSyncTotalUSD"] as? Double == 54965)
+            #expect(response.json.keys.sorted() == ["rawSyncTotalUSD", "valuedTotalUSD"])
         }
 
         @Test func `an account's totals are its Accounts balance and provider total, inactive included`() throws {
@@ -223,11 +221,9 @@
                 let balance = try #require(balances[account.id])
                 let response = try totals(store, accountId: account.id.uuidString)
 
-                withKnownIssue {
-                    #expect(response.statusCode == 200)
-                    #expect(response.json["valuedTotalUSD"] as? Double == balance.balance.jsonDouble)
-                    #expect(response.json["rawSyncTotalUSD"] as? Double == balance.providerTotal.jsonDouble)
-                }
+                #expect(response.statusCode == 200)
+                #expect(response.json["valuedTotalUSD"] as? Double == balance.balance.jsonDouble)
+                #expect(response.json["rawSyncTotalUSD"] as? Double == balance.providerTotal.jsonDouble)
             }
         }
 
@@ -239,11 +235,9 @@
             let enabled = try totals(store, isBackfillEnabled: true)
             let disabled = try totals(store, isBackfillEnabled: false)
 
-            withKnownIssue {
-                #expect(enabled.json["valuedTotalUSD"] as? Double == 5250)
-                #expect(disabled.json["valuedTotalUSD"] as? Double == 5220)
-                #expect(disabled.json["rawSyncTotalUSD"] as? Double == 54965)
-            }
+            #expect(enabled.json["valuedTotalUSD"] as? Double == 5250)
+            #expect(disabled.json["valuedTotalUSD"] as? Double == 5220)
+            #expect(disabled.json["rawSyncTotalUSD"] as? Double == 54965)
         }
 
         @Test func `a malformed accountId is a bad request`() throws {
@@ -251,10 +245,8 @@
 
             let response = try totals(store, accountId: "not-a-uuid")
 
-            withKnownIssue {
-                #expect(response.statusCode == 400)
-                #expect(response.json["error"] as? String == "Invalid accountId")
-            }
+            #expect(response.statusCode == 400)
+            #expect(response.json["error"] as? String == "Invalid accountId")
         }
 
         @Test func `an unknown accountId is not found`() throws {
@@ -263,9 +255,7 @@
             let response = try totals(store, accountId: UUID().uuidString)
 
             #expect(response.statusCode == 404)
-            withKnownIssue {
-                #expect(response.json["error"] as? String == "Account not found")
-            }
+            #expect(response.json["error"] as? String == "Account not found")
         }
 
         /// The route runs through `DebugServer` with the live book from the store. Without it ETH,
@@ -294,11 +284,9 @@
             let httpResponse = try #require(response as? HTTPURLResponse)
             let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
-            withKnownIssue {
-                #expect(httpResponse.statusCode == 200)
-                #expect(json["valuedTotalUSD"] as? Double == 5220)
-                #expect(json["rawSyncTotalUSD"] as? Double == 54965)
-            }
+            #expect(httpResponse.statusCode == 200)
+            #expect(json["valuedTotalUSD"] as? Double == 5220)
+            #expect(json["rawSyncTotalUSD"] as? Double == 54965)
         }
     }
 #endif

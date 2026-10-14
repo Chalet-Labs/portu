@@ -175,21 +175,28 @@ struct AddPositionSheet: View {
 }
 
 enum ManualPositionEntry {
-    /// Add needs an account, an asset and an amount.
+    /// Add needs an account, an asset and an amount above 0 (U1).
     static func canAdd(hasAccount: Bool, hasAsset: Bool, amount: Decimal) -> Bool {
-        hasAccount && hasAsset && amount != 0
+        hasAccount && hasAsset && amount > 0
     }
 }
 
 enum ManualPositionPricing {
-    /// The value the sheet stores for a new manual position, priced from the app's live book.
+    /// The USD value the sheet stores for a new manual position (U1). A typed value is a USD total
+    /// and is stored as entered; otherwise the asset's live USD price × the amount, or 0 with no
+    /// price. The display rate plays no part.
     @MainActor
     static func usdValue(amount: Decimal, override: Decimal?, coinGeckoId: String?, appState: AppState) -> Decimal {
-        usdValue(
-            amount: amount,
-            override: override,
-            displayPrice: coinGeckoId.flatMap { appState.prices[$0] },
-            usdToDisplayRate: appState.currentUSDToDisplayRate)
+        if let override {
+            return override
+        }
+        guard let price = livePriceUSD(coinGeckoId: coinGeckoId, in: appState.livePricesUSD) else { return 0 }
+        return amount * price
+    }
+
+    /// The live USD price under the normalized CoinGecko ID, the form the book is keyed by.
+    static func livePriceUSD(coinGeckoId: String?, in livePricesUSD: [String: Decimal]) -> Decimal? {
+        TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId).flatMap { livePricesUSD[$0] }
     }
 
     /// Resolves the canonical USD value to persist for a manual position.

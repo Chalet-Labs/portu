@@ -86,10 +86,8 @@
 
             let prices = try #require(json["prices"] as? [String: Double])
             #expect(prices == ["bitcoin": 62500])
-            withKnownIssue {
-                #expect(json["pricesUSD"] as? [String: Double] == ["bitcoin": 50000])
-                #expect(json["usdToDisplayRate"] as? Double == 1.25)
-            }
+            #expect(json["pricesUSD"] as? [String: Double] == ["bitcoin": 50000])
+            #expect(json["usdToDisplayRate"] as? Double == 1.25)
         }
 
         /// Display = USD × rate for every price (I2). The values are exact in binary floating point.
@@ -104,14 +102,12 @@
 
             let prices = try #require(json["prices"] as? [String: Double])
             #expect(prices == ["bitcoin": 62500, "ethereum": 3750, "usd-coin": 1.25, "dogecoin": 0.625])
-            withKnownIssue {
-                let pricesUSD = json["pricesUSD"] as? [String: Double] ?? [:]
-                let displayRate = json["usdToDisplayRate"] as? Double
-                #expect(displayRate == 1.25)
-                #expect(pricesUSD.keys.sorted() == prices.keys.sorted())
-                for (id, usd) in pricesUSD {
-                    #expect(prices[id] == displayRate.map { usd * $0 })
-                }
+            let pricesUSD = try #require(json["pricesUSD"] as? [String: Double])
+            let displayRate = try #require(json["usdToDisplayRate"] as? Double)
+            #expect(displayRate == 1.25)
+            #expect(pricesUSD.keys.sorted() == prices.keys.sorted())
+            for (id, usd) in pricesUSD {
+                #expect(prices[id] == usd * displayRate)
             }
         }
 

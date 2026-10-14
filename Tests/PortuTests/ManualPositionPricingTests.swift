@@ -61,26 +61,20 @@ struct ManualPositionLivePriceTests {
     @Test func `a non-USD user stores the USD price times the amount`() throws {
         let appState = try appState(currency: .chf, rate: #require(Decimal(string: "0.9")))
 
-        withKnownIssue {
-            #expect(ManualPositionPricing.usdValue(amount: 2, override: nil, coinGeckoId: "bitcoin", appState: appState) == 100_000)
-        }
+        #expect(ManualPositionPricing.usdValue(amount: 2, override: nil, coinGeckoId: "bitcoin", appState: appState) == 100_000)
     }
 
     @Test func `a USD user stores the USD price times the amount`() {
         let appState = appState(currency: .usd, rate: 1)
 
-        withKnownIssue {
-            #expect(ManualPositionPricing.usdValue(amount: 2, override: nil, coinGeckoId: "bitcoin", appState: appState) == 100_000)
-        }
+        #expect(ManualPositionPricing.usdValue(amount: 2, override: nil, coinGeckoId: "bitcoin", appState: appState) == 100_000)
     }
 
     @Test func `a mixed-case CoinGecko ID finds its live price`() {
         let appState = appState(currency: .usd, rate: 1)
         appState.prices = appState.livePricesUSD
 
-        withKnownIssue {
-            #expect(ManualPositionPricing.usdValue(amount: 2, override: nil, coinGeckoId: " Bitcoin ", appState: appState) == 100_000)
-        }
+        #expect(ManualPositionPricing.usdValue(amount: 2, override: nil, coinGeckoId: " Bitcoin ", appState: appState) == 100_000)
     }
 
     /// The typed field is "USD Value", formatted as USD: a total, stored as entered, never
@@ -113,8 +107,6 @@ struct ManualPositionEntryTests {
     }
 
     @Test func `the Add button is disabled at a negative amount`() {
-        withKnownIssue {
-            #expect(!ManualPositionEntry.canAdd(hasAccount: true, hasAsset: true, amount: -1))
-        }
+        #expect(!ManualPositionEntry.canAdd(hasAccount: true, hasAsset: true, amount: -1))
     }
 }

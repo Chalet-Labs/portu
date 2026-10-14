@@ -36,7 +36,10 @@
             self.priceService = priceService
             registerBuiltInRoutes()
             if let modelContainer {
-                DebugEndpoints.register(on: self, modelContainer: modelContainer)
+                DebugEndpoints.register(on: self, modelContainer: modelContainer) { [store] in
+                    guard let store else { return .empty }
+                    return DebugMarketInputs(livePricesUSD: store.livePricesUSD, usdToDisplayRate: store.currentUSDToDisplayRate)
+                }
             }
             if store != nil {
                 registerTCARoutes()
@@ -158,6 +161,8 @@
                 var body: [String: any Sendable] = [
                     "currency": store.selectedCurrency.displayCode,
                     "prices": prices,
+                    "pricesUSD": store.livePricesUSD.mapValues(\.jsonDouble),
+                    "usdToDisplayRate": rate.jsonDouble,
                     "changes24h": changes
                 ]
                 if let date = store.lastPriceUpdate {
