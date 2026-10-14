@@ -198,26 +198,6 @@ enum ManualPositionPricing {
     static func livePriceUSD(coinGeckoId: String?, in livePricesUSD: [String: Decimal]) -> Decimal? {
         TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId).flatMap { livePricesUSD[$0] }
     }
-
-    /// Resolves the canonical USD value to persist for a manual position.
-    ///
-    /// `displayPrice` is the live price in the current display currency, so it is
-    /// converted back to USD via `usdToDisplayRate` before being applied. Without
-    /// this, adding a position while EUR/CHF is displayed would store a
-    /// display-currency notional into the canonical `usdValue`/`netUSDValue` fields
-    /// and corrupt totals after switching back to USD. An explicit override is
-    /// entered by the user as a USD amount, so it is used verbatim.
-    static func usdValue(
-        amount: Decimal,
-        override: Decimal?,
-        displayPrice: Decimal?,
-        usdToDisplayRate: Decimal) -> Decimal {
-        if let override {
-            return override
-        }
-        guard let displayPrice, usdToDisplayRate > 0 else { return 0 }
-        return amount * (displayPrice / usdToDisplayRate)
-    }
 }
 
 enum ManualPositionCategoryRules {
