@@ -33,8 +33,8 @@ public final class TokenIdentityMapping {
         self.canonicalKey = Self.canonicalKey(chain: chain, contractAddress: normalizedContract)
         self.chain = chain
         self.contractAddress = normalizedContract
-        self.coinGeckoId = Self.normalizedProviderID(coinGeckoId)
-        self.zapperId = Self.normalizedProviderID(zapperId)
+        self.coinGeckoId = TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId)
+        self.zapperId = TokenIdentityMappingFeature.normalizedProviderID(zapperId)
         self.coinGeckoResolvedAt = coinGeckoResolvedAt
         self.zapperResolvedAt = zapperResolvedAt
         self.lastCoinGeckoFailureAt = lastCoinGeckoFailureAt
@@ -73,7 +73,7 @@ public final class TokenIdentityMapping {
     }
 
     public func updateCoinGeckoId(_ coinGeckoId: String?, resolvedAt: Date) {
-        self.coinGeckoId = Self.normalizedProviderID(coinGeckoId)
+        self.coinGeckoId = TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId)
         coinGeckoResolvedAt = resolvedAt
         lastCoinGeckoFailureAt = nil
         updatedAt = resolvedAt
@@ -102,11 +102,5 @@ public final class TokenIdentityMapping {
     public static func normalizedContractAddress(_ address: String, chain: Chain) -> String {
         let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
         return chain == .solana ? trimmed : trimmed.lowercased()
-    }
-
-    public static func normalizedProviderID(_ id: String?) -> String? {
-        guard let id else { return nil }
-        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.isEmpty ? nil : normalized
     }
 }

@@ -326,7 +326,7 @@ enum TokenIdentityMappingWriter {
         mappings: inout [TokenIdentityMapping],
         in context: ModelContext,
         now: Date = .now) -> Bool {
-        guard let normalizedID = TokenIdentityMapping.normalizedProviderID(coinGeckoId) else {
+        guard let normalizedID = TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId) else {
             return false
         }
 
