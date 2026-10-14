@@ -28,6 +28,22 @@ extension ViewRenderSmokeTests {
         #expect(rows == [["Primary Wallet", "Wallet", "Idle", "Ethereum", AssetDetailFormat.amount(1000), TokenRowLabels.ignored]], "\(rows)")
     }
 
+    /// U4: a counted token with no price shows the Unpriced caption in place of a value.
+    @Test(.renderedTextReadable) func `asset detail shows an unpriced token with its caption`() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let account = try #require(context.fetch(FetchDescriptor<Account>()).first)
+        let nope = Asset(symbol: "NOPE", name: "No Price", category: .other)
+        context.insert(nope)
+        insertPosition(.idle, on: .ethereum, PositionToken(role: .balance, amount: 1, usdValue: 0, asset: nope), into: account, context: context)
+        try context.save()
+
+        let (rows, _) = try readAssetDetail(nope.id, in: container, until: { !$0.isEmpty }, read: Self.tableRows)
+
+        try #require(rows.count == 1, "\(rows)")
+        #expect(rows == [["Primary Wallet", "Wallet", "Idle", "Ethereum", AssetDetailFormat.amount(1), TokenRowLabels.unpriced]], "\(rows)")
+    }
+
     /// U4, S7: a reward shows its own value, 5 × $1, tagged Not counted (the muting is a colour),
     /// and sorts at its contribution of 0, above the borrow, which is negative.
     @Test(.renderedTextReadable) func `asset detail tags a reward as not counted and signs the borrow`() throws {

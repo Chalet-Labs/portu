@@ -166,6 +166,17 @@ struct AssetDetailSeamTests {
         #expect(page.header == RowPricing(price: 50, source: .live, fraction24h: nil))
     }
 
+    /// S7, U3: a held DEGEN prices through its identity mapping (degen-base, live 0.01), so the
+    /// row, the total and the header share one price ID: 10,000 × 0.01.
+    @Test func `a held mapped asset prices through its mapping`() {
+        let degen = Fixture.inputs.filter { $0.token.assetId == Fixture.AssetID.degen }
+        let page = Seam.page(Seam.asset(Fixture.AssetID.degen, "DEGEN", onchainIdentity: Fixture.degenIdentity), inputs: degen)
+
+        #expect(Seam.rows(page) == [.init(id: Fixture.tokenID(10), state: .counted, value: 100)])
+        #expect(page.holdings.totalValue == 100)
+        #expect(page.header == RowPricing(price: Fixture.decimal("0.01"), source: .live, fraction24h: nil))
+    }
+
     // MARK: - Holdings (S7, A7, AGENT-DECIDED 13)
 
     /// A7: the total is Σ contributions, the amount the net of the counted tokens, and the
@@ -287,6 +298,25 @@ struct AssetDetailSeamTests {
         #expect(solPage.holdings.totalValue == 1500)
         #expect(Seam.rows(scamPage) == [.init(id: Fixture.tokenID(18), state: .ignored, value: nil)])
         #expect(Seam.rows(badPage) == [.init(id: Fixture.tokenID(8), state: .unpriced, value: nil)])
+    }
+
+    /// U4: a zero-amount balance counts nothing. Its row shows, not counted, at its own value of 0
+    /// and sorts at contribution 0; the total, the amount and the chains leave it out.
+    @Test func `a zero-amount token shows as not counted`() {
+        let empty = Seam.ethInput(Fixture.uuid(9506), role: .balance, amount: 0, chain: .optimism, position: Fixture.uuid(9606))
+        let page = Seam.page(Seam.eth, inputs: Seam.ethVariant + [empty])
+        let expected: [Seam.RowValue] = [
+            .init(id: Fixture.tokenID(2), state: .counted, value: 6000),
+            .init(id: Fixture.tokenID(12), state: .counted, value: 3000),
+            .init(id: empty.tokenId, state: .notCounted, value: 0),
+            .init(id: Fixture.tokenID(13), state: .counted, value: -1500),
+            .init(id: Seam.arbitrumBorrowID, state: .counted, value: -3000)
+        ]
+
+        #expect(Seam.rows(page) == expected)
+        #expect(page.holdings.totalValue == 4500)
+        #expect(page.holdings.totalAmount == Fixture.decimal("1.5"))
+        #expect(page.holdings.chains.map(\.name) == ["Ethereum", "Arbitrum"])
     }
 
     /// AGENT-DECIDED 13: rows sort by contribution descending, then account name, then token ID. A
