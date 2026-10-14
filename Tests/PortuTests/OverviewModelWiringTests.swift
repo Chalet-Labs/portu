@@ -16,8 +16,7 @@ import Testing
 /// | DEGEN | active | 10,000 | 95 | 100 (Degen-chain token mapped to `degen-base`, live 0.01; sync 95) |
 /// | BTC | inactive | 1 | 60000 | not valued |
 ///
-/// The display book `appState.prices` holds ten times the USD book, so a view that read it would
-/// show other numbers. The rate is 0.9.
+/// The rate is 0.9.
 @MainActor
 struct OverviewModelWiringTests {
     private typealias Fixture = PortfolioValuationFixture
@@ -94,7 +93,7 @@ struct OverviewModelWiringTests {
     }
 
     @Test(arguments: [false, true])
-    func `the overview price inputs read the usd book, not the display book`(includingLiveChanges: Bool) throws {
+    func `the overview price inputs read the usd book`(includingLiveChanges: Bool) throws {
         let store = try Store()
         let historical = HistoricalMarketPrices(closesUSD: [:], changes24h: ["bitcoin": Fixture.decimal("0.02")])
 
@@ -245,10 +244,8 @@ struct OverviewModelWiringTests {
             self.tokens = try context.fetch(FetchDescriptor<PositionToken>())
             self.mappings = try context.fetch(FetchDescriptor<TokenIdentityMapping>())
 
-            let livePricesUSD: [String: Decimal] = ["ethereum": 3000, "degen-base": Fixture.decimal("0.01"), "bitcoin": 60000]
             self.appState = AppState()
-            appState.livePricesUSD = livePricesUSD
-            appState.prices = livePricesUSD.mapValues { $0 * 10 }
+            appState.livePricesUSD = ["ethereum": 3000, "degen-base": Fixture.decimal("0.01"), "bitcoin": 60000]
             appState.priceChanges24h = ["ethereum": Fixture.decimal("0.25")]
             appState.currentUSDToDisplayRate = OverviewModelWiringTests.rate
         }

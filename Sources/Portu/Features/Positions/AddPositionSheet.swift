@@ -155,7 +155,7 @@ struct AddPositionSheet: View {
             amount: amount,
             override: usdValueOverride,
             coinGeckoId: asset.coinGeckoId,
-            appState: appState)
+            livePricesUSD: appState.livePricesUSD)
         let token = PositionToken(role: .balance, amount: amount, usdValue: usdValue, asset: asset)
         let position = Position(
             positionType: positionType,
@@ -185,12 +185,15 @@ enum ManualPositionPricing {
     /// The USD value the sheet stores for a new manual position (U1). A typed value is a USD total
     /// and is stored as entered; otherwise the asset's live USD price × the amount, or 0 with no
     /// price. The display rate plays no part.
-    @MainActor
-    static func usdValue(amount: Decimal, override: Decimal?, coinGeckoId: String?, appState: AppState) -> Decimal {
+    static func usdValue(
+        amount: Decimal,
+        override: Decimal?,
+        coinGeckoId: String?,
+        livePricesUSD: [String: Decimal]) -> Decimal {
         if let override {
             return override
         }
-        guard let price = livePriceUSD(coinGeckoId: coinGeckoId, in: appState.livePricesUSD) else { return 0 }
+        guard let price = livePriceUSD(coinGeckoId: coinGeckoId, in: livePricesUSD) else { return 0 }
         return amount * price
     }
 

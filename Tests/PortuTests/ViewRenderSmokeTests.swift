@@ -139,7 +139,6 @@ struct ViewRenderSmokeTests {
     @Test func `token settings tab renders without crashing`() throws {
         let container = try makeContainer()
         let appState = AppState()
-        appState.prices = ["ethereum": 3050, "usd-coin": 1]
 
         let view = TokenSettingsView()
             .modelContainer(container)
