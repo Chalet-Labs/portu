@@ -275,8 +275,8 @@ enum TokenSettingsFeature {
             || (row.coinGeckoId?.localizedCaseInsensitiveContains(query) ?? false)
     }
 
-    /// Counted rows with a value first, by value descending; then the rows that do not count (ignored,
-    /// unpriced, not counted). Ties and the trailing group: symbol, then asset ID.
+    /// Rows with a value that counts first, by value descending; then the rows with no value (ignored,
+    /// unpriced) and the not-counted rows. Ties and the trailing group: symbol, then asset ID.
     private static func sortRows(_ lhs: TokenSettingsRow, _ rhs: TokenSettingsRow) -> Bool {
         let lhsValue = sortValue(lhs)
         let rhsValue = sortValue(rhs)

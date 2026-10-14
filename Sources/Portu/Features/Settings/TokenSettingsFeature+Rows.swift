@@ -31,7 +31,8 @@ extension TokenSettingsRow {
             override: override)
     }
 
-    /// Borrows subtract, as in `ValuationTotals.netAmount`; rewards add.
+    /// Borrows subtract, as in `ValuationTotals.netAmount`; rewards add. Unlike `netAmount`, the
+    /// all-token sum keeps non-positive amounts, as the pre-PR (b) aggregate did.
     private static func amount(of row: DashboardRow<UUID>, isIgnored: Bool) -> Decimal {
         guard isIgnored || row.status == .notCounted else { return row.totals.netAmount }
         return row.tokens.reduce(0) { sum, token in
