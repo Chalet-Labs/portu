@@ -245,8 +245,9 @@ struct AccountsView: View {
         }
     }
 
+    @ViewBuilder
     private func balanceCell(_ row: AccountRowData) -> some View {
-        VStack(alignment: .trailing) {
+        let cell = VStack(alignment: .trailing) {
             Text(AccountsFormat.currency(row.balance, code: currencyCode))
                 .font(DashboardStyle.monoTableFont)
             if let error = row.lastSyncError {
@@ -256,7 +257,11 @@ struct AccountsView: View {
                     .lineLimit(1)
             }
         }
-        .help(AccountsFormat.providerTotalHelp(row.providerTotal, code: currencyCode))
+        if let providerTotal = row.providerTotal {
+            cell.help(AccountsFormat.providerTotalHelp(providerTotal, code: currencyCode))
+        } else {
+            cell
+        }
     }
 
     @ViewBuilder

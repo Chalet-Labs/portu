@@ -36,7 +36,9 @@ nonisolated struct AccountRowData: Identifiable {
     let address: String
     let type: String
     let balance: Decimal
-    var providerTotal: Decimal = 0
+    /// The sync-time total for the tooltip; `nil` for an exchange, which reports no USD value at
+    /// sync (U6).
+    var providerTotal: Decimal?
     let dataSource: DataSource
     let isActive: Bool
     let lastSyncError: String?
@@ -195,7 +197,7 @@ struct AccountsFeature {
                 address: addressDisplay(for: account),
                 type: account.kind.rawValue.capitalized,
                 balance: account.totalBalance,
-                providerTotal: account.providerTotal,
+                providerTotal: account.kind == .exchange ? nil : account.providerTotal,
                 dataSource: account.dataSource,
                 isActive: account.isActive,
                 lastSyncError: account.lastSyncError)

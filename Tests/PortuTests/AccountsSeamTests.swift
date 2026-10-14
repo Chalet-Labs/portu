@@ -111,18 +111,46 @@ struct AccountsSeamTests {
     }
 
     /// "Number changes → Accounts": Kraken goes from 0 to a live value. An exchange stores no sync
-    /// value, so its 0.5 BTC is worth live 60,000 × 0.5 while its provider total stays 0.
+    /// value, so its 0.5 BTC is worth live 60,000 × 0.5.
     @Test func `an exchange token with no sync value takes its live value`() {
-        let btc = Fixture.token(Fixture.uuid(16), "BTC", "Bitcoin", .major, coinGeckoId: "bitcoin", amount: Fixture.decimal("0.5"), usdValue: 0)
-        let balances = Seam.balances(inputs: [Seam.lone(btc, account: Seam.exchangeAccount)])
+        let balances = Seam.balances(inputs: [Seam.lone(Self.krakenBTC, account: Seam.exchangeAccount)])
 
         #expect(balances[Seam.exchangeAccount]?.balance == 30000)
-        #expect(balances[Seam.exchangeAccount]?.providerTotal == 0)
     }
 
+    /// U6: an exchange reports no USD value at sync, so its row carries no provider total and shows
+    /// no tooltip. The wallet and the manual account keep theirs (64,999.4 and the 2900 entry).
+    @Test func `an exchange account's row has no provider total`() {
+        let manualETH = ValuationInput(
+            tokenId: Fixture.uuid(9210),
+            token: Fixture.token(Fixture.AssetID.eth, "ETH", "Ethereum", .major, coinGeckoId: "ethereum", amount: 1, usdValue: 2900),
+            position: PositionContext(positionId: Fixture.uuid(9211), positionType: .idle, accountId: Seam.manualAccount))
+        let balances = Seam.balances(inputs: Fixture.inputs + [Seam.lone(Self.krakenBTC, account: Seam.exchangeAccount), manualETH])
+        let accounts: [(id: UUID, kind: AccountKind, source: DataSource)] = [
+            (Fixture.mainAccount, .wallet, .zerion),
+            (Seam.manualAccount, .manual, .manual),
+            (Seam.exchangeAccount, .exchange, .exchange)
+        ]
+
+        let rows = AccountsFeature.mapAccountRows(from: accounts.map { account in
+            let balance = balances[account.id] ?? .zero
+            return AccountInput(
+                id: account.id, name: account.kind.rawValue, kind: account.kind,
+                exchangeType: account.kind == .exchange ? .kraken : nil, dataSource: account.source, group: nil, isActive: true,
+                lastSyncError: nil, totalBalance: balance.balance, providerTotal: balance.providerTotal,
+                firstAddress: nil)
+        })
+
+        #expect(rows.map(\.balance) == [Fixture.decimal("10430.4"), 3000, 30000])
+        #expect(rows.map(\.providerTotal) == [Fixture.decimal("64999.4"), 2900, nil])
+    }
+
+    private static let krakenBTC = Fixture.token(
+        Fixture.uuid(16), "BTC", "Bitcoin", .major, coinGeckoId: "bitcoin", amount: Fixture.decimal("0.5"), usdValue: 0)
+
     /// "Number changes → Accounts", new tooltip "Provider total at last sync": the sync-time total
-    /// (A6) at the current rate, on a synced account and on a manual one (AGENT-DECIDED 12). The
-    /// manual entry stored 1 ETH at 2900; ETH is now live at 3000.
+    /// (A6) at the current rate, on a synced account and on a manual one (AGENT-DECIDED 12, narrowed
+    /// by U6). The manual entry stored 1 ETH at 2900; ETH is now live at 3000.
     @Test func `the provider total is the sync-time total at the current rate`() {
         let rate = Fixture.decimal("0.9")
         let manualETH = Fixture.token(Fixture.AssetID.eth, "ETH", "Ethereum", .major, coinGeckoId: "ethereum", amount: 1, usdValue: 2900)

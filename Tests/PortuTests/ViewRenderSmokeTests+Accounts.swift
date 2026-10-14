@@ -11,28 +11,36 @@ import Testing
 /// borrow of 500 (live 1), so its balance is 6100 + 3500 = 9600 against a provider total of 9500.
 extension ViewRenderSmokeTests {
     /// "Number changes → Accounts": the balance is Σ contributions at the live value, and the new
-    /// "Provider total at last sync" tooltip shows on every account, a manual one included
-    /// (AGENT-DECIDED 12). The manual account's 1 ETH was entered at 3000 and is now live at 3050.
+    /// "Provider total at last sync" tooltip shows on wallet and manual accounts (AGENT-DECIDED 12).
+    /// The manual account's 1 ETH was entered at 3000 and is now live at 3050. U6: the exchange
+    /// stored its 1 ETH at 0, so its live balance has no tooltip. Rows are in name order.
     @Test(.renderedTextReadable) func `accounts show live balances with the provider total tooltip`() throws {
         let container = try makeContainer()
         let context = container.mainContext
         let eth = try #require(context.fetch(FetchDescriptor<Asset>()).first { $0.symbol == "ETH" })
         let manual = Account(name: "Cold Storage", kind: .manual, dataSource: .manual)
+        let kraken = Account(name: "Kraken", kind: .exchange, exchangeType: .kraken, dataSource: .exchange)
         context.insert(manual)
+        context.insert(kraken)
         context.insert(Position(
             positionType: .idle,
             netUSDValue: 3000,
             tokens: [PositionToken(role: .balance, amount: 1, usdValue: 3000, asset: eth)],
             account: manual))
+        context.insert(Position(
+            positionType: .idle,
+            netUSDValue: 0,
+            tokens: [PositionToken(role: .balance, amount: 1, usdValue: 0, asset: eth)],
+            account: kraken))
         try context.save()
 
-        let (cells, code) = try readAccountBalances(in: container, until: { $0.count == 2 })
+        let (cells, code) = try readAccountBalances(in: container, until: { $0.count == 3 })
         let currency = { (value: Decimal) in AccountsFormat.currency(value, code: code) }
         let help = { (value: Decimal) in AccountsFormat.providerTotalHelp(value, code: code) }
 
-        try #require(cells.count == 2, "\(cells)")
-        #expect(cells.map(\.texts) == [[currency(3050)], [currency(9600)]], "\(cells)")
-        #expect(cells.map(\.help) == [help(3000), help(9500)], "\(cells)")
+        try #require(cells.count == 3, "\(cells)")
+        #expect(cells.map(\.texts) == [[currency(3050)], [currency(3050)], [currency(9600)]], "\(cells)")
+        #expect(cells.map(\.help) == [help(3000), nil, help(9500)], "\(cells)")
     }
 
     struct BalanceCell: Equatable {
