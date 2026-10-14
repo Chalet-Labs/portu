@@ -37,7 +37,7 @@ struct AssetPositionsTable: View {
                 TableColumn("Balance") { row in
                     AssetPositionBalanceCell(row: row, currencyCode: currencyCode)
                 }
-                .width(min: 80, ideal: 100)
+                .width(min: 80, ideal: 140)
             }
             .dashboardTable()
         }

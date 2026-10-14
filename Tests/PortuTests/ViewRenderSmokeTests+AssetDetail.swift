@@ -25,9 +25,7 @@ extension ViewRenderSmokeTests {
         let (rows, _) = try readAssetDetail(scam.id, in: container, until: { !$0.isEmpty }, read: Self.tableRows)
 
         try #require(rows.count == 1, "\(rows)")
-        withKnownIssue("Asset Detail still shows an ignored token's value") {
-            #expect(rows == [["Primary Wallet", "Wallet", "Idle", "Ethereum", AssetDetailFormat.amount(1000), TokenRowLabels.ignored]], "\(rows)")
-        }
+        #expect(rows == [["Primary Wallet", "Wallet", "Idle", "Ethereum", AssetDetailFormat.amount(1000), TokenRowLabels.ignored]], "\(rows)")
     }
 
     /// U4, S7: a reward shows its own value, 5 × $1, tagged Not counted (the muting is a colour),
@@ -44,9 +42,7 @@ extension ViewRenderSmokeTests {
         let currency = { (value: Decimal) in AssetDetailFormat.currency(value, code: code) }
 
         try #require(rows.count == 3, "\(rows)")
-        withKnownIssue("Asset Detail rows are still unsigned and every row counts") {
-            #expect(rows.map(\.last) == [currency(4000), "\(TokenRowLabels.notCounted) \(currency(5))", currency(-500)], "\(rows)")
-        }
+        #expect(rows.map(\.last) == [currency(4000), "\(TokenRowLabels.notCounted) \(currency(5))", currency(-500)], "\(rows)")
     }
 
     /// S7, F4: each chain shows its net amount and net value; a net total that is not positive
@@ -68,12 +64,10 @@ extension ViewRenderSmokeTests {
         #expect(texts.contains(AssetDetailFormat.change(Decimal(string: "0.021") ?? 0)), "\(texts)")
         #expect(texts.contains(AssetDetailFormat.amount(-1)), "\(texts)")
         #expect(texts.contains(currency(-3050)), "\(texts)")
-        withKnownIssue("The per-chain breakdown is still positive-only, with amount shares") {
-            #expect(networks == [
-                "Ethereum", AssetDetailFormat.amount(2), "—", currency(6100),
-                "Arbitrum", AssetDetailFormat.amount(-3), "—", currency(-9150)
-            ], "\(texts)")
-        }
+        #expect(networks == [
+            "Ethereum", AssetDetailFormat.amount(2), "—", currency(6100),
+            "Arbitrum", AssetDetailFormat.amount(-3), "—", currency(-9150)
+        ], "\(texts)")
     }
 
     private func insertPosition(

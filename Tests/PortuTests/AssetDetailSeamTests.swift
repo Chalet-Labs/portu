@@ -106,10 +106,8 @@ struct AssetDetailSeamTests {
         let page = Seam.page(Seam.eth, inputs: Seam.ethVariant)
         let converted = Seam.page(Seam.eth, inputs: Seam.ethVariant, rate: Fixture.decimal("0.9"))
 
-        withKnownIssue("The header still reads the display book under the chart key") {
-            #expect(page.header == RowPricing(price: 3000, source: .live, fraction24h: Fixture.decimal("0.25")))
-            #expect(converted.header == RowPricing(price: 2700, source: .live, fraction24h: Fixture.decimal("0.25")))
-        }
+        #expect(page.header == RowPricing(price: 3000, source: .live, fraction24h: Fixture.decimal("0.25")))
+        #expect(converted.header == RowPricing(price: 2700, source: .live, fraction24h: Fixture.decimal("0.25")))
     }
 
     /// S7: LINK has no live price; its newer close (16) values it and the historical +25% is its
@@ -118,9 +116,7 @@ struct AssetDetailSeamTests {
         let link = Fixture.inputs.filter { $0.token.assetId == Fixture.AssetID.link }
         let page = Seam.page(Seam.asset(Fixture.AssetID.link, "LINK", coinGeckoId: "chainlink"), inputs: link)
 
-        withKnownIssue("The header still reads the display book under the chart key") {
-            #expect(page.header == RowPricing(price: 16, source: .close, fraction24h: Fixture.decimal("0.25")))
-        }
+        #expect(page.header == RowPricing(price: 16, source: .close, fraction24h: Fixture.decimal("0.25")))
     }
 
     /// V5: a manual lead has no fraction, even with a live fraction on file for its coin.
@@ -131,9 +127,7 @@ struct AssetDetailSeamTests {
             inputs: manual,
             liveChanges24h: Fixture.liveChanges24h.merging(["manual-coin": Fixture.decimal("0.1")]) { $1 })
 
-        withKnownIssue("The header still reads the display book under the chart key") {
-            #expect(page.header == RowPricing(price: 2, source: .manual, fraction24h: nil))
-        }
+        #expect(page.header == RowPricing(price: 2, source: .manual, fraction24h: nil))
     }
 
     /// U3: BAD is held and counted, but its onchain live price is implausible, so nothing is
@@ -156,13 +150,11 @@ struct AssetDetailSeamTests {
         let sol = Seam.page(Seam.asset(Fixture.AssetID.sol, "SOL", coinGeckoId: "solana"), inputs: solReward)
         let degen = Seam.page(Seam.asset(Fixture.AssetID.degen, "DEGEN", onchainIdentity: Fixture.degenIdentity), inputs: [])
 
-        withKnownIssue("The header still reads the display book under the chart key") {
-            #expect(bitcoin.header == RowPricing(price: 60000, source: .live, fraction24h: Fixture.decimal("0.1")))
-            #expect(convertedBitcoin.header == RowPricing(price: 54000, source: .live, fraction24h: Fixture.decimal("0.1")))
-            #expect(dogecoin.header == RowPricing(price: Fixture.decimal("0.2"), source: .close, fraction24h: Fixture.decimal("-0.2")))
-            #expect(sol.header == RowPricing(price: 150, source: .live, fraction24h: nil))
-            #expect(degen.header == RowPricing(price: Fixture.decimal("0.01"), source: .live, fraction24h: nil))
-        }
+        #expect(bitcoin.header == RowPricing(price: 60000, source: .live, fraction24h: Fixture.decimal("0.1")))
+        #expect(convertedBitcoin.header == RowPricing(price: 54000, source: .live, fraction24h: Fixture.decimal("0.1")))
+        #expect(dogecoin.header == RowPricing(price: Fixture.decimal("0.2"), source: .close, fraction24h: Fixture.decimal("-0.2")))
+        #expect(sol.header == RowPricing(price: 150, source: .live, fraction24h: nil))
+        #expect(degen.header == RowPricing(price: Fixture.decimal("0.01"), source: .live, fraction24h: nil))
     }
 
     /// U3: an ignored asset has no counted, non-ignored token, so it shows its market quote (SCAM
@@ -171,9 +163,7 @@ struct AssetDetailSeamTests {
         let scam = Fixture.inputs.filter { $0.token.assetId == Fixture.AssetID.scam }
         let page = Seam.page(Seam.asset(Fixture.AssetID.scam, "SCAM", coinGeckoId: "scam-token"), inputs: scam)
 
-        withKnownIssue("The header still reads the display book under the chart key") {
-            #expect(page.header == RowPricing(price: 50, source: .live, fraction24h: nil))
-        }
+        #expect(page.header == RowPricing(price: 50, source: .live, fraction24h: nil))
     }
 
     // MARK: - Holdings (S7, A7, AGENT-DECIDED 13)
@@ -185,9 +175,7 @@ struct AssetDetailSeamTests {
 
         #expect(page.holdings.totalAmount == Fixture.decimal("1.5"))
         #expect(page.holdings.accountCount == 2)
-        withKnownIssue("Holdings still price from the display book") {
-            #expect(page.holdings.totalValue == 4500)
-        }
+        #expect(page.holdings.totalValue == 4500)
     }
 
     /// AGENT-DECIDED 13: accounts are counted by ID, so two accounts sharing a name count twice.
@@ -195,9 +183,7 @@ struct AssetDetailSeamTests {
         let labels = Seam.labels(Seam.ethVariant, accountNames: [Fixture.mainAccount: "Wallet", Fixture.degenAccount: "Wallet"])
         let page = Seam.page(Seam.eth, inputs: Seam.ethVariant, labels: labels)
 
-        withKnownIssue("The account count still counts names") {
-            #expect(page.holdings.accountCount == 2)
-        }
+        #expect(page.holdings.accountCount == 2)
     }
 
     /// AGENT-DECIDED 13, T4: an ignored asset's tokens add nothing to Total Amount or Total Value.
@@ -206,10 +192,8 @@ struct AssetDetailSeamTests {
         let page = Seam.page(Seam.asset(Fixture.AssetID.scam, "SCAM", coinGeckoId: "scam-token"), inputs: scam)
 
         #expect(page.holdings.accountCount == 1)
-        withKnownIssue("Ignored tokens still count") {
-            #expect(page.holdings.totalAmount == 0)
-            #expect(page.holdings.totalValue == 0)
-        }
+        #expect(page.holdings.totalAmount == 0)
+        #expect(page.holdings.totalValue == 0)
     }
 
     // MARK: - Per-chain breakdown (S7, F4, T2)
@@ -224,10 +208,8 @@ struct AssetDetailSeamTests {
             AssetChainRow(name: "Arbitrum", amount: -1, value: -3000, share: Fixture.decimal("-0.667"))
         ]
 
-        withKnownIssue("The per-chain breakdown is still positive-only") {
-            #expect(page.holdings.chains == expected)
-            #expect(page.holdings.chains.compactMap(\.share).reduce(0, +) == 1)
-        }
+        #expect(page.holdings.chains == expected)
+        #expect(page.holdings.chains.compactMap(\.share).reduce(0, +) == 1)
     }
 
     /// F4: a net total that is not positive gives every chain "—" (7500 − 9000 = −1500).
@@ -235,10 +217,8 @@ struct AssetDetailSeamTests {
         let inputs = Seam.ethTokens + [Seam.arbitrumBorrow(amount: 3)]
         let page = Seam.page(Seam.eth, inputs: inputs)
 
-        withKnownIssue("The per-chain breakdown is still positive-only") {
-            #expect(page.holdings.chains.map(\.name) == ["Ethereum", "Arbitrum"])
-            #expect(page.holdings.chains.map(\.share) == [nil, nil])
-        }
+        #expect(page.holdings.chains.map(\.name) == ["Ethereum", "Arbitrum"])
+        #expect(page.holdings.chains.map(\.share) == [nil, nil])
     }
 
     /// S7: a chain holding only a reward counts nothing and vanishes; its row still shows in the
@@ -248,9 +228,7 @@ struct AssetDetailSeamTests {
         let page = Seam.page(Seam.eth, inputs: Seam.ethVariant + [reward])
 
         #expect(!page.holdings.chains.map(\.name).contains("Base"))
-        withKnownIssue("The per-chain breakdown is still positive-only") {
-            #expect(page.holdings.chains.map(\.name) == ["Ethereum", "Arbitrum"])
-        }
+        #expect(page.holdings.chains.map(\.name) == ["Ethereum", "Arbitrum"])
     }
 
     /// C8: Asset Detail never hides a row, whatever the dashboard settings: a dust chain (0.0001 ETH
@@ -279,21 +257,17 @@ struct AssetDetailSeamTests {
             .init(id: Seam.arbitrumBorrowID, state: .counted, value: -3000)
         ]
 
-        withKnownIssue("Rows are still unsigned display-book values") {
-            #expect(Seam.rows(page) == expected)
-            #expect(page.rows.compactMap(\.value).reduce(0, +) == page.holdings.totalValue)
-        }
+        #expect(Seam.rows(page) == expected)
+        #expect(page.rows.compactMap(\.value).reduce(0, +) == page.holdings.totalValue)
     }
 
     /// T1 Units: the rate is applied once, to rows, total, chains and header alike.
     @Test func `the display rate is applied once`() {
         let page = Seam.page(Seam.eth, inputs: Seam.ethVariant, rate: Fixture.decimal("0.9"))
 
-        withKnownIssue("Rows are still unsigned display-book values") {
-            #expect(page.rows.map(\.value) == [5400, 2700, -1350, -2700])
-            #expect(page.holdings.totalValue == 4050)
-            #expect(page.holdings.chains.map(\.value) == [6750, -2700])
-        }
+        #expect(page.rows.map(\.value) == [5400, 2700, -1350, -2700])
+        #expect(page.holdings.totalValue == 4050)
+        #expect(page.holdings.chains.map(\.value) == [6750, -2700])
     }
 
     /// U4: the stake counts its contribution; the reward shows its own value, not counted. An
@@ -306,15 +280,13 @@ struct AssetDetailSeamTests {
         let scamPage = Seam.page(Seam.asset(Fixture.AssetID.scam, "SCAM", coinGeckoId: "scam-token"), inputs: scam)
         let badPage = Seam.page(Seam.asset(Fixture.AssetID.bad, "BAD", onchainIdentity: Fixture.badIdentity), inputs: bad)
 
-        withKnownIssue("Every row is still counted at its display-book value") {
-            #expect(Seam.rows(solPage) == [
-                .init(id: Fixture.tokenID(15), state: .counted, value: 1500),
-                .init(id: Fixture.tokenID(16), state: .notCounted, value: 150)
-            ])
-            #expect(solPage.holdings.totalValue == 1500)
-            #expect(Seam.rows(scamPage) == [.init(id: Fixture.tokenID(18), state: .ignored, value: nil)])
-            #expect(Seam.rows(badPage) == [.init(id: Fixture.tokenID(8), state: .unpriced, value: nil)])
-        }
+        #expect(Seam.rows(solPage) == [
+            .init(id: Fixture.tokenID(15), state: .counted, value: 1500),
+            .init(id: Fixture.tokenID(16), state: .notCounted, value: 150)
+        ])
+        #expect(solPage.holdings.totalValue == 1500)
+        #expect(Seam.rows(scamPage) == [.init(id: Fixture.tokenID(18), state: .ignored, value: nil)])
+        #expect(Seam.rows(badPage) == [.init(id: Fixture.tokenID(8), state: .unpriced, value: nil)])
     }
 
     /// AGENT-DECIDED 13: rows sort by contribution descending, then account name, then token ID. A
@@ -337,9 +309,7 @@ struct AssetDetailSeamTests {
         })
         let page = AssetDetailFeature.page(context, asset: Seam.asset(Fixture.AssetID.otc, "OTC"), labels: labels)
 
-        withKnownIssue("Rows still sort by unsigned value alone") {
-            #expect(page.rows.map(\.id) == [5005, 5002, 5004, 5001, 5000, 5003].map(Fixture.uuid))
-        }
+        #expect(page.rows.map(\.id) == [5005, 5002, 5004, 5001, 5000, 5003].map(Fixture.uuid))
     }
 
     /// The row labels: account and protocol names from the label table, the position type as the

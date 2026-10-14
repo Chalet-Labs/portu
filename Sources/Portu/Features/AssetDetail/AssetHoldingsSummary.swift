@@ -36,6 +36,9 @@ struct AssetHoldingsSummary: View {
                     HStack {
                         Text(chain.name)
                         Spacer()
+                        Text(AssetDetailFormat.amount(chain.amount))
+                            .font(DashboardStyle.monoTableFont)
+                            .foregroundStyle(PortuTheme.dashboardSecondaryText)
                         Text(AssetDetailFormat.share(chain.share))
                             .foregroundStyle(PortuTheme.dashboardSecondaryText)
                         Text(AssetDetailFormat.currency(chain.value, code: currencyCode))

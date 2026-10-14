@@ -49,7 +49,7 @@ struct AssetDetailView: View {
     var body: some View {
         if let asset {
             let projection = AssetDetailProjection(asset, tokens: tokens)
-            let page = sources.assetDetail(projection, legacyDisplayPrices: store.liveDisplayPrices)
+            let page = sources.assetDetail(projection)
             HSplitView {
                 ScrollView {
                     VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
