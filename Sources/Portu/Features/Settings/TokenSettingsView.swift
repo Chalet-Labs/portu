@@ -285,10 +285,10 @@ private struct TokenSettingsCountsBar: View {
     var body: some View {
         HStack(spacing: 8) {
             count("All", counts.all)
-            count("Unpriced", counts.unpriced)
+            count(TokenRowLabels.unpriced, counts.unpriced)
             count("Dust", counts.belowThreshold)
-            count(TokenSettingsLabels.ignored, counts.ignored)
-            count(TokenSettingsLabels.notCounted, counts.notCounted)
+            count(TokenRowLabels.ignored, counts.ignored)
+            count(TokenRowLabels.notCounted, counts.notCounted)
             count("Manual", counts.manualPrice)
             count("Mapped", counts.mappedPriceSource)
         }

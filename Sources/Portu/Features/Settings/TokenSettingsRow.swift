@@ -303,9 +303,9 @@ private struct TokenSettingsStatusTag: View {
 
     init?(_ row: TokenSettingsRow) {
         if row.isIgnored {
-            self.title = TokenSettingsLabels.ignored
+            self.title = TokenRowLabels.ignored
         } else if row.status == .notCounted {
-            self.title = TokenSettingsLabels.notCounted
+            self.title = TokenRowLabels.notCounted
         } else {
             return nil
         }
@@ -321,11 +321,6 @@ private struct TokenSettingsStatusTag: View {
                 Capsule()
                     .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
-}
-
-enum TokenSettingsLabels {
-    static let ignored = "Ignored"
-    static let notCounted = "Not counted"
 }
 
 private struct TokenSettingsLogo: View {

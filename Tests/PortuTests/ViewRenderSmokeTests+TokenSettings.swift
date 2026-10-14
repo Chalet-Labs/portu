@@ -52,7 +52,7 @@ extension ViewRenderSmokeTests {
         let ethRow = Self.rowTexts(texts, symbol: "ETH")
 
         #expect(ethRow.first == "ETH", "\(texts)")
-        #expect(ethRow.contains(TokenSettingsLabels.ignored), "\(texts)")
+        #expect(ethRow.contains(TokenRowLabels.ignored), "\(texts)")
         #expect(ethRow.contains("—"), "\(texts)")
         #expect(!ethRow.contains { $0.hasPrefix(Self.currencyPrefix) }, "\(ethRow)")
     }
@@ -79,10 +79,10 @@ extension ViewRenderSmokeTests {
         let rewardRow = Self.rowTexts(texts, symbol: "RWD")
 
         #expect(rewardRow.first == "RWD", "\(texts)")
-        #expect(rewardRow.contains(TokenSettingsLabels.notCounted), "\(texts)")
+        #expect(rewardRow.contains(TokenRowLabels.notCounted), "\(texts)")
         #expect(rewardRow.contains(TokenSettingsFormat.currency(5, currency: .default)), "\(rewardRow)")
         #expect(rewardRow.contains(TokenSettingsFormat.decimal(5)), "\(rewardRow)")
-        #expect(texts.count { $0 == TokenSettingsLabels.notCounted } == 2, "\(texts)")
+        #expect(texts.count { $0 == TokenRowLabels.notCounted } == 2, "\(texts)")
     }
 
     /// U4: a counted, unpriced row shows its Unpriced caption and no value. NOPE has no price ID and
