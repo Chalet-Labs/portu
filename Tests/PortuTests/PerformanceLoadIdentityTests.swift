@@ -30,7 +30,25 @@ struct PerformanceLoadIdentityTests {
         harness.store.send(.performance(.chartModeChanged(.assets)))
         #expect(await harness.waitUntil { harness.requests.count > 1 }, "A real input must still reload")
         #expect(harness.requests.map(\.chartMode) == [.value, .assets])
+        #expect(harness.requests.last?.livePricesUSD == ["ethereum": 3200])
         #expect(harness.requests.last?.liveDisplayPrices == ["ethereum": 3200])
+    }
+
+    /// S10: the load carries the USD book as polled, whatever the display currency.
+    @Test func `a load carries the live USD book unscaled by the display rate`() async throws {
+        let harness = try Harness(usdToDisplayRate: 2)
+        defer { harness.tearDown() }
+        #expect(await harness.waitUntil { harness.requests.count == 1 }, "Showing the page loads once")
+
+        harness.store.send(.pricesReceived(PriceUpdate(
+            currency: .usd,
+            prices: ["ethereum": 3200],
+            changes24h: [:])))
+        harness.store.send(.performance(.chartModeChanged(.assets)))
+        #expect(await harness.waitUntil { harness.requests.count > 1 }, "A real input must still reload")
+        #expect(harness.requests.last?.currentUSDToDisplayRate == 2)
+        #expect(harness.requests.last?.livePricesUSD == ["ethereum": 3200])
+        #expect(harness.requests.last?.liveDisplayPrices == ["ethereum": 6400])
     }
 
     @Test func `historical price updates do not reload the data`() async throws {
@@ -38,13 +56,16 @@ struct PerformanceLoadIdentityTests {
         defer { harness.tearDown() }
         #expect(await harness.waitUntil { harness.requests.count == 1 }, "Showing the page loads once")
 
+        let close = HistoricalClose(day: Date(timeIntervalSince1970: 1_000_000), price: 64000)
         harness.historicalPrices.prices = ["bitcoin": 64000]
+        harness.historicalPrices.market = HistoricalMarketPrices(closesUSD: ["bitcoin": close])
         let reloaded = await harness.waitUntil(timeout: .milliseconds(600)) { harness.requests.count > 1 }
         #expect(!reloaded, "A historical price refresh must not restart the load")
 
         harness.store.send(.performance(.chartModeChanged(.assets)))
         #expect(await harness.waitUntil { harness.requests.count > 1 }, "A real input must still reload")
         #expect(harness.requests.map(\.chartMode) == [.value, .assets])
+        #expect(harness.requests.last?.closesUSD == ["bitcoin": close])
         #expect(harness.requests.last?.historicalDisplayPrices == ["bitcoin": 64000])
     }
 
@@ -117,7 +138,7 @@ private final class Harness {
 
     /// `observesSaves` binds the live save client to the hosted container; otherwise the
     /// inert default is used and no save can reach the page.
-    init(observesSaves: Bool = false) throws {
+    init(observesSaves: Bool = false, usdToDisplayRate: Decimal = 1) throws {
         let log = log
         let clock = clock
         let loads = loads
@@ -125,7 +146,12 @@ private final class Harness {
             for: ModelContainerFactory.schema,
             configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
         self.container = container
-        self.store = Store(initialState: AppFeature.State(selectedSection: .performance)) {
+        var initialState = AppFeature.State(selectedSection: .performance)
+        if usdToDisplayRate != 1 {
+            initialState.selectedCurrency = .eur
+            initialState.currentUSDToDisplayRate = usdToDisplayRate
+        }
+        self.store = Store(initialState: initialState) {
             AppFeature()
         } withDependencies: {
             $0.performanceData.load = { request in
@@ -216,6 +242,7 @@ private final class Harness {
 @Observable
 private final class HistoricalPrices {
     var prices: [String: Decimal] = [:]
+    var market: HistoricalMarketPrices = .empty
 }
 
 private struct PerformanceHost: View {
@@ -225,6 +252,7 @@ private struct PerformanceHost: View {
     var body: some View {
         PerformanceView(store: store)
             .environment(\.historicalDisplayPrices, historicalPrices.prices)
+            .environment(\.historicalMarketPrices, historicalPrices.market)
     }
 }
 

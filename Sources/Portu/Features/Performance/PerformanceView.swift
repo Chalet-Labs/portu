@@ -8,6 +8,7 @@ struct PerformanceView: View {
     let store: StoreOf<AppFeature>
 
     @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
 
     @Query private var accounts: [Account]
 
@@ -78,6 +79,8 @@ struct PerformanceView: View {
             // re-evaluates the page, and neither price source can restart the load.
             store.send(.performance(.dataRequested(dataTaskID.request(
                 asOf: .now,
+                livePricesUSD: store.livePricesUSD,
+                closesUSD: historicalMarketPrices.closesUSD,
                 liveDisplayPrices: store.liveDisplayPrices,
                 historicalDisplayPrices: historicalDisplayPrices))))
         }
@@ -198,6 +201,8 @@ struct PerformanceView: View {
 
         func request(
             asOf date: Date,
+            livePricesUSD: [String: Decimal],
+            closesUSD: [String: HistoricalClose],
             liveDisplayPrices: [String: Decimal],
             historicalDisplayPrices: [String: Decimal]) -> PerformanceDataRequest {
             PerformanceDataRequest(
@@ -207,6 +212,8 @@ struct PerformanceView: View {
                 analyticsScopeFingerprint: analyticsScopeFingerprint,
                 displayCurrency: displayCurrency,
                 currentUSDToDisplayRate: currentUSDToDisplayRate,
+                livePricesUSD: livePricesUSD,
+                closesUSD: closesUSD,
                 liveDisplayPrices: liveDisplayPrices,
                 historicalDisplayPrices: historicalDisplayPrices,
                 minimumDashboardValue: minimumDashboardValue,

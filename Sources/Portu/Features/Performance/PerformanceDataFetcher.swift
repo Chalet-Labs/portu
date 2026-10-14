@@ -90,7 +90,6 @@ actor PerformanceDataFetcher {
         let conversion = try conversionContext(request, startDay: startDay)
         let visibleAssetIDs = try dashboardVisibleAssetIDs(
             request,
-            resolver: resolver,
             overrides: overrides,
             mappings: mappings)
         try Task.checkCancellation()
@@ -227,7 +226,6 @@ actor PerformanceDataFetcher {
     /// bottom panel's category changes and price changes.
     private func dashboardVisibleAssetIDs(
         _ request: PerformanceDataRequest,
-        resolver: PortfolioCategoryResolver,
         overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot]) throws -> Set<UUID> {
         let tokens = try modelContext.fetch(FetchDescriptor<PositionToken>())
@@ -236,20 +234,19 @@ actor PerformanceDataFetcher {
         let scoped = request.accountId.map { id in
             tokens.filter { $0.position?.account?.id == id }
         } ?? tokens
-        let entries = TokenSettingsFeature.applyIdentityMappings(
-            to: TokenEntry.fromActiveTokens(scoped, categoryResolver: resolver),
-            mappings: mappings,
-            overrides: overrides)
-        let prices = OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: request.liveDisplayPrices,
-            historical: request.historicalDisplayPrices)
-        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: entries,
-            prices: prices,
+        let context = ValuationContext(
+            inputs: ValuationInput.activeAccounts(scoped),
             overrides: overrides,
+            mappings: mappings,
             settings: request.dashboardSettings,
-            usdToDisplayRate: request.currentUSDToDisplayRate)
-        return Set(eligible.map(\.assetId))
+            usdToDisplayRate: request.currentUSDToDisplayRate,
+            prices: ValuationPriceInputs(
+                livePricesUSD: request.livePricesUSD,
+                historical: HistoricalMarketPrices(closesUSD: request.closesUSD)))
+        return PerformanceDataShaping.visibleAssetIDs(
+            context,
+            liveDisplayPrices: request.liveDisplayPrices,
+            historicalDisplayPrices: request.historicalDisplayPrices)
     }
 
     // MARK: - Category chart

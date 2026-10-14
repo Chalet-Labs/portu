@@ -14,6 +14,8 @@ struct PerformanceDataRequest: Equatable, Sendable {
     var analyticsScopeFingerprint: String?
     var displayCurrency: FiatCurrency = .usd
     var currentUSDToDisplayRate: Decimal = 1
+    var livePricesUSD: [String: Decimal] = [:]
+    var closesUSD: [String: HistoricalClose] = [:]
     var liveDisplayPrices: [String: Decimal] = [:]
     var historicalDisplayPrices: [String: Decimal] = [:]
     var minimumDashboardValue: Decimal = TokenDashboardSettings.defaultMinimumDashboardValue
