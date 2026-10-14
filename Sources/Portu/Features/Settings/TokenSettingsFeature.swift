@@ -28,7 +28,7 @@ struct TokenSettingsRow: Equatable, Identifiable {
     let assetId: UUID
     let symbol: String
     let name: String
-    /// Σ role-signed amounts of the counted tokens.
+    /// Σ role-signed amounts of the counted tokens; of every token on an ignored or not-counted row.
     let amount: Decimal
     /// Σ contributions; `nil` for an ignored or unpriced asset, which is listed with no value. A
     /// not-counted asset shows its tokens' unsigned value instead, which counts nowhere.

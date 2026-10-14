@@ -5,7 +5,8 @@ extension TokenSettingsRow {
     /// An asset row in the display currency. Every token of the row shares one asset, so its
     /// symbol, name, category and override come from any of them; ignore applies to all of them.
     /// Ignored and unpriced rows have no value; a not-counted row shows its tokens' own value, which
-    /// counts nowhere (U4, S8).
+    /// counts nowhere (U4, S8). The amount covers the tokens the row describes: the counted ones on a
+    /// counted row, every token on an ignored or not-counted row.
     init?(
         _ row: DashboardRow<UUID>,
         override: TokenPricingOverrideSnapshot?,
@@ -17,7 +18,7 @@ extension TokenSettingsRow {
             assetId: row.key,
             symbol: token.symbol,
             name: token.name,
-            amount: row.totals.netAmount,
+            amount: Self.amount(of: row, isIgnored: isIgnored),
             value: Self.value(of: row, isIgnored: isIgnored, rate: rate),
             portfolioCategory: token.portfolioCategory,
             pricingSource: isIgnored ? nil : TokenPricingSource(row.pricing.source, status: row.status),
@@ -28,6 +29,14 @@ extension TokenSettingsRow {
             logoURL: token.logoURL,
             currency: currency,
             override: override)
+    }
+
+    /// Borrows subtract, as in `ValuationTotals.netAmount`; rewards add.
+    private static func amount(of row: DashboardRow<UUID>, isIgnored: Bool) -> Decimal {
+        guard isIgnored || row.status == .notCounted else { return row.totals.netAmount }
+        return row.tokens.reduce(0) { sum, token in
+            sum + (token.token.role.isBorrow ? -token.token.amount : token.token.amount)
+        }
     }
 
     private static func value(of row: DashboardRow<UUID>, isIgnored: Bool, rate: Decimal) -> Decimal? {

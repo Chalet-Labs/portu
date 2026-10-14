@@ -58,8 +58,8 @@ extension ViewRenderSmokeTests {
     }
 
     /// U4: a reward-only asset carries the Not counted badge, and the counts bar a Not counted chip.
-    /// Its value line shows the reward's own value, 5 × $1 (S8 as amended); the muting is a colour,
-    /// which the text tree does not carry.
+    /// Its value line shows the reward's own value, 5 × $1 (S8 as amended), above the reward's amount,
+    /// 5, not 0; the muting is a colour, which the text tree does not carry.
     @Test(.renderedTextReadable) func `a reward-only token settings row is marked not counted`() throws {
         let container = try makeContainer()
         let account = try #require(container.mainContext.fetch(FetchDescriptor<Account>()).first)
@@ -81,6 +81,7 @@ extension ViewRenderSmokeTests {
         #expect(rewardRow.first == "RWD", "\(texts)")
         #expect(rewardRow.contains(TokenSettingsLabels.notCounted), "\(texts)")
         #expect(rewardRow.contains(TokenSettingsFormat.currency(5, currency: .default)), "\(rewardRow)")
+        #expect(rewardRow.contains(TokenSettingsFormat.decimal(5)), "\(rewardRow)")
         #expect(texts.count { $0 == TokenSettingsLabels.notCounted } == 2, "\(texts)")
     }
 

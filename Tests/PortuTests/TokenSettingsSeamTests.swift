@@ -201,6 +201,73 @@ struct TokenSettingsSeamTests {
         #expect(row.map { $0.value == nil } == true)
     }
 
+    /// A row's amount covers the tokens its value describes. A not-counted row's value is its tokens'
+    /// own, so its amount is theirs too: the 5 reward tokens, not 0.
+    @Test func `a reward-only asset shows its reward amount`() throws {
+        let reward = Self.token(10, coinGeckoId: "reward-coin", role: .reward, amount: 5, usdValue: 50)
+        let context = Fixture.context(tokens: [reward], livePricesUSD: ["reward-coin": 10])
+        let row = try #require(Self.result(context).rows.first)
+
+        #expect(row.status == .notCounted)
+        #expect(row.amount == 5)
+    }
+
+    /// An ignored row has no value, so its amount is every token it holds: SCAM's 1000.
+    @Test func `an ignored held asset shows its held amount`() throws {
+        let scam = try #require(Self.rowsByAsset(Self.result(Fixture.context()))[Fixture.AssetID.scam])
+
+        #expect(scam.isIgnored)
+        #expect(scam.amount == 1000)
+    }
+
+    /// Borrows subtract, as in `ValuationTotals.netAmount`: 10 supplied − 4 borrowed.
+    @Test func `an ignored asset with a borrow nets the borrow`() throws {
+        let supply = Self.token(11, coinGeckoId: "ignored-coin", role: .supply, amount: 10, usdValue: 100)
+        let borrow = Self.token(11, coinGeckoId: "ignored-coin", role: .borrow, amount: 4, usdValue: 40)
+        let context = Fixture.context(
+            tokens: [supply, borrow],
+            overrides: [TokenPricingOverrideSnapshot(assetId: supply.assetId, isIgnored: true)],
+            livePricesUSD: ["ignored-coin": 10])
+        let row = try #require(Self.result(context).rows.first)
+
+        #expect(row.isIgnored)
+        #expect(row.amount == 6)
+    }
+
+    /// Every token of an ignored row is in its amount, rewards included: 3 held + 2 reward, and an
+    /// ignored reward-only asset's 5.
+    @Test func `an ignored asset's amount includes its rewards`() throws {
+        let balance = Self.token(12, coinGeckoId: "ignored-coin", amount: 3, usdValue: 30)
+        let reward = Self.token(12, coinGeckoId: "ignored-coin", role: .reward, amount: 2, usdValue: 20)
+        let rewardOnly = Self.token(13, coinGeckoId: "reward-coin", role: .reward, amount: 5, usdValue: 50)
+        let context = Fixture.context(
+            tokens: [balance, reward, rewardOnly],
+            overrides: [
+                TokenPricingOverrideSnapshot(assetId: balance.assetId, isIgnored: true),
+                TokenPricingOverrideSnapshot(assetId: rewardOnly.assetId, isIgnored: true)
+            ],
+            livePricesUSD: ["ignored-coin": 10, "reward-coin": 10])
+        let rows = Self.rowsByAsset(Self.result(context))
+        let held = try #require(rows[balance.assetId])
+        let rewarded = try #require(rows[rewardOnly.assetId])
+
+        #expect(held.amount == 5)
+        #expect(rewarded.amount == 5)
+    }
+
+    /// A counted row's amount covers the same tokens as its value, so its reward stays out: the 10
+    /// staked, not 12. Number changes → Token Settings: "Rewards no longer add to an asset".
+    @Test func `a counted asset with a reward keeps only its counted amount`() throws {
+        let stake = Self.token(14, coinGeckoId: "staked-coin", role: .stake, amount: 10, usdValue: 100)
+        let reward = Self.token(14, coinGeckoId: "staked-coin", role: .reward, amount: 2, usdValue: 20)
+        let context = Fixture.context(tokens: [stake, reward], livePricesUSD: ["staked-coin": 10])
+        let row = try #require(Self.result(context).rows.first)
+
+        #expect(row.status == .priced)
+        #expect(row.value == 100)
+        #expect(row.amount == 10)
+    }
+
     /// F1: the filter value is the larger of gross and debt, so a hedged asset with a $0.50 net is
     /// priced. Number changes → Token Settings: "A hedged asset is not dust".
     @Test func `a hedged asset is not dust`() {
