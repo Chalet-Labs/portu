@@ -175,7 +175,6 @@ struct AppFeatureTests {
             $0.connectionStatus = .idle
         }
         #expect(capturedRequests == [PricePollingRequest(coinGeckoIDs: ["bitcoin"], onchainIdentities: [])])
-        #expect(store.state.liveDisplayPrices == ["bitcoin": 116_000])
 
         await store.send(.stopPricePolling) {
             $0.connectionStatus = .idle

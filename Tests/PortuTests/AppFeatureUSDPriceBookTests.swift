@@ -4,8 +4,8 @@ import Foundation
 import PortuCore
 import Testing
 
-/// Live prices are stored in USD and display prices are derived from them, so a rate
-/// refresh or a currency switch never has to throw prices away or restart polling.
+/// Live prices are stored in USD, so a rate refresh or a currency switch never has to throw
+/// prices away or restart polling.
 @MainActor
 struct AppFeatureUSDPriceBookTests {
     private static let testDate = Date(timeIntervalSince1970: 1_000_000)
@@ -21,21 +21,6 @@ struct AppFeatureUSDPriceBookTests {
         // Today's historical FX is already fetched, so a refresh tick starts no top-up.
         state.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: testDate)
         return state
-    }
-
-    // MARK: - Derived display prices
-
-    @Test func `display prices are the usd book scaled by the current rate`() throws {
-        var state = AppFeature.State()
-        state.livePricesUSD = ["bitcoin": 100, "ethereum": 3]
-
-        #expect(state.liveDisplayPrices == ["bitcoin": 100, "ethereum": 3])
-
-        state.currentUSDToDisplayRate = try #require(Decimal(string: "0.92"))
-        let expectedEthereum = try #require(Decimal(string: "2.76"))
-
-        #expect(state.liveDisplayPrices == ["bitcoin": 92, "ethereum": expectedEthereum])
-        #expect(state.livePricesUSD == ["bitcoin": 100, "ethereum": 3])
     }
 
     // MARK: - Periodic rate refresh
@@ -59,7 +44,6 @@ struct AppFeatureUSDPriceBookTests {
         }
 
         #expect(store.state.livePricesUSD == ["bitcoin": 100, "ethereum": 50])
-        #expect(store.state.liveDisplayPrices == ["bitcoin": 300, "ethereum": 150])
         #expect(store.state.priceChanges24h == ["bitcoin": 0.05])
         #expect(store.state.lastPriceUpdate == Self.testDate)
         #expect(fetchCount == 0)
@@ -93,7 +77,7 @@ struct AppFeatureUSDPriceBookTests {
         // Nothing is shown under the new currency before its rate arrives: while the
         // switch is pending the old currency's prices stay on screen.
         #expect(store.state.selectedCurrency == .usd)
-        #expect(store.state.liveDisplayPrices == ["bitcoin": 100])
+        #expect(store.state.livePricesUSD == ["bitcoin": 100])
 
         await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(2))) {
             $0.pendingCurrency = nil
@@ -104,7 +88,6 @@ struct AppFeatureUSDPriceBookTests {
             $0.historicalFXAvailability = .available
             $0.historicalFXLastRefreshDayByCurrency[.eur] = HistoricalPriceCalendar.utcStartOfDay(for: Self.testDate)
         }
-        #expect(store.state.liveDisplayPrices == ["bitcoin": 200])
         #expect(store.state.livePricesUSD == ["bitcoin": 100])
         #expect(store.state.lastPriceUpdate == Self.testDate)
 
@@ -113,7 +96,7 @@ struct AppFeatureUSDPriceBookTests {
             $0.selectedCurrency = .usd
             $0.currentUSDToDisplayRate = 1
         }
-        #expect(store.state.liveDisplayPrices == ["bitcoin": 100])
+        #expect(store.state.livePricesUSD == ["bitcoin": 100])
         #expect(store.state.priceChanges24h == ["bitcoin": 0.05])
         #expect(fetchCount == 0)
     }
@@ -140,7 +123,7 @@ struct AppFeatureUSDPriceBookTests {
                 $0.historicalFXAvailability = .failed("offline")
             }
 
-        #expect(store.state.liveDisplayPrices == ["bitcoin": 100])
+        #expect(store.state.livePricesUSD == ["bitcoin": 100])
         #expect(store.state.lastPriceUpdate == Self.testDate)
     }
 
@@ -168,6 +151,6 @@ struct AppFeatureUSDPriceBookTests {
                 $0.lastPriceUpdate = Self.testDate.addingTimeInterval(60)
             }
 
-        #expect(store.state.liveDisplayPrices == ["bitcoin": 220, "ethereum": 100])
+        #expect(store.state.livePricesUSD == ["bitcoin": 110, "ethereum": 50])
     }
 }
