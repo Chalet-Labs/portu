@@ -268,7 +268,7 @@ actor PerformanceDataFetcher {
         guard !holdings.isEmpty else { return [] }
 
         let heldRows = PerformanceFeature.historicalPriceEntriesForHeldAssets(
-            rows: OverviewHistoricalPriceChangeFeature.mergedHistoricalPriceEntries(
+            rows: PerformanceDataShaping.mergedHistoricalPriceEntries(
                 from: inputs.priceRows,
                 displayCurrency: inputs.request.displayCurrency,
                 context: inputs.conversion),

@@ -2,8 +2,6 @@ import PortuCore
 import PortuUI
 import SwiftUI
 
-enum OverviewHistoricalPriceChangeFeature {}
-
 enum OverviewPositionChangeTone: Equatable {
     case favorable
     case unfavorable
