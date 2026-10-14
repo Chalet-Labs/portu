@@ -7,7 +7,6 @@ import SwiftUI
 struct PerformanceView: View {
     let store: StoreOf<AppFeature>
 
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
     @Environment(\.historicalMarketPrices) private var historicalMarketPrices
 
     @Query private var accounts: [Account]
@@ -80,9 +79,7 @@ struct PerformanceView: View {
             store.send(.performance(.dataRequested(dataTaskID.request(
                 asOf: .now,
                 livePricesUSD: store.livePricesUSD,
-                closesUSD: historicalMarketPrices.closesUSD,
-                liveDisplayPrices: store.liveDisplayPrices,
-                historicalDisplayPrices: historicalDisplayPrices))))
+                closesUSD: historicalMarketPrices.closesUSD))))
         }
         .task(id: analyticsTaskID(account: accountInput)) {
             if let context = makeAnalyticsContext(account: accountInput, asOf: .now) {
@@ -202,9 +199,7 @@ struct PerformanceView: View {
         func request(
             asOf date: Date,
             livePricesUSD: [String: Decimal],
-            closesUSD: [String: HistoricalClose],
-            liveDisplayPrices: [String: Decimal],
-            historicalDisplayPrices: [String: Decimal]) -> PerformanceDataRequest {
+            closesUSD: [String: HistoricalClose]) -> PerformanceDataRequest {
             PerformanceDataRequest(
                 accountId: accountId,
                 startDate: range.startDate(at: date),
@@ -214,8 +209,6 @@ struct PerformanceView: View {
                 currentUSDToDisplayRate: currentUSDToDisplayRate,
                 livePricesUSD: livePricesUSD,
                 closesUSD: closesUSD,
-                liveDisplayPrices: liveDisplayPrices,
-                historicalDisplayPrices: historicalDisplayPrices,
                 minimumDashboardValue: minimumDashboardValue,
                 hideUnpriced: hideUnpriced,
                 hideDust: hideDust,

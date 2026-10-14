@@ -68,7 +68,7 @@ extension HistoricalPriceBackfillClient {
 
 @MainActor
 private struct HistoricalBackfillSourceData {
-    let tokens: [TokenEntry]
+    let inputs: [ValuationInput]
     let snapshots: [HistoricalBackfillSnapshotEntry]
     let overrides: [TokenPricingOverrideSnapshot]
     let mappings: [TokenIdentityMappingSnapshot]
@@ -95,8 +95,12 @@ private struct BackfillRunner {
     func run() async throws -> HistoricalBackfillResult {
         let settings = dashboardSettings()
         let sourceData = try loadSourceData()
+        let tokens = HistoricalBackfillCandidateResolver.valuedTokens(
+            sourceData.inputs,
+            overrides: sourceData.overrides,
+            mappings: sourceData.mappings)
         let identitiesNeedingResolution = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
-            tokens: sourceData.tokens,
+            tokens: tokens,
             snapshots: sourceData.snapshots,
             overrides: sourceData.overrides,
             mappings: sourceData.mappings,
@@ -106,14 +110,14 @@ private struct BackfillRunner {
             resolvedCoinGeckoIDs,
             existingMappings: sourceData.liveMappings)
         let candidates = HistoricalBackfillCandidateResolver.candidates(
-            tokens: sourceData.tokens,
+            tokens: tokens,
             snapshots: sourceData.snapshots,
             overrides: sourceData.overrides,
             mappings: sourceData.mappings,
             dashboardSettings: settings,
             resolvedCoinGeckoIDs: resolvedCoinGeckoIDs)
         let sourceAssetCount = HistoricalBackfillCandidateResolver.sourceAssetIDs(
-            tokens: sourceData.tokens,
+            tokens: tokens,
             snapshots: sourceData.snapshots,
             overrides: sourceData.overrides,
             dashboardSettings: settings).count
@@ -137,7 +141,6 @@ private struct BackfillRunner {
         let assetSnapshots = try modelContext.fetch(FetchDescriptor<AssetSnapshot>())
         let overrides = try modelContext.fetch(FetchDescriptor<TokenPricingOverride>())
         let mappings = try modelContext.fetch(FetchDescriptor<TokenIdentityMapping>())
-        let entries = TokenEntry.fromActiveTokens(tokens)
         let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
         let snapshotEntries = assetSnapshots.map { snapshot in
             let asset = assetsById[snapshot.assetId]
@@ -154,7 +157,7 @@ private struct BackfillRunner {
         let mappingSnapshots = mappings.map(TokenIdentityMappingSnapshot.init)
 
         return HistoricalBackfillSourceData(
-            tokens: entries,
+            inputs: ValuationInput.activeAccounts(tokens),
             snapshots: snapshotEntries,
             overrides: overrideSnapshots,
             mappings: mappingSnapshots,

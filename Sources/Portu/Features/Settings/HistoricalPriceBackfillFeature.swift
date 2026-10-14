@@ -102,22 +102,27 @@ struct HistoricalBackfillError: LocalizedError, Equatable {
 }
 
 enum HistoricalBackfillCandidateResolver {
+    /// One run's tokens, valued once over an empty market (S12): backfill has no live book or
+    /// closes, so a token is worth its manual price × amount, else its sync value, as it always was.
+    static func valuedTokens(
+        _ inputs: [ValuationInput],
+        overrides: [TokenPricingOverrideSnapshot],
+        mappings: [TokenIdentityMappingSnapshot] = []) -> [ValuedToken] {
+        PortfolioValuation(inputs: inputs, market: MarketPrices(), overrides: overrides, mappings: mappings).tokens
+    }
+
     static func candidates(
-        tokens: [TokenEntry],
+        tokens: [ValuedToken],
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
         overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot] = [],
-        prices: [String: Decimal] = [:],
         dashboardSettings: TokenDashboardSettings = .defaults,
         resolvedCoinGeckoIDs: [OnchainTokenIdentity: String] = [:]) -> [HistoricalBackfillCandidate] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
         var grouped: [HistoricalBackfillCandidateKey: Set<UUID>] = [:]
-        for token in tokens where shouldIncludeToken(
-            token,
-            override: overrideMap[token.assetId],
-            prices: prices,
-            dashboardSettings: dashboardSettings) {
+        for valued in tokens where shouldIncludeToken(valued, dashboardSettings: dashboardSettings) {
+            let token = valued.token
             addCandidate(
                 asset: HistoricalBackfillAssetReference(
                     assetId: token.assetId,
@@ -153,21 +158,13 @@ enum HistoricalBackfillCandidateResolver {
     }
 
     static func sourceAssetIDs(
-        tokens: [TokenEntry],
+        tokens: [ValuedToken],
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
         overrides: [TokenPricingOverrideSnapshot] = [],
-        prices: [String: Decimal] = [:],
         dashboardSettings: TokenDashboardSettings = .defaults) -> Set<UUID> {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         let tokenIDs = tokens.compactMap { token -> UUID? in
-            guard
-                shouldIncludeToken(
-                    token,
-                    override: overrideMap[token.assetId],
-                    prices: prices,
-                    dashboardSettings: dashboardSettings)
-            else { return nil }
-            return token.assetId
+            shouldIncludeToken(token, dashboardSettings: dashboardSettings) ? token.token.assetId : nil
         }
         let snapshotIDs = snapshots.compactMap { snapshot -> UUID? in
             guard
@@ -182,20 +179,16 @@ enum HistoricalBackfillCandidateResolver {
     }
 
     static func onchainIdentitiesNeedingResolution(
-        tokens: [TokenEntry],
+        tokens: [ValuedToken],
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
         overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot] = [],
-        prices: [String: Decimal] = [:],
         dashboardSettings: TokenDashboardSettings = .defaults) -> [OnchainTokenIdentity] {
         let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
         let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
         var identities = Set<OnchainTokenIdentity>()
-        for token in tokens where shouldIncludeToken(
-            token,
-            override: overrideMap[token.assetId],
-            prices: prices,
-            dashboardSettings: dashboardSettings) {
+        for valued in tokens where shouldIncludeToken(valued, dashboardSettings: dashboardSettings) {
+            let token = valued.token
             addUnresolvedIdentity(
                 assetId: token.assetId,
                 coinGeckoId: token.coinGeckoId,
@@ -224,26 +217,19 @@ enum HistoricalBackfillCandidateResolver {
         }
     }
 
+    /// Backfill's own per-token rule (S12) on the selection value: counted and not ignored,
+    /// alwaysShow wins, then the unpriced and dust toggles against the USD threshold.
     private static func shouldIncludeToken(
-        _ token: TokenEntry,
-        override: TokenPricingOverrideSnapshot?,
-        prices: [String: Decimal],
+        _ token: ValuedToken,
         dashboardSettings: TokenDashboardSettings) -> Bool {
-        guard token.amount > 0 else { return false }
-        guard token.role.isPositive || token.role.isBorrow else { return false }
-        guard override?.isIgnored != true else { return false }
-        if override?.alwaysShow == true {
+        guard token.isCounted, let value = token.selectionValue else { return false }
+        if token.alwaysShow {
             return true
         }
-
-        let value = TokenSettingsFeature.resolvedValue(
-            token: token,
-            prices: prices,
-            override: override) ?? token.usdValue
         if value == 0 {
             return !dashboardSettings.hideUnpriced
         }
-        if absolute(value) < normalizedThreshold(dashboardSettings.minimumDashboardValue) {
+        if value < dashboardSettings.dustThresholdUSD {
             return !dashboardSettings.hideDust
         }
         return true

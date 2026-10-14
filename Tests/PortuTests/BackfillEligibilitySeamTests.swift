@@ -3,9 +3,10 @@ import Foundation
 import PortuCore
 import Testing
 
-/// Backfill eligibility (S12, AGENT-DECIDED 15) over the shared fixture plus a few edge tokens. The
-/// expected sets are today's: a token's value is its manual price × amount, else its sync value, and
-/// the threshold is unscaled USD.
+/// Backfill eligibility (S12, AGENT-DECIDED 15) over the shared fixture plus a few edge tokens, valued
+/// once per run over an empty market. The expected sets are the ones the per-token legacy rule chose:
+/// a token's value is its manual price × amount, else its sync value, and the threshold is unscaled
+/// USD.
 ///
 /// | Token | Amount | `usdValue` | Override | Selected (defaults) |
 /// |---|---|---|---|---|
@@ -43,8 +44,10 @@ enum BackfillEligibilityFixture {
         Fixture.token(AssetID.moved, "MOVR", "Moved", .other, coinGeckoId: "old-id", amount: 1, usdValue: 10)
     ]
 
-    /// The fixture's tokens in table order, then the edge tokens.
-    static let tokens = Fixture.inputs.map(\.token) + extraTokens
+    /// The fixture's inputs, then the edge tokens in the main wallet.
+    static let inputs = Fixture.inputs + extraTokens.enumerated().map { index, token in
+        ValuationInput(tokenId: Fixture.uuid(9550 + index), token: token, position: Fixture.PositionSlot.wallet.context)
+    }
 
     static let overrides = Fixture.overrides + [
         TokenPricingOverrideSnapshot(assetId: AssetID.manualDust, manualPriceUSD: Fixture.decimal("0.01")),
@@ -71,6 +74,7 @@ enum BackfillEligibilityFixture {
     }
 
     static func select(settings: TokenDashboardSettings) -> Selection {
+        let tokens = HistoricalBackfillCandidateResolver.valuedTokens(inputs, overrides: overrides, mappings: Fixture.mappings)
         let candidates = HistoricalBackfillCandidateResolver.candidates(
             tokens: tokens,
             snapshots: snapshots,

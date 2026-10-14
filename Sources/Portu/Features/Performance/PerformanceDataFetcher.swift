@@ -243,10 +243,7 @@ actor PerformanceDataFetcher {
             prices: ValuationPriceInputs(
                 livePricesUSD: request.livePricesUSD,
                 historical: HistoricalMarketPrices(closesUSD: request.closesUSD)))
-        return PerformanceDataShaping.visibleAssetIDs(
-            context,
-            liveDisplayPrices: request.liveDisplayPrices,
-            historicalDisplayPrices: request.historicalDisplayPrices)
+        return PerformanceDataShaping.visibleAssetIDs(context)
     }
 
     // MARK: - Category chart

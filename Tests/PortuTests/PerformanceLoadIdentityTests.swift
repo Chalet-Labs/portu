@@ -31,7 +31,6 @@ struct PerformanceLoadIdentityTests {
         #expect(await harness.waitUntil { harness.requests.count > 1 }, "A real input must still reload")
         #expect(harness.requests.map(\.chartMode) == [.value, .assets])
         #expect(harness.requests.last?.livePricesUSD == ["ethereum": 3200])
-        #expect(harness.requests.last?.liveDisplayPrices == ["ethereum": 3200])
     }
 
     /// S10: the load carries the USD book as polled, whatever the display currency.
@@ -48,7 +47,6 @@ struct PerformanceLoadIdentityTests {
         #expect(await harness.waitUntil { harness.requests.count > 1 }, "A real input must still reload")
         #expect(harness.requests.last?.currentUSDToDisplayRate == 2)
         #expect(harness.requests.last?.livePricesUSD == ["ethereum": 3200])
-        #expect(harness.requests.last?.liveDisplayPrices == ["ethereum": 6400])
     }
 
     @Test func `historical price updates do not reload the data`() async throws {
@@ -57,7 +55,6 @@ struct PerformanceLoadIdentityTests {
         #expect(await harness.waitUntil { harness.requests.count == 1 }, "Showing the page loads once")
 
         let close = HistoricalClose(day: Date(timeIntervalSince1970: 1_000_000), price: 64000)
-        harness.historicalPrices.prices = ["bitcoin": 64000]
         harness.historicalPrices.market = HistoricalMarketPrices(closesUSD: ["bitcoin": close])
         let reloaded = await harness.waitUntil(timeout: .milliseconds(600)) { harness.requests.count > 1 }
         #expect(!reloaded, "A historical price refresh must not restart the load")
@@ -66,7 +63,6 @@ struct PerformanceLoadIdentityTests {
         #expect(await harness.waitUntil { harness.requests.count > 1 }, "A real input must still reload")
         #expect(harness.requests.map(\.chartMode) == [.value, .assets])
         #expect(harness.requests.last?.closesUSD == ["bitcoin": close])
-        #expect(harness.requests.last?.historicalDisplayPrices == ["bitcoin": 64000])
     }
 
     @Test func `a save reloads the page only when it touches what the page reads`() async throws {
@@ -241,7 +237,6 @@ private final class Harness {
 @MainActor
 @Observable
 private final class HistoricalPrices {
-    var prices: [String: Decimal] = [:]
     var market: HistoricalMarketPrices = .empty
 }
 
@@ -251,7 +246,6 @@ private struct PerformanceHost: View {
 
     var body: some View {
         PerformanceView(store: store)
-            .environment(\.historicalDisplayPrices, historicalPrices.prices)
             .environment(\.historicalMarketPrices, historicalPrices.market)
     }
 }

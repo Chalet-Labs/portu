@@ -199,9 +199,7 @@ struct PerformanceDataFetcherTests {
             livePricesUSD: ["degen-base": #require(Decimal(string: "0.01"))]))
         let categoryIDs = snapshot.bottomPanel.categoryChanges.map(\.id)
 
-        withKnownIssue("eligibility still prices with the display books, which this request leaves empty") {
-            #expect(categoryIDs == [degenCategory])
-        }
+        #expect(categoryIDs == [degenCategory])
         #expect(!categoryIDs.contains(scamCategory), "An ignored asset never reaches the panel")
     }
 

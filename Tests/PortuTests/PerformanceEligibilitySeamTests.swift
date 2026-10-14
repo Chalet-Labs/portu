@@ -124,11 +124,9 @@ struct PerformanceEligibilitySeamTests {
             Fixture.context(settings: TokenDashboardSettings(hideUnpriced: false, hideDust: true)))
         let everything = PerformanceDataShaping.visibleAssetIDs(Fixture.context(settings: .showAll))
 
-        withKnownIssue("eligibility is still per token over the display books") {
-            #expect(atOne == Self.fixtureVisible)
-            #expect(atHalf == Self.fixtureVisible)
-            #expect(unpricedShown == Self.fixtureVisible.union([Fixture.AssetID.bad]))
-        }
+        #expect(atOne == Self.fixtureVisible)
+        #expect(atHalf == Self.fixtureVisible)
+        #expect(unpricedShown == Self.fixtureVisible.union([Fixture.AssetID.bad]))
         // With nothing hidden, every counted asset that is not ignored shows, per token or per row.
         #expect(everything == Self.fixtureVisible.union([Fixture.AssetID.bad, Fixture.AssetID.dai, Fixture.AssetID.usdt]))
     }
@@ -138,9 +136,7 @@ struct PerformanceEligibilitySeamTests {
     @Test func `a sync-only holding is eligible at its sync value`() {
         let visible = Variant.visible()
 
-        withKnownIssue("a token with no live or manual price is still unpriced") {
-            #expect(visible.contains(Fixture.AssetID.otc))
-        }
+        #expect(visible.contains(Fixture.AssetID.otc))
     }
 
     /// "Number changes → Performance": a stale close loses to the sync value. A close beats the sync
@@ -148,9 +144,7 @@ struct PerformanceEligibilitySeamTests {
     @Test func `a stale close loses to the sync value`() {
         let visible = Variant.visible()
 
-        withKnownIssue("the merged display book has no sync value to fall back on") {
-            #expect(visible.contains(Variant.AssetID.stale), "A same-day close must not make a 50 holding dust")
-        }
+        #expect(visible.contains(Variant.AssetID.stale), "A same-day close must not make a 50 holding dust")
         #expect(!visible.contains(Variant.AssetID.fresh), "A close on a later day than the sync wins, and is dust")
     }
 
@@ -159,9 +153,7 @@ struct PerformanceEligibilitySeamTests {
     @Test func `plausibility compares the USD price with the USD sync value`() {
         let visible = Variant.visible(rate: 150)
 
-        withKnownIssue("plausibility still compares a display price with the USD sync value") {
-            #expect(visible.contains(Variant.AssetID.plausible))
-        }
+        #expect(visible.contains(Variant.AssetID.plausible))
         #expect(!visible.contains(Fixture.AssetID.bad), "A USD ratio of 200 stays implausible")
     }
 
@@ -172,9 +164,7 @@ struct PerformanceEligibilitySeamTests {
         let dustHidden = Variant.visible(settings: TokenDashboardSettings(hideUnpriced: false, hideDust: true))
         let nothingHidden = Variant.visible(settings: .showAll)
 
-        withKnownIssue("an unpriced token still makes its asset eligible on its own") {
-            #expect(!dustHidden.contains(Variant.AssetID.narrow))
-        }
+        #expect(!dustHidden.contains(Variant.AssetID.narrow))
         #expect(nothingHidden.contains(Variant.AssetID.narrow))
     }
 
@@ -183,10 +173,8 @@ struct PerformanceEligibilitySeamTests {
     @Test func `dust is judged on the whole asset row`() {
         let visible = Variant.visible()
 
-        withKnownIssue("dust is still judged per token") {
-            #expect(visible.contains(Variant.AssetID.pair))
-            #expect(visible.contains(Variant.AssetID.hedge))
-        }
+        #expect(visible.contains(Variant.AssetID.pair))
+        #expect(visible.contains(Variant.AssetID.hedge))
     }
 
     /// F2: ignored and not-counted rows are never dashboard rows, whatever the settings.
