@@ -112,23 +112,6 @@ struct CategorySnapshotEntry: Equatable {
         self.categoryName = categoryName ?? category.rawValue.capitalized
         self.usdValue = usdValue
     }
-
-    @MainActor
-    init(
-        snapshot: AssetSnapshot,
-        categoryResolver: PortfolioCategoryResolver = .defaults) {
-        let resolved = categoryResolver.resolve(
-            symbol: snapshot.symbol,
-            legacyCategory: snapshot.category)
-        self.init(
-            accountId: snapshot.accountId,
-            assetId: snapshot.assetId,
-            timestamp: snapshot.timestamp,
-            category: snapshot.category,
-            categoryID: resolved.id.uuidString,
-            categoryName: resolved.name,
-            usdValue: snapshot.usdValue)
-    }
 }
 
 /// Aggregated category chart data point (one per day per category).

@@ -244,59 +244,6 @@ struct PerformanceValueChangeTests {
 // MARK: - Category Change Breakdown
 
 struct PerformanceCategoryChangeTests {
-    @MainActor
-    @Test func `category snapshot entry resolves through supplied resolver`() {
-        let categoryID = UUID()
-        let category = PortfolioCategorySnapshot(
-            id: categoryID,
-            name: "Custom ETH",
-            sortOrder: 0,
-            semanticRole: .normal,
-            isSystemRequired: false)
-        let resolver = PortfolioCategoryResolver(
-            categories: [category, PortfolioCategoryDefaults.fallbackCategory],
-            rules: [
-                CategorySymbolRuleSnapshot(
-                    id: UUID(),
-                    symbol: "ETH",
-                    categoryId: categoryID)
-            ])
-        let snapshot = AssetSnapshot(
-            syncBatchId: UUID(),
-            timestamp: Date(),
-            accountId: UUID(),
-            assetId: UUID(),
-            symbol: "ETH",
-            category: .major,
-            portfolioCategoryID: PortfolioCategoryDefaults.ethCategoryID.uuidString,
-            portfolioCategoryName: "Frozen ETH",
-            amount: 1,
-            usdValue: 100)
-
-        let entry = CategorySnapshotEntry(snapshot: snapshot, categoryResolver: resolver)
-
-        #expect(entry.categoryID == categoryID.uuidString)
-        #expect(entry.categoryName == "Custom ETH")
-    }
-
-    @MainActor
-    @Test func `category snapshot entry maps legacy known symbols to default portfolio category IDs`() {
-        let snapshot = AssetSnapshot(
-            syncBatchId: UUID(),
-            timestamp: Date(),
-            accountId: UUID(),
-            assetId: UUID(),
-            symbol: "ETH",
-            category: .major,
-            amount: 1,
-            usdValue: 2000)
-
-        let entry = CategorySnapshotEntry(snapshot: snapshot)
-
-        #expect(entry.categoryID == PortfolioCategoryDefaults.ethCategoryID.uuidString)
-        #expect(entry.categoryName == "ETH")
-    }
-
     @Test func `category entries resolve snapshot rows through the supplied resolver`() {
         let categoryID = UUID()
         let category = PortfolioCategorySnapshot(

@@ -341,9 +341,8 @@ struct PerformanceAssetRow: Equatable, Sendable {
 enum PerformanceDataShaping {
     static let priceChangeLimit = 5
 
-    /// Reproduces the former `CategorySnapshotEntry(snapshot:categoryResolver:)` main-actor
-    /// convenience initializer against value rows. The SQL lower bound is the UTC day start,
-    /// so the exact `startDate` boundary is re-applied here just as the view body did.
+    /// Category entries from value rows, each resolved through the category resolver. The SQL
+    /// lower bound is the UTC day start, so the exact `startDate` boundary is re-applied here.
     static func categoryEntries(
         rows: [PerformanceSnapshotRow],
         from startDate: Date,
@@ -370,7 +369,7 @@ enum PerformanceDataShaping {
         rows: [PerformanceSnapshotRow],
         overrides: [TokenPricingOverrideSnapshot],
         assets: [PerformanceAssetRow]) -> [HistoricalEstimateSnapshotEntry] {
-        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(overrides)
+        let overridesByAssetId = TokenPricingOverrideFeature.overridesByAssetId(overrides)
         let assetsById = Dictionary(
             assets.map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first })
@@ -444,7 +443,7 @@ enum PerformanceDataShaping {
         assets: [PerformanceAssetRow],
         overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot]) -> [String: String] {
-        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(overrides)
+        let overridesByAssetId = TokenPricingOverrideFeature.overridesByAssetId(overrides)
         let mappingsByIdentity = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
         var names: [String: String] = [:]
 

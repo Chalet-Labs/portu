@@ -85,8 +85,10 @@ actor PerformanceDataFetcher {
     private func loadInputs(_ request: PerformanceDataRequest) throws -> PerformanceLoadInputs {
         let startDay = HistoricalPriceCalendar.utcStartOfDay(for: request.startDate)
         let resolver = try categoryResolver()
-        let overrides = try overrideRows()
-        let mappings = try mappingRows()
+        let overrides = try modelContext.fetch(FetchDescriptor<TokenPricingOverride>())
+            .map(TokenPricingOverrideSnapshot.init)
+        let mappings = try modelContext.fetch(FetchDescriptor<TokenIdentityMapping>())
+            .map(TokenIdentityMappingSnapshot.init)
         let conversion = try conversionContext(request, startDay: startDay)
         let visibleAssetIDs = try dashboardVisibleAssetIDs(
             request,
@@ -133,29 +135,6 @@ actor PerformanceDataFetcher {
         return PortfolioCategoryResolver(
             categories: categories.map(PortfolioCategorySnapshot.init),
             rules: rules.compactMap(CategorySymbolRuleSnapshot.init))
-    }
-
-    private func overrideRows() throws -> [TokenPricingOverrideSnapshot] {
-        try modelContext.fetch(FetchDescriptor<TokenPricingOverride>()).map {
-            TokenPricingOverrideSnapshot(
-                id: $0.id,
-                assetId: $0.assetId,
-                manualPriceUSD: $0.manualPriceUSD,
-                coinGeckoIdOverride: $0.coinGeckoIdOverride,
-                isIgnored: $0.isIgnored,
-                alwaysShow: $0.alwaysShow,
-                notes: $0.notes)
-        }
-    }
-
-    private func mappingRows() throws -> [TokenIdentityMappingSnapshot] {
-        try modelContext.fetch(FetchDescriptor<TokenIdentityMapping>()).map {
-            TokenIdentityMappingSnapshot(
-                id: $0.id,
-                identity: $0.onchainIdentity,
-                coinGeckoId: $0.coinGeckoId,
-                zapperId: $0.zapperId)
-        }
     }
 
     private func assetRows() throws -> [PerformanceAssetRow] {
