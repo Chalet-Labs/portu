@@ -108,7 +108,7 @@ struct AllPositionsSeamTests {
         #expect(Seam.cardTotals(page) == expected)
     }
 
-    /// S6, A7: a section is Σ its cards; sections in type order, cards in input order.
+    /// S6, A7: a section is Σ its cards; sections in type order, cards by value (U5).
     @Test func `a section is the sum of its cards`() {
         let page = Seam.page()
 
@@ -251,7 +251,8 @@ struct AllPositionsSeamTests {
 
     /// From the retired PositionGroupValue test: supply 2 and borrow 1 ETH at live 3100, plus a
     /// 10 ETH reward, make a $3,100 card. The reward row shows its own $31,000, not counted, and a
-    /// zero-amount token is a not-counted row worth 0.
+    /// zero-amount token is a not-counted row worth 0. Both sit at contribution 0, before the borrow
+    /// (U5).
     @Test func `a card leaves out rewards and subtracts borrows`() {
         let eth = { (role: TokenRole, amount: Decimal, usdValue: Decimal) in
             Fixture.token(Fixture.AssetID.eth, "ETH", "Ethereum", .major, coinGeckoId: "ethereum", role: role, amount: amount, usdValue: usdValue)
@@ -266,10 +267,70 @@ struct AllPositionsSeamTests {
         #expect(Seam.cardTotals(page) == [Fixture.PositionID.wallet: 3100])
         #expect(rows == [
             Seam.RowValue(state: .counted, value: 6200),
-            Seam.RowValue(state: .counted, value: -3100),
             Seam.RowValue(state: .notCounted, value: 31000),
-            Seam.RowValue(state: .notCounted, value: 0)
+            Seam.RowValue(state: .notCounted, value: 0),
+            Seam.RowValue(state: .counted, value: -3100)
         ])
+    }
+
+    /// U5: rows sort by contribution, highest first, then symbol, then token ID, whatever order the
+    /// tokens arrive in. The unpriced BAD, the ignored SCAM and the SOL reward all count 0, so they
+    /// sit between the supplies and the borrow, by symbol; the two equal USDC rows by token ID.
+    @Test func `token rows sort by contribution, then symbol, then token ID`() {
+        let eth = { (role: TokenRole, amount: Decimal) in
+            Fixture.token(
+                Fixture.AssetID.eth,
+                "ETH",
+                "Ethereum",
+                .major,
+                coinGeckoId: "ethereum",
+                role: role,
+                amount: amount,
+                usdValue: amount * 2900)
+        }
+        let usdc = Fixture.token(Fixture.AssetID.usdc, "USDC", "USD Coin", .stablecoin, coinGeckoId: "usd-coin", amount: 100, usdValue: 100)
+        let inputs = [
+            Fixture.input(36, .wallet, Fixture.token(
+                Fixture.AssetID.sol, "SOL", "Solana", .major, coinGeckoId: "solana", role: .reward, amount: 1, usdValue: 150)),
+            Fixture.input(42, .wallet, usdc),
+            Fixture.input(40, .wallet, eth(.borrow, Fixture.decimal("0.5"))),
+            Fixture.input(39, .wallet, Fixture.token(
+                Fixture.AssetID.bad, "BAD", "Bad Price", .other, onchainIdentity: Fixture.badIdentity, amount: 100, usdValue: 5000)),
+            Fixture.input(38, .wallet, Fixture.token(
+                Fixture.AssetID.scam, "SCAM", "Scam Token", .other, coinGeckoId: "scam-token", amount: 1000, usdValue: 50000)),
+            Fixture.input(41, .wallet, usdc),
+            Fixture.input(37, .wallet, eth(.supply, 1))
+        ]
+        let expected = [37, 41, 42, 39, 38, 36, 40].map(Fixture.tokenID)
+
+        for order in [inputs, inputs.reversed()] {
+            let page = Seam.page(Fixture.context(inputs: order), cards: [Seam.card(.wallet)])
+            let rows = page.sections.flatMap(\.cards).flatMap(\.rows)
+
+            #expect(rows.map(\.id) == expected)
+            #expect(rows.map(\.state) == [.counted, .counted, .counted, .unpriced, .ignored, .notCounted, .counted])
+        }
+    }
+
+    /// U5: cards in a section sort by value, highest first, with ties by position ID, whatever order
+    /// the positions arrive in.
+    @Test func `cards sort by value, then position ID`() {
+        let inputs = [
+            Seam.syncPosition(1, protocolID: "p-1", usdValue: 100),
+            Seam.syncPosition(2, protocolID: "p-2", usdValue: 100),
+            Seam.syncPosition(3, protocolID: "p-3", usdValue: 300),
+            Seam.syncPosition(4, protocolID: "p-4", usdValue: 50)
+        ]
+        let cards = inputs.map { Seam.card($0.position) }
+        let context = Fixture.context(inputs: inputs, livePricesUSD: [:], liveChanges24h: [:], historical: .empty)
+        let expected = [3, 1, 2, 4].map { Fixture.uuid(8000 + $0) }
+
+        for order in [[cards[1], cards[3], cards[0], cards[2]], [cards[2], cards[0], cards[3], cards[1]]] {
+            let page = Seam.page(context, cards: order)
+
+            #expect(page.sections.map { $0.cards.map(\.id) } == [expected])
+            #expect(page.sections.first?.cards.map(\.total) == [300, 100, 100, 50])
+        }
     }
 
     /// The display rate is applied once, to the module's USD results: at 0.5 every figure halves.

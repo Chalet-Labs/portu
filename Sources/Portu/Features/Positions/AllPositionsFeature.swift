@@ -33,7 +33,8 @@ enum AllPositionsFeature {
 
     /// The page seam: cards, sections and sidebar options from one valuation of the active accounts'
     /// inputs (A7: net basis). A card is Σ its tokens' contributions; a section and a sidebar option
-    /// are each Σ their cards, summed in USD and converted once. No row is ever hidden.
+    /// are each Σ their cards, summed in USD and converted once. No row is ever hidden. Cards and
+    /// rows sort by value, whatever order the store returns them in (U5).
     static func page(
         _ context: ValuationContext,
         cards infos: [AllPositionsCardInfo],
@@ -62,8 +63,9 @@ enum AllPositionsFeature {
                             chain: info.chain,
                             healthFactor: info.healthFactor,
                             total: cardTotal(info).display(rate: rate).net,
-                            rows: (tokensByCard[info.id] ?? []).map { row($0, rate: rate) })
-                    })
+                            rows: (tokensByCard[info.id] ?? []).sorted(by: rowOrder).map { row($0, rate: rate) })
+                    }
+                    .sorted(by: cardOrder))
             }
 
         var typeOptions = [AllPositionsTypeOption(type: nil, label: "All", total: valuation.totals.display(rate: rate).net)]
@@ -117,6 +119,28 @@ enum AllPositionsFeature {
             return order == .orderedAscending
         }
         return protocolKey(lhs.filter) < protocolKey(rhs.filter)
+    }
+
+    /// U5: largest total first; ties by position ID.
+    private static func cardOrder(_ lhs: AllPositionsCard, _ rhs: AllPositionsCard) -> Bool {
+        if lhs.total != rhs.total {
+            return lhs.total > rhs.total
+        }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    /// U5, as Asset Detail orders its rows: contribution descending, so rows that count 0 (not
+    /// counted, unpriced, ignored) sit between the supplies and the borrows; ties by symbol, then
+    /// token ID.
+    private static func rowOrder(_ lhs: ValuedToken, _ rhs: ValuedToken) -> Bool {
+        if lhs.contribution != rhs.contribution {
+            return lhs.contribution > rhs.contribution
+        }
+        let order = lhs.token.symbol.localizedStandardCompare(rhs.token.symbol)
+        if order != .orderedSame {
+            return order == .orderedAscending
+        }
+        return lhs.tokenId.uuidString < rhs.tokenId.uuidString
     }
 
     private static func protocolKey(_ filter: ProtocolFilter) -> String {
