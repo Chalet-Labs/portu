@@ -11,6 +11,7 @@ struct AccountsView: View {
     @Query(sort: \Account.name) private var accounts: [Account]
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
+    var sources = ValuationSources()
 
     @State private var sortOrder: [KeyPathComparator<AccountRowData>] = [
         KeyPathComparator(\.name)
@@ -24,9 +25,12 @@ struct AccountsView: View {
         self.secretStore = secretStore
     }
 
-    private var accountInputs: [AccountInput] {
-        accounts.map { account in
-            AccountInput(
+    /// Values every account once; the table and the group picker both read the result.
+    private func accountInputs() -> [AccountInput] {
+        let balances = sources.accountBalances(accounts)
+        return accounts.map { account in
+            let balance = balances[account.id] ?? .zero
+            return AccountInput(
                 id: account.id,
                 name: account.name,
                 kind: account.kind,
@@ -35,14 +39,14 @@ struct AccountsView: View {
                 group: account.group,
                 isActive: account.isActive,
                 lastSyncError: account.lastSyncError,
-                totalBalance: account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
-                    * appState.currentUSDToDisplayRate,
+                totalBalance: balance.balance,
+                providerTotal: balance.providerTotal,
                 firstAddress: account.addresses.first?.address)
         }
     }
 
-    private var rows: [AccountRowData] {
-        let mapped = AccountsFeature.mapAccountRows(from: accountInputs)
+    private func rows(_ inputs: [AccountInput]) -> [AccountRowData] {
+        let mapped = AccountsFeature.mapAccountRows(from: inputs)
         let filtered = AccountsFeature.filterAccountRows(
             mapped,
             searchText: store.accounts.searchText,
@@ -51,19 +55,16 @@ struct AccountsView: View {
         return filtered.sorted(using: sortOrder)
     }
 
-    private var allGroups: [String] {
-        AccountsFeature.extractGroups(from: accountInputs)
-    }
-
     private var currencyCode: String {
         appState.selectedCurrency.displayCode
     }
 
     var body: some View {
+        let inputs = accountInputs()
         VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
             DashboardPageHeader("Accounts")
-            toolbar
-            accountTable
+            toolbar(groups: AccountsFeature.extractGroups(from: inputs))
+            accountTable(rows(inputs))
                 .dashboardCard(horizontalPadding: 10, verticalPadding: 10)
         }
         .padding(DashboardStyle.pagePadding)
@@ -93,7 +94,7 @@ struct AccountsView: View {
 
     // MARK: - Toolbar
 
-    private var toolbar: some View {
+    private func toolbar(groups: [String]) -> some View {
         HStack(spacing: 10) {
             DashboardSearchField(placeholder: "Search accounts...", text: Binding(
                 get: { store.accounts.searchText },
@@ -104,7 +105,7 @@ struct AccountsView: View {
                 get: { store.accounts.filterGroup },
                 set: { store.send(.accounts(.filterGroupChanged($0))) })) {
                     Text("All Groups").tag(nil as String?)
-                    ForEach(allGroups, id: \.self) { group in
+                    ForEach(groups, id: \.self) { group in
                         Text(group).tag(group as String?)
                     }
                 }
@@ -168,7 +169,7 @@ struct AccountsView: View {
 
     // MARK: - Table
 
-    private var accountTable: some View {
+    private func accountTable(_ rows: [AccountRowData]) -> some View {
         Table(rows, sortOrder: $sortOrder) {
             TableColumn("Name", value: \.name) { row in
                 HStack(spacing: 6) {
@@ -200,16 +201,7 @@ struct AccountsView: View {
             .width(min: 60, ideal: 80)
 
             TableColumn("Balance", value: \.balance) { row in
-                VStack(alignment: .trailing) {
-                    Text(row.balance, format: .currency(code: currencyCode))
-                        .font(DashboardStyle.monoTableFont)
-                    if let error = row.lastSyncError {
-                        Text(error)
-                            .font(.caption2)
-                            .foregroundStyle(PortuTheme.dashboardWarning)
-                            .lineLimit(1)
-                    }
-                }
+                balanceCell(row)
             }
             .width(min: 80, ideal: 120)
 
@@ -249,41 +241,59 @@ struct AccountsView: View {
         }
         .dashboardTable()
         .contextMenu(forSelectionType: AccountRowData.ID.self) { selection in
-            if let id = selection.first, let account = accounts.first(where: { $0.id == id }) {
-                Button("Edit") {
-                    store.send(.accounts(.editAccountTapped(id)))
+            accountMenu(selection)
+        }
+    }
+
+    private func balanceCell(_ row: AccountRowData) -> some View {
+        VStack(alignment: .trailing) {
+            Text(AccountsFormat.currency(row.balance, code: currencyCode))
+                .font(DashboardStyle.monoTableFont)
+            if let error = row.lastSyncError {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundStyle(PortuTheme.dashboardWarning)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func accountMenu(_ selection: Set<AccountRowData.ID>) -> some View {
+        if let id = selection.first, let account = accounts.first(where: { $0.id == id }) {
+            Button("Edit") {
+                store.send(.accounts(.editAccountTapped(id)))
+            }
+            Button("Sync") {
+                store.send(.accountSyncTapped(id))
+            }
+            .disabled(!account.isSyncable || store.syncStatus.isSyncing)
+            Divider()
+            Button(account.isActive ? "Deactivate" : "Activate") {
+                do {
+                    try AccountSheetSaveCoordinator.setAccount(
+                        account,
+                        isActive: !account.isActive,
+                        modelContext: modelContext)
+                } catch {
+                    accountActionError = error.localizedDescription
                 }
-                Button("Sync") {
-                    store.send(.accountSyncTapped(id))
-                }
-                .disabled(!account.isSyncable || store.syncStatus.isSyncing)
-                Divider()
-                Button(account.isActive ? "Deactivate" : "Activate") {
+            }
+            .disabled(AccountRowActionPolicy.activationToggleDisabled(globalSyncIsRunning: store.syncStatus.isSyncing))
+            Divider()
+            Button("Delete", role: .destructive) {
+                Task { @MainActor in
                     do {
-                        try AccountSheetSaveCoordinator.setAccount(
+                        try await AccountSheetSaveCoordinator.deleteAccount(
                             account,
-                            isActive: !account.isActive,
-                            modelContext: modelContext)
+                            modelContext: modelContext,
+                            secretStore: secretStore)
                     } catch {
                         accountActionError = error.localizedDescription
                     }
                 }
-                .disabled(AccountRowActionPolicy.activationToggleDisabled(globalSyncIsRunning: store.syncStatus.isSyncing))
-                Divider()
-                Button("Delete", role: .destructive) {
-                    Task { @MainActor in
-                        do {
-                            try await AccountSheetSaveCoordinator.deleteAccount(
-                                account,
-                                modelContext: modelContext,
-                                secretStore: secretStore)
-                        } catch {
-                            accountActionError = error.localizedDescription
-                        }
-                    }
-                }
-                .disabled(AccountRowActionPolicy.deleteDisabled(globalSyncIsRunning: store.syncStatus.isSyncing))
             }
+            .disabled(AccountRowActionPolicy.deleteDisabled(globalSyncIsRunning: store.syncStatus.isSyncing))
         }
     }
 

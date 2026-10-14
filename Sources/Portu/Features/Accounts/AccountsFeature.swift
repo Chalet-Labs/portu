@@ -15,6 +15,7 @@ struct AccountInput: Equatable {
     let isActive: Bool
     let lastSyncError: String?
     let totalBalance: Decimal
+    var providerTotal: Decimal = 0
     let firstAddress: String?
 }
 
@@ -35,6 +36,7 @@ nonisolated struct AccountRowData: Identifiable {
     let address: String
     let type: String
     let balance: Decimal
+    var providerTotal: Decimal = 0
     let dataSource: DataSource
     let isActive: Bool
     let lastSyncError: String?
@@ -193,6 +195,7 @@ struct AccountsFeature {
                 address: addressDisplay(for: account),
                 type: account.kind.rawValue.capitalized,
                 balance: account.totalBalance,
+                providerTotal: account.providerTotal,
                 dataSource: account.dataSource,
                 isActive: account.isActive,
                 lastSyncError: account.lastSyncError)

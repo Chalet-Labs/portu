@@ -100,6 +100,7 @@
 		59974330FE487EC104F9F44A /* ValuationContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B05E124916137AABAB8EC24 /* ValuationContext.swift */; };
 		59B827BBE030A4CF7600C391 /* OverviewRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D6C970D2A036CFB54E4FB03 /* OverviewRenderingTests.swift */; };
 		5B0F3CD56BEEF2BC2F006FEB /* ZapperToZerionMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAC182775898B406285F0876 /* ZapperToZerionMigrator.swift */; };
+		5CCE965272799A9493DBAD2B /* AccountsFeature+Balances.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3495FDC8562EAC0AD9697017 /* AccountsFeature+Balances.swift */; };
 		5EE233362C693C7BB21382FE /* AssetsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06025CA3BF194094E297EC73 /* AssetsTab.swift */; };
 		5F289205CFA69D669B51A3A7 /* ViewRenderSmokeTests+AllPositions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9ED6FF7C331A9D6F9BA035D /* ViewRenderSmokeTests+AllPositions.swift */; };
 		6068E00157E6F9B70F3A1E7D /* PortfolioValueChartFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18F38062FE3BB59B837AA671 /* PortfolioValueChartFeature.swift */; };
@@ -240,6 +241,7 @@
 		D4B37B7013275E0393B345B1 /* ExposureFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0F997F49008BE7A368532C /* ExposureFeature.swift */; };
 		D55859C15A9E30E5EECA3D6D /* PortfolioCategorySeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1E06309E68FBD62B4957310 /* PortfolioCategorySeeder.swift */; };
 		D5C9D5612731410483F544D3 /* MainWindowPlacementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AAA2334D5B05A6C7B1C84F2 /* MainWindowPlacementTests.swift */; };
+		D7C51CE9FB13F17550820B03 /* ValuationSources+Accounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE6CAEB84F0263D422EC7064 /* ValuationSources+Accounts.swift */; };
 		D7EB90317E3B1DEEE2E61A32 /* OverviewTopAssetsSeamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A49EEBCA1C835DF5574E650 /* OverviewTopAssetsSeamTests.swift */; };
 		D8509962986D86AABAD3E5FE /* OverviewCategorySource.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB11403E0368E037291933DF /* OverviewCategorySource.swift */; };
 		D882138045F214B8FE8EB3C5 /* AllAssetsDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97E2F2639E0D691B8AA03049 /* AllAssetsDashboard.swift */; };
@@ -365,6 +367,7 @@
 		33A8B760DBB5ADCC14074F6D /* ModelSaveClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSaveClientTests.swift; sourceTree = "<group>"; };
 		33C7EC8BA3C811AEF2E2D2DB /* OverviewPositionTabComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPositionTabComponents.swift; sourceTree = "<group>"; };
 		34106A87F63B161FEC71DFFF /* HistoricalPricesProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPricesProvider.swift; sourceTree = "<group>"; };
+		3495FDC8562EAC0AD9697017 /* AccountsFeature+Balances.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccountsFeature+Balances.swift"; sourceTree = "<group>"; };
 		371ED7D4DE3A82EBE87230AC /* CategorySymbolRuleWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategorySymbolRuleWriter.swift; sourceTree = "<group>"; };
 		37E2A3E671D1FD2E10EB6F2F /* CurrencyConversionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrencyConversionContext.swift; sourceTree = "<group>"; };
 		39320574FA8ED9762F65B1CE /* AssetDetailFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetDetailFeatureTests.swift; sourceTree = "<group>"; };
@@ -519,6 +522,7 @@
 		BD13FDD77A649AA0A7CBEA62 /* AppFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureTests.swift; sourceTree = "<group>"; };
 		BD49BF9A1B2BBF0FFB2F4812 /* AppFeatureSyncProgressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureSyncProgressTests.swift; sourceTree = "<group>"; };
 		BDD4CD7BC973EEBA6750157E /* PerformanceDataTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceDataTypes.swift; sourceTree = "<group>"; };
+		BE6CAEB84F0263D422EC7064 /* ValuationSources+Accounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ValuationSources+Accounts.swift"; sourceTree = "<group>"; };
 		BEA37039B203CA0B14A05EFD /* OverviewPositionTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPositionTabs.swift; sourceTree = "<group>"; };
 		C098AACD3A503135E31467D1 /* SyncEngineLegacyAccountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineLegacyAccountTests.swift; sourceTree = "<group>"; };
 		C1E06309E68FBD62B4957310 /* PortfolioCategorySeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioCategorySeeder.swift; sourceTree = "<group>"; };
@@ -646,6 +650,7 @@
 			isa = PBXGroup;
 			children = (
 				E72F0D537E08E9AFCE7549E3 /* AccountsFeature.swift */,
+				3495FDC8562EAC0AD9697017 /* AccountsFeature+Balances.swift */,
 				AFB16B288A8FDA49E18239C2 /* AccountSheetDraft.swift */,
 				20002294759D52134305A0B6 /* AccountSheetSaveError.swift */,
 				52E52E92A4ADD1CA36A62709 /* AccountsView.swift */,
@@ -654,6 +659,7 @@
 				FA314118C60FC003FA3C6117 /* AddAccountSheetCredentialLoading.swift */,
 				8A6FF70061475C4B92F546CE /* AddAccountSheetFields.swift */,
 				5C92AA921F540823BA2AC34B /* ExchangeCredentialSnapshot.swift */,
+				BE6CAEB84F0263D422EC7064 /* ValuationSources+Accounts.swift */,
 			);
 			path = Accounts;
 			sourceTree = "<group>";
@@ -1174,6 +1180,7 @@
 				230FDDF90C3B1EB88AF0981C /* APIKeysViewModel.swift in Sources */,
 				AAAB1F935EF02D565C748435 /* AccountSheetDraft.swift in Sources */,
 				FDDE3D68C93ED50ABB115E73 /* AccountSheetSaveError.swift in Sources */,
+				5CCE965272799A9493DBAD2B /* AccountsFeature+Balances.swift in Sources */,
 				84957F67FC8B550274FAAE42 /* AccountsFeature.swift in Sources */,
 				C5983C7BEF4CC57836BD456E /* AccountsView.swift in Sources */,
 				7FE55C3B27ABF3CC4228467F /* AddAccountSheet.swift in Sources */,
@@ -1302,6 +1309,7 @@
 				B9EBE98379145DC5A52E0595 /* UpdaterStatus.swift in Sources */,
 				61527A9AD6ADC34DDE9B1D1C /* UpdatesSettingsView.swift in Sources */,
 				59974330FE487EC104F9F44A /* ValuationContext.swift in Sources */,
+				D7C51CE9FB13F17550820B03 /* ValuationSources+Accounts.swift in Sources */,
 				0446260A16F033322CB9E8C3 /* ValuationSources+AllAssets.swift in Sources */,
 				B09FF3660181797A0F39B936 /* ValuationSources+AllPositions.swift in Sources */,
 				D0B82A14865A90B36E47D611 /* ValuationSources+AssetDetail.swift in Sources */,
