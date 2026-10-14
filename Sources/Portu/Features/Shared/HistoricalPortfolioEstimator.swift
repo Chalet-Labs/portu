@@ -54,7 +54,7 @@ enum HistoricalPortfolioEstimator {
         accountId: UUID?) -> [HistoricalPortfolioValuePoint] {
         let scopedHoldings = holdings.compactMap { holding -> HistoricalEstimateHolding? in
             guard accountId == nil || holding.accountId == accountId else { return nil }
-            guard let coinGeckoId = normalizedID(holding.coinGeckoId) else { return nil }
+            guard let coinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(holding.coinGeckoId) else { return nil }
             return HistoricalEstimateHolding(
                 accountId: holding.accountId,
                 assetId: holding.assetId,
@@ -69,7 +69,7 @@ enum HistoricalPortfolioEstimator {
         var pricesByDay: [Date: [String: Decimal]] = [:]
 
         let normalizedPrices = prices.compactMap { price -> HistoricalPriceEntry? in
-            guard let coinGeckoId = normalizedID(price.coinGeckoId) else { return nil }
+            guard let coinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(price.coinGeckoId) else { return nil }
             return HistoricalPriceEntry(coinGeckoId: coinGeckoId, day: price.day, usdPrice: price.usdPrice)
         }
         let referencePrices = referencePricesByID(prices: normalizedPrices, firstRealDay: firstRealDay)
@@ -156,9 +156,5 @@ enum HistoricalPortfolioEstimator {
             latestByID[price.coinGeckoId] = (day, price.usdPrice)
         }
         return latestByID.mapValues(\.price)
-    }
-
-    private static func normalizedID(_ id: String) -> String? {
-        TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
     }
 }

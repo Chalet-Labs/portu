@@ -389,7 +389,7 @@ extension HistoricalBackfillPriceSource: Hashable {
         switch self {
         case let .coingecko(id):
             hasher.combine("coingecko")
-            hasher.combine(id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+            hasher.combine(TokenIdentityMappingFeature.normalizedProviderID(id))
         case let .zerion(identity):
             hasher.combine("zerion")
             hasher.combine(identity)

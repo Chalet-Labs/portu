@@ -421,7 +421,7 @@ struct PerformanceFeature {
     static func computeHistoricalPriceChanges(
         rows: [HistoricalPriceEntry]) -> [AssetPricePeriodChange] {
         let normalizedRows = rows.compactMap { row -> HistoricalPriceEntry? in
-            guard let historicalPriceID = normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
+            guard let historicalPriceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
             return HistoricalPriceEntry(coinGeckoId: historicalPriceID, day: row.day, usdPrice: row.usdPrice)
         }
         let grouped = Dictionary(grouping: normalizedRows) { $0.coinGeckoId }
@@ -450,7 +450,7 @@ struct PerformanceFeature {
         namesByHistoricalPriceID: [String: String]) -> [AssetPricePeriodChange] {
         let normalizedNames = Dictionary(
             namesByHistoricalPriceID.compactMap { id, name -> (String, String)? in
-                guard let normalizedID = normalizedHistoricalPriceID(id) else { return nil }
+                guard let normalizedID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(id) else { return nil }
                 let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmedName.isEmpty else { return nil }
                 return (normalizedID, trimmedName)
@@ -500,7 +500,7 @@ struct PerformanceFeature {
         guard heldIDs.isEmpty == false else { return [] }
 
         return rows.compactMap { row in
-            guard let coinGeckoId = normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
+            guard let coinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
             guard row.day >= startDay, heldIDs.contains(coinGeckoId) else { return nil }
             return HistoricalPriceEntry(
                 coinGeckoId: coinGeckoId,
@@ -554,10 +554,6 @@ struct PerformanceFeature {
         return TokenIdentityMappingFeature.priceID(
             coinGeckoId: coinGeckoId,
             onchainIdentity: snapshot.onchainIdentity)
-    }
-
-    private static func normalizedHistoricalPriceID(_ id: String?) -> String? {
-        TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
     }
 
     static func utcStartOfDay(for date: Date) -> Date {

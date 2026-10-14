@@ -99,10 +99,6 @@ struct TokenSettingsResult: Equatable {
 enum TokenSettingsFeature {
     static let displayLimit = 100
 
-    static func overridesByAssetId(_ overrides: [TokenPricingOverrideSnapshot]) -> [UUID: TokenPricingOverrideSnapshot] {
-        TokenPricingOverrideFeature.overridesByAssetId(overrides)
-    }
-
     /// The Token Settings list over the active accounts' context: the module's asset rows (the
     /// Assets tab's list), every row and never only the visible ones, then the search, the filter
     /// and the cap. The counts cover every row the search matches.
@@ -159,9 +155,9 @@ enum TokenSettingsFeature {
         case .notCounted:
             !row.isIgnored && row.status == .notCounted
         case .manualPrice:
-            sanitizedManualPrice(row.override?.manualPriceUSD) != nil
+            TokenPricingOverrideFeature.sanitizedManualPrice(row.override?.manualPriceUSD) != nil
         case .mappedPriceSource:
-            normalizedCoinGeckoID(row.override?.coinGeckoIdOverride) != nil
+            TokenIdentityMappingFeature.normalizedProviderID(row.override?.coinGeckoIdOverride) != nil
         }
     }
 

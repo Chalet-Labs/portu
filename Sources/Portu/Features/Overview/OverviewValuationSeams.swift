@@ -197,7 +197,7 @@ extension OverviewFeature {
         let mappings = TokenIdentityMappingFeature.mappingsByIdentity(context.mappings)
         var pricedAssets: [String: Set<UUID>] = [:]
         for asset in assets {
-            guard let coinGeckoId = OverviewWatchlistStore.normalizedID(asset.coinGeckoId) else { continue }
+            guard let coinGeckoId = TokenIdentityMappingFeature.normalizedProviderID(asset.coinGeckoId) else { continue }
             pricedAssets[coinGeckoId, default: []].insert(asset.id)
         }
         for token in tokens {

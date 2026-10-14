@@ -218,7 +218,7 @@ struct TokenSettingsView: View {
         }
         upsertOverride(assetId: assetId) { override in
             override.manualPriceUSD = parsed.value
-            override.coinGeckoIdOverride = normalizedOptional(coinGeckoIdText)
+            override.coinGeckoIdOverride = TokenIdentityMappingFeature.normalizedProviderID(coinGeckoIdText)
             override.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
@@ -276,11 +276,6 @@ struct TokenSettingsView: View {
             tokenSettingsLogger.error("Failed to save override for \(assetId, privacy: .public): \(String(describing: error), privacy: .public)")
             saveError = error.localizedDescription
         }
-    }
-
-    private func normalizedOptional(_ value: String) -> String? {
-        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.isEmpty ? nil : normalized
     }
 }
 

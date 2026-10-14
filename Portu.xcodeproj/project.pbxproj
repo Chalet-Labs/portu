@@ -91,7 +91,6 @@
 		4D6FBF67ABA1F278F4B6BB23 /* HistoricalPortfolioEstimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8489FFB3B14202D63DFC5284 /* HistoricalPortfolioEstimator.swift */; };
 		4EE987418351C5D1552194B5 /* PreSnapshotIndexes.store in Resources */ = {isa = PBXBuildFile; fileRef = 267F6185437CBD691533570D /* PreSnapshotIndexes.store */; };
 		5067F5363F99C73EFD568110 /* PortuCore in Frameworks */ = {isa = PBXBuildFile; productRef = FC9D1CDC5B4BF289632883B4 /* PortuCore */; };
-		50A832CF14AB57672831ACD4 /* TokenSettingsFeature+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8391D55809DB666FE792AD77 /* TokenSettingsFeature+Helpers.swift */; };
 		528762AEBFE7695C38D3DB9C /* AssetLookupCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E98AA642DEA9418434E3238B /* AssetLookupCacheTests.swift */; };
 		52A6CFFFCF82E2F1F98C0C35 /* MainWindowPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2F33C046095EBD74E27BAF /* MainWindowPlacement.swift */; };
 		544780D377B4F15ADCE5DAD6 /* CategorySymbolRuleWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 371ED7D4DE3A82EBE87230AC /* CategorySymbolRuleWriter.swift */; };
@@ -469,7 +468,6 @@
 		813D162565D572ED30229095 /* SettingsIntervalRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsIntervalRow.swift; sourceTree = "<group>"; };
 		814E567DB3F1447A8A6FAF44 /* SyncEngineSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineSupport.swift; sourceTree = "<group>"; };
 		8198FC7D426142AD64CE0738 /* SettingsUpdateChannelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsUpdateChannelPicker.swift; sourceTree = "<group>"; };
-		8391D55809DB666FE792AD77 /* TokenSettingsFeature+Helpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TokenSettingsFeature+Helpers.swift"; sourceTree = "<group>"; };
 		8489FFB3B14202D63DFC5284 /* HistoricalPortfolioEstimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPortfolioEstimator.swift; sourceTree = "<group>"; };
 		84E0CE70F797E90EC7D5347A /* PortfolioCategorySeederTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioCategorySeederTests.swift; sourceTree = "<group>"; };
 		86C5C8B946FC7CA06DAE1005 /* AllAssetsSeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllAssetsSeamTests.swift; sourceTree = "<group>"; };
@@ -882,7 +880,6 @@
 				9C9330A7E8F8102FE57BFE75 /* SettingsView.swift */,
 				4C5B647C18FB90D4BF98BB5E /* TokenPricingOverrideWriter.swift */,
 				97271DF343FF3BCB2234A40D /* TokenSettingsFeature.swift */,
-				8391D55809DB666FE792AD77 /* TokenSettingsFeature+Helpers.swift */,
 				3B7FE9B27D4FED8093683323 /* TokenSettingsFeature+Rows.swift */,
 				AF501A47E70AF0FF687F80D9 /* TokenSettingsRow.swift */,
 				3E6FF9588E006CC2658730D6 /* TokenSettingsView.swift */,
@@ -1321,7 +1318,6 @@
 				8FBCA384E7FA9824860169F5 /* SyncEngineSupport.swift in Sources */,
 				446DB5318394D5247E6A5316 /* TokenPricingOverrideWriter.swift in Sources */,
 				F466303D5DC673594A7B1CC1 /* TokenRowLabels.swift in Sources */,
-				50A832CF14AB57672831ACD4 /* TokenSettingsFeature+Helpers.swift in Sources */,
 				F3DEF20D0698D9C8324CB5AC /* TokenSettingsFeature+Rows.swift in Sources */,
 				3E9FAAECCAB6AD25EDF404CE /* TokenSettingsFeature.swift in Sources */,
 				B15A829AC4BE771ECBA38995 /* TokenSettingsRow.swift in Sources */,

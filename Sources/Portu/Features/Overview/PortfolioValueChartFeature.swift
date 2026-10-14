@@ -71,7 +71,7 @@ actor PortfolioValueChartEstimateFetcher {
         }
 
         // 5. Project winners to value types.
-        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(overrides)
+        let overridesByAssetId = TokenPricingOverrideFeature.overridesByAssetId(overrides)
         let entries: [HistoricalEstimateSnapshotEntry] = winners.map { snapshot in
             let asset = assetsById[snapshot.assetId]
             return HistoricalEstimateSnapshotEntry(

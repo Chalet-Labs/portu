@@ -27,7 +27,7 @@ struct AssetPriceChart: View {
         self.coinGeckoId = coinGeckoId
         self.store = store
         let targetAssetId = assetId
-        let targetCoinGeckoId = Self.normalizedCoinGeckoId(coinGeckoId) ?? "__missing_coin_gecko_id__"
+        let targetCoinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(coinGeckoId) ?? "__missing_coin_gecko_id__"
         _snapshots = Query(
             filter: #Predicate<AssetSnapshot> { $0.assetId == targetAssetId },
             sort: \.timestamp)
@@ -227,9 +227,5 @@ struct AssetPriceChart: View {
             }
             .frame(height: 250)
         }
-    }
-
-    private static func normalizedCoinGeckoId(_ id: String?) -> String? {
-        TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
     }
 }
