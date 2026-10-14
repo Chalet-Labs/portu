@@ -82,17 +82,3 @@ struct PositionTokenRowView: View {
         .opacity(row.state == .ignored ? 0.5 : 1)
     }
 }
-
-enum PositionGroupValue {
-    static func headerTotal(
-        for tokens: [PositionToken],
-        livePrices: [String: Decimal],
-        fallbackUSDToDisplayRate: Decimal = 1) -> Decimal {
-        tokens.reduce(Decimal.zero) { total, token in
-            total + AssetValueFormatter.signedValue(
-                for: token,
-                livePrices: livePrices,
-                fallbackUSDToDisplayRate: fallbackUSDToDisplayRate)
-        }
-    }
-}

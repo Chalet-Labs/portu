@@ -52,7 +52,6 @@
 		26B849B0A66B482ED6C6EA97 /* DeadlockWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F7F08C277E7F9AED8896AFE /* DeadlockWatchdog.swift */; };
 		288195E041046D1915F4C4EF /* NetworkLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B5D6AE56F85E18A9E63B7B /* NetworkLogger.swift */; };
 		29D24A7CD1E11D0F636D2567 /* OverviewPositionProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 091308B10EE348C4FD4D56B3 /* OverviewPositionProjection.swift */; };
-		2A5980FDF680ADDCB39EA59B /* PositionGroupValueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B00E51B9CD5D696629A76B9 /* PositionGroupValueTests.swift */; };
 		2C0FDFBFFA96D46D54E9527E /* PerformanceDataClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C27FC49CD62739285B3191B /* PerformanceDataClient.swift */; };
 		2E1ECF2FEFF79728EE7CA698 /* InspectorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80D8A6F5E0D27CFE2E0F5446 /* InspectorPanel.swift */; };
 		2E204E462E315636628D90DD /* PortfolioHealthFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBA5184D0631578B50D57760 /* PortfolioHealthFeature.swift */; };
@@ -150,7 +149,6 @@
 		850A770966CD9B0BF9905DD5 /* DisplayCurrencyPreference.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F9B7162AA8C1D822C51BBB /* DisplayCurrencyPreference.swift */; };
 		85212735D0F3DD8E79A07A69 /* AllPositionsFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 217BAB67071799402C6FEDC7 /* AllPositionsFeature.swift */; };
 		85E47194B92F2AD0CD67CBE9 /* NetworksTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB47E7990208DC0893BDB696 /* NetworksTab.swift */; };
-		867FA2DB1B4BF8FA9FD47FAA /* AssetValueFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EBE743A9AC8B9A2C8333003 /* AssetValueFormatter.swift */; };
 		8780D8FAC0239DCEA7AD71E8 /* ProviderPortfolioHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BC6E0EF8231855B36484C69 /* ProviderPortfolioHistory.swift */; };
 		889082CDB81C331C5684C15F /* AccountSheetDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B56D23BA9DF6CE549D5DBEA /* AccountSheetDraftTests.swift */; };
 		88ABBA56E103152F9C2C6747 /* AssetLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 550D6F6A8C36881EAA48DF2E /* AssetLogoView.swift */; };
@@ -325,7 +323,6 @@
 		190DDDD6C7E50B4300F8F595 /* DebugEndpointsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugEndpointsTests.swift; sourceTree = "<group>"; };
 		1AAB6958F228996FEDEDC07A /* AppDependencies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDependencies.swift; sourceTree = "<group>"; };
 		1ADB5A9BC7AC9E8188E7159C /* OverviewHealthSeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewHealthSeamTests.swift; sourceTree = "<group>"; };
-		1B00E51B9CD5D696629A76B9 /* PositionGroupValueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PositionGroupValueTests.swift; sourceTree = "<group>"; };
 		1B05E124916137AABAB8EC24 /* ValuationContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ValuationContext.swift; sourceTree = "<group>"; };
 		1BF3531455DB02B3CD05FBBA /* HistoricalMarketPricesProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalMarketPricesProviderTests.swift; sourceTree = "<group>"; };
 		1D2F33C046095EBD74E27BAF /* MainWindowPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowPlacement.swift; sourceTree = "<group>"; };
@@ -430,7 +427,6 @@
 		6C27FC49CD62739285B3191B /* PerformanceDataClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceDataClient.swift; sourceTree = "<group>"; };
 		6C46DC75D0866A55E3AE6B63 /* UpdatesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatesSettingsView.swift; sourceTree = "<group>"; };
 		6E73BD66578FD9C7009C3632 /* DashboardStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardStyle.swift; sourceTree = "<group>"; };
-		6EBE743A9AC8B9A2C8333003 /* AssetValueFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetValueFormatter.swift; sourceTree = "<group>"; };
 		6EF959B5C3D507CB470711F6 /* PlatformsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformsTab.swift; sourceTree = "<group>"; };
 		6F0E7258436E78C228FB291C /* PortuUI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PortuUI; path = Packages/PortuUI; sourceTree = SOURCE_ROOT; };
 		6FDADF527210BF4564D3AD76 /* ExposureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExposureView.swift; sourceTree = "<group>"; };
@@ -624,7 +620,6 @@
 			isa = PBXGroup;
 			children = (
 				550D6F6A8C36881EAA48DF2E /* AssetLogoView.swift */,
-				6EBE743A9AC8B9A2C8333003 /* AssetValueFormatter.swift */,
 				37E2A3E671D1FD2E10EB6F2F /* CurrencyConversionContext.swift */,
 				6E73BD66578FD9C7009C3632 /* DashboardStyle.swift */,
 				41F24FC7E499C44313A47E07 /* HiddenBalancesLabel.swift */,
@@ -965,7 +960,6 @@
 				B44BBABF8DC9D82CEE3CD750 /* PortfolioHealthMetricsTests.swift */,
 				77A271AFBD5E45BE1E80FB85 /* PortfolioValuationFixture.swift */,
 				C35858F256DF9CC212C24F56 /* PortfolioValueChartFeatureTests.swift */,
-				1B00E51B9CD5D696629A76B9 /* PositionGroupValueTests.swift */,
 				9D07175A908D286EFB84690E /* PriceServiceClientDefaultCurrencyTests.swift */,
 				2E83779E156800BF99D5B42F /* ProtocolFilterTests.swift */,
 				62643CCED7A5091869CDB00E /* ProviderPortfolioHistoryTests.swift */,
@@ -1189,7 +1183,6 @@
 				6D9B9970959D46585F380D7A /* AssetMetadataSidebar.swift in Sources */,
 				CFE9060530486693BFF3461C /* AssetPositionsTable.swift in Sources */,
 				2F47E990712C6285668BD294 /* AssetPriceChart.swift in Sources */,
-				867FA2DB1B4BF8FA9FD47FAA /* AssetValueFormatter.swift in Sources */,
 				0A2431EF5C69483405B0ADA3 /* AssetsChartMode.swift in Sources */,
 				5EE233362C693C7BB21382FE /* AssetsTab.swift in Sources */,
 				E7000B42AB79ADDC06055DFA /* CategorySettingsView.swift in Sources */,
@@ -1406,7 +1399,6 @@
 				60AB89812EE9C34CD3833BBD /* PortfolioHealthMetricsTests.swift in Sources */,
 				32B7B359BF8516EFBDAD4697 /* PortfolioValuationFixture.swift in Sources */,
 				96C4DECEE50EA892ED111C55 /* PortfolioValueChartFeatureTests.swift in Sources */,
-				2A5980FDF680ADDCB39EA59B /* PositionGroupValueTests.swift in Sources */,
 				62E2C89EA9D197AF0CE8FCF6 /* PriceServiceClientDefaultCurrencyTests.swift in Sources */,
 				199AC50AADF5D13C0A51DFBD /* ProtocolFilterTests.swift in Sources */,
 				A20767232F14DABE89550EA2 /* ProviderPortfolioHistoryTests.swift in Sources */,
