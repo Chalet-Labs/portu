@@ -103,8 +103,10 @@ struct AddPositionSheet: View {
                 Spacer()
                 Button("Add") { savePosition() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(selectedAccountId == nil || amount == 0 ||
-                        (createNewAsset ? newSymbol.isEmpty || newName.isEmpty : selectedAsset == nil))
+                    .disabled(!ManualPositionEntry.canAdd(
+                        hasAccount: selectedAccountId != nil,
+                        hasAsset: createNewAsset ? !newSymbol.isEmpty && !newName.isEmpty : selectedAsset != nil,
+                        amount: amount))
             }
             .padding()
         }
@@ -149,12 +151,11 @@ struct AddPositionSheet: View {
             return
         }
 
-        let livePrice = asset.coinGeckoId.flatMap { appState.prices[$0] }
         let usdValue = ManualPositionPricing.usdValue(
             amount: amount,
             override: usdValueOverride,
-            displayPrice: livePrice,
-            usdToDisplayRate: appState.currentUSDToDisplayRate)
+            coinGeckoId: asset.coinGeckoId,
+            appState: appState)
         let token = PositionToken(role: .balance, amount: amount, usdValue: usdValue, asset: asset)
         let position = Position(
             positionType: positionType,
@@ -173,7 +174,24 @@ struct AddPositionSheet: View {
     }
 }
 
+enum ManualPositionEntry {
+    /// Add needs an account, an asset and an amount.
+    static func canAdd(hasAccount: Bool, hasAsset: Bool, amount: Decimal) -> Bool {
+        hasAccount && hasAsset && amount != 0
+    }
+}
+
 enum ManualPositionPricing {
+    /// The value the sheet stores for a new manual position, priced from the app's live book.
+    @MainActor
+    static func usdValue(amount: Decimal, override: Decimal?, coinGeckoId: String?, appState: AppState) -> Decimal {
+        usdValue(
+            amount: amount,
+            override: override,
+            displayPrice: coinGeckoId.flatMap { appState.prices[$0] },
+            usdToDisplayRate: appState.currentUSDToDisplayRate)
+    }
+
     /// Resolves the canonical USD value to persist for a manual position.
     ///
     /// `displayPrice` is the live price in the current display currency, so it is

@@ -119,6 +119,18 @@
             return dict
         }
 
+        // MARK: - /state/totals
+
+        /// Not served yet: answers as an unknown path does.
+        static func totals(
+            context _: ModelContext,
+            request _: HTTPRequest,
+            market _: DebugMarketInputs,
+            defaults _: UserDefaults = .standard,
+            now _: Date = .now) -> HTTPResponse {
+            errorResponse("Not found", statusCode: 404)
+        }
+
         // MARK: - /state/assets
 
         static func assets(context: ModelContext, request: HTTPRequest) -> HTTPResponse {
@@ -298,6 +310,14 @@
             }
             return HTTPResponse(statusCode: statusCode, body: data)
         }
+    }
+
+    /// The store's USD live book and display rate, read each time a route runs.
+    struct DebugMarketInputs {
+        var livePricesUSD: [String: Decimal] = [:]
+        var usdToDisplayRate: Decimal = 1
+
+        static let empty = DebugMarketInputs()
     }
 
     // MARK: - Query Param Helpers
