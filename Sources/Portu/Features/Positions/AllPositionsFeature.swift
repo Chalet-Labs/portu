@@ -77,7 +77,7 @@ enum AllPositionsFeature {
             .map { protocolId, infos in
                 AllPositionsProtocolOption(
                     filter: protocolId.map(ProtocolFilter.specific) ?? .none,
-                    name: protocolName(infos),
+                    name: protocolId == nil ? walletProtocolName : protocolName(infos),
                     total: sum(infos))
             }
             .sorted(by: protocolOrder)
@@ -97,8 +97,9 @@ enum AllPositionsFeature {
         }
     }
 
-    /// The lowest non-nil protocol name of the option's positions, as Platforms names a platform
-    /// (AGENT-DECIDED 8), else "Wallet".
+    /// A protocol's option is named after the lowest non-nil protocol name of its positions, as
+    /// Platforms names a platform, else "Wallet". The protocol-less option is always "Wallet": a
+    /// manual position can carry a name without a protocol ID, and must not rename it.
     private static func protocolName(_ infos: [AllPositionsCardInfo]) -> String {
         infos.compactMap(\.protocolName).min { lhs, rhs in
             let order = lhs.localizedStandardCompare(rhs)

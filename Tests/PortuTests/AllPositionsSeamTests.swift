@@ -175,8 +175,8 @@ struct AllPositionsSeamTests {
         #expect(page.protocolOptions.map(\.total) == [Fixture.decimal("7690.8"), 1500, Fixture.decimal("1499.6"), 90])
     }
 
-    /// The sidebar orders equal totals by name, then protocol ID, and names an option after the
-    /// lowest protocol name of its positions (AGENT-DECIDED 8).
+    /// The sidebar orders equal totals by name, then protocol ID, and names a protocol's option after
+    /// the lowest protocol name of its positions, as Platforms names a platform.
     @Test func `sidebar ties order by name then protocol ID`() {
         let inputs = [
             Seam.syncPosition(1, protocolID: "p-beta", usdValue: 100),
@@ -194,6 +194,28 @@ struct AllPositionsSeamTests {
         #expect(page.protocolOptions.map(\.name) == ["Able", "Beta", "Same", "Same"])
         #expect(page.protocolOptions.map(\.filter) == [.specific("p-alpha"), .specific("p-beta"), .specific("p-1"), .specific("p-2")])
         #expect(page.protocolOptions.map(\.total) == [100, 100, 100, 100])
+    }
+
+    /// A manual position can carry a protocol name with no protocol ID (AddPositionSheet). Its card
+    /// keeps that name, but the protocol-less option stays "Wallet", alone or beside the wallets.
+    @Test func `a named position without a protocol does not rename the Wallet option`() throws {
+        let ledger = Seam.syncPosition(6, type: .idle, protocolID: nil, usdValue: 200)
+        let ledgerCard = Seam.card(ledger.position, name: "Ledger")
+
+        let mixed = Seam.page(
+            Fixture.context(inputs: Fixture.inputs + [ledger]),
+            cards: Seam.cards + [ledgerCard])
+        let wallet = try #require(mixed.protocolOptions.first { $0.filter == .none })
+        #expect(wallet.name == AllPositionsFeature.walletProtocolName)
+        #expect(wallet.total == Fixture.decimal("7890.8"))
+        let shownLedger = mixed.sections.flatMap(\.cards).first { $0.id == ledgerCard.id }
+        #expect(shownLedger?.title == "Ledger")
+
+        let alone = Seam.page(
+            Fixture.context(inputs: [ledger], livePricesUSD: [:], liveChanges24h: [:], historical: .empty),
+            cards: [ledgerCard])
+        #expect(alone.protocolOptions.map(\.name) == [AllPositionsFeature.walletProtocolName])
+        #expect(alone.protocolOptions.map(\.total) == [200])
     }
 
     /// S6, U4: rows are signed contributions; a reward shows its own value as not counted; an
