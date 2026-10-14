@@ -128,6 +128,7 @@
 		714D885F01ABA19E0448AA2D /* OverviewTabBasisSeamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E45AF5D899DA241B3FBA42FB /* OverviewTabBasisSeamTests.swift */; };
 		75702B6E850A28368DCA84F6 /* OverviewFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6405DEF0896EB32AFFCA3D9B /* OverviewFeatureTests.swift */; };
 		7586E5633F191DC76655F7F0 /* SidebarLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B04273770EC464078A23908 /* SidebarLayout.swift */; };
+		7605BD5750C02F0BF3950965 /* AccountsSeamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77AB50CAD6B32A0877E4EBEB /* AccountsSeamTests.swift */; };
 		76331AE8D8576426CED8DEB9 /* WalletPnLPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BDA745BD7623E3372B0DA2D /* WalletPnLPresentation.swift */; };
 		77752EA857BE174E9F55FA9A /* PlatformsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EF959B5C3D507CB470711F6 /* PlatformsTab.swift */; };
 		77AE4B3C82D8CAFB6862B76D /* HistoricalLatestCloseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D263D1546F411E47E784464 /* HistoricalLatestCloseTests.swift */; };
@@ -198,6 +199,7 @@
 		AC85B3422199D8E5346CB08A /* LocalSigningSetupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF14531F794AF3BD778434D9 /* LocalSigningSetupTests.swift */; };
 		ACABB35F9973A57572179B81 /* AppFeatureAccountSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A01CB6E84AA5F46CB9019A4 /* AppFeatureAccountSyncTests.swift */; };
 		ACC0582AA532A78461C7BE47 /* SettingsUpdateStatusNotice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5234A960C589AFF10DB36D51 /* SettingsUpdateStatusNotice.swift */; };
+		ADB5627DFDB15C1C26BF2714 /* ViewRenderSmokeTests+Accounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 046A7671E51FEACC2914B948 /* ViewRenderSmokeTests+Accounts.swift */; };
 		B0612D7929CE6AB324AE4005 /* AssetDetailAssetQueryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E2A0E96EA8A1F782D412C5 /* AssetDetailAssetQueryTests.swift */; };
 		B0707B1F26AEE433FF971240 /* PortfolioAnalyticsFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D371F61690CB468F79B57512 /* PortfolioAnalyticsFeatureTests.swift */; };
 		B09FF3660181797A0F39B936 /* ValuationSources+AllPositions.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFA681F21E57E3B39B9B116E /* ValuationSources+AllPositions.swift */; };
@@ -308,6 +310,7 @@
 		010C1DB373A8290FC444B86E /* PerformanceDataFetcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceDataFetcherTests.swift; sourceTree = "<group>"; };
 		015A266F795505EF5A43A041 /* AppFeatureSyncCompletionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureSyncCompletionTests.swift; sourceTree = "<group>"; };
 		032C6036352F4AD17F90B9DF /* HistoricalPriceBackfillSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillSettings.swift; sourceTree = "<group>"; };
+		046A7671E51FEACC2914B948 /* ViewRenderSmokeTests+Accounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ViewRenderSmokeTests+Accounts.swift"; sourceTree = "<group>"; };
 		046E97FD21BA985765DBBA5D /* PerformanceLoadIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceLoadIdentityTests.swift; sourceTree = "<group>"; };
 		06025CA3BF194094E297EC73 /* AssetsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetsTab.swift; sourceTree = "<group>"; };
 		08F07C1CD9BFC389EF82221E /* OverviewPollingSeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPollingSeamTests.swift; sourceTree = "<group>"; };
@@ -449,6 +452,7 @@
 		75DA968F02800DC976D92003 /* ModelContainerFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerFactoryTests.swift; sourceTree = "<group>"; };
 		7674696086937331A79F61C2 /* HistoricalPortfolioEstimatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPortfolioEstimatorTests.swift; sourceTree = "<group>"; };
 		77A271AFBD5E45BE1E80FB85 /* PortfolioValuationFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioValuationFixture.swift; sourceTree = "<group>"; };
+		77AB50CAD6B32A0877E4EBEB /* AccountsSeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsSeamTests.swift; sourceTree = "<group>"; };
 		77BA63F789AE9A9C1544D1C7 /* AppFeatureUpdaterSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatureUpdaterSettingsTests.swift; sourceTree = "<group>"; };
 		79425078F4E02B149F06E972 /* AppStateBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateBridgeTests.swift; sourceTree = "<group>"; };
 		79475C02C1D67BEDC8745854 /* CurrencyConversionContextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrencyConversionContextTests.swift; sourceTree = "<group>"; };
@@ -882,6 +886,7 @@
 				E14B8750CDB4B4FF65401D0B /* AccountsFeatureTests.swift */,
 				4B56D23BA9DF6CE549D5DBEA /* AccountSheetDraftTests.swift */,
 				307EE29FCE573C37E94B776D /* AccountSheetInvalidationTests.swift */,
+				77AB50CAD6B32A0877E4EBEB /* AccountsSeamTests.swift */,
 				737ADD29F72D176E21C41D96 /* AddAccountSheetReviewTests.swift */,
 				2C5E29636BD6B99B6A038320 /* AddAccountSupportChipTests.swift */,
 				59F1B452183C058E480F9BCC /* AddPositionCategoryRuleTests.swift */,
@@ -1003,6 +1008,7 @@
 				D727DC43294E81CB398E1040 /* UpdaterIntegrationTests.swift */,
 				2C1AD33ED9590B6094AA51DE /* UpdaterSettingsUITests.swift */,
 				E03E305DDC6E4458F794B16A /* ViewRenderSmokeTests.swift */,
+				046A7671E51FEACC2914B948 /* ViewRenderSmokeTests+Accounts.swift */,
 				4AE091270630A7BDD5F9BE7D /* ViewRenderSmokeTests+AllAssets.swift */,
 				D9ED6FF7C331A9D6F9BA035D /* ViewRenderSmokeTests+AllPositions.swift */,
 				8942ACC577F0226F38329198 /* ViewRenderSmokeTests+AssetDetail.swift */,
@@ -1333,6 +1339,7 @@
 				889082CDB81C331C5684C15F /* AccountSheetDraftTests.swift in Sources */,
 				FE9FC93C2B94C62746C3E49A /* AccountSheetInvalidationTests.swift in Sources */,
 				4BAE4A97F25DD88CC1E4297A /* AccountsFeatureTests.swift in Sources */,
+				7605BD5750C02F0BF3950965 /* AccountsSeamTests.swift in Sources */,
 				4C8A429B6784A49DD450615A /* AddAccountSheetReviewTests.swift in Sources */,
 				C5153D7BAD7942A4D8EC3429 /* AddAccountSupportChipTests.swift in Sources */,
 				FE3D3F7A3293898A4A4EE084 /* AddPositionCategoryRuleTests.swift in Sources */,
@@ -1451,6 +1458,7 @@
 				1C3D5ABCB44A8943B1616804 /* UpdaterBroadcasterTests.swift in Sources */,
 				A69CC0139006AEAEC405CABE /* UpdaterIntegrationTests.swift in Sources */,
 				CD386ED4D0CD3C53DA44FD80 /* UpdaterSettingsUITests.swift in Sources */,
+				ADB5627DFDB15C1C26BF2714 /* ViewRenderSmokeTests+Accounts.swift in Sources */,
 				7AFBA78C81C8758FA1A106C6 /* ViewRenderSmokeTests+AllAssets.swift in Sources */,
 				5F289205CFA69D669B51A3A7 /* ViewRenderSmokeTests+AllPositions.swift in Sources */,
 				3684993FDB09B782DF1612CF /* ViewRenderSmokeTests+AssetDetail.swift in Sources */,
