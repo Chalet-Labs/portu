@@ -297,6 +297,62 @@ struct PerformanceCategoryChangeTests {
         #expect(entry.categoryName == "ETH")
     }
 
+    @Test func `category entries resolve snapshot rows through the supplied resolver`() {
+        let categoryID = UUID()
+        let category = PortfolioCategorySnapshot(
+            id: categoryID,
+            name: "Custom ETH",
+            sortOrder: 0,
+            semanticRole: .normal,
+            isSystemRequired: false)
+        let resolver = PortfolioCategoryResolver(
+            categories: [category, PortfolioCategoryDefaults.fallbackCategory],
+            rules: [
+                CategorySymbolRuleSnapshot(
+                    id: UUID(),
+                    symbol: "ETH",
+                    categoryId: categoryID)
+            ])
+        let timestamp = Date()
+
+        let entries = PerformanceDataShaping.categoryEntries(
+            rows: [snapshotRow(symbol: "ETH", category: .major, usdValue: 100, at: timestamp)],
+            from: timestamp,
+            resolver: resolver)
+
+        #expect(entries.map(\.categoryID) == [categoryID.uuidString])
+        #expect(entries.map(\.categoryName) == ["Custom ETH"])
+    }
+
+    @Test func `category entries map legacy known symbols to default portfolio category IDs`() {
+        let timestamp = Date()
+
+        let entries = PerformanceDataShaping.categoryEntries(
+            rows: [snapshotRow(symbol: "ETH", category: .major, usdValue: 2000, at: timestamp)],
+            from: timestamp,
+            resolver: .defaults)
+
+        #expect(entries.map(\.categoryID) == [PortfolioCategoryDefaults.ethCategoryID.uuidString])
+        #expect(entries.map(\.categoryName) == ["ETH"])
+    }
+
+    private func snapshotRow(
+        symbol: String,
+        category: AssetCategory,
+        usdValue: Decimal,
+        at timestamp: Date) -> PerformanceSnapshotRow {
+        PerformanceSnapshotRow(
+            accountId: UUID(),
+            assetId: UUID(),
+            timestamp: timestamp,
+            symbol: symbol,
+            category: category,
+            amount: 1,
+            usdValue: usdValue,
+            borrowAmount: 0,
+            borrowUsdValue: 0)
+    }
+
     @Test func `computes start end and percent change`() throws {
         let cal = Calendar.current
         let day1 = try #require(cal.date(from: DateComponents(year: 2024, month: 1, day: 1, hour: 12)))
