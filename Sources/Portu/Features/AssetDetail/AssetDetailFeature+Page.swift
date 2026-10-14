@@ -9,7 +9,8 @@ extension AssetDetailFeature {
     /// The page seam: the header, holdings, per-chain breakdown and token rows of one asset from one
     /// valuation of the active accounts' tokens of that asset (A7: net basis, that asset). Values are
     /// summed in USD and converted once. No token row is ever hidden; reward-only and ignored chains
-    /// drop out of the per-chain list.
+    /// drop out of the per-chain list. The asset's override is looked up once, for the header's
+    /// market price ID and the chart key.
     static func page(
         _ context: ValuationContext,
         asset: AssetDetailAsset,
@@ -17,10 +18,15 @@ extension AssetDetailFeature {
         let market = context.prices.market
         let valuation = context.valuation(market: market)
         let rate = context.usdToDisplayRate
+        let override = TokenPricingOverrideFeature.overridesByAssetId(context.overrides)[asset.id]
         return AssetDetailPage(
-            header: header(valuation, market: market, asset: asset, context: context),
+            header: header(valuation, market: market, asset: asset, override: override, context: context),
             holdings: holdings(valuation, rate: rate),
-            rows: rows(valuation, labels: labels, rate: rate))
+            rows: rows(valuation, labels: labels, rate: rate),
+            chartPriceID: effectiveHistoricalCoinGeckoID(
+                assetCoinGeckoId: asset.coinGeckoId,
+                onchainIdentity: asset.onchainIdentity,
+                override: override))
     }
 
     static func networkName(_ chain: Chain?) -> String {
@@ -34,18 +40,22 @@ extension AssetDetailFeature {
         _ valuation: PortfolioValuation,
         market: MarketPrices,
         asset: AssetDetailAsset,
+        override: TokenPricingOverrideSnapshot?,
         context: ValuationContext) -> RowPricing? {
         let isHeld = valuation.tokens.contains { $0.isCounted && !$0.isIgnored }
         let pricing = isHeld
             ? RowPricing(tokens: valuation.tokens)
-            : market.quote(priceID: marketPriceID(of: asset, context: context))
+            : market.quote(priceID: marketPriceID(of: asset, override: override, mappings: context.mappings))
         let shown = pricing.display(rate: context.usdToDisplayRate)
         return shown.price == nil ? nil : shown
     }
 
     /// The asset's own market price ID. An unheld asset has no token to resolve it from, so the
     /// asset stands in as a zero-amount balance.
-    private static func marketPriceID(of asset: AssetDetailAsset, context: ValuationContext) -> String? {
+    private static func marketPriceID(
+        of asset: AssetDetailAsset,
+        override: TokenPricingOverrideSnapshot?,
+        mappings: [TokenIdentityMappingSnapshot]) -> String? {
         let entry = TokenEntry(
             assetId: asset.id,
             symbol: asset.symbol,
@@ -58,8 +68,8 @@ extension AssetDetailFeature {
             usdValue: 0)
         return TokenPricingOverrideFeature.marketPriceID(
             token: entry,
-            override: TokenPricingOverrideFeature.overridesByAssetId(context.overrides)[asset.id],
-            mappingsByIdentity: TokenIdentityMappingFeature.mappingsByIdentity(context.mappings))
+            override: override,
+            mappingsByIdentity: TokenIdentityMappingFeature.mappingsByIdentity(mappings))
     }
 
     /// Total Value is Σ contributions; Total Amount leaves out ignored tokens; accounts are counted by

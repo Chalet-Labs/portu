@@ -177,6 +177,22 @@ struct AssetDetailSeamTests {
         #expect(page.header == RowPricing(price: Fixture.decimal("0.01"), source: .live, fraction24h: nil))
     }
 
+    /// The chart key comes from the same override lookup as the header: a CoinGecko override wins
+    /// over the asset's own ID, and a mapped asset keeps its onchain key, since the chart ignores
+    /// identity mappings (spec, Out of scope).
+    @Test func `the chart key follows the asset's override and ignores mappings`() {
+        let renamed = Seam.asset(Fixture.uuid(9703), "OLD", coinGeckoId: "old-id")
+        let overridden = AssetDetailFeature.page(
+            Fixture.context(tokens: [], overrides: [TokenPricingOverrideSnapshot(assetId: renamed.id, coinGeckoIdOverride: "new-id")]),
+            asset: renamed,
+            labels: [:])
+        let degen = Seam.page(Seam.asset(Fixture.AssetID.degen, "DEGEN", onchainIdentity: Fixture.degenIdentity), inputs: [])
+
+        #expect(overridden.chartPriceID == "new-id")
+        #expect(Seam.page(Seam.eth, inputs: Seam.ethVariant).chartPriceID == "ethereum")
+        #expect(degen.chartPriceID == Fixture.degenIdentity.historicalPriceID)
+    }
+
     // MARK: - Holdings (S7, A7, AGENT-DECIDED 13)
 
     /// A7: the total is Σ contributions, the amount the net of the counted tokens, and the

@@ -34,15 +34,6 @@ struct AssetDetailView: View {
         assets.first { $0.id == assetId }
     }
 
-    /// The chart's cache key. It ignores identity mappings, which the backfill writer honours; that
-    /// divergence is out of scope for PR (b) (spec, Out of scope).
-    private func historicalPriceCoinGeckoId(_ asset: AssetDetailAsset) -> String? {
-        AssetDetailFeature.effectiveHistoricalCoinGeckoID(
-            assetCoinGeckoId: asset.coinGeckoId,
-            onchainIdentity: asset.onchainIdentity,
-            override: TokenPricingOverrideFeature.overridesByAssetId(sources.overrideSnapshots)[asset.id])
-    }
-
     private var currencyCode: String {
         appState.currencyCode
     }
@@ -83,7 +74,7 @@ struct AssetDetailView: View {
                             }
                         }
 
-                        AssetPriceChart(assetId: assetId, coinGeckoId: historicalPriceCoinGeckoId(projection.asset), store: store)
+                        AssetPriceChart(assetId: assetId, coinGeckoId: page.chartPriceID, store: store)
                             .dashboardCard()
                         AssetHoldingsSummary(holdings: page.holdings, currencyCode: currencyCode)
                             .dashboardCard()

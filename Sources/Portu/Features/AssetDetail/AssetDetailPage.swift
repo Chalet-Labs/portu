@@ -57,6 +57,9 @@ struct AssetDetailPage: Equatable {
     let header: RowPricing?
     let holdings: AssetHoldings
     let rows: [AssetPositionRow]
+    /// The price chart's cache key. It ignores identity mappings, which the backfill writer honours;
+    /// that divergence is out of scope for PR (b) (spec, Out of scope).
+    let chartPriceID: String?
 }
 
 struct AssetHoldings: Equatable {
