@@ -74,25 +74,22 @@ enum BackfillEligibilityFixture {
     }
 
     static func select(settings: TokenDashboardSettings) -> Selection {
-        let tokens = HistoricalBackfillCandidateResolver.valuedTokens(inputs, overrides: overrides, mappings: Fixture.mappings)
+        let valued = HistoricalBackfillCandidateResolver.valuedTokens(inputs, overrides: overrides, mappings: Fixture.mappings)
         let candidates = HistoricalBackfillCandidateResolver.candidates(
-            tokens: tokens,
+            valued: valued,
             snapshots: snapshots,
-            overrides: overrides,
             mappings: Fixture.mappings,
             dashboardSettings: settings)
         return Selection(
             candidates: Dictionary(uniqueKeysWithValues: candidates.map { ($0.historicalPriceID, $0.assetIds) }),
             sources: Dictionary(uniqueKeysWithValues: candidates.map { ($0.historicalPriceID, $0.source) }),
             sourceAssetIDs: HistoricalBackfillCandidateResolver.sourceAssetIDs(
-                tokens: tokens,
+                valued: valued,
                 snapshots: snapshots,
-                overrides: overrides,
                 dashboardSettings: settings),
             identities: HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
-                tokens: tokens,
+                valued: valued,
                 snapshots: snapshots,
-                overrides: overrides,
                 mappings: Fixture.mappings,
                 dashboardSettings: settings))
     }

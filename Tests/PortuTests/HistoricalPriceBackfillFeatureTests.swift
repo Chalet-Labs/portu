@@ -19,8 +19,7 @@ struct HistoricalPriceBackfillFeatureTests {
             TokenPricingOverrideSnapshot(assetId: manualOnly.assetId, manualPriceUSD: 1.25)
         ]
         let candidates = HistoricalBackfillCandidateResolver.candidates(
-            tokens: valued([bitcoin, mapped, manualOnly, noPrice], overrides: overrides),
-            overrides: overrides)
+            valued: valued([bitcoin, mapped, manualOnly, noPrice], overrides: overrides))
 
         #expect(candidates.map(\.coinGeckoId) == ["bitcoin", "new-id"])
         #expect(candidates.map(\.assetIds) == [[bitcoin.assetId], [mapped.assetId]])
@@ -30,7 +29,7 @@ struct HistoricalPriceBackfillFeatureTests {
         let first = token(assetId: uuid(1), symbol: "AAVE", coinGeckoId: " AAVE ", amount: 1, usdValue: 100)
         let second = token(assetId: uuid(2), symbol: "AAVE.e", coinGeckoId: "aave", amount: 2, usdValue: 200)
 
-        let candidates = HistoricalBackfillCandidateResolver.candidates(tokens: valued([second, first]), overrides: [])
+        let candidates = HistoricalBackfillCandidateResolver.candidates(valued: valued([second, first]))
 
         #expect(candidates.count == 1)
         #expect(candidates.first?.coinGeckoId == "aave")
@@ -54,8 +53,7 @@ struct HistoricalPriceBackfillFeatureTests {
             onchainIdentity: fallbackIdentity)
 
         let candidates = HistoricalBackfillCandidateResolver.candidates(
-            tokens: valued([fallback, mapped]),
-            overrides: [],
+            valued: valued([fallback, mapped]),
             resolvedCoinGeckoIDs: [mappedIdentity: "mapped-token"])
 
         #expect(candidates.map(\.historicalPriceID) == [fallbackIdentity.historicalPriceID, mappedIdentity.historicalPriceID])
@@ -77,12 +75,10 @@ struct HistoricalPriceBackfillFeatureTests {
         let mapping = TokenIdentityMappingSnapshot(identity: mappedIdentity, coinGeckoId: " cached-token ")
 
         let candidates = HistoricalBackfillCandidateResolver.candidates(
-            tokens: valued([mapped]),
-            overrides: [],
+            valued: valued([mapped]),
             mappings: [mapping])
         let unresolved = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
-            tokens: valued([mapped]),
-            overrides: [],
+            valued: valued([mapped]),
             mappings: [mapping])
 
         #expect(candidates.map(\.historicalPriceID) == [mappedIdentity.historicalPriceID])
@@ -102,8 +98,7 @@ struct HistoricalPriceBackfillFeatureTests {
             onchainIdentity: identity)
 
         let candidates = HistoricalBackfillCandidateResolver.candidates(
-            tokens: valued([solanaToken]),
-            overrides: [])
+            valued: valued([solanaToken]))
 
         #expect(candidates.map(\.historicalPriceID) == [identity.historicalPriceID])
         #expect(candidates.map(\.source) == [.zerion(identity)])
@@ -119,7 +114,7 @@ struct HistoricalPriceBackfillFeatureTests {
             usdValue: 390,
             onchainIdentity: identity)
 
-        let candidates = HistoricalBackfillCandidateResolver.candidates(tokens: valued([token]), overrides: [])
+        let candidates = HistoricalBackfillCandidateResolver.candidates(valued: valued([token]))
 
         #expect(candidates.map(\.historicalPriceID) == [identity.historicalPriceID])
         #expect(candidates.map(\.source) == [.coingecko("usd-coin")])
@@ -137,8 +132,7 @@ struct HistoricalPriceBackfillFeatureTests {
             TokenPricingOverrideSnapshot(assetId: pinnedDust.assetId, alwaysShow: true)
         ]
         let candidates = HistoricalBackfillCandidateResolver.candidates(
-            tokens: valued([visible, dust, ignored, unpriced, pinnedDust], overrides: overrides),
-            overrides: overrides)
+            valued: valued([visible, dust, ignored, unpriced, pinnedDust], overrides: overrides))
 
         #expect(candidates.map(\.historicalPriceID) == ["pinned-dust", "visible-token"])
         #expect(candidates.map(\.assetIds) == [[pinnedDust.assetId], [visible.assetId]])
@@ -161,8 +155,7 @@ struct HistoricalPriceBackfillFeatureTests {
             TokenPricingOverrideSnapshot(assetId: pinnedDust.assetId, alwaysShow: true)
         ]
         let identities = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
-            tokens: valued([visible, dust, ignored, unpriced, pinnedDust], overrides: overrides),
-            overrides: overrides)
+            valued: valued([visible, dust, ignored, unpriced, pinnedDust], overrides: overrides))
 
         #expect(identities == [pinnedIdentity, visibleIdentity])
     }
@@ -429,7 +422,7 @@ struct HistoricalPriceBackfillFeatureTests {
     /// The run's empty-market valuation over tokens that each sit in their own idle position.
     private func valued(
         _ tokens: [TokenEntry],
-        overrides: [TokenPricingOverrideSnapshot] = []) -> [ValuedToken] {
+        overrides: [TokenPricingOverrideSnapshot] = []) -> HistoricalBackfillValuedTokens {
         HistoricalBackfillCandidateResolver.valuedTokens(
             tokens.enumerated().map { index, token in
                 ValuationInput(

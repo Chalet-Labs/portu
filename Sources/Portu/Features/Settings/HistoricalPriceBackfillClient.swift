@@ -95,14 +95,13 @@ private struct BackfillRunner {
     func run() async throws -> HistoricalBackfillResult {
         let settings = dashboardSettings()
         let sourceData = try loadSourceData()
-        let tokens = HistoricalBackfillCandidateResolver.valuedTokens(
+        let valued = HistoricalBackfillCandidateResolver.valuedTokens(
             sourceData.inputs,
             overrides: sourceData.overrides,
             mappings: sourceData.mappings)
         let identitiesNeedingResolution = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
-            tokens: tokens,
+            valued: valued,
             snapshots: sourceData.snapshots,
-            overrides: sourceData.overrides,
             mappings: sourceData.mappings,
             dashboardSettings: settings)
         let resolvedCoinGeckoIDs = try await resolveCoinGeckoIDs(for: identitiesNeedingResolution)
@@ -110,16 +109,14 @@ private struct BackfillRunner {
             resolvedCoinGeckoIDs,
             existingMappings: sourceData.liveMappings)
         let candidates = HistoricalBackfillCandidateResolver.candidates(
-            tokens: tokens,
+            valued: valued,
             snapshots: sourceData.snapshots,
-            overrides: sourceData.overrides,
             mappings: sourceData.mappings,
             dashboardSettings: settings,
             resolvedCoinGeckoIDs: resolvedCoinGeckoIDs)
         let sourceAssetCount = HistoricalBackfillCandidateResolver.sourceAssetIDs(
-            tokens: tokens,
+            valued: valued,
             snapshots: sourceData.snapshots,
-            overrides: sourceData.overrides,
             dashboardSettings: settings).count
         let requested = candidates.reduce(0) { total, candidate in
             total + candidate.assetIds.count

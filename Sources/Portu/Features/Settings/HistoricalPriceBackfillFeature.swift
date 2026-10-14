@@ -101,28 +101,42 @@ struct HistoricalBackfillError: LocalizedError, Equatable {
     }
 }
 
+/// One run's valued tokens with the overrides they were valued with. The only way to build one is
+/// to value inputs, so the resolvers can never read tokens and overrides that disagree.
+struct HistoricalBackfillValuedTokens {
+    let tokens: [ValuedToken]
+    let overridesByAssetId: [UUID: TokenPricingOverrideSnapshot]
+
+    init(
+        _ inputs: [ValuationInput],
+        overrides: [TokenPricingOverrideSnapshot],
+        mappings: [TokenIdentityMappingSnapshot]) {
+        self.tokens = PortfolioValuation(inputs: inputs, market: MarketPrices(), overrides: overrides, mappings: mappings).tokens
+        self.overridesByAssetId = TokenPricingOverrideFeature.overridesByAssetId(overrides)
+    }
+}
+
 enum HistoricalBackfillCandidateResolver {
     /// One run's tokens, valued once over an empty market (S12): backfill has no live book or
     /// closes, so a token is worth its manual price × amount, else its sync value, as it always was.
     static func valuedTokens(
         _ inputs: [ValuationInput],
         overrides: [TokenPricingOverrideSnapshot],
-        mappings: [TokenIdentityMappingSnapshot] = []) -> [ValuedToken] {
-        PortfolioValuation(inputs: inputs, market: MarketPrices(), overrides: overrides, mappings: mappings).tokens
+        mappings: [TokenIdentityMappingSnapshot] = []) -> HistoricalBackfillValuedTokens {
+        HistoricalBackfillValuedTokens(inputs, overrides: overrides, mappings: mappings)
     }
 
     static func candidates(
-        tokens: [ValuedToken],
+        valued: HistoricalBackfillValuedTokens,
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
-        overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot] = [],
         dashboardSettings: TokenDashboardSettings = .defaults,
         resolvedCoinGeckoIDs: [OnchainTokenIdentity: String] = [:]) -> [HistoricalBackfillCandidate] {
-        let overrideMap = TokenPricingOverrideFeature.overridesByAssetId(overrides)
+        let overrideMap = valued.overridesByAssetId
         let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
         var grouped: [HistoricalBackfillCandidateKey: Set<UUID>] = [:]
-        for valued in tokens where shouldIncludeToken(valued, dashboardSettings: dashboardSettings) {
-            let token = valued.token
+        for valuedToken in valued.tokens where shouldIncludeToken(valuedToken, dashboardSettings: dashboardSettings) {
+            let token = valuedToken.token
             addCandidate(
                 asset: HistoricalBackfillAssetReference(
                     assetId: token.assetId,
@@ -158,12 +172,11 @@ enum HistoricalBackfillCandidateResolver {
     }
 
     static func sourceAssetIDs(
-        tokens: [ValuedToken],
+        valued: HistoricalBackfillValuedTokens,
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
-        overrides: [TokenPricingOverrideSnapshot] = [],
         dashboardSettings: TokenDashboardSettings = .defaults) -> Set<UUID> {
-        let overrideMap = TokenPricingOverrideFeature.overridesByAssetId(overrides)
-        let tokenIDs = tokens.compactMap { token -> UUID? in
+        let overrideMap = valued.overridesByAssetId
+        let tokenIDs = valued.tokens.compactMap { token -> UUID? in
             shouldIncludeToken(token, dashboardSettings: dashboardSettings) ? token.token.assetId : nil
         }
         let snapshotIDs = snapshots.compactMap { snapshot -> UUID? in
@@ -179,16 +192,15 @@ enum HistoricalBackfillCandidateResolver {
     }
 
     static func onchainIdentitiesNeedingResolution(
-        tokens: [ValuedToken],
+        valued: HistoricalBackfillValuedTokens,
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
-        overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot] = [],
         dashboardSettings: TokenDashboardSettings = .defaults) -> [OnchainTokenIdentity] {
-        let overrideMap = TokenPricingOverrideFeature.overridesByAssetId(overrides)
+        let overrideMap = valued.overridesByAssetId
         let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
         var identities = Set<OnchainTokenIdentity>()
-        for valued in tokens where shouldIncludeToken(valued, dashboardSettings: dashboardSettings) {
-            let token = valued.token
+        for valuedToken in valued.tokens where shouldIncludeToken(valuedToken, dashboardSettings: dashboardSettings) {
+            let token = valuedToken.token
             addUnresolvedIdentity(
                 assetId: token.assetId,
                 coinGeckoId: token.coinGeckoId,
