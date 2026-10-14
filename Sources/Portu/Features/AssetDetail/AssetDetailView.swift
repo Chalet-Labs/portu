@@ -34,7 +34,8 @@ struct AssetDetailView: View {
         assets.first { $0.id == assetId }
     }
 
-    /// The chart's cache key, mapping-blind as the backfill writer's read path expects.
+    /// The chart's cache key. It ignores identity mappings, which the backfill writer honours; that
+    /// divergence is out of scope for PR (b) (spec, Out of scope).
     private func historicalPriceCoinGeckoId(_ asset: AssetDetailAsset) -> String? {
         AssetDetailFeature.effectiveHistoricalCoinGeckoID(
             assetCoinGeckoId: asset.coinGeckoId,

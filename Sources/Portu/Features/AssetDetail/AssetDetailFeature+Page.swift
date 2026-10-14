@@ -8,7 +8,8 @@ extension AssetDetailFeature {
 
     /// The page seam: the header, holdings, per-chain breakdown and token rows of one asset from one
     /// valuation of the active accounts' tokens of that asset (A7: net basis, that asset). Values are
-    /// summed in USD and converted once. No row is ever hidden.
+    /// summed in USD and converted once. No token row is ever hidden; reward-only and ignored chains
+    /// drop out of the per-chain list.
     static func page(
         _ context: ValuationContext,
         asset: AssetDetailAsset,
