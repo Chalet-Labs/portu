@@ -26,20 +26,6 @@ public extension TokenEntry {
             logoURL: asset.logoURL,
             syncedAt: token.position?.syncedAt)
     }
-
-    /// Convert active PositionTokens to TokenEntries, filtering out tokens without assets or inactive accounts.
-    static func fromActiveTokens(
-        _ tokens: [PositionToken],
-        categoryResolver: PortfolioCategoryResolver = .defaults) -> [TokenEntry] {
-        tokens.compactMap { token in
-            guard let asset = token.asset, token.position?.account?.isActive == true else { return nil }
-            return TokenEntry(
-                token,
-                asset: asset,
-                portfolioCategory: categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
-                coinGeckoId: asset.coinGeckoId)
-        }
-    }
 }
 
 public extension TokenIdentityMappingSnapshot {

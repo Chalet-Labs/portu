@@ -34,7 +34,7 @@ struct TokenEntrySyncTimeTests {
         let container = try makeTestContainer()
         let token = insertToken(into: container.mainContext, syncedAt: syncedAt)
 
-        let entries = TokenEntry.fromActiveTokens([token])
+        let entries = ValuationInput.activeAccounts([token]).map(\.token)
 
         #expect(entries.map(\.syncedAt) == [syncedAt])
     }

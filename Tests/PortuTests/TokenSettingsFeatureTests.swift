@@ -5,47 +5,6 @@ import SwiftData
 import Testing
 
 struct TokenSettingsFeatureTests {
-    @Test func `dashboard threshold uses strict less than so boundary value stays visible`() {
-        let boundary = token(symbol: "BOUND", coinGeckoId: "bound", amount: 1, usdValue: 0)
-        let prices: [String: Decimal] = ["bound": 1]
-        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
-
-        #expect(TokenSettingsFeature.isDashboardEligible(
-            token: boundary,
-            prices: prices,
-            override: nil,
-            settings: settings))
-    }
-
-    @Test func `dashboard threshold hides values strictly below the minimum when hide dust is on`() {
-        let below = token(symbol: "BELOW", coinGeckoId: "below", amount: 1, usdValue: 0)
-        let prices: [String: Decimal] = ["below": decimal("0.99")]
-        let hideDust = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
-        let showDust = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: false)
-
-        #expect(!TokenSettingsFeature.isDashboardEligible(token: below, prices: prices, override: nil, settings: hideDust))
-        #expect(TokenSettingsFeature.isDashboardEligible(token: below, prices: prices, override: nil, settings: showDust))
-    }
-
-    @Test func `dashboard defaults exclude zero amount ignored unpriced and dust tokens`() {
-        let visible = token(symbol: "VISIBLE", coinGeckoId: "visible", amount: 1, usdValue: 2)
-        let zeroAmount = token(symbol: "ZERO", coinGeckoId: "zero", amount: 0, usdValue: 10)
-        let ignored = token(symbol: "IGNORED", coinGeckoId: "ignored", amount: 1, usdValue: 10)
-        let unpriced = token(symbol: "UNPRICED", amount: 1, usdValue: 0)
-        let syncOnly = token(symbol: "SYNC", amount: 1, usdValue: 1000)
-        let dust = token(symbol: "DUST", coinGeckoId: "dust", amount: 1, usdValue: 0.50)
-
-        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: [visible, zeroAmount, ignored, unpriced, syncOnly, dust],
-            prices: ["visible": 2, "zero": 10, "ignored": 10, "dust": 0.50],
-            overrides: [
-                TokenPricingOverrideSnapshot(assetId: ignored.assetId, isIgnored: true)
-            ],
-            settings: .defaults)
-
-        #expect(eligible.map(\.symbol) == ["VISIBLE"])
-    }
-
     /// Flipped: a sync-only token is valued at its sync value with the Sync-time source (spec S8,
     /// V1.5). Number changes → Token Settings: "sync-only tokens are valued with the Sync-time source".
     @Test func `settings rows value a token with no live or manual price at its sync value`() throws {
@@ -57,41 +16,6 @@ struct TokenSettingsFeatureTests {
         #expect(row.value == 1000)
         #expect(row.pricingSource == .syncTime)
         #expect(row.status == .priced)
-    }
-
-    @Test func `manual price and always show make low value tokens dashboard eligible`() {
-        let manual = token(symbol: "MANUAL", amount: 2, usdValue: 0)
-        let pinned = token(symbol: "PINNED", coinGeckoId: "pinned", amount: 1, usdValue: 0.25)
-
-        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: [manual, pinned],
-            prices: ["pinned": 0.25],
-            overrides: [
-                TokenPricingOverrideSnapshot(assetId: manual.assetId, manualPriceUSD: decimal("0.60")),
-                TokenPricingOverrideSnapshot(assetId: pinned.assetId, alwaysShow: true)
-            ],
-            settings: .defaults)
-
-        #expect(eligible.map(\.symbol) == ["MANUAL", "PINNED"])
-    }
-
-    @Test func `dashboard eligibility accepts a prebuilt override map`() {
-        let manual = token(symbol: "MANUAL", amount: 2, usdValue: 0)
-        let hidden = token(symbol: "HIDDEN", coinGeckoId: "hidden", amount: 1, usdValue: 10)
-        let overrides = [
-            TokenPricingOverrideSnapshot(assetId: manual.assetId, manualPriceUSD: decimal("1.25")),
-            TokenPricingOverrideSnapshot(assetId: hidden.assetId, isIgnored: true)
-        ]
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-
-        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: [manual, hidden],
-            prices: ["hidden": 10],
-            overrideMap: overrideMap,
-            settings: .defaults)
-
-        #expect(eligible.map(\.symbol) == ["MANUAL"])
-        #expect(eligible.first?.usdValue == decimal("2.50"))
     }
 
     @Test func `manual price wins over live price and coin gecko override is applied`() throws {
@@ -113,22 +37,6 @@ struct TokenSettingsFeatureTests {
         #expect(row.pricingSource == .manual)
         #expect(row.status == .priced)
         #expect(row.coinGeckoId == "new-map")
-    }
-
-    @Test func `identity mappings apply coingecko ids without writing user overrides`() {
-        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xLocal")
-        let local = token(symbol: "LOCAL", amount: 2, usdValue: 4, onchainIdentity: identity)
-        let mapping = TokenIdentityMappingSnapshot(
-            identity: identity,
-            coinGeckoId: " mapped-token ")
-
-        let entries = TokenSettingsFeature.applyIdentityMappings(
-            to: [local],
-            mappings: [mapping],
-            overrides: [])
-
-        #expect(entries.first?.coinGeckoId == "mapped-token")
-        #expect(entries.first?.onchainIdentity == identity)
     }
 
     @Test func `settings rows use Zerion live price for unmapped onchain tokens`() throws {
@@ -238,48 +146,6 @@ struct TokenSettingsFeatureTests {
         #expect(result.rows.count == 1)
         #expect(row.amount == 8)
         #expect(row.value == 24000)
-    }
-
-    @Test func `dashboard eligibility scales the usd threshold by the display rate for live prices`() {
-        let small = token(symbol: "SML", coinGeckoId: "sml", amount: 1, usdValue: 0)
-        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
-
-        let eligible = TokenSettingsFeature.isDashboardEligible(
-            token: small,
-            prices: ["sml": decimal("0.6")],
-            override: nil,
-            settings: settings,
-            usdToDisplayRate: decimal("0.5"))
-
-        #expect(eligible)
-    }
-
-    @Test func `dashboard eligibility still treats values below the scaled threshold as dust`() {
-        let small = token(symbol: "SML", coinGeckoId: "sml", amount: 1, usdValue: 0)
-        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
-
-        let eligible = TokenSettingsFeature.isDashboardEligible(
-            token: small,
-            prices: ["sml": decimal("0.4")],
-            override: nil,
-            settings: settings,
-            usdToDisplayRate: decimal("0.5"))
-
-        #expect(!eligible)
-    }
-
-    @Test func `dashboard eligible tokens list scales the threshold by the display rate`() {
-        let live = token(symbol: "LIVE", coinGeckoId: "live", amount: 1, usdValue: 0)
-        let settings = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
-
-        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: [live],
-            prices: ["live": decimal("0.6")],
-            overrides: [],
-            settings: settings,
-            usdToDisplayRate: decimal("0.5"))
-
-        #expect(eligible.map(\.symbol) == ["LIVE"])
     }
 
     @Test func `settings rows convert the manual usd price into the display currency`() throws {

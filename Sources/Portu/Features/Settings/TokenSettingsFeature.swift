@@ -103,95 +103,6 @@ enum TokenSettingsFeature {
         TokenPricingOverrideFeature.overridesByAssetId(overrides)
     }
 
-    static func applyIdentityMappings(
-        to tokens: [TokenEntry],
-        mappings: [TokenIdentityMappingSnapshot],
-        overrides: [TokenPricingOverrideSnapshot]) -> [TokenEntry] {
-        let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
-        let overrideMap = overridesByAssetId(overrides)
-
-        return tokens.map { token in
-            let override = overrideMap[token.assetId]
-            let coinGeckoId = resolvedCoinGeckoID(token: token, override: override)
-                ?? TokenIdentityMappingFeature.mappedCoinGeckoID(
-                    for: token.onchainIdentity,
-                    mappingsByIdentity: mappingMap)
-            guard coinGeckoId != token.coinGeckoId else { return token }
-            return tokenEntry(
-                from: token,
-                coinGeckoId: coinGeckoId,
-                usdValue: token.usdValue)
-        }
-    }
-
-    static func dashboardEligibleTokens(
-        tokens: [TokenEntry],
-        prices: [String: Decimal],
-        overrides: [TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults,
-        usdToDisplayRate: Decimal = 1) -> [TokenEntry] {
-        let overrideMap = overridesByAssetId(overrides)
-        return dashboardEligibleTokens(
-            tokens: tokens,
-            prices: prices,
-            overrideMap: overrideMap,
-            settings: settings,
-            usdToDisplayRate: usdToDisplayRate)
-    }
-
-    static func dashboardEligibleTokens(
-        tokens: [TokenEntry],
-        prices: [String: Decimal],
-        overrideMap: [UUID: TokenPricingOverrideSnapshot],
-        settings: TokenDashboardSettings = .defaults,
-        usdToDisplayRate: Decimal = 1) -> [TokenEntry] {
-        tokens.compactMap { token in
-            let override = overrideMap[token.assetId]
-            guard
-                isDashboardEligible(
-                    token: token,
-                    prices: prices,
-                    override: override,
-                    settings: settings,
-                    usdToDisplayRate: usdToDisplayRate)
-            else {
-                return nil
-            }
-            return dashboardAdjustedToken(from: token, override: override)
-        }
-    }
-
-    static func isDashboardEligible(
-        token: TokenEntry,
-        prices: [String: Decimal],
-        override: TokenPricingOverrideSnapshot?,
-        settings: TokenDashboardSettings = .defaults,
-        usdToDisplayRate: Decimal = 1) -> Bool {
-        guard token.amount > 0 else { return false }
-        guard token.role.isPositive || token.role.isBorrow else { return false }
-        guard override?.isIgnored != true else { return false }
-        if override?.alwaysShow == true {
-            return true
-        }
-
-        guard
-            let value = resolvedDisplayValue(
-                token: token,
-                prices: prices,
-                override: override,
-                usdToDisplayRate: usdToDisplayRate)
-        else {
-            return !settings.hideUnpriced
-        }
-
-        // The live price map is already in the display currency, so the USD dust
-        // threshold must be scaled by the same rate to stay comparable.
-        if absolute(value) < normalizedThreshold(settings.minimumDashboardValue) * usdToDisplayRate {
-            return !settings.hideDust
-        }
-        return true
-    }
-
     /// The Token Settings list over the active accounts' context: the module's asset rows (the
     /// Assets tab's list), every row and never only the visible ones, then the search, the filter
     /// and the cap. The counts cover every row the search matches.
@@ -221,19 +132,6 @@ enum TokenSettingsFeature {
             rows: cappedRows,
             totalMatches: filteredRows.count,
             counts: counts)
-    }
-
-    /// No identity mappings here, as before: the mapped CoinGecko ID only applies in PortuCore valuation.
-    static func resolvedCoinGeckoID(
-        token: TokenEntry,
-        override: TokenPricingOverrideSnapshot?) -> String? {
-        TokenPricingOverrideFeature.resolvedCoinGeckoID(token: token, override: override)
-    }
-
-    static func resolvedPriceID(
-        token: TokenEntry,
-        override: TokenPricingOverrideSnapshot?) -> String? {
-        TokenPricingOverrideFeature.resolvedPriceID(token: token, override: override)
     }
 
     private static func counts(for rows: [TokenSettingsRow]) -> TokenSettingsCounts {
@@ -297,21 +195,5 @@ enum TokenSettingsFeature {
     /// A not-counted row's value counts nowhere, so it does not rank.
     private static func sortValue(_ row: TokenSettingsRow) -> Decimal? {
         row.status == .notCounted ? nil : row.value
-    }
-
-    static func dashboardAdjustedToken(
-        from token: TokenEntry,
-        override: TokenPricingOverrideSnapshot?) -> TokenEntry {
-        if let manualPrice = sanitizedManualPrice(override?.manualPriceUSD) {
-            return tokenEntry(
-                from: token,
-                coinGeckoId: nil,
-                preserveOnchainIdentity: false,
-                usdValue: token.amount * manualPrice)
-        }
-        return tokenEntry(
-            from: token,
-            coinGeckoId: resolvedCoinGeckoID(token: token, override: override),
-            usdValue: token.usdValue)
     }
 }
