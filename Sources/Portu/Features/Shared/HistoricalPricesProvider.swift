@@ -3,14 +3,13 @@ import SwiftData
 import SwiftUI
 
 extension EnvironmentValues {
-    @Entry var historicalDisplayPrices: [String: Decimal] = [:]
     /// The historical half of the USD valuation inputs. It never carries the live book, so a live
     /// tick does not invalidate its readers.
     @Entry var historicalMarketPrices: HistoricalMarketPrices = .empty
 }
 
 /// Publishes the stored historical prices to the content: the USD closes and fractions valuation
-/// reads, and the display-currency closes Assets and Performance still read.
+/// reads.
 struct HistoricalPricesProvider<Content: View>: View {
     @Environment(AppState.self) private var appState
 
@@ -39,13 +38,7 @@ struct HistoricalPricesProvider<Content: View>: View {
     }
 
     var body: some View {
-        let displayPrices: [String: Decimal] = if historicalBackfillEnabled {
-            OverviewHistoricalPriceChangeFeature.latestPrices(from: historicalEntries)
-        } else {
-            [:]
-        }
-        return content
-            .environment(\.historicalDisplayPrices, displayPrices)
+        content
             .environment(\.historicalMarketPrices, HistoricalMarketPricesFeature.prices(
                 from: historicalPrices,
                 isBackfillEnabled: historicalBackfillEnabled,

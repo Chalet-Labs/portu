@@ -20,21 +20,6 @@ struct OverviewHistoricalPriceChangeTests {
         #expect(price == "$ <1e-8")
     }
 
-    @Test func `latest historical prices prefer newest row and canonicalize onchain ids`() {
-        let oldDay = Date(timeIntervalSince1970: 0)
-        let latestDay = Date(timeIntervalSince1970: 172_800)
-
-        let prices = OverviewHistoricalPriceChangeFeature.latestPrices(from: [
-            HistoricalPriceEntry(coinGeckoId: "zapper:base:0xabc", day: oldDay, usdPrice: 1),
-            HistoricalPriceEntry(coinGeckoId: "zapper:base:0xabc", day: latestDay, usdPrice: 3),
-            HistoricalPriceEntry(coinGeckoId: "bitcoin", day: latestDay, usdPrice: 100)
-        ])
-
-        #expect(prices["asset:base:0xabc"] == 3)
-        #expect(prices["zapper:base:0xabc"] == nil)
-        #expect(prices["bitcoin"] == 100)
-    }
-
     @Test func `merged historical price entries pick the row with the latest fetchedAt on duplicate days`() {
         let day = Date(timeIntervalSince1970: 1_704_067_200)
         let olderFetch = day
@@ -84,15 +69,6 @@ struct OverviewHistoricalPriceChangeTests {
             context: .usd)
 
         #expect(entries.allSatisfy { $0.day == normalizedDay })
-    }
-
-    @Test func `merged price cache lets live prices override historical fallback`() {
-        let merged = OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: ["ethereum": 2200],
-            historical: ["ethereum": 2100, "asset:base:0xabc": 3])
-
-        #expect(merged["ethereum"] == 2200)
-        #expect(merged["asset:base:0xabc"] == 3)
     }
 
     /// No live price or change: the token is valued from its sync value and moved by the historical
