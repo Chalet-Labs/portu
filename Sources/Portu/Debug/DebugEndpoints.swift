@@ -23,7 +23,7 @@
         static func register(
             on server: DebugServer,
             modelContainer: ModelContainer,
-            market: @escaping @MainActor () -> DebugMarketInputs = { .empty },
+            market: @escaping @MainActor () -> DebugMarketInputs,
             defaults: UserDefaults = .standard) {
             server.addRoute("GET", "/state/accounts") { _ in
                 accounts(context: ModelContext(modelContainer))
