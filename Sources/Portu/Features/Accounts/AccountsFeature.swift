@@ -226,6 +226,14 @@ struct AccountsFeature {
         }
     }
 
+    /// Sorts rows by the table's column order, breaking ties by name, then account ID, so equal
+    /// rows keep one order while balances move with live prices.
+    static func sortAccountRows(
+        _ rows: [AccountRowData],
+        using sortOrder: [KeyPathComparator<AccountRowData>]) -> [AccountRowData] {
+        rows.sorted(using: sortOrder + [KeyPathComparator(\.name), KeyPathComparator(\.id)])
+    }
+
     /// Extract sorted unique group names from account inputs.
     static func extractGroups(from accounts: [AccountInput]) -> [String] {
         Array(Set(accounts.compactMap(\.group))).sorted()

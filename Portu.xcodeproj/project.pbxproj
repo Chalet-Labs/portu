@@ -231,6 +231,7 @@
 		CBEBBF56CF7B53911166E1EB /* OverviewListSeamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BEF11C19E73F3EC445C42E6 /* OverviewListSeamTests.swift */; };
 		CD386ED4D0CD3C53DA44FD80 /* UpdaterSettingsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C1AD33ED9590B6094AA51DE /* UpdaterSettingsUITests.swift */; };
 		CD990876A3CFB77041A5534B /* ExposureDashboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8861E3ED43F6CF0F522E2E7 /* ExposureDashboardTests.swift */; };
+		CEB4DF931C1E0559E604EE0D /* AccountRowSortingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D062D067B0C333552A20312 /* AccountRowSortingTests.swift */; };
 		CFC30415788A774E28D05A82 /* SyncEngineLegacyAccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C098AACD3A503135E31467D1 /* SyncEngineLegacyAccountTests.swift */; };
 		CFE9060530486693BFF3461C /* AssetPositionsTable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F756C31F93737292F0F09AB /* AssetPositionsTable.swift */; };
 		D06FF041CE44B377F45B4B2C /* PortfolioAnalyticsCacheWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C5C5749654501CDBB8A418 /* PortfolioAnalyticsCacheWriter.swift */; };
@@ -457,6 +458,7 @@
 		79425078F4E02B149F06E972 /* AppStateBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateBridgeTests.swift; sourceTree = "<group>"; };
 		79475C02C1D67BEDC8745854 /* CurrencyConversionContextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrencyConversionContextTests.swift; sourceTree = "<group>"; };
 		7A49EEBCA1C835DF5574E650 /* OverviewTopAssetsSeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewTopAssetsSeamTests.swift; sourceTree = "<group>"; };
+		7D062D067B0C333552A20312 /* AccountRowSortingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRowSortingTests.swift; sourceTree = "<group>"; };
 		80D8A6F5E0D27CFE2E0F5446 /* InspectorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPanel.swift; sourceTree = "<group>"; };
 		813D162565D572ED30229095 /* SettingsIntervalRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsIntervalRow.swift; sourceTree = "<group>"; };
 		814E567DB3F1447A8A6FAF44 /* SyncEngineSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineSupport.swift; sourceTree = "<group>"; };
@@ -883,6 +885,7 @@
 			isa = PBXGroup;
 			children = (
 				4508898433C1170BAEE66E3C /* Fixtures */,
+				7D062D067B0C333552A20312 /* AccountRowSortingTests.swift */,
 				E14B8750CDB4B4FF65401D0B /* AccountsFeatureTests.swift */,
 				4B56D23BA9DF6CE549D5DBEA /* AccountSheetDraftTests.swift */,
 				307EE29FCE573C37E94B776D /* AccountSheetInvalidationTests.swift */,
@@ -1336,6 +1339,7 @@
 			files = (
 				C9A863A99DB886388D21017B /* APIKeyNormalizationTests.swift in Sources */,
 				F9B5ED895D5E63A10F140714 /* APIKeysViewModelTests.swift in Sources */,
+				CEB4DF931C1E0559E604EE0D /* AccountRowSortingTests.swift in Sources */,
 				889082CDB81C331C5684C15F /* AccountSheetDraftTests.swift in Sources */,
 				FE9FC93C2B94C62746C3E49A /* AccountSheetInvalidationTests.swift in Sources */,
 				4BAE4A97F25DD88CC1E4297A /* AccountsFeatureTests.swift in Sources */,

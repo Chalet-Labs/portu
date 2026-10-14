@@ -52,7 +52,7 @@ struct AccountsView: View {
             searchText: store.accounts.searchText,
             filterGroup: store.accounts.filterGroup,
             showInactive: store.accounts.showInactive)
-        return filtered.sorted(using: sortOrder)
+        return AccountsFeature.sortAccountRows(filtered, using: sortOrder)
     }
 
     private var currencyCode: String {
