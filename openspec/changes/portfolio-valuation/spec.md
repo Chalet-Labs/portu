@@ -300,6 +300,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
   - a reward is shown as not counted
   - an ignored token is greyed, with an "Ignored" badge and no value
 - No row is hidden.
+- Cards within a section sort by value, highest first, ties by position ID. Token rows within a card sort by contribution, highest first, then symbol, then token ID, so rows that count 0 (not counted, unpriced, ignored) sit between the supplies and the borrows. Decided 2026-10-14.
 
 ### S7: Asset Detail (PR b)
 - **Header:** the V5 price and its V5 fraction, from merged live and historical fractions. Today it reads live changes only.
@@ -323,7 +324,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 
 ### S9: Accounts (PR b)
 - A balance is Σ the contributions of that account's own tokens, **active or not**. It uses the all-accounts valuation input.
-- A tooltip on the Balance cell shows the sync-time total (A6) as "Provider total at last sync".
+- A tooltip on the Balance cell of a wallet or manual account shows the sync-time total (A6) as "Provider total at last sync". An exchange account shows none, because the exchange reports no USD value at sync. Decided 2026-10-14.
 - Σ of the active balances = the Overview net total.
 
 ### S10: Performance eligibility (PR b)
@@ -583,6 +584,13 @@ The PR (b) description lists the commits in order and every intentional number c
   - An ignored token is greyed, with an "Ignored" badge and no value.
   - Token Settings gains a Not counted badge, a count and a filter entry.
 
+#### User, 2026-10-14
+- **All Positions order:**
+  - Cards within a section sort by value, highest first, with ties by position ID.
+  - Token rows within a card sort by contribution, highest first, then symbol, then token ID. This is Asset Detail's row rule, so not-counted, unpriced and ignored rows (contribution 0) sit between the supplies and the borrows.
+  - The section and sidebar orders are unchanged.
+- **The Accounts tooltip:** exchange accounts show no "Provider total at last sync" tooltip, because the exchange reports no USD value at sync (Kraken stores 0). Wallet and manual accounts keep it. This narrows the Accounts bullet below.
+
 ### Decided in implementation (veto in review)
 - **One shared valuation context.** `ValuationContext`, `ValuationPriceInputs` and `ValuationSources` live in `Features/Shared` and replace the Overview-named types. Each screen adds its own methods to the shared sources type.
 - **`TokenDashboardSettings.showAll`:** lists that never hide rows use it, whatever settings the context carries.
@@ -614,7 +622,7 @@ The PR (b) description lists the commits in order and every intentional number c
   - A row's amount covers the tokens the row describes. A counted row (priced, dust or unpriced) shows the net amount of its counted tokens, so a reward does not add to it. An ignored or not-counted row shows the net amount of all its tokens. In both, borrows subtract, as in `ValuationTotals.netAmount`.
   - The view builds its context with `ValuationContext.activeAccounts` from its own override and mapping queries, rather than through `ValuationSources`. It already owns the override query and the dashboard settings for its writers.
   - `SettingsView` mounts `HistoricalPricesProvider`, so the Settings window sees closes (S8). Until the I2 cleanup strips the provider's display-currency work, every Settings tab pays for it.
-- **Accounts:** the tooltip shows on every account, converted at the current rate.
+- **Accounts:** the tooltip shows on every wallet and manual account, converted at the current rate. Exchange accounts show none (decided by the user, 2026-10-14).
 - **Asset Detail:**
   - Active accounts only.
   - Token rows sort by contribution descending, then account name, then token ID.
