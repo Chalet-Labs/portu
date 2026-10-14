@@ -272,6 +272,22 @@ struct AssetDetailSeamTests {
         #expect(page.rows.compactMap(\.value).reduce(0, +) == page.holdings.totalValue)
     }
 
+    /// A7, U4: with a reward (0.1 ETH on Base, its own 300) the counted rows' contributions still sum
+    /// to the total; the not-counted row shows its own value, which stays out of that sum.
+    @Test func `counted rows sum to the total beside a reward`() throws {
+        let reward = Seam.ethInput(Fixture.uuid(9507), role: .reward, amount: Fixture.decimal("0.1"), chain: .base, position: Fixture.uuid(9607))
+        let page = Seam.page(Seam.eth, inputs: Seam.ethVariant + [reward])
+        let rewardRow = try #require(page.rows.first { $0.id == reward.tokenId })
+        let counted = page.rows.filter { $0.state == .counted }
+
+        #expect(page.holdings.totalValue == 4500)
+        #expect(counted.map(\.id) == [Fixture.tokenID(2), Fixture.tokenID(12), Fixture.tokenID(13), Seam.arbitrumBorrowID])
+        #expect(counted.compactMap(\.value).reduce(0, +) == page.holdings.totalValue)
+        #expect(rewardRow.state == .notCounted)
+        #expect(rewardRow.value == 300)
+        #expect(page.rows.compactMap(\.value).reduce(0, +) == page.holdings.totalValue + 300)
+    }
+
     /// T1 Units: the rate is applied once, to rows, total, chains and header alike.
     @Test func `the display rate is applied once`() {
         let page = Seam.page(Seam.eth, inputs: Seam.ethVariant, rate: Fixture.decimal("0.9"))
