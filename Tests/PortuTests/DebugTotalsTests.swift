@@ -21,6 +21,10 @@
     ///
     /// Wallet: valued 4750 (4720 with backfill off), sync-time total 54,565. Vault: 500 and 400.
     /// Active: valued 5250 (5220 with backfill off), sync-time total 54,965. Cold: 61,000 and 60,000.
+    ///
+    /// The wallet's idle position stores a `netUSDValue` of 54,015, not its tokens' 56,015, on
+    /// purpose: a route that summed `netUSDValue` would report an active sync-time total of 52,965
+    /// instead of 54,965.
     @MainActor
     struct DebugTotalsStore {
         typealias Fixture = PortfolioValuationFixture
@@ -48,7 +52,10 @@
         }
 
         /// `closes: false` leaves out the LINK close, so the totals do not depend on the backfill flag.
-        init(closes: Bool = true) throws {
+        /// `dustAndUnpriced: true` adds a wallet position the default display filter hides whole:
+        /// DUST (amount 1, synced 0.5, no live price, so valued 0.5) and MYSTERY (amount 100, no
+        /// price ID, synced 0, so unpriced). Active: valued 5250.5, sync-time total 54,965.5.
+        init(closes: Bool = true, dustAndUnpriced: Bool = false) throws {
             self.container = try ModelContainer(
                 for: Account.self, WalletAddress.self, Position.self, PositionToken.self, Asset.self,
                 TokenPricingOverride.self, TokenIdentityMapping.self, HistoricalPricePoint.self,
@@ -94,6 +101,9 @@
                     ],
                     syncedAt: syncedAt)
             ]
+            if dustAndUnpriced {
+                wallet.positions.append(Self.dustAndUnpricedPosition(syncedAt: syncedAt, in: context))
+            }
             vault.positions = [Position(
                 positionType: .idle,
                 netUSDValue: 400,
@@ -124,18 +134,39 @@
             try context.save()
         }
 
+        private static func dustAndUnpricedPosition(syncedAt: Date, in context: ModelContext) -> Position {
+            let dust = Asset(symbol: "DUST", name: "Dust", coinGeckoId: "dust-token", category: .meme)
+            let mystery = Asset(symbol: "MYSTERY", name: "Mystery", category: .other)
+            context.insert(dust)
+            context.insert(mystery)
+            return Position(
+                positionType: .idle,
+                chain: .ethereum,
+                netUSDValue: Fixture.decimal("0.5"),
+                tokens: [
+                    PositionToken(role: .balance, amount: 1, usdValue: Fixture.decimal("0.5"), asset: dust),
+                    PositionToken(role: .balance, amount: 100, usdValue: 0, asset: mystery)
+                ],
+                syncedAt: syncedAt)
+        }
+
         /// The Overview headline over the same store, at a display rate of 1 so it reads in USD.
         func headline(isBackfillEnabled: Bool) throws -> OverviewHeadline {
+            try OverviewFeature.headline(overviewContext(isBackfillEnabled: isBackfillEnabled))
+        }
+
+        /// The Overview's input over the same store, under the default dashboard settings.
+        func overviewContext(isBackfillEnabled: Bool) throws -> ValuationContext {
             let appState = AppState()
             appState.livePricesUSD = Self.livePricesUSD
-            return try OverviewFeature.headline(.activePortfolio(
+            return try .activePortfolio(
                 positions: context.fetch(FetchDescriptor<Position>()),
                 overrides: context.fetch(FetchDescriptor<TokenPricingOverride>()),
                 mappings: context.fetch(FetchDescriptor<TokenIdentityMapping>()),
                 settings: .defaults,
                 appState: appState,
                 historical: historical(isBackfillEnabled: isBackfillEnabled),
-                includingLiveChanges: true))
+                includingLiveChanges: true)
         }
 
         /// Every account's Accounts balance over the same store, at a display rate of 1.
@@ -238,6 +269,29 @@
             #expect(enabled.json["valuedTotalUSD"] as? Double == 5250)
             #expect(disabled.json["valuedTotalUSD"] as? Double == 5220)
             #expect(disabled.json["rawSyncTotalUSD"] as? Double == 54965)
+        }
+
+        /// A7: the default filter hides DUST and MYSTERY from every list, but no total drops them.
+        @Test func `the totals ignore the display filter that hides dust and unpriced rows`() throws {
+            let store = try DebugTotalsStore(dustAndUnpriced: true)
+            let overview = try store.overviewContext(isBackfillEnabled: true)
+            #expect(overview.settings == .defaults)
+            let hidden = DashboardList(
+                overview.valuation().tokens,
+                basis: .net,
+                settings: overview.settings,
+                groupedBy: \.token.assetId).hidden
+            #expect(hidden.rowCount == 2)
+            #expect(hidden.unpricedCount == 1)
+            #expect(hidden.gross == Fixture.decimal("0.5"))
+            let headline = try store.headline(isBackfillEnabled: true)
+            #expect(headline.total == Fixture.decimal("5250.5"))
+
+            let response = try totals(store)
+
+            #expect(response.statusCode == 200)
+            #expect(response.json["valuedTotalUSD"] as? Double == headline.total.jsonDouble)
+            #expect(response.json["rawSyncTotalUSD"] as? Double == 54965.5)
         }
 
         @Test func `a malformed accountId is a bad request`() throws {
