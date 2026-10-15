@@ -10,8 +10,6 @@ import Testing
 /// the snapshot step; a failing provider does the same for a wallet's kept positions.
 @MainActor
 struct SyncEngineIgnoredSnapshotTests {
-    private static let pending: Comment = "Snapshot recording leaves ignored assets out in the next commit"
-
     private struct Recorded {
         let portfolio: PortfolioSnapshot
         let accounts: [UUID: AccountSnapshot]
@@ -86,13 +84,11 @@ struct SyncEngineIgnoredSnapshotTests {
         let scamOnlyRow = try #require(recorded.accounts[scamOnly.id], "An account whose tokens are all ignored still records a row")
         #expect(recorded.accounts.count == 2)
         #expect(recorded.assets.contains { $0.assetId == eth.id })
-        withKnownIssue(Self.pending) {
-            #expect(recorded.portfolio.totalValue == 3000)
-            #expect(recorded.portfolio.idleValue == 3000)
-            #expect(mainRow.totalValue == 3000)
-            #expect(scamOnlyRow.totalValue == 0)
-            #expect(!recorded.assets.contains { $0.assetId == scam.id })
-        }
+        #expect(recorded.portfolio.totalValue == 3000)
+        #expect(recorded.portfolio.idleValue == 3000)
+        #expect(mainRow.totalValue == 3000)
+        #expect(scamOnlyRow.totalValue == 0)
+        #expect(!recorded.assets.contains { $0.assetId == scam.id })
     }
 
     /// Positions by type, with the hand-checked split: idle 1000; lending supply 500 against a
@@ -130,11 +126,9 @@ struct SyncEngineIgnoredSnapshotTests {
         #expect(portfolio.totalValue == 1700)
         #expect(portfolio.idleValue == 1000)
         #expect(portfolio.debtValue == 200)
-        withKnownIssue(Self.pending) {
-            // N1 / A3: vesting and other land in deployed.
-            #expect(portfolio.deployedValue == 900)
-            #expect(portfolio.idleValue + portfolio.deployedValue - portfolio.debtValue == portfolio.totalValue)
-        }
+        // N1 / A3: vesting and other land in deployed.
+        #expect(portfolio.deployedValue == 900)
+        #expect(portfolio.idleValue + portfolio.deployedValue - portfolio.debtValue == portfolio.totalValue)
     }
 
     /// Sync rewrites `netUSDValue` for every account it refreshes, so the divergence sits on
@@ -167,11 +161,9 @@ struct SyncEngineIgnoredSnapshotTests {
         let failedRow = try #require(recorded.accounts[failed.id], "The failed account's kept positions feed the snapshot")
         #expect(failedRow.isFresh == false)
         #expect(recorded.portfolio.isPartial == true)
-        withKnownIssue(Self.pending) {
-            #expect(recorded.portfolio.totalValue == 3100)
-            #expect(manualRow.totalValue == 3000)
-            #expect(failedRow.totalValue == 100)
-        }
+        #expect(recorded.portfolio.totalValue == 3100)
+        #expect(manualRow.totalValue == 3000)
+        #expect(failedRow.totalValue == 100)
     }
 
     /// Three syncs: before the ignore, while ignored, after un-ignoring. Asset Detail's chart
@@ -206,10 +198,8 @@ struct SyncEngineIgnoredSnapshotTests {
         _ = try await engine.sync()
         let ignored = try latestBatch(in: context)
         try #require(ignored.portfolio.syncBatchId != before.portfolio.syncBatchId)
-        withKnownIssue(Self.pending) {
-            #expect(ignored.portfolio.totalValue == 3000)
-            #expect(!ignored.assets.contains { $0.assetId == scamID })
-        }
+        #expect(ignored.portfolio.totalValue == 3000)
+        #expect(!ignored.assets.contains { $0.assetId == scamID })
 
         override.isIgnored = false
         try context.save()
@@ -222,9 +212,7 @@ struct SyncEngineIgnoredSnapshotTests {
         let batches = try context.fetch(scamRows).map(\.syncBatchId)
         #expect(batches.first == before.portfolio.syncBatchId)
         #expect(batches.last == restored.portfolio.syncBatchId)
-        withKnownIssue(Self.pending) {
-            #expect(batches == [before.portfolio.syncBatchId, restored.portfolio.syncBatchId])
-        }
+        #expect(batches == [before.portfolio.syncBatchId, restored.portfolio.syncBatchId])
     }
 
     // MARK: - Guards (green before and after)

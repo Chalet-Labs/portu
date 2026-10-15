@@ -25,11 +25,15 @@ actor PortfolioValueChartEstimateFetcher {
     /// Steps: (1) limit-1 earliest row probe; (2) parity guard; (3) single UTC-day fetch;
     /// (4) dedup by (accountId, assetId), keeping the earliest row per key; (5) targeted Asset
     /// fetch from winner ids only; (6) project to value types. `try?` on any fetch → nil.
+    /// Both fetches leave out the assets ignored now, old rows included (N2).
     func estimateSource(
         overrides: [TokenPricingOverrideSnapshot],
         chartStartDate: Date) -> PortfolioValueChartEstimateSource? {
-        // 1. Globally-earliest AssetSnapshot — limit-1 fetch, no full table scan.
+        let ignoredIDs = Array(TokenPricingOverrideFeature.ignoredAssetIds(overrides))
+
+        // 1. Globally-earliest non-ignored AssetSnapshot — limit-1 fetch, no full table scan.
         var earliestDescriptor = FetchDescriptor<AssetSnapshot>(
+            predicate: #Predicate<AssetSnapshot> { !ignoredIDs.contains($0.assetId) },
             sortBy: [SortDescriptor(\.timestamp, order: .forward)])
         earliestDescriptor.fetchLimit = 1
         guard let earliest = (try? modelContext.fetch(earliestDescriptor))?.first else { return nil }
@@ -45,7 +49,7 @@ actor PortfolioValueChartEstimateFetcher {
         let dayEnd = firstDay.addingTimeInterval(24 * 60 * 60)
         let dayDescriptor = FetchDescriptor<AssetSnapshot>(
             predicate: #Predicate<AssetSnapshot> {
-                $0.timestamp >= firstDay && $0.timestamp < dayEnd
+                $0.timestamp >= firstDay && $0.timestamp < dayEnd && !ignoredIDs.contains($0.assetId)
             },
             sortBy: [SortDescriptor(\.timestamp, order: .forward)])
         guard let dayRows = try? modelContext.fetch(dayDescriptor) else { return nil }

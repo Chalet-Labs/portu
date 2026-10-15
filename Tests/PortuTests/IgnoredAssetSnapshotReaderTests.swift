@@ -15,8 +15,6 @@ import Testing
 /// 155,000 globally and 55,000 for the main account, or 150,000 and 50,000 without SCAM.
 @MainActor
 struct IgnoredAssetSnapshotReaderTests {
-    private static let pending: Comment = "AssetSnapshot readers leave ignored assets out in the next commit"
-
     private static let main = id(10)
     private static let other = id(11)
     private static let btc = id(1)
@@ -152,13 +150,11 @@ struct IgnoredAssetSnapshotReaderTests {
         let source = await overviewSource(container, overrides: overrides)
         #expect(source?.firstRealSnapshotDate == Self.firstReal)
 
-        withKnownIssue(Self.pending) {
-            #expect(global == [150_000, 150_000, 150_000])
-            #expect(account == [50000, 50000, 50000])
-            #expect(globalCategories == [Self.btcCategory])
-            #expect(accountCategories == [Self.btcCategory])
-            #expect(assetIDs(source) == [Self.btc])
-        }
+        #expect(global == [150_000, 150_000, 150_000])
+        #expect(account == [50000, 50000, 50000])
+        #expect(globalCategories == [Self.btcCategory])
+        #expect(accountCategories == [Self.btcCategory])
+        #expect(assetIDs(source) == [Self.btc])
     }
 
     /// Already filtered today: the panel reads through `visibleAssetIDs`, and the current
@@ -193,13 +189,11 @@ struct IgnoredAssetSnapshotReaderTests {
         let accountCategories = try await categoryIDs(container, accountId: Self.main)
         let source = await overviewSource(container, overrides: overrides)
 
-        withKnownIssue(Self.pending) {
-            #expect(global.isEmpty)
-            #expect(account.isEmpty)
-            #expect(globalCategories.isEmpty)
-            #expect(accountCategories.isEmpty)
-            #expect(source == nil)
-        }
+        #expect(global.isEmpty)
+        #expect(account.isEmpty)
+        #expect(globalCategories.isEmpty)
+        #expect(accountCategories.isEmpty)
+        #expect(source == nil)
     }
 
     /// The rows exist before the override does, as they would for an asset ignored today.
@@ -215,11 +209,9 @@ struct IgnoredAssetSnapshotReaderTests {
         let ignoredEstimate = try await estimate(container)
         let ignoredCategories = try await categoryIDs(container)
         let ignoredSource = await overviewSource(container, overrides: [TokenPricingOverrideSnapshot(override)])
-        withKnownIssue(Self.pending) {
-            #expect(ignoredEstimate == [150_000, 150_000, 150_000])
-            #expect(ignoredCategories == [Self.btcCategory])
-            #expect(assetIDs(ignoredSource) == [Self.btc])
-        }
+        #expect(ignoredEstimate == [150_000, 150_000, 150_000])
+        #expect(ignoredCategories == [Self.btcCategory])
+        #expect(assetIDs(ignoredSource) == [Self.btc])
 
         override.isIgnored = false
         try context.save()
@@ -243,12 +235,10 @@ struct IgnoredAssetSnapshotReaderTests {
         let account = try await estimate(container, accountId: Self.main)
         let source = await overviewSource(container, overrides: overrides)
 
-        withKnownIssue(Self.pending) {
-            #expect(global == [150_000, 150_000, 150_000])
-            #expect(account == [50000, 50000, 50000])
-            #expect(source?.firstRealSnapshotDate == Self.firstReal)
-            #expect(assetIDs(source) == [Self.btc])
-        }
+        #expect(global == [150_000, 150_000, 150_000])
+        #expect(account == [50000, 50000, 50000])
+        #expect(source?.firstRealSnapshotDate == Self.firstReal)
+        #expect(assetIDs(source) == [Self.btc])
     }
 
     // MARK: - Large ignored lists
@@ -263,13 +253,11 @@ struct IgnoredAssetSnapshotReaderTests {
         let globalCategories = try await categoryIDs(container)
         let source = await overviewSource(container, overrides: overrides)
 
-        withKnownIssue(Self.pending) {
-            #expect(global == [150_000, 150_000, 150_000])
-            #expect(account == [50000, 50000, 50000])
-            #expect(globalCategories == [Self.btcCategory])
-            #expect(source?.firstRealSnapshotDate == Self.firstReal)
-            #expect(assetIDs(source) == [Self.btc])
-        }
+        #expect(global == [150_000, 150_000, 150_000])
+        #expect(account == [50000, 50000, 50000])
+        #expect(globalCategories == [Self.btcCategory])
+        #expect(source?.firstRealSnapshotDate == Self.firstReal)
+        #expect(assetIDs(source) == [Self.btc])
     }
 
     /// AGENT-DECIDED 16: the same reads on the production schema in a store on disk, first with no
@@ -294,12 +282,96 @@ struct IgnoredAssetSnapshotReaderTests {
         let globalCategories = try await categoryIDs(container)
         let source = await overviewSource(container, overrides: overrides)
 
-        withKnownIssue(Self.pending) {
-            #expect(global == [150_000, 150_000, 150_000])
-            #expect(account == [50000, 50000, 50000])
-            #expect(globalCategories == [Self.btcCategory])
-            #expect(source?.firstRealSnapshotDate == Self.firstReal)
-            #expect(assetIDs(source) == [Self.btc])
+        #expect(global == [150_000, 150_000, 150_000])
+        #expect(account == [50000, 50000, 50000])
+        #expect(globalCategories == [Self.btcCategory])
+        #expect(source?.firstRealSnapshotDate == Self.firstReal)
+        #expect(assetIDs(source) == [Self.btc])
+    }
+
+    // MARK: - Query cost
+
+    /// 10,000 rows on disk (50 assets × 2 accounts × 100 days from Jan 5) plus one ignored row on
+    /// Dec 30, then 5,000 ignored IDs covering the 25 SPAM assets. Each kept ETH row is worth 1 at a
+    /// flat close of 1, so an estimated day is 50 globally and 25 per account. The durations are
+    /// logged for the record, measured around calls that run on the model actors; only the
+    /// results are asserted.
+    @Test func `reads over ten thousand rows and five thousand ignored IDs stay correct and log their cost`() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "IgnoredAssetSnapshotReaderTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let container = try ModelContainerFactory(storeURL: directory.appending(path: "Portu.store"))
+            .makeForProduction()
+        let context = container.mainContext
+        let keepCategory = PortfolioCategoryResolver.defaults.resolve(symbol: "ETH", legacyCategory: .major).id.uuidString
+        try #require(keepCategory != PortfolioCategoryResolver.defaults.resolve(symbol: "SPAM", legacyCategory: .other).id.uuidString)
+
+        let keep = (0 ..< 25).map { _ in UUID() }
+        let spam = (0 ..< 25).map { _ in UUID() }
+        for (index, assetID) in keep.enumerated() {
+            context.insert(Asset(id: assetID, symbol: "ETH", name: "Keep \(index)", coinGeckoId: "keep-\(index)", category: .major))
+            for day in 2 ... 4 {
+                context.insert(HistoricalPricePoint(coinGeckoId: "keep-\(index)", day: Self.utcDate(2024, 1, day), usdPrice: 1))
+            }
         }
+        for (index, assetID) in spam.enumerated() {
+            context.insert(Asset(id: assetID, symbol: "SPAM", name: "Spam \(index)", coinGeckoId: "spam-\(index)", category: .other))
+        }
+        for day in 0 ..< 100 {
+            let timestamp = Self.firstReal.addingTimeInterval(TimeInterval(day) * 86400)
+            let batch = UUID()
+            for accountID in [Self.main, Self.other] {
+                for assetID in keep {
+                    context.insert(AssetSnapshot(
+                        syncBatchId: batch, timestamp: timestamp, accountId: accountID, assetId: assetID,
+                        symbol: "ETH", category: .major, amount: 1, usdValue: 1))
+                }
+                for assetID in spam {
+                    context.insert(AssetSnapshot(
+                        syncBatchId: batch, timestamp: timestamp, accountId: accountID, assetId: assetID,
+                        symbol: "SPAM", category: .other, amount: 1000, usdValue: 10))
+                }
+            }
+        }
+        context.insert(AssetSnapshot(
+            syncBatchId: UUID(), timestamp: Self.earlyIgnored, accountId: Self.main, assetId: spam[0],
+            symbol: "SPAM", category: .other, amount: 1000, usdValue: 10))
+        try context.save()
+        #expect(try context.fetchCount(FetchDescriptor<AssetSnapshot>()) == 10001)
+
+        let clock = ContinuousClock()
+        func timed<T>(_ label: String, _ body: () async throws -> T) async rethrows -> T {
+            let start = clock.now
+            let result = try await body()
+            print("C-S timing: \(label): \(clock.now - start)")
+            return result
+        }
+
+        // Baseline with nothing ignored: the Dec 30 row stops both estimates.
+        _ = try await timed("performance global, value, 0 ignored") { try await estimate(container) }
+        _ = try await timed("performance account, value, 0 ignored") { try await estimate(container, accountId: Self.main) }
+        _ = try await timed("performance global, assets, 0 ignored") { try await categoryIDs(container) }
+        _ = try await timed("performance account, assets, 0 ignored") { try await categoryIDs(container, accountId: Self.main) }
+        _ = await timed("overview estimate, 0 ignored") { await overviewSource(container, overrides: []) }
+
+        let overrides = try ignore(spam, extra: 5000 - spam.count, in: context)
+        try #require(overrides.count == 5000)
+        let global = try await timed("performance global, value, 5000 ignored") { try await estimate(container) }
+        let account = try await timed("performance account, value, 5000 ignored") {
+            try await estimate(container, accountId: Self.main)
+        }
+        let globalCategories = try await timed("performance global, assets, 5000 ignored") { try await categoryIDs(container) }
+        let accountCategories = try await timed("performance account, assets, 5000 ignored") {
+            try await categoryIDs(container, accountId: Self.main)
+        }
+        let source = await timed("overview estimate, 5000 ignored") { await overviewSource(container, overrides: overrides) }
+
+        #expect(global == [50, 50, 50])
+        #expect(account == [25, 25, 25])
+        #expect(globalCategories == [keepCategory])
+        #expect(accountCategories == [keepCategory])
+        #expect(source?.firstRealSnapshotDate == Self.firstReal)
+        #expect(assetIDs(source) == Set(keep))
+        #expect(source?.firstDayEntries.count == 50)
     }
 }
