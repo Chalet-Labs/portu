@@ -183,6 +183,9 @@ private final class Harness {
             styleMask: [.borderless],
             backing: .buffered,
             defer: false)
+        // `tearDown` closes the window while this harness still owns it; a window made in code
+        // releases itself on close by default, and ARC's later release then over-releases it.
+        window.isReleasedWhenClosed = false
         window.contentView = hostingView
         window.orderFrontRegardless()
         self.contentView = hostingView
