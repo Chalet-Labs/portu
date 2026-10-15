@@ -16,10 +16,12 @@ struct ScopeReconciliationTests {
     private static let activeAccounts = [Fixture.mainAccount, Fixture.degenAccount]
 
     /// The all-accounts input with the inactive account's tokens left out.
-    private static let activeInputs = Seam.inputs.filter { $0.position.accountId.map(activeAccounts.contains) == true }
+    private static let activeInputs = Seam.inputs.filter { input in
+        activeAccounts.contains { $0 == input.position.accountId }
+    }
 
     @Test func `the active input is the fixture without the inactive account`() {
-        #expect(Self.activeInputs.map(\.tokenId) == Fixture.inputs.map(\.tokenId))
+        #expect(Self.activeInputs == Fixture.inputs)
         #expect(Seam.inputs.contains { $0.position.accountId == Seam.inactiveAccount })
     }
 
@@ -29,7 +31,7 @@ struct ScopeReconciliationTests {
         let headline = OverviewFeature.headline(active).total
 
         let assets = AllAssetsFeature.assets(active, searchText: "")
-        let platforms = AllAssetsFeature.platforms(active)
+        let platforms = AllAssetsFeature.platforms(active, protocolNames: AllAssetsSeamFixture.protocolNames)
         let networks = AllAssetsFeature.networks(active)
         let exposure = ExposureFeature.dashboard(active)
         let page = AllPositionsFeature.page(active, cards: AllPositionsSeamFixture.cards, filter: .all)
