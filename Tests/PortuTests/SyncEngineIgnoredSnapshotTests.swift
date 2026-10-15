@@ -91,6 +91,46 @@ struct SyncEngineIgnoredSnapshotTests {
         #expect(!recorded.assets.contains { $0.assetId == scam.id })
     }
 
+    /// An ignored borrow and an ignored staked token, next to counted ones: idle ETH 1000,
+    /// lending USDC 500 against an ignored 200 borrow, staking 600 plus an ignored 400.
+    @Test func `ignored borrow and deployed tokens stay out of debt and deployed`() async throws {
+        let context = try makeContext()
+        let eth = Asset(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum", category: .major)
+        let usdc = Asset(symbol: "USDC", name: "USD Coin", category: .stablecoin)
+        let stETH = Asset(symbol: "STETH", name: "Staked Ether", category: .major)
+        let badDebt = Asset(symbol: "BADDEBT", name: "Bad Debt", category: .other)
+        let scam = Asset(symbol: "SCAM", name: "Scam", category: .other)
+        let account = manualAccount("Main", positions: [
+            Position(positionType: .idle, netUSDValue: 1000, tokens: [
+                PositionToken(role: .balance, amount: 1, usdValue: 1000, asset: eth)
+            ]),
+            Position(positionType: .lending, netUSDValue: 300, tokens: [
+                PositionToken(role: .supply, amount: 500, usdValue: 500, asset: usdc),
+                PositionToken(role: .borrow, amount: 200, usdValue: 200, asset: badDebt)
+            ]),
+            Position(positionType: .staking, netUSDValue: 1000, tokens: [
+                PositionToken(role: .stake, amount: 1, usdValue: 600, asset: stETH),
+                PositionToken(role: .stake, amount: 4000, usdValue: 400, asset: scam)
+            ])
+        ])
+        context.insert(account)
+        context.insert(TokenPricingOverride(assetId: badDebt.id, isIgnored: true))
+        context.insert(TokenPricingOverride(assetId: scam.id, isIgnored: true))
+        try context.save()
+
+        _ = try await makeEngine(context).sync()
+
+        let recorded = try latestBatch(in: context)
+        let accountRow = try #require(recorded.accounts[account.id])
+        #expect(recorded.portfolio.idleValue == 1000)
+        #expect(recorded.portfolio.deployedValue == 1100)
+        #expect(recorded.portfolio.debtValue == 0)
+        #expect(recorded.portfolio.totalValue == 2100)
+        #expect(accountRow.totalValue == 2100)
+        #expect(!recorded.assets.contains { $0.assetId == badDebt.id || $0.assetId == scam.id })
+        #expect(recorded.assets.contains { $0.assetId == stETH.id })
+    }
+
     /// Positions by type, with the hand-checked split: idle 1000; lending supply 500 against a
     /// 200 borrow; vesting 300; other 100; a farming position holding only a 50 reward, which
     /// counts nowhere. The stored totals match their tokens, so only the deployed split moves.
