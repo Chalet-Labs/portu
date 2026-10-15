@@ -38,9 +38,9 @@
   - In PR (a) the Overview and Sidebar switch their historical 24h-change input to the USD consecutive-day fractions. Asset Detail's header reads the live changes only, and it moves to the merged fractions in PR (b) (S7).
 - **PR (b) cleanup:**
   - It deletes `historicalDisplayPrices`.
-  - It deletes `appState.prices` if no reader remains.
+  - It deletes `appState.prices` and its bridge once manual entry, its last reader, moves to the USD book.
   - Manual entry and the debug `/state/prices` route read the USD book or the store directly.
-  - It deletes `AppFeature.State.liveDisplayPrices`, the derived display copy of the live book. Its last reader is `/state/prices`, which computes `livePricesUSD × currentUSDToDisplayRate` in place instead. Decided 2026-10-13.
+  - It deletes `AppFeature.State.liveDisplayPrices`, the derived display copy of the live book. Its last reader was the `appState.prices` bridge; `/state/prices` computes `livePricesUSD × currentUSDToDisplayRate` in place. Decided 2026-10-13.
 
 ### I3: Price ID
 - **CoinGecko ID**: the override CoinGecko ID, else the asset CoinGecko ID, else the identity-mapped CoinGecko ID. Each is normalized.
@@ -587,7 +587,7 @@ The PR (b) description lists the commits in order and every intentional number c
 #### User, 2026-10-14
 - **All Positions order:**
   - Cards within a section sort by value, highest first, with ties by position ID.
-  - Token rows within a card sort by contribution, highest first, then symbol, then token ID. This is Asset Detail's row rule, so not-counted, unpriced and ignored rows (contribution 0) sit between the supplies and the borrows.
+  - Token rows within a card sort by contribution, highest first, then symbol, then token ID. The first key is Asset Detail's row rule (Asset Detail then breaks ties by account name, then token ID), so not-counted, unpriced and ignored rows (contribution 0) sit between the supplies and the borrows.
   - The section and sidebar orders are unchanged.
 - **The Accounts tooltip:** exchange accounts show no "Provider total at last sync" tooltip, because the exchange reports no USD value at sync (Kraken stores 0). Wallet and manual accounts keep it. This narrows the Accounts bullet below.
 
@@ -621,7 +621,7 @@ The PR (b) description lists the commits in order and every intentional number c
   - Rows with a value that counts sort first, by value descending, ties by symbol, then asset ID. One trailing group follows, ordered by symbol, then asset ID. It holds the rows with no value (ignored and unpriced) and the not-counted rows, whose own value counts nowhere. Unpriced rows do count; they trail only because they have no value.
   - A row's amount covers the tokens the row describes. A counted row (priced, dust or unpriced) shows the net amount of its counted tokens, so a reward does not add to it. An ignored or not-counted row shows the net amount of all its tokens. In both, borrows subtract, as in `ValuationTotals.netAmount`.
   - The view builds its context with `ValuationContext.activeAccounts` from its own override and mapping queries, rather than through `ValuationSources`. It already owns the override query and the dashboard settings for its writers.
-  - `SettingsView` mounts `HistoricalPricesProvider`, so the Settings window sees closes (S8). Until the I2 cleanup strips the provider's display-currency work, every Settings tab pays for it.
+  - `SettingsView` mounts `HistoricalPricesProvider`, so the Settings window sees closes (S8). The provider reads only the USD closes, with no currency or rate.
 - **Accounts:** the tooltip shows on every wallet and manual account, converted at the current rate. Exchange accounts show none (decided by the user, 2026-10-14).
 - **Asset Detail:**
   - Active accounts only.
