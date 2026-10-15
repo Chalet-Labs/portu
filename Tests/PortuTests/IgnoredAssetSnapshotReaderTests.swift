@@ -347,7 +347,10 @@ struct IgnoredAssetSnapshotReaderTests {
             return result
         }
 
-        // Baseline with nothing ignored: the Dec 30 row stops both estimates.
+        // A discarded load after each save, so the first timed call doesn't carry the store's
+        // warm-up. Baseline with nothing ignored: the Dec 30 row stops both estimates before
+        // their day fetch, so only the assets and Overview lines compare like for like.
+        _ = try await estimate(container)
         _ = try await timed("performance global, value, 0 ignored") { try await estimate(container) }
         _ = try await timed("performance account, value, 0 ignored") { try await estimate(container, accountId: Self.main) }
         _ = try await timed("performance global, assets, 0 ignored") { try await categoryIDs(container) }
@@ -356,6 +359,7 @@ struct IgnoredAssetSnapshotReaderTests {
 
         let overrides = try ignore(spam, extra: 5000 - spam.count, in: context)
         try #require(overrides.count == 5000)
+        _ = try await estimate(container)
         let global = try await timed("performance global, value, 5000 ignored") { try await estimate(container) }
         let account = try await timed("performance account, value, 5000 ignored") {
             try await estimate(container, accountId: Self.main)
