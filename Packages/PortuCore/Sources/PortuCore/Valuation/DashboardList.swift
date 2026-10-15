@@ -118,10 +118,10 @@ struct RowClassification {
 
 /// The rows the display filter hides (F1–F3), summed on all three bases.
 public struct HiddenBalances: Equatable, Sendable {
-    public var rowCount = 0
-    public var unpricedCount = 0
-    public var gross: Decimal = 0
-    public var debt: Decimal = 0
+    public internal(set) var rowCount = 0
+    public internal(set) var unpricedCount = 0
+    public internal(set) var gross: Decimal = 0
+    public internal(set) var debt: Decimal = 0
 
     public var net: Decimal {
         gross - debt
@@ -297,12 +297,6 @@ public struct ListShares: Equatable, Sendable {
     public let rows: [Decimal]
     public let remainder: Decimal?
     public let hidden: Decimal?
-
-    public init(rows: [Decimal], remainder: Decimal?, hidden: Decimal?) {
-        self.rows = rows
-        self.remainder = remainder
-        self.hidden = hidden
-    }
 
     public var all: [Decimal] {
         rows + [remainder, hidden].compactMap(\.self)
