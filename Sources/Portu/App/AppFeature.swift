@@ -315,8 +315,8 @@ struct AppFeature {
                     return commitDisplayCurrency(&state, currency: currency, rate: rate)
                 }
                 // Launch/refresh path for the already-selected currency. Live prices are in
-                // USD, so only the rate changes: display prices follow it, nothing is
-                // cleared and polling keeps running.
+                // USD, so only the rate changes: views apply the new rate when they
+                // render, nothing is cleared and polling keeps running.
                 guard currency == state.selectedCurrency else { return .none }
                 state.currentUSDToDisplayRate = rate
                 return historicalFXTopUpEffect(&state, currency: currency)
