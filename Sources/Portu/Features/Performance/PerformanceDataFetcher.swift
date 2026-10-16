@@ -335,7 +335,7 @@ actor PerformanceDataFetcher {
         return try PerformanceValueChartData(
             points: points,
             estimatedPoints: ProviderPortfolioHistory.estimatesOutsideProviderCoverage(
-                estimatedPoints(inputs),
+                estimatedPoints(inputs, local: local),
                 providerDates: points.compactMap { $0.source == .zerion ? $0.date : nil }),
             providerDisclosure: ProviderPortfolioHistory.disclosure(for: rendered),
             historicalFXUnavailableBefore: converted.historicalFXUnavailableBefore,
@@ -421,18 +421,31 @@ actor PerformanceDataFetcher {
             }
     }
 
-    private func estimatedPoints(
-        _ inputs: PerformanceLoadInputs) throws -> [HistoricalPortfolioValuePoint] {
+    /// The first local point the value chart draws in this scope, even before the range: any
+    /// `PortfolioSnapshot` globally; for an account, the first fresh row (`merge`'s authority day),
+    /// which `localObservations` already re-inserts when it predates the range, so it is reused.
+    private func firstRecordedDate(_ request: PerformanceDataRequest, local: [LocalPortfolioValueObservation]) throws -> Date? {
+        guard request.accountId == nil else { return local.filter(\.isFresh).map(\.timestamp).min() }
+        var probe = FetchDescriptor<PortfolioSnapshot>(sortBy: [SortDescriptor(\.timestamp, order: .forward)])
+        probe.fetchLimit = 1
+        return try modelContext.fetch(probe).first?.timestamp
+    }
+
+    /// Holdings and the price filter (so the reference close) stay on the first non-ignored asset
+    /// batch; the points end at the first recorded point when that comes earlier (U7).
+    private func estimatedPoints(_ inputs: PerformanceLoadInputs, local: [LocalPortfolioValueObservation]) throws -> [HistoricalPortfolioValuePoint] {
         let request = inputs.request
         guard
             request.historicalBackfillEnabled,
             let firstRealSnapshotDate = try earliestAssetSnapshotDate(
                 accountId: request.accountId,
-                excluding: inputs.ignoredAssetIDs),
-            // When the earliest row predates the range, the estimator's price window
-            // [startDay, utcStartOfDay(firstReal)) is empty and the estimate is empty too.
-            firstRealSnapshotDate >= request.startDate
+                excluding: inputs.ignoredAssetIDs)
         else { return [] }
+        let estimateEndDate = try HistoricalPortfolioEstimator.estimateEndDate(
+            holdingsDate: firstRealSnapshotDate,
+            firstRecordedDate: firstRecordedDate(request, local: local))
+        // An end before the range leaves the window [startDay, utcStartOfDay(end)) empty.
+        guard estimateEndDate >= request.startDate else { return [] }
 
         let firstDay = HistoricalPriceCalendar.utcStartOfDay(for: firstRealSnapshotDate)
         let dayRows = try assetSnapshotRows(
@@ -464,6 +477,7 @@ actor PerformanceDataFetcher {
             prices: prices,
             startDate: request.startDate,
             firstRealSnapshotDate: firstRealSnapshotDate,
+            endDate: estimateEndDate,
             accountId: request.accountId)
             .map { inputs.conversion.convertUSDPoint($0) }
     }

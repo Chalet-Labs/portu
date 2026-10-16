@@ -155,10 +155,8 @@ struct EstimateWindowEndTests {
 
         let points = try await overviewEstimate(container)
 
-        withKnownIssue("U7: the estimate still runs to the first non-ignored asset row on Jan 5") {
-            #expect(points.map(\.date) == Self.clippedDays)
-            #expect(points.map(\.value) == Self.clippedGlobal)
-        }
+        #expect(points.map(\.date) == Self.clippedDays)
+        #expect(points.map(\.value) == Self.clippedGlobal)
     }
 
     @Test func `the Overview estimate ends at a total recorded with no asset rows`() async throws {
@@ -166,10 +164,8 @@ struct EstimateWindowEndTests {
 
         let points = try await overviewEstimate(container)
 
-        withKnownIssue("U7: the estimate still runs to the first asset row on Jan 5") {
-            #expect(points.map(\.date) == Self.clippedDays)
-            #expect(points.map(\.value) == Self.clippedGlobal)
-        }
+        #expect(points.map(\.date) == Self.clippedDays)
+        #expect(points.map(\.value) == Self.clippedGlobal)
     }
 
     @Test func `the Performance estimate ends at a total recorded with only ignored asset rows`() async throws {
@@ -180,12 +176,10 @@ struct EstimateWindowEndTests {
         try #require(global.points.first?.date == Self.firstRecorded, "The global chart draws the Jan 3 total")
         try #require(account.points.first?.date == Self.firstRecorded, "The account chart draws the Jan 3 row")
 
-        withKnownIssue("U7: both branches still run to the first non-ignored asset row on Jan 5") {
-            #expect(global.estimatedPoints.map(\.date) == Self.clippedDays)
-            #expect(global.estimatedPoints.map(\.value) == Self.clippedGlobal)
-            #expect(account.estimatedPoints.map(\.date) == Self.clippedDays)
-            #expect(account.estimatedPoints.map(\.value) == Self.clippedAccount)
-        }
+        #expect(global.estimatedPoints.map(\.date) == Self.clippedDays)
+        #expect(global.estimatedPoints.map(\.value) == Self.clippedGlobal)
+        #expect(account.estimatedPoints.map(\.date) == Self.clippedDays)
+        #expect(account.estimatedPoints.map(\.value) == Self.clippedAccount)
     }
 
     @Test func `the Performance estimate ends at a total recorded with no asset rows`() async throws {
@@ -196,15 +190,13 @@ struct EstimateWindowEndTests {
         try #require(global.points.first?.date == Self.firstRecorded, "The global chart draws the Jan 3 total")
         try #require(account.points.first?.date == Self.firstRecorded, "The account chart draws the Jan 3 row")
 
-        withKnownIssue("U7: both branches still run to the first asset row on Jan 5") {
-            #expect(global.estimatedPoints.map(\.date) == Self.clippedDays)
-            #expect(global.estimatedPoints.map(\.value) == Self.clippedGlobal)
-            #expect(account.estimatedPoints.map(\.date) == Self.clippedDays)
-            #expect(account.estimatedPoints.map(\.value) == Self.clippedAccount)
-        }
+        #expect(global.estimatedPoints.map(\.date) == Self.clippedDays)
+        #expect(global.estimatedPoints.map(\.value) == Self.clippedGlobal)
+        #expect(account.estimatedPoints.map(\.date) == Self.clippedDays)
+        #expect(account.estimatedPoints.map(\.value) == Self.clippedAccount)
     }
 
-    /// The window ends before the range starts, so the estimate is empty, as it is today when the
+    /// The window ends before the range starts, so the estimate is empty, as it already is when the
     /// first asset row predates the range.
     @Test func `a total recorded before the range start leaves no estimate`() async throws {
         let container = try makeContainer(.totalsBeforeStart)
@@ -213,11 +205,9 @@ struct EstimateWindowEndTests {
         let global = try await performanceChart(container)
         let account = try await performanceChart(container, accountId: Self.main)
 
-        withKnownIssue("U7: every estimate still runs from the range start to Jan 5") {
-            #expect(overview.isEmpty)
-            #expect(global.estimatedPoints.isEmpty)
-            #expect(account.estimatedPoints.isEmpty)
-        }
+        #expect(overview.isEmpty)
+        #expect(global.estimatedPoints.isEmpty)
+        #expect(account.estimatedPoints.isEmpty)
     }
 
     // MARK: - Guards
