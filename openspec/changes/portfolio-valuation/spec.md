@@ -375,6 +375,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - **Not filtered:** Asset Detail's charts (S7).
 - **Un-ignoring:** the old rows become readable again. Nothing is backfilled.
 - **The step at the join (accepted 2026-10-13):** N2 filters the estimated segment, but N3 keeps the recorded totals. A holding that is ignored now therefore drops out of the estimate and stays in the recorded series it joins, so the chart can step at the join.
+- **The estimate ends at the first recorded point (decided 2026-10-16):** each estimate ends at the earlier of the first non-ignored asset row and the first point of the recorded series that chart draws in its scope, so it never overlaps that series. This also covers a total recorded with no asset rows. The holdings still come from the first non-ignored asset batch.
 
 ### N3: History is not rewritten
 - Existing `PortfolioSnapshot` and `AccountSnapshot` rows keep their values.
