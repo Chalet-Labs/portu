@@ -256,7 +256,7 @@ extension AllAssetsFeature {
         }
         var names: [PlatformKey: String] = [:]
         for row in list.rows {
-            names[row.key] = row.tokens.compactMap { protocolNames[$0.position.positionId] }.min(by: isOrderedBefore)
+            names[row.key] = NameOrder.lowest(row.tokens.compactMap { protocolNames[$0.position.positionId] })
                 ?? row.key.fallbackName
         }
         let ranked = list.ranked { lhs, rhs in
@@ -319,14 +319,9 @@ extension AllAssetsFeature {
     /// Equal balances: name in localized standard order, then key.
     private static func isOrderedBefore(_ lhsName: String, _ lhsKey: String, _ rhsName: String, _ rhsKey: String) -> Bool {
         if lhsName != rhsName {
-            return isOrderedBefore(lhsName, rhsName)
+            return NameOrder.isOrderedBefore(lhsName, rhsName)
         }
         return lhsKey < rhsKey
-    }
-
-    private static func isOrderedBefore(_ lhs: String, _ rhs: String) -> Bool {
-        let order = lhs.localizedStandardCompare(rhs)
-        return order == .orderedSame ? lhs < rhs : order == .orderedAscending
     }
 }
 
