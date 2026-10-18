@@ -1,8 +1,9 @@
 @testable import Portu
 import Testing
 
-/// The name order Platforms and the All Positions protocol filter share (AGENT-DECIDED 8). Each
-/// case orders differently under plain `<`, so a comparator that dropped the localized order fails.
+/// The name order Platforms and the All Positions protocol filter share (AGENT-DECIDED 8). The
+/// number and case tests order differently under plain `<`, so a comparator that dropped the
+/// localized order fails them.
 struct NameOrderTests {
     @Test func `numbers order by value`() {
         #expect(NameOrder.isOrderedBefore("Pool 2", "Pool 10"))
