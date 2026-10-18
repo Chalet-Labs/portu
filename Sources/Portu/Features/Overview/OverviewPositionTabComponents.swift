@@ -185,9 +185,9 @@ struct OverviewHiddenBalancesLine: View {
     }
 }
 
+@MainActor
 extension View {
     /// The elevated panel a position group's rows sit on.
-    @MainActor
     func overviewPositionPanel() -> some View {
         padding(.horizontal, 12)
             .padding(.vertical, 10)

@@ -19,8 +19,8 @@ struct AppFeatureUpdaterStatusTests {
         #expect(UpdaterFailure.validationFailed.message.contains("The update was not installed"))
     }
 
-    @Test func `recovery URL is the canonical GitHub releases page`() {
-        #expect(UpdaterFailure.recoveryURL == URL(string: "https://github.com/Chalet-Labs/portu/releases")!)
+    @Test func `recovery URL is the canonical GitHub releases page`() throws {
+        #expect(try UpdaterFailure.recoveryURL == #require(URL(string: "https://github.com/Chalet-Labs/portu/releases")))
     }
 
     // MARK: - Terminal cycle classification

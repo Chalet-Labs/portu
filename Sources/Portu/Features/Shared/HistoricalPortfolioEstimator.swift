@@ -63,8 +63,9 @@ enum HistoricalPortfolioEstimator {
         endDate: Date? = nil,
         accountId: UUID?) -> [HistoricalPortfolioValuePoint] {
         let scopedHoldings = holdings.compactMap { holding -> HistoricalEstimateHolding? in
-            guard accountId == nil || holding.accountId == accountId else { return nil }
-            guard let coinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(holding.coinGeckoId) else { return nil }
+            guard
+                accountId == nil || holding.accountId == accountId,
+                let coinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(holding.coinGeckoId) else { return nil }
             return HistoricalEstimateHolding(
                 accountId: holding.accountId,
                 assetId: holding.assetId,

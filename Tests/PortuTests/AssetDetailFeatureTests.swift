@@ -78,7 +78,7 @@ struct AssetDetailSnapshotTests {
         #expect(points[0].grossUSD == 3000)
         #expect(points[0].borrowUSD == 1000)
         #expect(points[0].grossAmount == 1)
-        #expect(points[0].borrowAmount == Decimal(string: "0.4")!)
+        #expect(try points[0].borrowAmount == #require(Decimal(string: "0.4")))
     }
 
     @Test func `multiple syncs same day takes latest not sum`() throws {

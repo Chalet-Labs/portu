@@ -49,7 +49,7 @@ struct AppStateBridgeTests {
         #expect(appState.lastPriceUpdate == Date(timeIntervalSince1970: 1_000_000))
         #expect(appState.storeIsEphemeral == true)
         #expect(appState.selectedCurrency == .chf)
-        #expect(appState.currentUSDToDisplayRate == Decimal(string: "0.88")!)
+        #expect(try appState.currentUSDToDisplayRate == #require(Decimal(string: "0.88")))
         #expect(appState.historicalFXAvailability == .loading)
     }
 

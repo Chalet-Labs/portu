@@ -47,9 +47,9 @@ struct PortfolioHealthDiversificationTests {
 
         #expect(metrics.assetCount == 3)
         #expect(metrics.chainCount == 2)
-        #expect(metrics.stablecoinRatio == Decimal(string: "0.2")!) // 20000/100000
+        #expect(try metrics.stablecoinRatio == #require(Decimal(string: "0.2"))) // 20000/100000
         // HHI = 0.5² + 0.3² + 0.2² = 0.25 + 0.09 + 0.04 = 0.38
-        #expect(metrics.herfindahlIndex == Decimal(string: "0.38")!)
+        #expect(try metrics.herfindahlIndex == #require(Decimal(string: "0.38")))
     }
 
     @Test func `empty portfolio returns zero metrics`() {
@@ -101,7 +101,7 @@ struct PortfolioHealthDiversificationTests {
         let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
             tokens: tokens, weights: weights, chainCount: 1)
 
-        #expect(metrics.stablecoinRatio == Decimal(string: "0.5")!) // 50000/100000
+        #expect(try metrics.stablecoinRatio == #require(Decimal(string: "0.5"))) // 50000/100000
     }
 
     @Test func `stablecoin ratio uses resolved values when live prices available`() throws {

@@ -39,8 +39,8 @@ extension DependencyValues {
     }
 }
 
+@MainActor
 extension HistoricalPriceBackfillClient {
-    @MainActor
     static func live(
         modelContext: ModelContext,
         priceService: PriceServiceClient,

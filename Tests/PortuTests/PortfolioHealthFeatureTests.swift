@@ -185,7 +185,7 @@ struct PortfolioHealthConcentrationTests {
         let first = try #require(risks.first, "Expected 1 concentration risk")
         #expect(risks.count == 1)
         #expect(first.symbol == "BTC")
-        #expect(first.percentage == Decimal(string: "0.7")!)
+        #expect(try first.percentage == #require(Decimal(string: "0.7")))
     }
 
     @Test func `returns empty when no asset exceeds threshold`() throws {

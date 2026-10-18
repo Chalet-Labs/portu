@@ -77,8 +77,8 @@ extension DependencyValues {
     }
 }
 
+@MainActor
 extension CurrencyConversionClient {
-    @MainActor
     static func live(
         modelContext: ModelContext,
         priceService: PriceServiceClient,

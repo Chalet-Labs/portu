@@ -32,10 +32,7 @@
         static func parse(_ data: Data) -> HTTPRequest? {
             guard
                 !data.isEmpty,
-                data.range(of: headerTerminator) != nil
-            else { return nil }
-
-            guard let firstLineEnd = data.range(of: Data("\r\n".utf8)) else { return nil }
+                data.range(of: headerTerminator) != nil, let firstLineEnd = data.range(of: Data("\r\n".utf8)) else { return nil }
             let requestLineData = data[data.startIndex ..< firstLineEnd.lowerBound]
 
             guard

@@ -50,10 +50,9 @@ public extension ZerionProvider {
                         } else {
                             .native(on: chain)
                         }
-                        guard let key = try? ZerionChainMapping.implementation(for: returnedIdentity) else {
-                            continue
-                        }
-                        guard let identity = requested[key], let marketData = resource.attributes.marketData else {
+                        guard
+                            let key = try? ZerionChainMapping.implementation(for: returnedIdentity), let identity = requested[key],
+                            let marketData = resource.attributes.marketData else {
                             continue
                         }
                         if let price = marketData.price, price > 0 {

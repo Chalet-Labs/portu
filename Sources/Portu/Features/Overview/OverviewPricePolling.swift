@@ -36,8 +36,7 @@ extension OverviewFeature {
         case .manual, .live, .close:
             return isVisible
         case .sync, .unpriced:
-            guard !isVisible, !token.alwaysShow, settings.hideUnpriced else { return true }
-            guard OnchainTokenIdentity(historicalPriceID: priceID) != nil else { return true }
+            guard !isVisible, !token.alwaysShow, settings.hideUnpriced, OnchainTokenIdentity(historicalPriceID: priceID) != nil else { return true }
             return !settings.hideDust || abs(token.token.usdValue) >= settings.dustThresholdUSD
         case .ignored:
             return false

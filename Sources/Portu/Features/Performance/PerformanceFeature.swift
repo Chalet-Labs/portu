@@ -500,8 +500,9 @@ struct PerformanceFeature {
         guard heldIDs.isEmpty == false else { return [] }
 
         return rows.compactMap { row in
-            guard let coinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
-            guard row.day >= startDay, heldIDs.contains(coinGeckoId) else { return nil }
+            guard
+                let coinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(row.coinGeckoId), row.day >= startDay,
+                heldIDs.contains(coinGeckoId) else { return nil }
             return HistoricalPriceEntry(
                 coinGeckoId: coinGeckoId,
                 day: row.day,
@@ -514,9 +515,9 @@ struct PerformanceFeature {
         startDate: Date,
         accountId: UUID?) -> Set<String> {
         Set(snapshots.compactMap { snapshot in
-            guard snapshot.timestamp >= startDate else { return nil }
-            guard accountId == nil || snapshot.accountId == accountId else { return nil }
-            guard snapshot.amount - snapshot.borrowAmount != 0 else { return nil }
+            guard
+                snapshot.timestamp >= startDate, accountId == nil || snapshot.accountId == accountId,
+                snapshot.amount - snapshot.borrowAmount != 0 else { return nil }
             return resolvedCoinGeckoID(snapshot)
         })
     }

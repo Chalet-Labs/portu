@@ -188,8 +188,8 @@ extension DependencyValues {
     }
 }
 
+@MainActor
 extension PortfolioAnalyticsClient {
-    @MainActor
     static func live(
         modelContext: ModelContext,
         service: any ZerionAnalyticsService,
@@ -269,7 +269,6 @@ extension PortfolioAnalyticsClient {
             })
     }
 
-    @MainActor
     private static func loadCachedAnalytics(
         scope: PortfolioAnalyticsScope,
         range: ProviderPnLRange,
@@ -327,7 +326,6 @@ extension PortfolioAnalyticsClient {
             pnl: pnl.map(providerPnLDTO))
     }
 
-    @MainActor
     private static func providerPnLDTO(_ snapshot: ProviderPnLSnapshot) -> ProviderPnLDTO {
         ProviderPnLDTO(
             range: snapshot.range,

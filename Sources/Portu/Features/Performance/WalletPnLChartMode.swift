@@ -291,8 +291,8 @@ private extension PortfolioAnalyticsFailure {
     }
 }
 
+@MainActor
 private extension WalletPnLDirection {
-    @MainActor
     var color: Color {
         switch self {
         case .gain: .green

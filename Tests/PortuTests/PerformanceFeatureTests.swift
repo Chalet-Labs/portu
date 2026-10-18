@@ -320,7 +320,7 @@ struct PerformanceCategoryChangeTests {
         let major = changes.first { $0.name == "Major" }
         #expect(major?.startValue == 1000)
         #expect(major?.endValue == 1200)
-        #expect(major?.percentChange == Decimal(string: "0.2")!) // 200/1000
+        #expect(try major?.percentChange == #require(Decimal(string: "0.2"))) // 200/1000
 
         let stable = changes.first { $0.name == "Stablecoin" }
         #expect(stable?.percentChange == 0)
@@ -437,7 +437,7 @@ struct PerformanceCategoryChangeTests {
 
         #expect(Set(chartPoints.map(\.categoryName)) == ["ETH"])
         #expect(changes.first?.name == "ETH")
-        #expect(changes.first?.percentChange == Decimal(string: "0.2")!)
+        #expect(try changes.first?.percentChange == #require(Decimal(string: "0.2")))
     }
 
     @Test func `uses category ids as stable identity when names collide`() throws {
@@ -597,7 +597,7 @@ struct PerformanceCategoryChangeTests {
         // Must use the latest snapshot per (day, accountId, assetId), not sum all syncs
         #expect(major?.startValue == 1000) // day1Evening only, not 900 + 1000 = 1900
         #expect(major?.endValue == 1200) // day2Evening only, not 1100 + 1200 = 2300
-        #expect(major?.percentChange == Decimal(string: "0.2")!)
+        #expect(try major?.percentChange == #require(Decimal(string: "0.2")))
     }
 }
 

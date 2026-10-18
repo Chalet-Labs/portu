@@ -151,10 +151,8 @@ nonisolated struct CoinGeckoOnchainTokenMapResponse {
 
         var result: [String: String] = [:]
         for row in rows {
-            guard let attributes = row["attributes"] as? [String: Any] else {
-                continue
-            }
             guard
+                let attributes = row["attributes"] as? [String: Any],
                 let address = attributes["address"] as? String,
                 let coinGeckoID = attributes["coingecko_coin_id"] as? String
             else {

@@ -127,8 +127,12 @@ struct AccountCredentialLoadRecoveryTests {
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
 
-        #expect(normalizedSource.contains("@MainActor func loadCredentialsIfNeeded() async"))
-        #expect(normalizedSource.contains("@MainActor func retryCredentialLoad()"))
+        // Both functions live in the file's only extension, which carries the isolation.
+        #expect(normalizedSource.hasPrefix("@MainActor extension AddAccountSheet {"))
+        #expect(normalizedSource.components(separatedBy: "extension ").count == 2)
+        #expect(!normalizedSource.contains("nonisolated"))
+        #expect(normalizedSource.contains("func loadCredentialsIfNeeded() async"))
+        #expect(normalizedSource.contains("func retryCredentialLoad()"))
         #expect(normalizedSource.contains("Task { @MainActor in"))
         #expect(normalizedSource.contains(
             "didLoadCredentials = true isLoadingCredentials = true defer { isLoadingCredentials = false }"))

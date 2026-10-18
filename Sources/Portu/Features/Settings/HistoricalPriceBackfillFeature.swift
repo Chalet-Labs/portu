@@ -252,8 +252,7 @@ enum HistoricalBackfillCandidateResolver {
         override: TokenPricingOverrideSnapshot?,
         dashboardSettings: TokenDashboardSettings) -> Bool {
         let netAmount = snapshot.amount - snapshot.borrowAmount
-        guard netAmount != 0 else { return false }
-        guard override?.isIgnored != true else { return false }
+        guard netAmount != 0, override?.isIgnored != true else { return false }
         if override?.alwaysShow == true {
             return true
         }
@@ -345,15 +344,9 @@ enum HistoricalBackfillCandidateResolver {
         override: TokenPricingOverrideSnapshot?,
         mappingsByIdentity: [OnchainTokenIdentity: TokenIdentityMappingSnapshot],
         identities: inout Set<OnchainTokenIdentity>) {
-        guard shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity else {
-            return
-        }
         guard
-            TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil
-        else {
-            return
-        }
-        guard
+            shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity,
+            TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil,
             TokenIdentityMappingFeature.mappedCoinGeckoID(
                 for: onchainIdentity,
                 mappingsByIdentity: mappingsByIdentity) == nil
