@@ -11,9 +11,11 @@ struct NameOrderTests {
         #expect(NameOrder.lowest(["Pool 10", "Pool 2"]) == "Pool 2")
     }
 
-    @Test func `lowercase orders before uppercase`() {
-        #expect(NameOrder.isOrderedBefore("aave", "Aave"))
-        #expect(NameOrder.lowest(["Aave", "aave v3", "aave"]) == "aave")
+    /// The letters differ, so the host language cannot decide the order: Danish and Maltese sort
+    /// "Aave" before "aave", English after it.
+    @Test func `letters order without regard to case`() {
+        #expect(NameOrder.isOrderedBefore("balancer", "Curve"))
+        #expect(NameOrder.lowest(["Curve", "balancer"]) == "balancer")
     }
 
     @Test func `a name is not ordered before itself`() {
