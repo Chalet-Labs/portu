@@ -158,7 +158,7 @@ struct IgnoredAssetSnapshotReaderTests {
     }
 
     /// Already filtered today: the panel reads through `visibleAssetIDs`, and the current
-    /// valuation never makes an ignored asset visible.
+    /// valuation never makes an ignored asset visible. Before the ignore, SCAM's category shows.
     @Test func `the bottom panel leaves out an ignored asset`() async throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -171,8 +171,12 @@ struct IgnoredAssetSnapshotReaderTests {
             PositionToken(role: .balance, amount: 1000, usdValue: 5000, asset: scam)
         ], account: account)]
         context.insert(account)
-        try ignore([Self.scam], in: context)
+        try context.save()
 
+        let unignored = try await load(container, mode: .value).bottomPanel.categoryChanges.map(\.id)
+        #expect(Set(unignored) == [Self.btcCategory, Self.scamCategory])
+
+        try ignore([Self.scam], in: context)
         let changes = try await load(container, mode: .value).bottomPanel.categoryChanges.map(\.id)
 
         #expect(changes == [Self.btcCategory])
