@@ -17,7 +17,7 @@ struct AllPositionsFilter: Equatable {
 }
 
 /// A position's card fields, read from the model once at the boundary.
-struct AllPositionsCardInfo: Equatable, Identifiable {
+struct AllPositionsCardInfo: Equatable, Identifiable, Sendable {
     let id: UUID
     let positionType: PositionType
     let protocolId: String?

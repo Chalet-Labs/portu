@@ -6,11 +6,16 @@ import PortuCore
 /// `SyncEngine` deletes and reinserts `Position` rows while SwiftUI may still be evaluating a body,
 /// and reading a deleted model's property terminates the process (#103). The page reads every
 /// model here, once, at the top of its body pass; only value types cross.
-struct AllPositionsProjection: Equatable {
+struct AllPositionsProjection: Equatable, Sendable {
     /// The active accounts' valuation inputs.
     let inputs: [ValuationInput]
     /// Every active position, in query order, including one with no token.
     let cards: [AllPositionsCardInfo]
+
+    init(inputs: [ValuationInput], cards: [AllPositionsCardInfo]) {
+        self.inputs = inputs
+        self.cards = cards
+    }
 
     @MainActor
     init(_ positions: [Position], categoryResolver: PortfolioCategoryResolver = .defaults) {

@@ -2,9 +2,14 @@ import PortuCore
 
 /// The Overview screens, and the Sidebar header that shares the headline.
 extension ValuationSources {
-    /// The top bar and the Sidebar header: the active portfolio's net total and 24h change.
+    /// The top bar and the Sidebar header: the net total and 24h change of the active portfolio
+    /// the provider published.
+    func headline(_ portfolio: AllPositionsProjection) -> OverviewHeadline {
+        OverviewFeature.headline(context(portfolio.inputs, includingLiveChanges: true))
+    }
+
     func headline(_ positions: [Position]) -> OverviewHeadline {
-        OverviewFeature.headline(activePortfolio(positions, categoryResolver: .defaults, includingLiveChanges: true))
+        headline(AllPositionsProjection(positions))
     }
 
     /// The summary cards show no 24h figure, so they do not read the live fractions: a change to
