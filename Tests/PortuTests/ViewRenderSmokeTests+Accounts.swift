@@ -86,6 +86,9 @@ extension ViewRenderSmokeTests {
     private func readAccountBalances(
         in container: ModelContainer,
         until isReady: ([BalanceCell]) -> Bool) throws -> (cells: [BalanceCell], currencyCode: String) {
+        let suiteName = "ViewRenderSmokeTests.accounts.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = makeStore(section: .accounts)
         let appState = AppState()
         appState.bridge(from: store)
@@ -93,6 +96,7 @@ extension ViewRenderSmokeTests {
             AccountsView(store: store, secretStore: InMemorySecretStore())
                 .modelContainer(container)
                 .environment(appState)
+                .defaultAppStorage(defaults)
                 .frame(width: 1400, height: 900))
 
         var cells = Self.balanceCells(hostingView)
