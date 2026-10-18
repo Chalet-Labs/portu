@@ -58,11 +58,10 @@ struct ValuationContext {
     }
 }
 
+@MainActor
 extension ValuationContext {
     /// The dashboard input over the active accounts' tokens, from the store's models.
-    @MainActor
-    // swiftlint:disable:next function_parameter_count
-    static func activeAccounts(
+    static func activeAccounts( // swiftlint:disable:this function_parameter_count
         _ tokens: [PositionToken],
         overrides: [TokenPricingOverride],
         mappings: [TokenIdentityMapping],
@@ -79,13 +78,12 @@ extension ValuationContext {
             prices: prices)
     }
 
-    /// The input over the active portfolio with the app's USD books. The headline (top bar and
-    /// Sidebar header) and the summary cards are built on it, so they can never value a different
-    /// portfolio. Inactive accounts' positions are skipped before their tokens are read;
+    /// The input over the active portfolio with the app's USD books, for the summary cards. The
+    /// headline (top bar and Sidebar header) values `ActivePortfolioProvider`'s projection instead,
+    /// which takes the same active accounts' tokens through the same `ValuationInput.activeAccounts`.
+    /// Inactive accounts' positions are skipped before their tokens are read;
     /// `ValuationInput.activeAccounts` still decides.
-    @MainActor
-    // swiftlint:disable:next function_parameter_count
-    static func activePortfolio(
+    static func activePortfolio( // swiftlint:disable:this function_parameter_count
         positions: [Position],
         overrides: [TokenPricingOverride],
         mappings: [TokenIdentityMapping],

@@ -35,9 +35,7 @@ struct ActivePortfolioProviderTests {
         store.send(.sectionSelected(.overview))
 
         #expect(store.selectedSection == .overview)
-        withKnownIssue {
-            #expect(changed.withLock { $0 } == false, "ContentView.body read store state")
-        }
+        #expect(changed.withLock { $0 } == false, "ContentView.body read store state")
     }
 
     @Test(.renderedTextReadable) func `the dashboard shows the published projection`() throws {
@@ -90,9 +88,7 @@ struct ActivePortfolioProviderTests {
             RunLoop.main.run(until: Date().addingTimeInterval(0.05))
             texts = ViewRenderSmokeTests.accessibilityLabels(hostingView)
         }
-        withKnownIssue {
-            #expect(expected.allSatisfy(texts.contains), "expected \(expected) in \(texts)")
-        }
+        #expect(expected.allSatisfy(texts.contains), "expected \(expected) in \(texts)")
     }
 
     @Test func `the provider publishes the store's active projection and follows saves`() throws {
@@ -130,6 +126,7 @@ struct ActivePortfolioProviderTests {
         let tokenID = token.id
         #expect(waitUntil { recorder.portfolio.inputs.map(\.tokenId) == [tokenID] }, "\(recorder.portfolio)")
         #expect(recorder.portfolio.cards.count == 2)
+        spin(0.5)
         print("C-P count: T4 save builds=\(counter.summary)")
         counter.reset()
 
@@ -152,56 +149,53 @@ struct ActivePortfolioProviderTests {
         let eth = try #require(assets.first { $0.symbol == "ETH" })
         let usdc = try #require(assets.first { $0.symbol == "USDC" })
 
-        withKnownIssue {
-            let built = waitUntil { counter.builds >= 1 }
-            #expect(built, "the provider never built a projection")
-            guard built else { return }
-            spin(0.5)
-            print("C-P count: T6 mount builds=\(counter.summary)")
-            counter.reset()
+        let built = waitUntil { counter.builds >= 1 }
+        #expect(built, "the provider never built a projection")
+        guard built else { return }
+        spin(0.5)
+        print("C-P count: T6 mount builds=\(counter.summary)")
+        counter.reset()
 
-            dashboard.appState.livePricesUSD["ethereum"] = 3100
-            dashboard.appState.syncStatus = .syncing
-            spin(0.5)
-            print("C-P count: T6 tick and sync status builds=\(counter.summary)")
-            #expect(counter.builds == 0, "a price tick or a sync status change rebuilt the projection")
-            counter.reset()
+        dashboard.appState.livePricesUSD["ethereum"] = 3100
+        dashboard.appState.syncStatus = .syncing
+        spin(0.5)
+        print("C-P count: T6 tick and sync status builds=\(counter.summary)")
+        #expect(counter.builds == 0, "a price tick or a sync status change rebuilt the projection")
+        counter.reset()
 
-            // What a sync does: delete the account's positions, reinsert them on the same assets, save.
-            for position in try context.fetch(FetchDescriptor<Position>()) {
-                context.delete(position)
-            }
-            let tokens = [
-                PositionToken(role: .balance, amount: 3, usdValue: 9000, asset: eth),
-                PositionToken(role: .supply, amount: 4100, usdValue: 4100, asset: usdc)
-            ]
-            context.insert(Self.position(.idle, [tokens[0]], in: account))
-            context.insert(Self.position(.lending, [tokens[1]], in: account))
-            try context.save()
-            let tokenIDs = Set(tokens.map(\.id))
-            #expect(waitUntil { counter.builds >= 1 && counter.last.map { Set($0.inputs.map(\.tokenId)) } == tokenIDs })
-            print("C-P count: T6 save builds=\(counter.summary)")
+        // What a sync does: delete the account's positions, reinsert them on the same assets, save.
+        for position in try context.fetch(FetchDescriptor<Position>()) {
+            context.delete(position)
         }
+        let tokens = [
+            PositionToken(role: .balance, amount: 3, usdValue: 9000, asset: eth),
+            PositionToken(role: .supply, amount: 4100, usdValue: 4100, asset: usdc)
+        ]
+        context.insert(Self.position(.idle, [tokens[0]], in: account))
+        context.insert(Self.position(.lending, [tokens[1]], in: account))
+        try context.save()
+        let tokenIDs = Set(tokens.map(\.id))
+        #expect(waitUntil { counter.builds >= 1 && counter.last.map { Set($0.inputs.map(\.tokenId)) } == tokenIDs })
+        spin(0.5)
+        print("C-P count: T6 save builds=\(counter.summary)")
     }
 
     @Test func `switching sections builds nothing`() throws {
         let counter = BuildCounter()
         let dashboard = try Dashboard(section: .overview, counter: counter)
 
-        withKnownIssue {
-            let built = waitUntil { counter.builds >= 1 }
-            #expect(built, "the provider never built a projection")
-            guard built else { return }
-            spin(0.5)
-            print("C-P count: T7 mount builds=\(counter.summary)")
-            counter.reset()
+        let built = waitUntil { counter.builds >= 1 }
+        #expect(built, "the provider never built a projection")
+        guard built else { return }
+        spin(0.5)
+        print("C-P count: T7 mount builds=\(counter.summary)")
+        counter.reset()
 
-            dashboard.store.send(.sectionSelected(.allPositions))
-            #expect(waitUntil { dashboard.store.selectedSection == .allPositions })
-            spin(0.5)
-            print("C-P count: T7 navigation builds=\(counter.summary)")
-            #expect(counter.builds == 0, "switching to All Positions rebuilt the projection")
-        }
+        dashboard.store.send(.sectionSelected(.allPositions))
+        #expect(waitUntil { dashboard.store.selectedSection == .allPositions })
+        spin(0.5)
+        print("C-P count: T7 navigation builds=\(counter.summary)")
+        #expect(counter.builds == 0, "switching to All Positions rebuilt the projection")
     }
 
     // MARK: - Hosts

@@ -37,7 +37,7 @@ extension OverviewModelWiringTests {
         probe(store) { sources, positions, tokens, assets in
             Screens(
                 settings: sources.settings,
-                headline: sources.headline(positions),
+                headline: sources.headline(AllPositionsProjection(positions)),
                 cards: sources.summaryCards(positions, categoryResolver: categoryResolver),
                 keyChanges: sources.positionTab(.keyChanges, positions: positions, categoryResolver: categoryResolver),
                 idleStables: sources.positionTab(.idleStables, positions: positions, categoryResolver: categoryResolver),
@@ -182,7 +182,7 @@ extension OverviewModelWiringTests {
 
         let flags = try #require(Self.probe(store) { sources, positions, tokens, assets in
             [
-                "headline": Self.observing { _ = sources.headline(positions) },
+                "headline": Self.observing { _ = sources.headline(AllPositionsProjection(positions)) },
                 "cards": Self.observing { _ = sources.summaryCards(positions, categoryResolver: .defaults) },
                 "tabs": Self.observing { _ = sources.positionTab(.keyChanges, positions: positions, categoryResolver: .defaults) },
                 "watchlist": Self.observing { _ = sources.watchlistRows(tokens, assets: assets, watchlistIDs: []) },

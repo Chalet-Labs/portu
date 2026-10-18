@@ -121,14 +121,14 @@ struct OverviewModelWiringTests {
         return rendered == nil ? nil : capture.value
     }
 
-    /// Hosts `view` in a window over the store's container and `AppState`, with `@AppStorage` on a
-    /// fresh, empty defaults suite.
+    /// Hosts `view` under the active portfolio provider, as the dashboard does, in a window over the
+    /// store's container and `AppState`, with `@AppStorage` on a fresh, empty defaults suite.
     @discardableResult
     static func render(_ view: some View, over store: Store, size: CGSize = CGSize(width: 200, height: 200)) -> NSHostingView<AnyView>? {
         let suiteName = "OverviewModelWiringTests.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else { return nil }
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let hostingView = NSHostingView(rootView: AnyView(view
+        let hostingView = NSHostingView(rootView: AnyView(ActivePortfolioProvider { view }
                 .modelContainer(store.container)
                 .environment(store.appState)
                 .defaultAppStorage(defaults)))

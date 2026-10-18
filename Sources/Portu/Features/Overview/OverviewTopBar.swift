@@ -1,15 +1,14 @@
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
 struct OverviewTopBar: View {
     @Environment(AppState.self) private var appState
-    @Query private var positions: [Position]
+    @Environment(\.activePortfolio) private var portfolio
     var sources = ValuationSources()
 
     private var headline: OverviewHeadline {
-        sources.headline(positions)
+        sources.headline(portfolio)
     }
 
     private var currencyCode: String {

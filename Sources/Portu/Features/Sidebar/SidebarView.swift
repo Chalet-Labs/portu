@@ -1,7 +1,6 @@
 import ComposableArchitecture
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
 struct SidebarView: View {
@@ -67,20 +66,19 @@ struct SidebarView: View {
     }
 }
 
-// Owns every input the portfolio valuation reads (the position query here, the
-// rest through `ValuationSources`). Parameterless on purpose: when
-// `SidebarView.body` re-evaluates on a navigation click (`store.selectedSection`),
-// the unchanged `SidebarPortfolioHeader()` value lets SwiftUI skip this body, so
-// the O(portfolio) valuation no longer runs per click (issue #98, criterion 1).
-// It still re-renders when its own observed inputs change.
+// Values the portfolio `ActivePortfolioProvider` publishes and owns no position
+// query, so it never walks the store itself. `ValuationSources` is a dynamic
+// property, so this body still re-evaluates with `SidebarView`'s on every
+// navigation click (issue #98) and on every save; each re-evaluation values the
+// published values and reads no model.
 
 struct SidebarPortfolioHeader: View {
     @Environment(AppState.self) private var appState
-    @Query private var positions: [Position]
+    @Environment(\.activePortfolio) private var portfolio
     var sources = ValuationSources()
 
     private var headline: OverviewHeadline {
-        sources.headline(positions)
+        sources.headline(portfolio)
     }
 
     var body: some View {

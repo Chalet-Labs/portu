@@ -1,12 +1,11 @@
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
 struct AllPositionsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.activePortfolio) private var portfolio
     var sources = ValuationSources()
-    @Query private var allPositions: [Position]
 
     @State private var filter = AllPositionsFilter.all
     @State private var showAddSheet = false
@@ -16,7 +15,7 @@ struct AllPositionsView: View {
     }
 
     var body: some View {
-        let page = sources.allPositions(allPositions, filter: filter)
+        let page = sources.allPositions(portfolio, filter: filter)
         HSplitView {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {

@@ -26,19 +26,15 @@ struct ActivePortfolioStructureTests {
             let properties = Self.properties(of: reader.view)
             // The walk reaches `ValuationSources`' own queries, so a nested query cannot hide.
             #expect(properties.contains { $0 is OverrideQuery }, "\(reader.name): the walk never reached ValuationSources")
-            withKnownIssue {
-                let owned = properties.filter { $0 is PositionQuery || $0 is TokenQuery }
-                #expect(owned.isEmpty, "\(reader.name) owns \(owned.map { type(of: $0) })")
-            }
+            let owned = properties.filter { $0 is PositionQuery || $0 is TokenQuery }
+            #expect(owned.isEmpty, "\(reader.name) owns \(owned.map { type(of: $0) })")
         }
     }
 
     @Test func `the sidebar header, top bar and All Positions page read the shared projection`() {
         for reader in Self.readers {
             let properties = Self.properties(of: reader.view)
-            withKnownIssue {
-                #expect(properties.count { $0 is Environment<AllPositionsProjection> } == 1, "\(reader.name)")
-            }
+            #expect(properties.count { $0 is Environment<AllPositionsProjection> } == 1, "\(reader.name)")
         }
     }
 

@@ -106,7 +106,7 @@ extension ViewRenderSmokeTests {
         appState.bridge(from: makeStore(section: .allPositions))
         let size = CGSize(width: 1400, height: 2400)
         let hostingView = render(
-            AllPositionsView()
+            ActivePortfolioProvider { AllPositionsView() }
                 .modelContainer(container)
                 .environment(appState)
                 .defaultAppStorage(defaults)
