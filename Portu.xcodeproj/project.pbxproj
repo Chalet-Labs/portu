@@ -61,6 +61,7 @@
 		2E207E9D186342B6E9FA0A0C /* PerformanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1439A6AFF1671C8CD649E9C3 /* PerformanceView.swift */; };
 		2F47E990712C6285668BD294 /* AssetPriceChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AF7B3690D6CF6C34EF93FAC /* AssetPriceChart.swift */; };
 		2F6A5963A583F48B806EA184 /* PortfolioCategoryWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AAFE42584C56DC967627234 /* PortfolioCategoryWriter.swift */; };
+		2FB6D4B78C4E104BEAD0D459 /* ActivePortfolioStructureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C89B2043CB853CBCCA547E77 /* ActivePortfolioStructureTests.swift */; };
 		32B7B359BF8516EFBDAD4697 /* PortfolioValuationFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A271AFBD5E45BE1E80FB85 /* PortfolioValuationFixture.swift */; };
 		34F190FE9EC00AD0BCDAE934 /* ValuationSources.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591F92ECC8AF614F2B27B088 /* ValuationSources.swift */; };
 		358C300CA60FEC426E09EAED /* HTTPParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 726BED9040CC03635619F414 /* HTTPParserTests.swift */; };
@@ -114,6 +115,7 @@
 		62E2C89EA9D197AF0CE8FCF6 /* PriceServiceClientDefaultCurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D07175A908D286EFB84690E /* PriceServiceClientDefaultCurrencyTests.swift */; };
 		6508609949A3FBDA8407167B /* HistoricalPricesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34106A87F63B161FEC71DFFF /* HistoricalPricesProvider.swift */; };
 		6694C3BE59A9D92FF2CCCC92 /* AssetDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A2B79AB14AC2E74CE7FA45B /* AssetDetailView.swift */; };
+		680FECEA16AB1B52D56A8068 /* ActivePortfolioProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0526C63AC8096D4C9D78A57F /* ActivePortfolioProviderTests.swift */; };
 		685A77C4E075C1AA07A301B8 /* ValueChangeChartMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B099DC0BB8A40588AD22CF45 /* ValueChangeChartMode.swift */; };
 		688D94778A29B329D3197E6F /* SidebarLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC72A910CE88E69A0A79746 /* SidebarLayoutTests.swift */; };
 		69414F722F9492E52A68DCBD /* AppFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 394B6E5490B3F08DC65B0B9E /* AppFeature.swift */; };
@@ -322,6 +324,7 @@
 		03522DD25AE640F360086F3E /* PerformanceHistoricalPricesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceHistoricalPricesTests.swift; sourceTree = "<group>"; };
 		046A7671E51FEACC2914B948 /* ViewRenderSmokeTests+Accounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ViewRenderSmokeTests+Accounts.swift"; sourceTree = "<group>"; };
 		046E97FD21BA985765DBBA5D /* PerformanceLoadIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceLoadIdentityTests.swift; sourceTree = "<group>"; };
+		0526C63AC8096D4C9D78A57F /* ActivePortfolioProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivePortfolioProviderTests.swift; sourceTree = "<group>"; };
 		06025CA3BF194094E297EC73 /* AssetsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetsTab.swift; sourceTree = "<group>"; };
 		08F07C1CD9BFC389EF82221E /* OverviewPollingSeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPollingSeamTests.swift; sourceTree = "<group>"; };
 		091308B10EE348C4FD4D56B3 /* OverviewPositionProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPositionProjection.swift; sourceTree = "<group>"; };
@@ -550,6 +553,7 @@
 		C35858F256DF9CC212C24F56 /* PortfolioValueChartFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioValueChartFeatureTests.swift; sourceTree = "<group>"; };
 		C375F4CE08E3AAE9016A076E /* OverviewPositionHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPositionHelpers.swift; sourceTree = "<group>"; };
 		C652E9A00074B7A22943B6A7 /* SyncEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngine.swift; sourceTree = "<group>"; };
+		C89B2043CB853CBCCA547E77 /* ActivePortfolioStructureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivePortfolioStructureTests.swift; sourceTree = "<group>"; };
 		C89E200AA14746D4F976DBB1 /* APIKeyNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyNormalizationTests.swift; sourceTree = "<group>"; };
 		C9435D98F3F4AC7D4A8F7310 /* HistoricalPriceBackfillFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoricalPriceBackfillFeatureTests.swift; sourceTree = "<group>"; };
 		C95F1EDADED217BABCD15C10 /* PortfolioHealthPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioHealthPanel.swift; sourceTree = "<group>"; };
@@ -908,6 +912,8 @@
 				4B56D23BA9DF6CE549D5DBEA /* AccountSheetDraftTests.swift */,
 				307EE29FCE573C37E94B776D /* AccountSheetInvalidationTests.swift */,
 				77AB50CAD6B32A0877E4EBEB /* AccountsSeamTests.swift */,
+				0526C63AC8096D4C9D78A57F /* ActivePortfolioProviderTests.swift */,
+				C89B2043CB853CBCCA547E77 /* ActivePortfolioStructureTests.swift */,
 				737ADD29F72D176E21C41D96 /* AddAccountSheetReviewTests.swift */,
 				2C5E29636BD6B99B6A038320 /* AddAccountSupportChipTests.swift */,
 				59F1B452183C058E480F9BCC /* AddPositionCategoryRuleTests.swift */,
@@ -1370,6 +1376,8 @@
 				FE9FC93C2B94C62746C3E49A /* AccountSheetInvalidationTests.swift in Sources */,
 				4BAE4A97F25DD88CC1E4297A /* AccountsFeatureTests.swift in Sources */,
 				7605BD5750C02F0BF3950965 /* AccountsSeamTests.swift in Sources */,
+				680FECEA16AB1B52D56A8068 /* ActivePortfolioProviderTests.swift in Sources */,
+				2FB6D4B78C4E104BEAD0D459 /* ActivePortfolioStructureTests.swift in Sources */,
 				4C8A429B6784A49DD450615A /* AddAccountSheetReviewTests.swift in Sources */,
 				C5153D7BAD7942A4D8EC3429 /* AddAccountSupportChipTests.swift in Sources */,
 				FE3D3F7A3293898A4A4EE084 /* AddPositionCategoryRuleTests.swift in Sources */,
