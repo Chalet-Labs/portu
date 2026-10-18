@@ -47,7 +47,7 @@ struct ActivePortfolioProviderTests {
         let appState = AppState()
         appState.bridge(from: store)
         appState.livePricesUSD = Fixture.livePricesUSD
-        let portfolio = AllPositionsProjection(inputs: Fixture.inputs, cards: AllPositionsSeamFixture.cards)
+        let portfolio = ActivePortfolioProjection(inputs: Fixture.inputs, cards: AllPositionsSeamFixture.cards)
 
         let hostingView = try smoke.render(
             ContentView(store: store)
@@ -104,7 +104,7 @@ struct ActivePortfolioProviderTests {
         context.insert(Position(positionType: .lending, protocolId: "aave-v3", protocolName: "Aave V3", account: active, syncedAt: Self.syncedAt))
         context.insert(Self.position(.idle, [PositionToken(role: .balance, amount: 1, usdValue: 3000, asset: eth)], in: archived))
         try context.save()
-        let expected = try AllPositionsProjection(context.fetch(FetchDescriptor<Position>()))
+        let expected = try ActivePortfolioProjection(context.fetch(FetchDescriptor<Position>()))
         #expect(expected.cards.count == 2)
         #expect(expected.inputs.count == 1)
 
@@ -134,7 +134,7 @@ struct ActivePortfolioProviderTests {
             context.delete(position)
         }
         try context.save()
-        #expect(waitUntil { recorder.portfolio == AllPositionsProjection(inputs: [], cards: []) }, "\(recorder.portfolio)")
+        #expect(waitUntil { recorder.portfolio == ActivePortfolioProjection(inputs: [], cards: []) }, "\(recorder.portfolio)")
         hostingView.layoutSubtreeIfNeeded()
         hostingView.displayIfNeeded()
         print("C-P count: T4 delete-all builds=\(counter.summary)")
@@ -236,8 +236,8 @@ struct ActivePortfolioProviderTests {
     }
 
     /// Query order is not contractual, so values are compared in ID order.
-    private static func sorted(_ portfolio: AllPositionsProjection) -> AllPositionsProjection {
-        AllPositionsProjection(
+    private static func sorted(_ portfolio: ActivePortfolioProjection) -> ActivePortfolioProjection {
+        ActivePortfolioProjection(
             inputs: portfolio.inputs.sorted { $0.tokenId.uuidString < $1.tokenId.uuidString },
             cards: portfolio.cards.sorted { $0.id.uuidString < $1.id.uuidString })
     }
@@ -263,13 +263,13 @@ struct ActivePortfolioProviderTests {
 @MainActor
 final class BuildCounter {
     private(set) var builds = 0
-    private(set) var last: AllPositionsProjection?
+    private(set) var last: ActivePortfolioProjection?
     private var nanoseconds: [UInt64] = []
 
     var builder: ActivePortfolioBuilder {
         ActivePortfolioBuilder { [self] positions in
             let start = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)
-            let projection = AllPositionsProjection(positions)
+            let projection = ActivePortfolioProjection(positions)
             nanoseconds.append(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - start)
             builds += 1
             last = projection
@@ -290,7 +290,7 @@ final class BuildCounter {
 
 @MainActor
 private final class PortfolioRecorder {
-    var portfolio = AllPositionsProjection(inputs: [], cards: [])
+    var portfolio = ActivePortfolioProjection(inputs: [], cards: [])
 }
 
 private struct PortfolioSink: View {

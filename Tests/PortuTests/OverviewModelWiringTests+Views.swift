@@ -16,7 +16,7 @@ extension OverviewModelWiringTests {
     @Test(.renderedTextReadable, arguments: [false, true])
     func `the top bar and sidebar header show the sources headline`(ignoringDegen: Bool) throws {
         let store = try Store(ignoring: ignoringDegen ? ["DEGEN"] : [])
-        let expected = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(AllPositionsProjection(positions)) })
+        let expected = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(ActivePortfolioProjection(positions)) })
         let currencyCode = store.appState.selectedCurrency.displayCode
         let shown = [
             OverviewPriceDisplay.currency(expected.total, currencyCode: currencyCode),
@@ -39,7 +39,7 @@ extension OverviewModelWiringTests {
         let wallet = try #require(store.positions.first { $0.account?.isActive == true })
         let eth = try #require(wallet.tokens.first { $0.asset?.symbol == "ETH" }?.asset)
         try store.insert([PositionToken(role: .borrow, amount: 3, usdValue: 8700, asset: eth, position: wallet)])
-        let headline = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(AllPositionsProjection(positions)) })
+        let headline = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(ActivePortfolioProjection(positions)) })
 
         #expect(headline.changePercentage == nil)
         for view in [AnyView(OverviewTopBar()), AnyView(SidebarPortfolioHeader())] {

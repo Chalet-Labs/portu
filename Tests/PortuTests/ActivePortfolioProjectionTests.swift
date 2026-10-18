@@ -5,9 +5,9 @@ import SwiftData
 import SwiftUI
 import Testing
 
-/// The All Positions model boundary over an in-memory store, through the page seam.
+/// The active portfolio model boundary over an in-memory store, through the All Positions page seam.
 @MainActor
-struct AllPositionsProjectionTests {
+struct ActivePortfolioProjectionTests {
     private static let syncedAt = Date(timeIntervalSinceReferenceDate: 800_000_000)
 
     /// Spec Terms (AGENT-DECIDED 23): a token whose asset is gone is outside valuation, so it has no
@@ -43,7 +43,7 @@ struct AllPositionsProjectionTests {
         }
         try context.save()
 
-        let projection = try AllPositionsProjection(context.fetch(FetchDescriptor<Position>()))
+        let projection = try ActivePortfolioProjection(context.fetch(FetchDescriptor<Position>()))
         let page = AllPositionsFeature.page(Self.context(projection.inputs), cards: projection.cards, filter: .all)
         let cards = page.sections.flatMap(\.cards)
 
@@ -75,7 +75,7 @@ struct AllPositionsProjectionTests {
         context.insert(position)
         try context.save()
 
-        let projection = try AllPositionsProjection(context.fetch(FetchDescriptor<Position>()))
+        let projection = try ActivePortfolioProjection(context.fetch(FetchDescriptor<Position>()))
         let page = AllPositionsFeature.page(
             Self.context(projection.inputs, livePricesUSD: ["ethereum": 3050]),
             cards: projection.cards,
@@ -111,7 +111,7 @@ struct AllPositionsProjectionTests {
             syncedAt: Self.syncedAt))
         try context.save()
         let positions = try context.fetch(FetchDescriptor<Position>())
-        let projection = AllPositionsProjection(positions)
+        let projection = ActivePortfolioProjection(positions)
 
         for position in positions {
             context.delete(position)

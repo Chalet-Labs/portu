@@ -5,7 +5,7 @@ import SwiftUI
 extension EnvironmentValues {
     /// The active accounts' positions as values, built once per store change by
     /// `ActivePortfolioProvider`. Empty outside one.
-    @Entry var activePortfolio = AllPositionsProjection(inputs: [], cards: [])
+    @Entry var activePortfolio = ActivePortfolioProjection(inputs: [], cards: [])
 
     /// How the provider builds the projection. Production never sets it; tests swap it to count
     /// or replace builds.
@@ -13,10 +13,10 @@ extension EnvironmentValues {
 }
 
 struct ActivePortfolioBuilder {
-    let build: @MainActor ([Position]) -> AllPositionsProjection
+    let build: @MainActor ([Position]) -> ActivePortfolioProjection
 
     static var live: ActivePortfolioBuilder {
-        ActivePortfolioBuilder { AllPositionsProjection($0) }
+        ActivePortfolioBuilder { ActivePortfolioProjection($0) }
     }
 }
 

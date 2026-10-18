@@ -34,7 +34,7 @@ struct ActivePortfolioStructureTests {
     @Test func `the sidebar header, top bar and All Positions page read the shared projection`() {
         for reader in Self.readers {
             let properties = Self.properties(of: reader.view)
-            #expect(properties.count { $0 is Environment<AllPositionsProjection> } == 1, "\(reader.name)")
+            #expect(properties.count { $0 is Environment<ActivePortfolioProjection> } == 1, "\(reader.name)")
         }
     }
 

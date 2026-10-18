@@ -73,7 +73,7 @@ struct ActivePortfolioStallEvidenceTests {
             historical: .empty,
             includingLiveChanges: true))
         let pagePositions = try context.fetch(FetchDescriptor<Position>())
-        let projection = AllPositionsProjection(pagePositions)
+        let projection = ActivePortfolioProjection(pagePositions)
         let page = AllPositionsFeature.page(
             valuation(projection, appState: appState, includingLiveChanges: false),
             cards: projection.cards,
@@ -83,7 +83,7 @@ struct ActivePortfolioStallEvidenceTests {
 
     /// C-P: one fetch and one projection, valued by the header and the page.
     private static func oneProjection(_ context: ModelContext, appState: AppState) throws -> Pass {
-        let projection = try AllPositionsProjection(context.fetch(FetchDescriptor<Position>()))
+        let projection = try ActivePortfolioProjection(context.fetch(FetchDescriptor<Position>()))
         let headline = OverviewFeature.headline(valuation(projection, appState: appState, includingLiveChanges: true))
         let page = AllPositionsFeature.page(
             valuation(projection, appState: appState, includingLiveChanges: false),
@@ -92,7 +92,7 @@ struct ActivePortfolioStallEvidenceTests {
         return Pass(headline: headline, page: page)
     }
 
-    private static func valuation(_ projection: AllPositionsProjection, appState: AppState, includingLiveChanges: Bool) -> ValuationContext {
+    private static func valuation(_ projection: ActivePortfolioProjection, appState: AppState, includingLiveChanges: Bool) -> ValuationContext {
         ValuationContext(
             inputs: projection.inputs,
             overrides: [],
