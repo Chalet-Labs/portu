@@ -84,7 +84,7 @@ public struct ValuationTotals: Equatable, Sendable {
         change24h += token.change24h
         syncTotal += role.signed(token.token.usdValue)
         if token.isCounted {
-            netAmount += role.isBorrow ? -token.token.amount : token.token.amount
+            netAmount += role.signedAmount(token.token.amount)
         }
     }
 }

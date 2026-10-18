@@ -31,13 +31,11 @@ extension TokenSettingsRow {
             override: override)
     }
 
-    /// Borrows subtract, as in `ValuationTotals.netAmount`; rewards add. Unlike `netAmount`, the
-    /// all-token sum keeps non-positive amounts, as the pre-PR (b) aggregate did.
+    /// Signed by `TokenRole.signedAmount`, as `ValuationTotals.netAmount` is. Unlike `netAmount`,
+    /// the all-token sum keeps non-positive amounts, as the pre-PR (b) aggregate did.
     private static func amount(of row: DashboardRow<UUID>, isIgnored: Bool) -> Decimal {
         guard isIgnored || row.status == .notCounted else { return row.totals.netAmount }
-        return row.tokens.reduce(0) { sum, token in
-            sum + (token.token.role.isBorrow ? -token.token.amount : token.token.amount)
-        }
+        return row.tokens.reduce(0) { $0 + $1.token.role.signedAmount($1.token.amount) }
     }
 
     private static func value(of row: DashboardRow<UUID>, isIgnored: Bool, rate: Decimal) -> Decimal? {

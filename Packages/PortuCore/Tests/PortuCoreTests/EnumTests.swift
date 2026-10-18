@@ -55,6 +55,14 @@ struct EnumTests {
         #expect(!TokenRole.reward.isBorrow)
     }
 
+    @Test func `signed amount subtracts borrows and adds every other role`() {
+        let signed = Dictionary(uniqueKeysWithValues: TokenRole.allCases.map { ($0, $0.signedAmount(2)) })
+
+        #expect(signed == [.supply: 2, .borrow: -2, .reward: 2, .stake: 2, .lpToken: 2, .balance: 2])
+        #expect(TokenRole.borrow.signedAmount(-1) == 1)
+        #expect(TokenRole.reward.signedAmount(0) == 0)
+    }
+
     @Test func `token role codable`() throws {
         let encoded = try JSONEncoder().encode(TokenRole.lpToken)
         let decoded = try JSONDecoder().decode(TokenRole.self, from: encoded)
