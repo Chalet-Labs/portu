@@ -17,6 +17,7 @@ import Testing
 struct ActivePortfolioProviderTests {
     private typealias Fixture = PortfolioValuationFixture
 
+    private static let maxRetainedWindows = 16
     private static var retainedWindows: [NSWindow] = []
     private static let syncedAt = Date(timeIntervalSinceReferenceDate: 800_000_000)
 
@@ -228,6 +229,9 @@ struct ActivePortfolioProviderTests {
         window.layoutIfNeeded()
         hostingView.layoutSubtreeIfNeeded()
         retainedWindows.append(window)
+        if retainedWindows.count > maxRetainedWindows {
+            retainedWindows.removeFirst(retainedWindows.count - maxRetainedWindows)
+        }
         return hostingView
     }
 
@@ -261,7 +265,7 @@ struct ActivePortfolioProviderTests {
 
 /// Counts the provider's builds and their main-thread CPU time. One per host, never shared.
 @MainActor
-final class BuildCounter {
+private final class BuildCounter {
     private(set) var builds = 0
     private(set) var last: ActivePortfolioProjection?
     private var nanoseconds: [UInt64] = []
