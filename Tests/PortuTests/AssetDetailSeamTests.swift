@@ -1,6 +1,7 @@
 import Foundation
 @testable import Portu
 import PortuCore
+import SwiftData
 import Testing
 
 /// The Asset Detail page seam (S7, A7, F4, V5, T2, T4, U3, U4) over the shared fixture and
@@ -401,5 +402,39 @@ struct AssetDetailSeamTests {
             "Idle",
             "Off-chain"
         ])
+    }
+
+    // MARK: - Projection (AGENT-DECIDED 13)
+
+    /// The page values the active accounts' tokens of the asset only: the inactive wallet's ETH
+    /// and both wallets' USDC never reach `inputs`. `labels` covers every token of the asset, but
+    /// rows look labels up by valued token, so the inactive one is never read.
+    @MainActor
+    @Test func `the projection keeps the active accounts' tokens of the asset`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let eth = Asset(symbol: "ETH", name: "Ethereum", coinGeckoId: "ethereum", category: .major)
+        let usdc = Asset(symbol: "USDC", name: "USD Coin", coinGeckoId: "usd-coin", category: .stablecoin)
+        let active = Account(name: "Main Wallet", kind: .wallet, dataSource: .zerion)
+        let inactive = Account(name: "Archived Wallet", kind: .wallet, dataSource: .zerion, isActive: false)
+        let activeETH = PositionToken(role: .balance, amount: 2, usdValue: 6000, asset: eth)
+        let inactiveETH = PositionToken(role: .balance, amount: 1, usdValue: 3000, asset: eth)
+        let otherTokens = [
+            PositionToken(role: .balance, amount: 100, usdValue: 100, asset: usdc),
+            PositionToken(role: .balance, amount: 50, usdValue: 50, asset: usdc)
+        ]
+        context.insert(eth)
+        context.insert(usdc)
+        context.insert(active)
+        context.insert(inactive)
+        context.insert(Position(positionType: .idle, chain: .ethereum, tokens: [activeETH, otherTokens[0]], account: active))
+        context.insert(Position(positionType: .idle, chain: .ethereum, tokens: [inactiveETH, otherTokens[1]], account: inactive))
+        try context.save()
+
+        let projection = try AssetDetailProjection(eth, tokens: context.fetch(FetchDescriptor<PositionToken>()))
+
+        #expect(projection.inputs.map(\.tokenId) == [activeETH.id])
+        #expect(projection.labels[activeETH.id] == AssetDetailRowLabels(accountName: "Main Wallet", protocolName: nil))
+        #expect(Set(projection.labels.keys).isDisjoint(with: otherTokens.map(\.id)))
     }
 }
