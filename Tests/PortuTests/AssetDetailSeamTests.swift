@@ -407,8 +407,7 @@ struct AssetDetailSeamTests {
     // MARK: - Projection (AGENT-DECIDED 13)
 
     /// The page values the active accounts' tokens of the asset only: the inactive wallet's ETH
-    /// and both wallets' USDC never reach `inputs`. `labels` covers every token of the asset, but
-    /// rows look labels up by valued token, so the inactive one is never read.
+    /// and both wallets' USDC reach neither `inputs` nor `labels`.
     @MainActor
     @Test func `the projection keeps the active accounts' tokens of the asset`() throws {
         let container = try ModelContainerFactory().makeInMemory()
@@ -434,7 +433,6 @@ struct AssetDetailSeamTests {
         let projection = try AssetDetailProjection(eth, tokens: context.fetch(FetchDescriptor<PositionToken>()))
 
         #expect(projection.inputs.map(\.tokenId) == [activeETH.id])
-        #expect(projection.labels[activeETH.id] == AssetDetailRowLabels(accountName: "Main Wallet", protocolName: nil))
-        #expect(Set(projection.labels.keys).isDisjoint(with: otherTokens.map(\.id)))
+        #expect(projection.labels == [activeETH.id: AssetDetailRowLabels(accountName: "Main Wallet", protocolName: nil)])
     }
 }

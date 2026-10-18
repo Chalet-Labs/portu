@@ -24,7 +24,7 @@ struct AssetDetailProjection: Equatable {
     let asset: AssetDetailAsset
     /// The active accounts' tokens of this asset.
     let inputs: [ValuationInput]
-    /// Keyed by `ValuationInput.tokenId`.
+    /// The labels of `inputs`, keyed by `ValuationInput.tokenId`.
     let labels: [UUID: AssetDetailRowLabels]
 
     @MainActor
@@ -38,9 +38,11 @@ struct AssetDetailProjection: Equatable {
             category: asset.category,
             coinGeckoId: asset.coinGeckoId,
             onchainIdentity: OnchainTokenIdentity(chain: asset.upsertChain, contractAddress: asset.upsertContract))
-        self.inputs = ValuationInput.activeAccounts(held)
+        let inputs = ValuationInput.activeAccounts(held)
+        let valuedIDs = Set(inputs.map(\.tokenId))
+        self.inputs = inputs
         self.labels = Dictionary(
-            held.compactMap { token in
+            held.filter { valuedIDs.contains($0.id) }.compactMap { token in
                 token.position.map { position in
                     (token.id, AssetDetailRowLabels(
                         accountName: position.account?.name ?? AssetDetailFeature.unknownAccountName,
