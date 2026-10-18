@@ -48,6 +48,24 @@ struct ActivePortfolioStructureTests {
         #expect(queries.allSatisfy { $0 is PositionQuery })
     }
 
+    /// `HistoricalPricesProvider` fixes its close window when it is built, so it must sit in
+    /// `DashboardView`, which every navigation click rebuilds, and not above it in `ContentView`.
+    @Test func `the historical prices provider sits below the content view`() {
+        let store = ViewRenderSmokeTests().makeStore(section: .overview)
+        let content = ContentView(store: store, secretStore: InMemorySecretStore()).body
+        let dashboard = DashboardView(store: store, secretStore: InMemorySecretStore()).body
+        let contentTree = [content] + Self.properties(of: content)
+        let dashboardTree = [dashboard] + Self.properties(of: dashboard)
+        let providers = { (tree: [Any]) in
+            tree.count { String(describing: type(of: $0)).hasPrefix("HistoricalPricesProvider<") }
+        }
+
+        // The walk reaches the provider `ContentView` does mount, so a provider beside it would show.
+        #expect(contentTree.contains { String(describing: type(of: $0)).hasPrefix("ActivePortfolioProvider<") })
+        #expect(providers(contentTree) == 0)
+        #expect(providers(dashboardTree) == 1)
+    }
+
     /// Every stored property of `value` and of the structs it holds, down to `depth` levels. A
     /// SwiftUI wrapper (`Query`, `Environment`, `AppStorage`, `State`) is reported and not opened;
     /// class instances are never opened.
