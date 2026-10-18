@@ -33,5 +33,8 @@
 # Swift version
 --swiftversion 6.2
 
+# SwiftFormat version — CI pins 0.64.0 (.github/workflows/ci.yml); older versions apply other rules
+--minversion 0.64.0
+
 # Excluded paths
 --exclude .build,DerivedData,*.xcodeproj

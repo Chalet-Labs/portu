@@ -24,9 +24,17 @@ jobs:
           xcode-version: latest-stable
 
       - name: Install tools
+        env:
+          SWIFTFORMAT_VERSION: 0.64.0
+          SWIFTFORMAT_SHA256: 95ea62625d0b898a7af870293311ae6f09e4a3147ecd900593687e4b9ab2fd98
         run: |
-          # SwiftFormat comes with the runner image; SwiftLint does not
           brew install xcodegen just swiftlint
+          # Pinned instead of the runner image's SwiftFormat, whose version moves and brings new rules
+          curl -fsSL -o "$RUNNER_TEMP/swiftformat.zip" \
+            "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip"
+          echo "${SWIFTFORMAT_SHA256}  $RUNNER_TEMP/swiftformat.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/swiftformat.zip" -d "$RUNNER_TEMP/swiftformat"
+          echo "$RUNNER_TEMP/swiftformat" >> "$GITHUB_PATH"
 
       - name: Check formatting and lint
         run: |
