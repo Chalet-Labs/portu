@@ -104,8 +104,11 @@ struct AddPositionSheet: View {
                 Button("Add") { savePosition() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(!ManualPositionEntry.canAdd(
-                        hasAccount: selectedAccountId != nil,
-                        hasAsset: createNewAsset ? !newSymbol.isEmpty && !newName.isEmpty : selectedAsset != nil,
+                        selectedAccountId: selectedAccountId,
+                        createNewAsset: createNewAsset,
+                        newSymbol: newSymbol,
+                        newName: newName,
+                        selectedAssetId: selectedAsset?.id,
                         amount: amount))
             }
             .padding()
@@ -178,6 +181,21 @@ enum ManualPositionEntry {
     /// Add needs an account, an asset and an amount above 0 (U1).
     static func canAdd(hasAccount: Bool, hasAsset: Bool, amount: Decimal) -> Bool {
         hasAccount && hasAsset && amount > 0
+    }
+
+    /// The Add button's state for the sheet's draft. A new asset needs a symbol and a name; the
+    /// selected asset counts only while the sheet is not creating one.
+    static func canAdd( // swiftlint:disable:this function_parameter_count
+        selectedAccountId: UUID?,
+        createNewAsset: Bool,
+        newSymbol: String,
+        newName: String,
+        selectedAssetId: UUID?,
+        amount: Decimal) -> Bool {
+        canAdd(
+            hasAccount: selectedAccountId != nil,
+            hasAsset: createNewAsset ? !newSymbol.isEmpty && !newName.isEmpty : selectedAssetId != nil,
+            amount: amount)
     }
 }
 

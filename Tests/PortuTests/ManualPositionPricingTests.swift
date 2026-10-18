@@ -44,4 +44,45 @@ struct ManualPositionEntryTests {
     @Test func `the Add button is disabled at a negative amount`() {
         #expect(!ManualPositionEntry.canAdd(hasAccount: true, hasAsset: true, amount: -1))
     }
+
+    // MARK: - The sheet's draft
+
+    @Test func `an existing asset draft needs an account, a selected asset and a positive amount`() {
+        #expect(draft())
+        #expect(!draft(selectedAccountId: nil))
+        #expect(!draft(selectedAssetId: nil))
+        #expect(!draft(amount: 0))
+        #expect(!draft(amount: -1))
+    }
+
+    @Test func `a new asset draft needs a symbol and a name, whatever asset is selected`() {
+        #expect(draft(createNewAsset: true, newSymbol: "NEW", newName: "New Coin", selectedAssetId: nil))
+        #expect(!draft(createNewAsset: true, newSymbol: "", newName: "New Coin"))
+        #expect(!draft(createNewAsset: true, newSymbol: "NEW", newName: ""))
+        #expect(!draft(createNewAsset: true, newSymbol: "NEW", newName: "New Coin", selectedAccountId: nil))
+        #expect(!draft(createNewAsset: true, newSymbol: "NEW", newName: "New Coin", amount: 0))
+        #expect(!draft(createNewAsset: true, newSymbol: "NEW", newName: "New Coin", amount: -1))
+    }
+
+    @Test func `an existing asset draft ignores the new asset fields`() {
+        #expect(draft(newSymbol: "", newName: ""))
+        #expect(!draft(newSymbol: "NEW", newName: "New Coin", selectedAssetId: nil))
+    }
+
+    /// A complete existing-asset draft, varied one field at a time.
+    private func draft(
+        createNewAsset: Bool = false,
+        newSymbol: String = "",
+        newName: String = "",
+        selectedAccountId: UUID? = UUID(),
+        selectedAssetId: UUID? = UUID(),
+        amount: Decimal = 1) -> Bool {
+        ManualPositionEntry.canAdd(
+            selectedAccountId: selectedAccountId,
+            createNewAsset: createNewAsset,
+            newSymbol: newSymbol,
+            newName: newName,
+            selectedAssetId: selectedAssetId,
+            amount: amount)
+    }
 }
