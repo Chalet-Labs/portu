@@ -45,6 +45,38 @@ extension ViewRenderSmokeTests {
         #expect(Array(texts.dropFirst(borrowIndex + 2).prefix(2)) == [amount(500), currency(-500)], "\(texts)")
     }
 
+    /// A sync can delete every position while the page is on screen. The dashboard renders the
+    /// empty store afterwards. A smoke test: it does not force a body pass between the save and
+    /// the query's refetch.
+    @Test func `all positions renders after every position is deleted mid-session`() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let store = makeStore(section: .allPositions)
+        let appState = AppState()
+        appState.bridge(from: store)
+
+        let hostingView = render(ContentView(store: store)
+            .modelContainer(container)
+            .environment(appState)
+            .frame(width: 1400, height: 900))
+
+        let positions = try context.fetch(FetchDescriptor<Position>())
+        try #require(!positions.isEmpty)
+        for position in positions {
+            context.delete(position)
+        }
+        try context.save()
+
+        let deadline = Date().addingTimeInterval(0.5)
+        while Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        hostingView.layoutSubtreeIfNeeded()
+        hostingView.displayIfNeeded()
+
+        #expect(try context.fetch(FetchDescriptor<Position>()).isEmpty)
+    }
+
     /// The texts after a row's symbol, up to the next row's role label, section title or the
     /// sidebar.
     private static func rowTexts(_ texts: [String], after symbol: String) -> [String] {

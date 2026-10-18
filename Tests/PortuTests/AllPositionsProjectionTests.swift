@@ -2,6 +2,7 @@ import Foundation
 @testable import Portu
 import PortuCore
 import SwiftData
+import SwiftUI
 import Testing
 
 /// The All Positions model boundary over an in-memory store, through the page seam.
@@ -85,6 +86,51 @@ struct AllPositionsProjectionTests {
         #expect(page.sections.flatMap(\.cards).map(\.total) == [3050])
         #expect(page.sections.flatMap(\.cards).flatMap(\.rows).map(\.value) == [3050])
         #expect(page.protocolOptions.map(\.total) == [3050])
+    }
+
+    /// #103: a sync deletes the positions a projection came from while a view may still hold it.
+    /// Everything it hands on stays readable and renderable.
+    @Test func `the projection outlives deletion of its source models`() throws {
+        let container = try ModelContainerFactory().makeInMemory()
+        let context = container.mainContext
+        let usdc = Asset(symbol: "USDC", name: "USD Coin", coinGeckoId: "usd-coin", category: .stablecoin)
+        let wallet = Account(name: "Main Wallet", kind: .wallet, dataSource: .zerion)
+        context.insert(usdc)
+        context.insert(wallet)
+        context.insert(Position(
+            positionType: .lending,
+            chain: .ethereum,
+            protocolId: "aave-v3",
+            protocolName: "Aave V3",
+            healthFactor: 2.4,
+            tokens: [
+                PositionToken(role: .supply, amount: 4000, usdValue: 4000, asset: usdc),
+                PositionToken(role: .borrow, amount: 500, usdValue: 500, asset: usdc)
+            ],
+            account: wallet,
+            syncedAt: Self.syncedAt))
+        try context.save()
+        let positions = try context.fetch(FetchDescriptor<Position>())
+        let projection = AllPositionsProjection(positions)
+
+        for position in positions {
+            context.delete(position)
+        }
+        try context.save()
+
+        #expect(try context.fetch(FetchDescriptor<Position>()).isEmpty)
+        #expect(projection.inputs.map(\.token.symbol) == ["USDC", "USDC"])
+        #expect(projection.cards.map(\.protocolName) == ["Aave V3"])
+        let page = AllPositionsFeature.page(
+            Self.context(projection.inputs, livePricesUSD: ["usd-coin": 1]),
+            cards: projection.cards,
+            filter: .all)
+        let card = try #require(page.sections.first?.cards.first)
+        #expect(card.title == "Aave V3")
+        #expect(card.total == 3500)
+        #expect(card.rows.map(\.value) == [4000, -500])
+
+        ViewRenderSmokeTests().render(PositionGroupView(card: card, currencyCode: "USD"), size: CGSize(width: 800, height: 300))
     }
 
     private static func context(_ inputs: [ValuationInput], livePricesUSD: [String: Decimal] = [:]) -> ValuationContext {
