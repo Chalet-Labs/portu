@@ -90,9 +90,8 @@ extension AssetDetailFeature {
             })
     }
 
-    /// U4: a counted row shows its signed contribution, a not-counted one (a reward or an amount ≤ 0)
-    /// its own unsigned value; an unpriced or ignored row has no value. Rows sort by contribution
-    /// descending, then account name, then token ID.
+    /// U4: a row's value is `ValuedToken.rowValue` in the display currency. Rows sort by
+    /// contribution descending, then account name, then token ID.
     private static func rows(
         _ valuation: PortfolioValuation,
         labels: [UUID: AssetDetailRowLabels],
@@ -109,13 +108,7 @@ extension AssetDetailFeature {
             return lhs.tokenId.uuidString < rhs.tokenId.uuidString
         }
         return sorted.map { token in
-            let shown = token.display(rate: rate)
-            let value: Decimal? = switch token.rowState {
-            case .counted: shown.contribution
-            case .notCounted: shown.value
-            case .unpriced, .ignored: nil
-            }
-            return AssetPositionRow(
+            AssetPositionRow(
                 id: token.tokenId,
                 accountName: accountName(token),
                 platformName: labels[token.tokenId]?.protocolName ?? walletPlatformName,
@@ -123,7 +116,7 @@ extension AssetDetailFeature {
                 network: networkName(token.position.chain),
                 amount: token.token.amount,
                 state: token.rowState,
-                value: value)
+                value: token.display(rate: rate).rowValue)
         }
     }
 }

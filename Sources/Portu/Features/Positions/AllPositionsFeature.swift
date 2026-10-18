@@ -123,21 +123,14 @@ enum AllPositionsFeature {
         return ""
     }
 
-    /// U4: a counted row shows its signed contribution, a not-counted one (a reward or an amount
-    /// ≤ 0) its own unsigned value; an unpriced or ignored row has no value.
+    /// U4: the row's value is `ValuedToken.rowValue` in the display currency.
     private static func row(_ token: ValuedToken, rate: Decimal) -> AllPositionsRow {
-        let shown = token.display(rate: rate)
-        let value: Decimal? = switch token.rowState {
-        case .counted: shown.contribution
-        case .notCounted: shown.value
-        case .unpriced, .ignored: nil
-        }
-        return AllPositionsRow(
+        AllPositionsRow(
             id: token.tokenId,
             role: token.token.role,
             symbol: token.token.symbol,
             amount: token.token.amount,
             state: token.rowState,
-            value: value)
+            value: token.display(rate: rate).rowValue)
     }
 }

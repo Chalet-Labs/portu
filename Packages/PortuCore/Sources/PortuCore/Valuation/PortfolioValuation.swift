@@ -96,6 +96,17 @@ public struct ValuedToken: Equatable, Sendable {
         return isValued ? .counted : .unpriced
     }
 
+    /// What a token-level row shows as its value (U4): the signed contribution of a counted row,
+    /// the unsigned value of a not-counted one, nothing for an unpriced or ignored row. Read it off
+    /// `display(rate:)` for the display currency.
+    public var rowValue: Decimal? {
+        switch rowState {
+        case .counted: contribution
+        case .notCounted: value
+        case .unpriced, .ignored: nil
+        }
+    }
+
     /// What polling ranks by and backfill gates on (S12): the value, or `|usdValue|` when the value
     /// is 0. Ignored tokens are never candidates.
     public var selectionValue: Decimal? {

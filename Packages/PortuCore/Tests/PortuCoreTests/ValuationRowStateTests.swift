@@ -83,6 +83,31 @@ struct ValuationRowStateTests {
         #expect(valued.rowState == .unpriced)
     }
 
+    @Test func `row value is the contribution when counted, the value when not counted, else nil`() {
+        let borrow = Fixture.token("ETH", coinGeckoId: "ethereum", role: .borrow, amount: 1)
+        let reward = Fixture.token("SOL", coinGeckoId: "solana", role: .reward, amount: 2)
+        let unpriced = Fixture.token("NOP", coinGeckoId: "nop", amount: 1)
+        let ignored = Fixture.token("SCAM", coinGeckoId: "scam", amount: 1000, usdValue: 500)
+        let valuation = Fixture.valuation(
+            [borrow, reward, unpriced, ignored].map { Fixture.input($0) },
+            market: Fixture.market(live: ["ethereum": 3000, "solana": 150]),
+            overrides: [Fixture.ignore(ignored)])
+        let shown = valuation.tokens.map { $0.display(rate: 2) }
+
+        #expect(valuation.tokens.map(\.rowState) == [.counted, .notCounted, .unpriced, .ignored])
+        #expect(valuation.tokens.map(\.rowValue) == [-3000, 300, nil, nil])
+        #expect(shown.map(\.rowValue) == [-6000, 600, nil, nil])
+    }
+
+    @Test func `a not-counted zero amount has a row value of zero, not none`() throws {
+        let token = Fixture.token(coinGeckoId: "ethereum", amount: 0, usdValue: 100)
+        let valuation = Fixture.valuation([Fixture.input(token)], market: Fixture.market(live: ["ethereum": 3000]))
+
+        let valued = try #require(valuation.tokens.first)
+        #expect(valued.rowState == .notCounted)
+        #expect(valued.rowValue == 0)
+    }
+
     @Test func `show all keeps dust and unpriced rows visible with no hidden line`() {
         let dust = Fixture.synced("DUST", Fixture.decimal("0.5"))
         let unpriced = Fixture.token("NOP", coinGeckoId: "nop", amount: 1)
