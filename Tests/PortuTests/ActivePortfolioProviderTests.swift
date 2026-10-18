@@ -142,8 +142,11 @@ struct ActivePortfolioProviderTests {
     }
 
     @Test func `price ticks and sync status changes build no projection, a save builds one`() throws {
+        let suiteName = "ActivePortfolioProviderTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let counter = BuildCounter()
-        let dashboard = try Dashboard(section: .allPositions, counter: counter)
+        let dashboard = try Dashboard(section: .allPositions, counter: counter, defaults: defaults)
         let context = dashboard.container.mainContext
         let account = try #require(context.fetch(FetchDescriptor<Account>()).first)
         let assets = try context.fetch(FetchDescriptor<Asset>())
@@ -182,8 +185,11 @@ struct ActivePortfolioProviderTests {
     }
 
     @Test func `switching sections builds nothing`() throws {
+        let suiteName = "ActivePortfolioProviderTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let counter = BuildCounter()
-        let dashboard = try Dashboard(section: .overview, counter: counter)
+        let dashboard = try Dashboard(section: .overview, counter: counter, defaults: defaults)
 
         let built = waitUntil { counter.builds >= 1 }
         #expect(built, "the provider never built a projection")
@@ -202,13 +208,14 @@ struct ActivePortfolioProviderTests {
     // MARK: - Hosts
 
     /// The production `ContentView` as `ViewRenderSmokeTests` hosts it, with the counting builder.
+    /// The caller owns `defaults` and removes its domain.
     @MainActor
     private struct Dashboard {
         let store: StoreOf<AppFeature>
         let container: ModelContainer
         let appState = AppState()
 
-        init(section: SidebarSection, counter: BuildCounter) throws {
+        init(section: SidebarSection, counter: BuildCounter, defaults: UserDefaults) throws {
             let smoke = ViewRenderSmokeTests()
             self.container = try smoke.makeContainer()
             self.store = smoke.makeStore(section: section)
@@ -217,6 +224,7 @@ struct ActivePortfolioProviderTests {
                 .modelContainer(container)
                 .environment(appState)
                 .environment(\.activePortfolioBuilder, counter.builder)
+                .defaultAppStorage(defaults)
                 .frame(width: 1400, height: 900))
         }
     }

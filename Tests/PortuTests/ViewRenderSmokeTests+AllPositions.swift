@@ -49,6 +49,9 @@ extension ViewRenderSmokeTests {
     /// empty store afterwards. A smoke test: it does not force a body pass between the save and
     /// the query's refetch.
     @Test func `all positions renders after every position is deleted mid-session`() throws {
+        let suiteName = "ViewRenderSmokeTests.allPositions.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let container = try makeContainer()
         let context = container.mainContext
         let store = makeStore(section: .allPositions)
@@ -58,6 +61,7 @@ extension ViewRenderSmokeTests {
         let hostingView = render(ContentView(store: store)
             .modelContainer(container)
             .environment(appState)
+            .defaultAppStorage(defaults)
             .frame(width: 1400, height: 900))
 
         let positions = try context.fetch(FetchDescriptor<Position>())
