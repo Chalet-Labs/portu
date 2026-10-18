@@ -2,8 +2,9 @@
 import Testing
 
 /// The name order Platforms and the All Positions protocol filter share (AGENT-DECIDED 8). The
-/// number and case tests order differently under plain `<`, so a comparator that dropped the
-/// localized order fails them.
+/// number, case and accent tests order differently under plain `<`, and the accent test also
+/// under a literal case-insensitive compare, so a comparator that dropped the localized order
+/// fails them.
 struct NameOrderTests {
     @Test func `numbers order by value`() {
         #expect(NameOrder.isOrderedBefore("Pool 2", "Pool 10"))
@@ -11,11 +12,17 @@ struct NameOrderTests {
         #expect(NameOrder.lowest(["Pool 10", "Pool 2"]) == "Pool 2")
     }
 
-    /// The letters differ, so the host language cannot decide the order: Danish and Maltese sort
-    /// "Aave" before "aave", English after it.
+    /// The first letters differ, so case cannot decide the order under any host collation. Names
+    /// that differ only in case would not do: Danish and Maltese collation puts "Aave" before
+    /// "aave".
     @Test func `letters order without regard to case`() {
         #expect(NameOrder.isOrderedBefore("balancer", "Curve"))
         #expect(NameOrder.lowest(["Curve", "balancer"]) == "balancer")
+    }
+
+    @Test func `an accented letter orders with its base letter`() {
+        #expect(NameOrder.isOrderedBefore("étoile", "fox"))
+        #expect(NameOrder.lowest(["fox", "étoile"]) == "étoile")
     }
 
     @Test func `a name is not ordered before itself`() {

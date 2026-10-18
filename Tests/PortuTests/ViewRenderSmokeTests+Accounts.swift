@@ -81,8 +81,9 @@ extension ViewRenderSmokeTests {
         return nil
     }
 
-    /// Renders the page and reads it, spinning the run loop until `isReady` or two seconds pass.
-    /// Returns the cells and the currency code they are shown in.
+    /// Renders the page with the dashboard settings on a fresh defaults suite, and reads it while
+    /// that suite still exists, spinning the run loop until `isReady` or two seconds pass. Returns
+    /// the cells and the currency code they are shown in.
     private func readAccountBalances(
         in container: ModelContainer,
         until isReady: ([BalanceCell]) -> Bool) throws -> (cells: [BalanceCell], currencyCode: String) {
