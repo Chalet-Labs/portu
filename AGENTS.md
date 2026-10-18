@@ -115,6 +115,7 @@ Never use `#Predicate` with optional chaining through relationships, such as `$0
 ## Formatting
 
 SwiftFormat is used for code formatting and runs automatically via hooks on file edits.
+SwiftFormat 0.64.0 or later is required: `.swiftformat` sets `--minversion 0.64.0`, and CI pins 0.64.0 in `.github/workflows/ci.yml`.
 
 ## Agent skills
 

@@ -345,11 +345,11 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 
 ### S12: Polling and backfill eligibility (PR a for polling, PR b for backfill)
 - **Shared rule:** their value checks call the module, and their own selection rules stay. Ignored tokens are never candidates, which is today's rule.
-- **Selection value:** the module value, or `|usdValue|` when the module value is 0 (`ValuedToken.selectionValue`). Polling ranks by it (`OverviewFeature.pricePollingIDs`); backfill uses it for eligibility (`HistoricalPriceBackfillFeature.shouldIncludeToken`) and keeps its own price-ID ordering.
+- **Selection value:** the module value, or `|usdValue|` when the module value is 0 (`ValuedToken.selectionValue`). Polling ranks by it (`OverviewFeature.pricePollingIDs`); backfill uses it for eligibility (`HistoricalBackfillCandidateResolver.shouldIncludeToken`) and keeps its own price-ID ordering.
 - **Polling:**
   - Overview keeps today's rank-by-value top N plus the watchlist. Exposure keeps its own rule: no ranking, no cap and no watchlist. It polls a counted, non-ignored token with a price ID when the token is in a visible row of the Exposure asset table, or when its source is *sync* or *unpriced* (for recovery). Manual, reward and `amount ≤ 0` tokens are never polled. Decided 2026-10-13.
   - A token is a candidate while it is in a visible row (F2) of the net asset-row list, which holds every token the tabs, Key Changes, the donut and the watchlist show, or of the Health list. Outside every such row, only the branch below for tokens with no usable price keeps it. Category slices, the headline, the cards and the hidden line never make a token a candidate.
-  - Two copies exist: Overview's (PR a) and Exposure's `dashboardPollingPriceID`, which migrates with Exposure in PR (b).
+  - Two rules exist: Overview's `OverviewFeature.pricePollingIDs` (PR a) and Exposure's `ExposureFeature.pollingIDs` (PR b).
   - The branch that keeps unpriced onchain IDs in the set stays. A token with an implausible onchain live price stays ranked by its sync value and stays polled, so it can recover.
   - Its ranking semantics belong to #101.
 - **Backfill:** it keeps today's candidate rules, and it values tokens over an empty market, as it effectively does today. No production caller passes a price book, so today's value is already USD: manual price × amount, else `usdValue`. The candidate, source and identity-resolution sets therefore do not change. The threshold is unscaled USD. Decided 2026-10-13.

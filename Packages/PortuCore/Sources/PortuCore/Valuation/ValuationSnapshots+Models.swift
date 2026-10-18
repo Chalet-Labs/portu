@@ -5,8 +5,8 @@ import SwiftData
 // reading SwiftData models happens here.
 
 public extension TokenEntry {
-    /// Projects a position token. Callers choose the category and CoinGecko ID, since screens
-    /// resolve those differently today.
+    /// Projects a position token for `ValuationInput`; the caller supplies the resolved category
+    /// and CoinGecko ID.
     init(
         _ token: PositionToken,
         asset: Asset,
