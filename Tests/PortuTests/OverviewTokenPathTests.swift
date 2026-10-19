@@ -6,7 +6,7 @@ import Testing
 /// T2: one token, the same value on every Overview path. A token's share of the headline and of
 /// the cards is the change when the fixture is valued without its asset; the lists show it as a row.
 struct OverviewTokenPathTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     @Test func `a sync only token counts its sync value on every path`() {
         #expect(headlineShare(of: Fixture.AssetID.otc) == 250)
@@ -99,7 +99,7 @@ struct OverviewTokenPathTests {
     }
 
     /// Idle + Deployed − Debt.
-    private func cardsNet(_ context: OverviewValuationContext) -> Decimal {
+    private func cardsNet(_ context: ValuationContext) -> Decimal {
         OverviewSummaryCardsFeature.cards(context, categories: PortfolioCategoryDefaults.categorySnapshots)
             .reduce(Decimal.zero) { total, card in
                 let sum = card.rows.reduce(Decimal.zero) { $0 + $1.value }

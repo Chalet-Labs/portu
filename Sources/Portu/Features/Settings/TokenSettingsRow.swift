@@ -54,13 +54,20 @@ struct TokenSettingsRowView: View {
         VStack(alignment: .leading, spacing: 8) {
             // Tier 1: Identity <---> Value / Amount + Pricing Source + Expand
             HStack(alignment: .center, spacing: 10) {
-                tokenIdentity
+                Group {
+                    tokenIdentity
 
-                Spacer(minLength: 12)
+                    Spacer(minLength: 12)
 
-                valueSummary
+                    if let statusTag = TokenSettingsStatusTag(row) {
+                        statusTag
+                    }
 
-                pricingBadge
+                    valueSummary
+
+                    pricingBadge
+                }
+                .opacity(row.isIgnored ? 0.5 : 1)
 
                 expandButton
             }
@@ -115,10 +122,12 @@ struct TokenSettingsRowView: View {
 
     private var valueSummary: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text(TokenSettingsFormat.currency(row.value, currency: row.currency))
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(SettingsDesign.primaryText)
-                .lineLimit(1)
+            if let value = row.value {
+                Text(TokenSettingsFormat.currency(value, currency: row.currency))
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(row.status == .notCounted ? SettingsDesign.secondaryText : SettingsDesign.primaryText)
+                    .lineLimit(1)
+            }
             Text(TokenSettingsFormat.decimal(row.amount))
                 .font(.caption2)
                 .foregroundStyle(SettingsDesign.secondaryText)
@@ -128,7 +137,7 @@ struct TokenSettingsRowView: View {
 
     private var pricingBadge: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text(row.pricingSource.rawValue)
+            Text(row.pricingSource?.rawValue ?? "—")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(sourceColor)
                 .padding(.horizontal, 6)
@@ -279,10 +288,38 @@ struct TokenSettingsRowView: View {
     private var sourceColor: Color {
         switch row.pricingSource {
         case .live: SettingsDesign.successBadgeText
-        case .syncTime: SettingsDesign.accentPrimary
+        case .close, .syncTime: SettingsDesign.accentPrimary
         case .manual: SettingsDesign.tokenTeal
         case .unpriced: SettingsDesign.warningOrange
+        case nil: SettingsDesign.secondaryText
         }
+    }
+}
+
+/// U4: an ignored asset is tagged Ignored, whatever its F1 status; one with no counted token is
+/// tagged Not counted.
+private struct TokenSettingsStatusTag: View {
+    let title: String
+
+    init?(_ row: TokenSettingsRow) {
+        if row.isIgnored {
+            self.title = TokenRowLabels.ignored
+        } else if row.status == .notCounted {
+            self.title = TokenRowLabels.notCounted
+        } else {
+            return nil
+        }
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(SettingsDesign.secondaryText)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .overlay(
+                Capsule()
+                    .stroke(SettingsDesign.cardStroke, lineWidth: 1))
     }
 }
 

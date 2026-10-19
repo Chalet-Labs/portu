@@ -46,15 +46,26 @@ struct HistoricalPriceEntry: Equatable, Sendable {
 }
 
 enum HistoricalPortfolioEstimator {
+    /// Where an estimate ends: the earlier of the holdings date and the first point the chart
+    /// draws from the recorded series in that scope, so it never runs over that series (U7).
+    static func estimateEndDate(holdingsDate: Date, firstRecordedDate: Date?) -> Date {
+        firstRecordedDate.map { min($0, holdingsDate) } ?? holdingsDate
+    }
+
+    /// Estimated days in `[utcStartOfDay(startDate), utcStartOfDay(endDate))`. The reference
+    /// prices always come from `firstRealSnapshotDate`, the holdings date; `endDate` can only end
+    /// the points earlier (U7) and defaults to the holdings date.
     static func estimatedValues(
         holdings: [HistoricalEstimateHolding],
         prices: [HistoricalPriceEntry],
         startDate: Date,
         firstRealSnapshotDate: Date,
+        endDate: Date? = nil,
         accountId: UUID?) -> [HistoricalPortfolioValuePoint] {
         let scopedHoldings = holdings.compactMap { holding -> HistoricalEstimateHolding? in
-            guard accountId == nil || holding.accountId == accountId else { return nil }
-            guard let coinGeckoId = normalizedID(holding.coinGeckoId) else { return nil }
+            guard
+                accountId == nil || holding.accountId == accountId,
+                let coinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(holding.coinGeckoId) else { return nil }
             return HistoricalEstimateHolding(
                 accountId: holding.accountId,
                 assetId: holding.assetId,
@@ -66,10 +77,11 @@ enum HistoricalPortfolioEstimator {
 
         let startDay = HistoricalPriceCalendar.utcStartOfDay(for: startDate)
         let firstRealDay = HistoricalPriceCalendar.utcStartOfDay(for: firstRealSnapshotDate)
+        let endDay = min(firstRealDay, HistoricalPriceCalendar.utcStartOfDay(for: endDate ?? firstRealSnapshotDate))
         var pricesByDay: [Date: [String: Decimal]] = [:]
 
         let normalizedPrices = prices.compactMap { price -> HistoricalPriceEntry? in
-            guard let coinGeckoId = normalizedID(price.coinGeckoId) else { return nil }
+            guard let coinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(price.coinGeckoId) else { return nil }
             return HistoricalPriceEntry(coinGeckoId: coinGeckoId, day: price.day, usdPrice: price.usdPrice)
         }
         let referencePrices = referencePricesByID(prices: normalizedPrices, firstRealDay: firstRealDay)
@@ -77,7 +89,7 @@ enum HistoricalPortfolioEstimator {
         // makes duplicate day/id rows deterministic; the highest price wins for exact duplicates.
         for price in normalizedPrices.sorted(by: priceSort) {
             let day = HistoricalPriceCalendar.utcStartOfDay(for: price.day)
-            guard day >= startDay, day < firstRealDay else {
+            guard day >= startDay, day < endDay else {
                 continue
             }
             pricesByDay[day, default: [:]][price.coinGeckoId] = price.usdPrice
@@ -156,9 +168,5 @@ enum HistoricalPortfolioEstimator {
             latestByID[price.coinGeckoId] = (day, price.usdPrice)
         }
         return latestByID.mapValues(\.price)
-    }
-
-    private static func normalizedID(_ id: String) -> String? {
-        TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
     }
 }

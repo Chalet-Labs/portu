@@ -41,8 +41,6 @@ struct AppStateBridgeTests {
         let appState = AppState()
         appState.bridge(from: store)
 
-        // AppState carries display-currency prices: the USD book at the store's rate.
-        #expect(appState.prices == ["bitcoin": 44000])
         // The USD book is bridged as stored, never scaled by the rate.
         #expect(appState.livePricesUSD == ["bitcoin": 50000])
         #expect(appState.priceChanges24h == ["bitcoin": 2.5])
@@ -51,7 +49,7 @@ struct AppStateBridgeTests {
         #expect(appState.lastPriceUpdate == Date(timeIntervalSince1970: 1_000_000))
         #expect(appState.storeIsEphemeral == true)
         #expect(appState.selectedCurrency == .chf)
-        #expect(appState.currentUSDToDisplayRate == Decimal(string: "0.88")!)
+        #expect(try appState.currentUSDToDisplayRate == #require(Decimal(string: "0.88")))
         #expect(appState.historicalFXAvailability == .loading)
     }
 
@@ -86,7 +84,7 @@ struct AppStateBridgeTests {
         appState.bridge(from: store)
         appState.bridge(from: store)
 
-        #expect(appState.prices == ["ethereum": 3000])
+        #expect(appState.livePricesUSD == ["ethereum": 3000])
     }
 
     @Test func `bridge syncs default idle state`() {
@@ -100,7 +98,6 @@ struct AppStateBridgeTests {
         let appState = AppState()
         appState.bridge(from: store)
 
-        #expect(appState.prices.isEmpty)
         #expect(appState.livePricesUSD.isEmpty)
         #expect(appState.priceChanges24h.isEmpty)
         #expect(appState.syncStatus == .idle)
@@ -124,7 +121,7 @@ struct AppStateBridgeTests {
         let appState = AppState()
         appState.observe(store)
 
-        #expect(appState.prices.isEmpty)
+        #expect(appState.livePricesUSD.isEmpty)
 
         // Mutate store state via action after observe was called
         store.send(.pricesReceived(PriceUpdate(prices: ["bitcoin": 50000], changes24h: ["bitcoin": 2.5])))
@@ -133,7 +130,6 @@ struct AppStateBridgeTests {
         await Task.yield()
 
         // Continuous observation should propagate this
-        #expect(appState.prices == ["bitcoin": 50000])
         #expect(appState.livePricesUSD == ["bitcoin": 50000])
         #expect(appState.priceChanges24h == ["bitcoin": 2.5])
     }

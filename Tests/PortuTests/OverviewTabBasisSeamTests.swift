@@ -6,7 +6,7 @@ import Testing
 /// The position tabs' basis (A7: every list but the donut and Exposure spot is net, Borrowing shows
 /// positive debt) and the Key Changes ranking through the production seam.
 struct OverviewTabBasisSeamTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     /// These tabs admit positive roles only, so their net is their gross: the numbers the list seam
     /// tests pin do not move.

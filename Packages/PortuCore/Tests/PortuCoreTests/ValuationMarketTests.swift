@@ -38,6 +38,30 @@ struct ValuationMarketTests {
         #expect(close.price == 3100)
     }
 
+    @Test func `latest closes keep the newest day per canonical id`() {
+        let closes = MarketPrices.latestCloses(from: [
+            Fixture.closeRow("zapper:base:0xabc", 1, day: -2),
+            Fixture.closeRow("zapper:base:0xabc", 3, day: 0),
+            Fixture.closeRow("bitcoin", 100, day: -2)
+        ])
+
+        #expect(closes["asset:base:0xabc"] == HistoricalClose(day: Fixture.day(0), price: 3))
+        #expect(closes["zapper:base:0xabc"] == nil)
+        #expect(closes["bitcoin"] == HistoricalClose(day: Fixture.day(-2), price: 100))
+    }
+
+    @Test func `latest closes break same day ties by the higher price and skip non positive prices`() {
+        let closes = MarketPrices.latestCloses(from: [
+            Fixture.closeRow("bitcoin", 100, day: 0),
+            Fixture.closeRow("bitcoin", 105, day: 0),
+            Fixture.closeRow("bitcoin", 101, day: 0),
+            Fixture.closeRow("ethereum", 0, day: 0)
+        ])
+
+        #expect(closes["bitcoin"] == HistoricalClose(day: Fixture.day(0), price: 105))
+        #expect(closes["ethereum"] == nil)
+    }
+
     @Test func `closes are empty when historical backfill is disabled`() {
         let market = MarketPrices(
             liveUSD: ["ethereum": 4000],

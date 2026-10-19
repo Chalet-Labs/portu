@@ -39,8 +39,8 @@ extension DependencyValues {
     }
 }
 
+@MainActor
 extension HistoricalPriceBackfillClient {
-    @MainActor
     static func live(
         modelContext: ModelContext,
         priceService: PriceServiceClient,
@@ -68,7 +68,7 @@ extension HistoricalPriceBackfillClient {
 
 @MainActor
 private struct HistoricalBackfillSourceData {
-    let tokens: [TokenEntry]
+    let inputs: [ValuationInput]
     let snapshots: [HistoricalBackfillSnapshotEntry]
     let overrides: [TokenPricingOverrideSnapshot]
     let mappings: [TokenIdentityMappingSnapshot]
@@ -95,10 +95,13 @@ private struct BackfillRunner {
     func run() async throws -> HistoricalBackfillResult {
         let settings = dashboardSettings()
         let sourceData = try loadSourceData()
-        let identitiesNeedingResolution = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
-            tokens: sourceData.tokens,
-            snapshots: sourceData.snapshots,
+        let valued = HistoricalBackfillCandidateResolver.valuedTokens(
+            sourceData.inputs,
             overrides: sourceData.overrides,
+            mappings: sourceData.mappings)
+        let identitiesNeedingResolution = HistoricalBackfillCandidateResolver.onchainIdentitiesNeedingResolution(
+            valued: valued,
+            snapshots: sourceData.snapshots,
             mappings: sourceData.mappings,
             dashboardSettings: settings)
         let resolvedCoinGeckoIDs = try await resolveCoinGeckoIDs(for: identitiesNeedingResolution)
@@ -106,16 +109,14 @@ private struct BackfillRunner {
             resolvedCoinGeckoIDs,
             existingMappings: sourceData.liveMappings)
         let candidates = HistoricalBackfillCandidateResolver.candidates(
-            tokens: sourceData.tokens,
+            valued: valued,
             snapshots: sourceData.snapshots,
-            overrides: sourceData.overrides,
             mappings: sourceData.mappings,
             dashboardSettings: settings,
             resolvedCoinGeckoIDs: resolvedCoinGeckoIDs)
         let sourceAssetCount = HistoricalBackfillCandidateResolver.sourceAssetIDs(
-            tokens: sourceData.tokens,
+            valued: valued,
             snapshots: sourceData.snapshots,
-            overrides: sourceData.overrides,
             dashboardSettings: settings).count
         let requested = candidates.reduce(0) { total, candidate in
             total + candidate.assetIds.count
@@ -137,7 +138,6 @@ private struct BackfillRunner {
         let assetSnapshots = try modelContext.fetch(FetchDescriptor<AssetSnapshot>())
         let overrides = try modelContext.fetch(FetchDescriptor<TokenPricingOverride>())
         let mappings = try modelContext.fetch(FetchDescriptor<TokenIdentityMapping>())
-        let entries = TokenEntry.fromActiveTokens(tokens)
         let assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
         let snapshotEntries = assetSnapshots.map { snapshot in
             let asset = assetsById[snapshot.assetId]
@@ -154,7 +154,7 @@ private struct BackfillRunner {
         let mappingSnapshots = mappings.map(TokenIdentityMappingSnapshot.init)
 
         return HistoricalBackfillSourceData(
-            tokens: entries,
+            inputs: ValuationInput.activeAccounts(tokens),
             snapshots: snapshotEntries,
             overrides: overrideSnapshots,
             mappings: mappingSnapshots,
@@ -326,7 +326,7 @@ enum TokenIdentityMappingWriter {
         mappings: inout [TokenIdentityMapping],
         in context: ModelContext,
         now: Date = .now) -> Bool {
-        guard let normalizedID = TokenIdentityMapping.normalizedProviderID(coinGeckoId) else {
+        guard let normalizedID = TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId) else {
             return false
         }
 

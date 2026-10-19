@@ -11,16 +11,18 @@ enum AssetTab: String, CaseIterable, Equatable, Hashable {
 }
 
 /// Row data for asset table display (nonisolated for Sendable KeyPaths).
-nonisolated struct AssetRowData: Identifiable {
+nonisolated struct AssetRowData: Identifiable, Equatable {
     let id: UUID
     let symbol: String
     let name: String
     let category: AssetCategory
     let portfolioCategory: PortfolioCategorySnapshot
     let netAmount: Decimal
-    let price: Decimal
+    /// The V5 unit price; `nil` (shown "—") when nothing in the row is valued.
+    let price: Decimal?
     let value: Decimal
-    let hasLivePrice: Bool
+    /// The source of the row's lead token; the clock marks a sync-time price.
+    let source: ValuationSource?
 
     init(
         id: UUID,
@@ -29,9 +31,9 @@ nonisolated struct AssetRowData: Identifiable {
         category: AssetCategory,
         portfolioCategory: PortfolioCategorySnapshot? = nil,
         netAmount: Decimal,
-        price: Decimal,
+        price: Decimal?,
         value: Decimal,
-        hasLivePrice: Bool) {
+        source: ValuationSource?) {
         self.id = id
         self.symbol = symbol
         self.name = name
@@ -41,22 +43,27 @@ nonisolated struct AssetRowData: Identifiable {
         self.netAmount = netAmount
         self.price = price
         self.value = value
-        self.hasLivePrice = hasLivePrice
+        self.source = source
     }
 }
 
-/// Accumulator for aggregating token amounts per asset.
-struct AssetAccumulator {
-    var symbol: String
-    var name: String
-    var category: AssetCategory
-    var portfolioCategory: PortfolioCategorySnapshot = PortfolioCategoryDefaults.fallbackCategory
-    var coinGeckoId: String?
-    var onchainIdentity: OnchainTokenIdentity?
-    var positive: Decimal = 0
-    var borrow: Decimal = 0
-    var positiveUSD: Decimal = 0
-    var borrowUSD: Decimal = 0
+extension AssetRowData {
+    /// An asset row in the display currency. Every token of the row shares one asset, so its
+    /// symbol, name and categories come from any of them.
+    init?(_ row: DashboardRow<UUID>, rate: Decimal) {
+        guard let token = row.tokens.first?.token else { return nil }
+        let pricing = row.pricing.display(rate: rate)
+        self.init(
+            id: row.key,
+            symbol: token.symbol,
+            name: token.name,
+            category: token.category,
+            portfolioCategory: token.portfolioCategory,
+            netAmount: row.totals.netAmount,
+            price: pricing.price,
+            value: row.displayValue(rate: rate),
+            source: pricing.source)
+    }
 }
 
 // MARK: - AllAssetsFeature
@@ -90,75 +97,6 @@ struct AllAssetsFeature {
 
     // MARK: - Pure Functions
 
-    /// Aggregate token entries into display rows, merging live prices where available.
-    static func aggregateRows(
-        tokens: [TokenEntry],
-        prices: [String: Decimal],
-        fallbackUSDToDisplayRate: Decimal = 1) -> [AssetRowData] {
-        var assetTokens: [UUID: AssetAccumulator] = [:]
-
-        for token in tokens {
-            if token.role.isReward {
-                continue
-            }
-
-            var entry = assetTokens[token.assetId] ?? AssetAccumulator(
-                symbol: token.symbol, name: token.name, category: token.category,
-                portfolioCategory: token.portfolioCategory,
-                coinGeckoId: token.coinGeckoId,
-                onchainIdentity: token.onchainIdentity)
-            entry.coinGeckoId = entry.coinGeckoId ?? token.coinGeckoId
-            entry.onchainIdentity = entry.onchainIdentity ?? token.onchainIdentity
-
-            if token.role.isBorrow {
-                entry.borrow += token.amount
-                entry.borrowUSD += token.usdValue
-            } else if token.role.isPositive {
-                entry.positive += token.amount
-                entry.positiveUSD += token.usdValue
-            }
-            assetTokens[token.assetId] = entry
-        }
-
-        return assetTokens.map { assetId, entry in
-            let netAmount = entry.positive - entry.borrow
-            let priceID = TokenIdentityMappingFeature.priceID(
-                coinGeckoId: entry.coinGeckoId,
-                onchainIdentity: entry.onchainIdentity)
-            let livePrice = priceID.flatMap { prices[$0] }
-            let hasLive = livePrice != nil
-
-            let price: Decimal
-            let value: Decimal
-
-            if let livePrice {
-                price = livePrice
-                value = netAmount * livePrice
-            } else {
-                // Sync-time fallback: weighted average price
-                if entry.positive > 0 {
-                    price = (entry.positiveUSD / entry.positive) * fallbackUSDToDisplayRate
-                } else if entry.borrow > 0 {
-                    price = (entry.borrowUSD / entry.borrow) * fallbackUSDToDisplayRate
-                } else {
-                    price = 0
-                }
-                value = (entry.positiveUSD - entry.borrowUSD) * fallbackUSDToDisplayRate
-            }
-
-            return AssetRowData(
-                id: assetId,
-                symbol: entry.symbol,
-                name: entry.name,
-                category: entry.category,
-                portfolioCategory: entry.portfolioCategory,
-                netAmount: netAmount,
-                price: price,
-                value: value,
-                hasLivePrice: hasLive)
-        }
-    }
-
     /// Filter rows by search text (case-insensitive match on symbol or name).
     static func filterRows(
         _ rows: [AssetRowData],
@@ -177,7 +115,8 @@ struct AllAssetsFeature {
         }
         let header = "Symbol,Name,Category,Net Amount,Price,Value"
         let lines = rows.map { row in
-            "\(csv(row.symbol)),\(csv(row.name)),\(csv(row.portfolioCategory.name)),\(row.netAmount),\(row.price),\(row.value)"
+            let price = row.price.map { "\($0)" } ?? ""
+            return "\(csv(row.symbol)),\(csv(row.name)),\(csv(row.portfolioCategory.name)),\(row.netAmount),\(price),\(row.value)"
         }
         return ([header] + lines).joined(separator: "\n")
     }

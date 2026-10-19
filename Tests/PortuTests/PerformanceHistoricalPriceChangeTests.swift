@@ -4,7 +4,7 @@ import PortuCore
 import Testing
 
 struct PerformanceHistoricalPriceChangeTests {
-    @Test func `computes period price changes from first and last cached prices`() {
+    @Test func `computes period price changes from first and last cached prices`() throws {
         let day1 = date(2024, 1, 1)
         let day2 = date(2024, 1, 2)
 
@@ -17,8 +17,8 @@ struct PerformanceHistoricalPriceChangeTests {
             ])
 
         #expect(changes.map(\.historicalPriceID) == ["bitcoin", "ethereum"])
-        #expect(changes[0].percentChange == Decimal(string: "0.1")!)
-        #expect(changes[1].percentChange == Decimal(string: "-0.1")!)
+        #expect(try changes[0].percentChange == #require(Decimal(string: "0.1")))
+        #expect(try changes[1].percentChange == #require(Decimal(string: "-0.1")))
     }
 
     @Test func `applies asset display names to period price changes`() {

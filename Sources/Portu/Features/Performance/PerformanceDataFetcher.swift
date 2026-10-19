@@ -11,6 +11,8 @@ private struct PerformanceLoadInputs {
     let conversion: CurrencyConversionContext
     let resolver: PortfolioCategoryResolver
     let overrides: [TokenPricingOverrideSnapshot]
+    /// The assets ignored now. Every `AssetSnapshot` read leaves them out, old rows included (N2).
+    let ignoredAssetIDs: [UUID]
     let mappings: [TokenIdentityMappingSnapshot]
     let visibleAssetIDs: Set<UUID>
     let snapshotRows: [PerformanceSnapshotRow]
@@ -85,12 +87,14 @@ actor PerformanceDataFetcher {
     private func loadInputs(_ request: PerformanceDataRequest) throws -> PerformanceLoadInputs {
         let startDay = HistoricalPriceCalendar.utcStartOfDay(for: request.startDate)
         let resolver = try categoryResolver()
-        let overrides = try overrideRows()
-        let mappings = try mappingRows()
+        let overrides = try modelContext.fetch(FetchDescriptor<TokenPricingOverride>())
+            .map(TokenPricingOverrideSnapshot.init)
+        let ignoredAssetIDs = Array(TokenPricingOverrideFeature.ignoredAssetIds(overrides))
+        let mappings = try modelContext.fetch(FetchDescriptor<TokenIdentityMapping>())
+            .map(TokenIdentityMappingSnapshot.init)
         let conversion = try conversionContext(request, startDay: startDay)
         let visibleAssetIDs = try dashboardVisibleAssetIDs(
             request,
-            resolver: resolver,
             overrides: overrides,
             mappings: mappings)
         try Task.checkCancellation()
@@ -99,7 +103,7 @@ actor PerformanceDataFetcher {
         // the category chart needs them whenever it is the active mode.
         let needsSnapshots = !visibleAssetIDs.isEmpty || request.chartMode == .assets
         let snapshotRows = needsSnapshots
-            ? try assetSnapshotRows(accountId: request.accountId, from: startDay)
+            ? try assetSnapshotRows(accountId: request.accountId, excluding: ignoredAssetIDs, from: startDay)
             : []
         try Task.checkCancellation()
         // The asset table and historical prices only feed backfill-derived output.
@@ -114,6 +118,7 @@ actor PerformanceDataFetcher {
             conversion: conversion,
             resolver: resolver,
             overrides: overrides,
+            ignoredAssetIDs: ignoredAssetIDs,
             mappings: mappings,
             visibleAssetIDs: visibleAssetIDs,
             snapshotRows: snapshotRows,
@@ -134,29 +139,6 @@ actor PerformanceDataFetcher {
         return PortfolioCategoryResolver(
             categories: categories.map(PortfolioCategorySnapshot.init),
             rules: rules.compactMap(CategorySymbolRuleSnapshot.init))
-    }
-
-    private func overrideRows() throws -> [TokenPricingOverrideSnapshot] {
-        try modelContext.fetch(FetchDescriptor<TokenPricingOverride>()).map {
-            TokenPricingOverrideSnapshot(
-                id: $0.id,
-                assetId: $0.assetId,
-                manualPriceUSD: $0.manualPriceUSD,
-                coinGeckoIdOverride: $0.coinGeckoIdOverride,
-                isIgnored: $0.isIgnored,
-                alwaysShow: $0.alwaysShow,
-                notes: $0.notes)
-        }
-    }
-
-    private func mappingRows() throws -> [TokenIdentityMappingSnapshot] {
-        try modelContext.fetch(FetchDescriptor<TokenIdentityMapping>()).map {
-            TokenIdentityMappingSnapshot(
-                id: $0.id,
-                identity: $0.onchainIdentity,
-                coinGeckoId: $0.coinGeckoId,
-                zapperId: $0.zapperId)
-        }
     }
 
     private func assetRows() throws -> [PerformanceAssetRow] {
@@ -190,17 +172,21 @@ actor PerformanceDataFetcher {
                 sortBy: [SortDescriptor(\.day)]))
     }
 
-    /// `AssetSnapshot` rows for the selected scope. `upper` defaults to `.distantFuture` so the
-    /// windowed (estimate) and open-ended (chart/panel) fetches share one predicate shape.
+    /// `AssetSnapshot` rows for the selected scope, without the ignored assets. `upper` defaults
+    /// to `.distantFuture` so the windowed (estimate) and open-ended (chart/panel) fetches share
+    /// one predicate shape. `ignoredIDs` is an array: the predicate turns it into SQL `NOT IN`.
     private func assetSnapshotRows(
         accountId: UUID?,
+        excluding ignoredIDs: [UUID],
         from lower: Date,
         before upper: Date = .distantFuture) throws -> [PerformanceSnapshotRow] {
         let sortBy = [SortDescriptor(\AssetSnapshot.timestamp)]
         guard let accountId else {
             return try modelContext.fetch(
                 FetchDescriptor<AssetSnapshot>(
-                    predicate: #Predicate<AssetSnapshot> { $0.timestamp >= lower && $0.timestamp < upper },
+                    predicate: #Predicate<AssetSnapshot> {
+                        $0.timestamp >= lower && $0.timestamp < upper && !ignoredIDs.contains($0.assetId)
+                    },
                     sortBy: sortBy))
                 .map(\.performanceRow)
         }
@@ -208,16 +194,21 @@ actor PerformanceDataFetcher {
             FetchDescriptor<AssetSnapshot>(
                 predicate: #Predicate<AssetSnapshot> {
                     $0.accountId == accountId && $0.timestamp >= lower && $0.timestamp < upper
+                        && !ignoredIDs.contains($0.assetId)
                 },
                 sortBy: sortBy))
             .map(\.performanceRow)
     }
 
-    private func earliestAssetSnapshotDate(accountId: UUID?) throws -> Date? {
+    /// The earliest row that is not ignored, skipped inside the fetch so the limit still holds.
+    private func earliestAssetSnapshotDate(accountId: UUID?, excluding ignoredIDs: [UUID]) throws -> Date? {
         var descriptor = FetchDescriptor<AssetSnapshot>(
+            predicate: #Predicate<AssetSnapshot> { !ignoredIDs.contains($0.assetId) },
             sortBy: [SortDescriptor(\.timestamp, order: .forward)])
         if let accountId {
-            descriptor.predicate = #Predicate<AssetSnapshot> { $0.accountId == accountId }
+            descriptor.predicate = #Predicate<AssetSnapshot> {
+                $0.accountId == accountId && !ignoredIDs.contains($0.assetId)
+            }
         }
         descriptor.fetchLimit = 1
         return try modelContext.fetch(descriptor).first?.timestamp
@@ -227,7 +218,6 @@ actor PerformanceDataFetcher {
     /// bottom panel's category changes and price changes.
     private func dashboardVisibleAssetIDs(
         _ request: PerformanceDataRequest,
-        resolver: PortfolioCategoryResolver,
         overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot]) throws -> Set<UUID> {
         let tokens = try modelContext.fetch(FetchDescriptor<PositionToken>())
@@ -236,20 +226,16 @@ actor PerformanceDataFetcher {
         let scoped = request.accountId.map { id in
             tokens.filter { $0.position?.account?.id == id }
         } ?? tokens
-        let entries = TokenSettingsFeature.applyIdentityMappings(
-            to: TokenEntry.fromActiveTokens(scoped, categoryResolver: resolver),
-            mappings: mappings,
-            overrides: overrides)
-        let prices = OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: request.liveDisplayPrices,
-            historical: request.historicalDisplayPrices)
-        let eligible = TokenSettingsFeature.dashboardEligibleTokens(
-            tokens: entries,
-            prices: prices,
+        let context = ValuationContext(
+            inputs: ValuationInput.activeAccounts(scoped),
             overrides: overrides,
+            mappings: mappings,
             settings: request.dashboardSettings,
-            usdToDisplayRate: request.currentUSDToDisplayRate)
-        return Set(eligible.map(\.assetId))
+            usdToDisplayRate: request.currentUSDToDisplayRate,
+            prices: ValuationPriceInputs(
+                livePricesUSD: request.livePricesUSD,
+                historical: HistoricalMarketPrices(closesUSD: request.closesUSD)))
+        return PerformanceDataShaping.visibleAssetIDs(context)
     }
 
     // MARK: - Category chart
@@ -295,7 +281,7 @@ actor PerformanceDataFetcher {
         guard !holdings.isEmpty else { return [] }
 
         let heldRows = PerformanceFeature.historicalPriceEntriesForHeldAssets(
-            rows: OverviewHistoricalPriceChangeFeature.mergedHistoricalPriceEntries(
+            rows: PerformanceDataShaping.mergedHistoricalPriceEntries(
                 from: inputs.priceRows,
                 displayCurrency: inputs.request.displayCurrency,
                 context: inputs.conversion),
@@ -349,7 +335,7 @@ actor PerformanceDataFetcher {
         return try PerformanceValueChartData(
             points: points,
             estimatedPoints: ProviderPortfolioHistory.estimatesOutsideProviderCoverage(
-                estimatedPoints(inputs),
+                estimatedPoints(inputs, local: local),
                 providerDates: points.compactMap { $0.source == .zerion ? $0.date : nil }),
             providerDisclosure: ProviderPortfolioHistory.disclosure(for: rendered),
             historicalFXUnavailableBefore: converted.historicalFXUnavailableBefore,
@@ -435,20 +421,36 @@ actor PerformanceDataFetcher {
             }
     }
 
-    private func estimatedPoints(
-        _ inputs: PerformanceLoadInputs) throws -> [HistoricalPortfolioValuePoint] {
+    /// The first local point the value chart draws in this scope, even before the range: any
+    /// `PortfolioSnapshot` globally; for an account, the first fresh row (`merge`'s authority day),
+    /// which `localObservations` already re-inserts when it predates the range, so it is reused.
+    private func firstRecordedDate(_ request: PerformanceDataRequest, local: [LocalPortfolioValueObservation]) throws -> Date? {
+        guard request.accountId == nil else { return local.filter(\.isFresh).map(\.timestamp).min() }
+        var probe = FetchDescriptor<PortfolioSnapshot>(sortBy: [SortDescriptor(\.timestamp, order: .forward)])
+        probe.fetchLimit = 1
+        return try modelContext.fetch(probe).first?.timestamp
+    }
+
+    /// Holdings and the price filter (so the reference close) stay on the first non-ignored asset
+    /// batch; the points end at the first recorded point when that comes earlier (U7).
+    private func estimatedPoints(_ inputs: PerformanceLoadInputs, local: [LocalPortfolioValueObservation]) throws -> [HistoricalPortfolioValuePoint] {
         let request = inputs.request
         guard
             request.historicalBackfillEnabled,
-            let firstRealSnapshotDate = try earliestAssetSnapshotDate(accountId: request.accountId),
-            // When the earliest row predates the range, the estimator's price window
-            // [startDay, utcStartOfDay(firstReal)) is empty and the estimate is empty too.
-            firstRealSnapshotDate >= request.startDate
+            let firstRealSnapshotDate = try earliestAssetSnapshotDate(
+                accountId: request.accountId,
+                excluding: inputs.ignoredAssetIDs)
         else { return [] }
+        let estimateEndDate = try HistoricalPortfolioEstimator.estimateEndDate(
+            holdingsDate: firstRealSnapshotDate,
+            firstRecordedDate: firstRecordedDate(request, local: local))
+        // An end before the range leaves the window [startDay, utcStartOfDay(end)) empty.
+        guard estimateEndDate >= request.startDate else { return [] }
 
         let firstDay = HistoricalPriceCalendar.utcStartOfDay(for: firstRealSnapshotDate)
         let dayRows = try assetSnapshotRows(
             accountId: request.accountId,
+            excluding: inputs.ignoredAssetIDs,
             from: firstDay,
             before: firstDay.addingTimeInterval(Self.secondsPerDay))
         let holdings = PerformanceFeature.earliestEstimateHoldings(
@@ -475,6 +477,7 @@ actor PerformanceDataFetcher {
             prices: prices,
             startDate: request.startDate,
             firstRealSnapshotDate: firstRealSnapshotDate,
+            endDate: estimateEndDate,
             accountId: request.accountId)
             .map { inputs.conversion.convertUSDPoint($0) }
     }

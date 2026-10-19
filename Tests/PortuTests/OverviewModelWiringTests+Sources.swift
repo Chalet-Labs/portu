@@ -4,7 +4,7 @@ import Observation
 import PortuCore
 import Testing
 
-/// Each Overview screen's method on `OverviewValuationSources`, rendered over the in-memory store.
+/// Each Overview screen's method on `ValuationSources`, rendered over the in-memory store.
 /// The method fixes which books the screen reads, so these pin the overrides, mappings, live 24h
 /// fractions and category rules each screen sees. The store and rate are in `OverviewModelWiringTests`.
 extension OverviewModelWiringTests {
@@ -37,7 +37,7 @@ extension OverviewModelWiringTests {
         probe(store) { sources, positions, tokens, assets in
             Screens(
                 settings: sources.settings,
-                headline: sources.headline(positions),
+                headline: sources.headline(ActivePortfolioProjection(positions)),
                 cards: sources.summaryCards(positions, categoryResolver: categoryResolver),
                 keyChanges: sources.positionTab(.keyChanges, positions: positions, categoryResolver: categoryResolver),
                 idleStables: sources.positionTab(.idleStables, positions: positions, categoryResolver: categoryResolver),
@@ -66,14 +66,14 @@ extension OverviewModelWiringTests {
         #expect(keyChanges.map(\.symbol) == ["ETH"])
         #expect(keyChanges.map(\.change24h) == [1200 * Self.rate])
         #expect(screens.watchlist.map(\.symbol) == ["ETH", "DEGEN"])
-        #expect(screens.watchlist.map(\.change24h) == [OverviewValuationFixture.decimal("0.25"), nil])
+        #expect(screens.watchlist.map(\.change24h) == [PortfolioValuationFixture.decimal("0.25"), nil])
     }
 
     @Test func `every screen values a mapped token through its identity mapping`() throws {
         let screens = try #require(Self.screens(Store()))
 
         #expect(try screens.idle() == [0, 6000 * Self.rate, 100 * Self.rate])
-        #expect(screens.watchlist.map(\.price) == [3000 * Self.rate, OverviewValuationFixture.decimal("0.01") * Self.rate])
+        #expect(screens.watchlist.map(\.price) == [3000 * Self.rate, PortfolioValuationFixture.decimal("0.01") * Self.rate])
         #expect(screens.assetSlices.slices.map(\.label) == ["ETH", "DEGEN"])
         #expect(screens.assetSlices.slices.map(\.value) == [6000 * Self.rate, 100 * Self.rate])
         #expect(screens.health.weights.map(\.usdValue) == [6000 * Self.rate, 100 * Self.rate])
@@ -182,7 +182,7 @@ extension OverviewModelWiringTests {
 
         let flags = try #require(Self.probe(store) { sources, positions, tokens, assets in
             [
-                "headline": Self.observing { _ = sources.headline(positions) },
+                "headline": Self.observing { _ = sources.headline(ActivePortfolioProjection(positions)) },
                 "cards": Self.observing { _ = sources.summaryCards(positions, categoryResolver: .defaults) },
                 "tabs": Self.observing { _ = sources.positionTab(.keyChanges, positions: positions, categoryResolver: .defaults) },
                 "watchlist": Self.observing { _ = sources.watchlistRows(tokens, assets: assets, watchlistIDs: []) },
@@ -191,7 +191,7 @@ extension OverviewModelWiringTests {
                 "polling": Self.observing { _ = sources.pricePollingIDs(tokens, watchlistIDs: []) }
             ]
         })
-        store.appState.priceChanges24h["solana"] = OverviewValuationFixture.decimal("0.1")
+        store.appState.priceChanges24h["solana"] = PortfolioValuationFixture.decimal("0.1")
 
         #expect(flags.filter(\.value.changed).keys.sorted() == ["headline", "tabs", "watchlist"])
     }

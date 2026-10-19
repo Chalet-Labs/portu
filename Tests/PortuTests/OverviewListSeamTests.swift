@@ -6,7 +6,7 @@ import Testing
 /// T2 for the Overview lists fed the shared fixture: the position tabs, the Top Assets donut, the
 /// watchlist, Health and the polling candidates. Each list is checked against its A7 identity.
 struct OverviewListSeamTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     // MARK: - Position tabs
 
@@ -417,5 +417,22 @@ extension OverviewListSeamTests {
 
         #expect(rows.map(\.symbol) == ["MAP", "ZAP"])
         #expect(rows.map(\.change24h) == [4, Fixture.decimal("-3.75")])
+    }
+
+    /// No live price or change: the token is valued from its sync value and moved by the historical
+    /// fraction. Exact formula (V4): 15 × −0.2 / 0.8 = −3.75.
+    @Test func `historical price changes backfill overview key changes when live changes are missing`() {
+        let identity = OnchainTokenIdentity(chain: .base, contractAddress: "0xProvider")
+        let context = Fixture.context(
+            tokens: [TokenEntry(
+                assetId: UUID(), symbol: "ZAP", name: "ZAP", category: .major, coinGeckoId: nil, onchainIdentity: identity,
+                role: .balance, amount: 3, usdValue: 15)],
+            historical: HistoricalMarketPrices(changes24h: [identity.historicalPriceID: Fixture.decimal("-0.2")]))
+
+        let rows = OverviewPositionProjection.tab(.keyChanges, context: context, positions: Fixture.positions)
+            .groups.flatMap(\.tokens)
+
+        #expect(rows.map(\.symbol) == ["ZAP"])
+        #expect(rows.map(\.change24h) == [Fixture.decimal("-3.75")])
     }
 }

@@ -6,9 +6,9 @@ import SwiftData
 import SwiftUI
 import Testing
 
-/// The historical provider publishes the USD half of the valuation inputs next to its old
-/// display-currency values. These pin the wiring: which stored rows reach the new value, and that
-/// the selected currency and its rate never touch it. The close and fraction rules are Core's.
+/// The historical provider publishes the USD half of the valuation inputs. These pin the wiring:
+/// which stored rows reach it, and that the selected currency and its rate never touch it. The
+/// close and fraction rules are Core's.
 @MainActor
 struct HistoricalMarketPricesProviderTests {
     /// 2025-10-06 12:00 UTC.

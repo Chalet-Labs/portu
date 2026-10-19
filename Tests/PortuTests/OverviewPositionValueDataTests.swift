@@ -117,13 +117,13 @@ struct OverviewPositionValueDataTests {
         let projected = OverviewPositionProjection.inputs(from: positions, for: tab, categoryResolver: .defaults)
         return OverviewPositionProjection.tab(
             tab,
-            context: OverviewValuationContext(
+            context: ValuationContext(
                 inputs: projected.inputs,
                 overrides: [],
                 mappings: [],
                 settings: TokenDashboardSettings(minimumDashboardValue: 0, hideUnpriced: false, hideDust: false),
                 usdToDisplayRate: 1,
-                prices: OverviewPriceInputs(livePricesUSD: ["usd-coin": 1, "tether": 1])),
+                prices: ValuationPriceInputs(livePricesUSD: ["usd-coin": 1, "tether": 1])),
             positions: projected.positions)
     }
 

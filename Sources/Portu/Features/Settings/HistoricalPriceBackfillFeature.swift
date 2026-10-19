@@ -101,23 +101,42 @@ struct HistoricalBackfillError: LocalizedError, Equatable {
     }
 }
 
-enum HistoricalBackfillCandidateResolver {
-    static func candidates(
-        tokens: [TokenEntry],
-        snapshots: [HistoricalBackfillSnapshotEntry] = [],
+/// One run's valued tokens with the overrides they were valued with. The only way to build one is
+/// to value inputs, so the resolvers can never read tokens and overrides that disagree.
+struct HistoricalBackfillValuedTokens {
+    let tokens: [ValuedToken]
+    let overridesByAssetId: [UUID: TokenPricingOverrideSnapshot]
+
+    init(
+        _ inputs: [ValuationInput],
         overrides: [TokenPricingOverrideSnapshot],
+        mappings: [TokenIdentityMappingSnapshot]) {
+        self.tokens = PortfolioValuation(inputs: inputs, market: MarketPrices(), overrides: overrides, mappings: mappings).tokens
+        self.overridesByAssetId = TokenPricingOverrideFeature.overridesByAssetId(overrides)
+    }
+}
+
+enum HistoricalBackfillCandidateResolver {
+    /// One run's tokens, valued once over an empty market (S12): backfill has no live book or
+    /// closes, so a token is worth its manual price × amount, else its sync value, as it always was.
+    static func valuedTokens(
+        _ inputs: [ValuationInput],
+        overrides: [TokenPricingOverrideSnapshot],
+        mappings: [TokenIdentityMappingSnapshot] = []) -> HistoricalBackfillValuedTokens {
+        HistoricalBackfillValuedTokens(inputs, overrides: overrides, mappings: mappings)
+    }
+
+    static func candidates(
+        valued: HistoricalBackfillValuedTokens,
+        snapshots: [HistoricalBackfillSnapshotEntry] = [],
         mappings: [TokenIdentityMappingSnapshot] = [],
-        prices: [String: Decimal] = [:],
         dashboardSettings: TokenDashboardSettings = .defaults,
         resolvedCoinGeckoIDs: [OnchainTokenIdentity: String] = [:]) -> [HistoricalBackfillCandidate] {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        let overrideMap = valued.overridesByAssetId
         let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
         var grouped: [HistoricalBackfillCandidateKey: Set<UUID>] = [:]
-        for token in tokens where shouldIncludeToken(
-            token,
-            override: overrideMap[token.assetId],
-            prices: prices,
-            dashboardSettings: dashboardSettings) {
+        for valuedToken in valued.tokens where shouldIncludeToken(valuedToken, dashboardSettings: dashboardSettings) {
+            let token = valuedToken.token
             addCandidate(
                 asset: HistoricalBackfillAssetReference(
                     assetId: token.assetId,
@@ -153,21 +172,12 @@ enum HistoricalBackfillCandidateResolver {
     }
 
     static func sourceAssetIDs(
-        tokens: [TokenEntry],
+        valued: HistoricalBackfillValuedTokens,
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
-        overrides: [TokenPricingOverrideSnapshot] = [],
-        prices: [String: Decimal] = [:],
         dashboardSettings: TokenDashboardSettings = .defaults) -> Set<UUID> {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
-        let tokenIDs = tokens.compactMap { token -> UUID? in
-            guard
-                shouldIncludeToken(
-                    token,
-                    override: overrideMap[token.assetId],
-                    prices: prices,
-                    dashboardSettings: dashboardSettings)
-            else { return nil }
-            return token.assetId
+        let overrideMap = valued.overridesByAssetId
+        let tokenIDs = valued.tokens.compactMap { token -> UUID? in
+            shouldIncludeToken(token, dashboardSettings: dashboardSettings) ? token.token.assetId : nil
         }
         let snapshotIDs = snapshots.compactMap { snapshot -> UUID? in
             guard
@@ -182,20 +192,15 @@ enum HistoricalBackfillCandidateResolver {
     }
 
     static func onchainIdentitiesNeedingResolution(
-        tokens: [TokenEntry],
+        valued: HistoricalBackfillValuedTokens,
         snapshots: [HistoricalBackfillSnapshotEntry] = [],
-        overrides: [TokenPricingOverrideSnapshot],
         mappings: [TokenIdentityMappingSnapshot] = [],
-        prices: [String: Decimal] = [:],
         dashboardSettings: TokenDashboardSettings = .defaults) -> [OnchainTokenIdentity] {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        let overrideMap = valued.overridesByAssetId
         let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
         var identities = Set<OnchainTokenIdentity>()
-        for token in tokens where shouldIncludeToken(
-            token,
-            override: overrideMap[token.assetId],
-            prices: prices,
-            dashboardSettings: dashboardSettings) {
+        for valuedToken in valued.tokens where shouldIncludeToken(valuedToken, dashboardSettings: dashboardSettings) {
+            let token = valuedToken.token
             addUnresolvedIdentity(
                 assetId: token.assetId,
                 coinGeckoId: token.coinGeckoId,
@@ -224,26 +229,19 @@ enum HistoricalBackfillCandidateResolver {
         }
     }
 
+    /// Backfill's own per-token rule (S12) on the selection value: counted and not ignored,
+    /// alwaysShow wins, then the unpriced and dust toggles against the USD threshold.
     private static func shouldIncludeToken(
-        _ token: TokenEntry,
-        override: TokenPricingOverrideSnapshot?,
-        prices: [String: Decimal],
+        _ token: ValuedToken,
         dashboardSettings: TokenDashboardSettings) -> Bool {
-        guard token.amount > 0 else { return false }
-        guard token.role.isPositive || token.role.isBorrow else { return false }
-        guard override?.isIgnored != true else { return false }
-        if override?.alwaysShow == true {
+        guard token.isCounted, let value = token.selectionValue else { return false }
+        if token.alwaysShow {
             return true
         }
-
-        let value = TokenSettingsFeature.resolvedValue(
-            token: token,
-            prices: prices,
-            override: override) ?? token.usdValue
         if value == 0 {
             return !dashboardSettings.hideUnpriced
         }
-        if absolute(value) < normalizedThreshold(dashboardSettings.minimumDashboardValue) {
+        if value < dashboardSettings.dustThresholdUSD {
             return !dashboardSettings.hideDust
         }
         return true
@@ -254,8 +252,7 @@ enum HistoricalBackfillCandidateResolver {
         override: TokenPricingOverrideSnapshot?,
         dashboardSettings: TokenDashboardSettings) -> Bool {
         let netAmount = snapshot.amount - snapshot.borrowAmount
-        guard netAmount != 0 else { return false }
-        guard override?.isIgnored != true else { return false }
+        guard netAmount != 0, override?.isIgnored != true else { return false }
         if override?.alwaysShow == true {
             return true
         }
@@ -264,7 +261,7 @@ enum HistoricalBackfillCandidateResolver {
         if netValue == 0 {
             return !dashboardSettings.hideUnpriced
         }
-        if absolute(netValue) < normalizedThreshold(dashboardSettings.minimumDashboardValue) {
+        if abs(netValue) < dashboardSettings.dustThresholdUSD {
             return !dashboardSettings.hideDust
         }
         return true
@@ -284,12 +281,13 @@ enum HistoricalBackfillCandidateResolver {
         mappingsByIdentity: [OnchainTokenIdentity: TokenIdentityMappingSnapshot],
         resolvedCoinGeckoIDs: [OnchainTokenIdentity: String],
         grouped: inout [HistoricalBackfillCandidateKey: Set<UUID>]) {
-        if asset.override?.manualPriceUSD != nil, normalizedID(asset.override?.coinGeckoIdOverride) == nil {
+        let overrideCoinGeckoID = TokenIdentityMappingFeature.normalizedProviderID(asset.override?.coinGeckoIdOverride)
+        if asset.override?.manualPriceUSD != nil, overrideCoinGeckoID == nil {
             return
         }
 
-        let explicitCoinGeckoID = normalizedID(asset.override?.coinGeckoIdOverride)
-            ?? normalizedID(asset.coinGeckoId)
+        let explicitCoinGeckoID = overrideCoinGeckoID
+            ?? TokenIdentityMappingFeature.normalizedProviderID(asset.coinGeckoId)
         guard let onchainIdentity = asset.onchainIdentity else {
             if let explicitCoinGeckoID {
                 grouped[
@@ -316,7 +314,7 @@ enum HistoricalBackfillCandidateResolver {
             ?? TokenIdentityMappingFeature.mappedCoinGeckoID(
                 for: onchainIdentity,
                 mappingsByIdentity: mappingsByIdentity)
-            ?? normalizedID(resolvedCoinGeckoIDs[onchainIdentity])
+            ?? TokenIdentityMappingFeature.normalizedProviderID(resolvedCoinGeckoIDs[onchainIdentity])
             ?? TokenIdentityMappingFeature.knownContractCoinGeckoID(for: onchainIdentity)
         if let providerCoinGeckoID {
             let cacheKey = TokenIdentityMappingFeature.priceID(
@@ -346,15 +344,9 @@ enum HistoricalBackfillCandidateResolver {
         override: TokenPricingOverrideSnapshot?,
         mappingsByIdentity: [OnchainTokenIdentity: TokenIdentityMappingSnapshot],
         identities: inout Set<OnchainTokenIdentity>) {
-        guard shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity else {
-            return
-        }
         guard
-            TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil
-        else {
-            return
-        }
-        guard
+            shouldResolveOnchain(coinGeckoId: coinGeckoId, override: override), let onchainIdentity,
+            TokenIdentityMappingFeature.nativeCoinGeckoID(for: onchainIdentity) == nil,
             TokenIdentityMappingFeature.mappedCoinGeckoID(
                 for: onchainIdentity,
                 mappingsByIdentity: mappingsByIdentity) == nil
@@ -367,24 +359,11 @@ enum HistoricalBackfillCandidateResolver {
     private static func shouldResolveOnchain(
         coinGeckoId: String?,
         override: TokenPricingOverrideSnapshot?) -> Bool {
-        if override?.manualPriceUSD != nil, normalizedID(override?.coinGeckoIdOverride) == nil {
+        let overrideCoinGeckoID = TokenIdentityMappingFeature.normalizedProviderID(override?.coinGeckoIdOverride)
+        if override?.manualPriceUSD != nil, overrideCoinGeckoID == nil {
             return false
         }
-        return normalizedID(override?.coinGeckoIdOverride) == nil && normalizedID(coinGeckoId) == nil
-    }
-
-    private static func normalizedID(_ id: String?) -> String? {
-        guard let id else { return nil }
-        let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.isEmpty ? nil : normalized
-    }
-
-    private static func normalizedThreshold(_ value: Decimal) -> Decimal {
-        value < 0 ? 0 : value
-    }
-
-    private static func absolute(_ value: Decimal) -> Decimal {
-        value < 0 ? -value : value
+        return overrideCoinGeckoID == nil && TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId) == nil
     }
 }
 
@@ -403,7 +382,7 @@ extension HistoricalBackfillPriceSource: Hashable {
         switch self {
         case let .coingecko(id):
             hasher.combine("coingecko")
-            hasher.combine(id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+            hasher.combine(TokenIdentityMappingFeature.normalizedProviderID(id))
         case let .zerion(identity):
             hasher.combine("zerion")
             hasher.combine(identity)

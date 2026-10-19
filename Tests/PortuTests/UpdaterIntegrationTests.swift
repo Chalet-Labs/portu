@@ -265,7 +265,7 @@ struct UpdaterIntegrationTests {
             "Recovery URL must never be baked into build settings")
 
         // The URL is a static Swift constant on UpdaterFailure — must match exactly
-        #expect(UpdaterFailure.recoveryURL == URL(string: "https://github.com/Chalet-Labs/portu/releases")!)
+        #expect(try UpdaterFailure.recoveryURL == #require(URL(string: "https://github.com/Chalet-Labs/portu/releases")))
     }
 
     @Test func `updaterFailure cases expose message containing required copy`() {

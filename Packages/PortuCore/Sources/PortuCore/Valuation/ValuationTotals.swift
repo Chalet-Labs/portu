@@ -3,20 +3,20 @@ import Foundation
 /// The value of a set of tokens on every basis, plus their 24h change.
 public struct ValuationTotals: Equatable, Sendable {
     /// Σ positive-role contributions.
-    public var gross: Decimal
+    public internal(set) var gross: Decimal
     /// Σ borrow values, as a positive amount.
-    public var debt: Decimal
+    public internal(set) var debt: Decimal
     /// Σ the tokens' 24h changes (V4) over every token, valued or not (A4). A change, not a value:
     /// `net` is the total it belongs to.
-    public var change24h: Decimal
+    public internal(set) var change24h: Decimal
     /// Σ role-signed amounts of counted tokens, ignored ones included. Only meaningful for one asset.
-    public var netAmount: Decimal
+    public internal(set) var netAmount: Decimal
     /// The raw sync-time total (A6): role-signed `usdValue`, rewards 0, no repricing, no ignore filter.
-    public var syncTotal: Decimal
+    public internal(set) var syncTotal: Decimal
 
     public static let zero = ValuationTotals(gross: 0, debt: 0, change24h: 0, netAmount: 0, syncTotal: 0)
 
-    public init(gross: Decimal, debt: Decimal, change24h: Decimal, netAmount: Decimal, syncTotal: Decimal) {
+    init(gross: Decimal, debt: Decimal, change24h: Decimal, netAmount: Decimal, syncTotal: Decimal) {
         self.gross = gross
         self.debt = debt
         self.change24h = change24h
@@ -84,7 +84,7 @@ public struct ValuationTotals: Equatable, Sendable {
         change24h += token.change24h
         syncTotal += role.signed(token.token.usdValue)
         if token.isCounted {
-            netAmount += role.isBorrow ? -token.token.amount : token.token.amount
+            netAmount += role.signedAmount(token.token.amount)
         }
     }
 }
@@ -92,9 +92,9 @@ public struct ValuationTotals: Equatable, Sendable {
 /// The Overview Idle / Deployed / Debt cards (A3). Idle + Deployed − Debt = net total.
 public struct SummaryCards: Equatable, Sendable {
     public struct Idle: Equatable, Sendable {
-        public var stablecoinsAndFiat: Decimal = 0
-        public var majors: Decimal = 0
-        public var tokensAndMemecoins: Decimal = 0
+        public internal(set) var stablecoinsAndFiat: Decimal = 0
+        public internal(set) var majors: Decimal = 0
+        public internal(set) var tokensAndMemecoins: Decimal = 0
 
         public var total: Decimal {
             stablecoinsAndFiat + majors + tokensAndMemecoins
@@ -102,22 +102,22 @@ public struct SummaryCards: Equatable, Sendable {
     }
 
     public struct Deployed: Equatable, Sendable {
-        public var lending: Decimal = 0
-        public var staked: Decimal = 0
+        public internal(set) var lending: Decimal = 0
+        public internal(set) var staked: Decimal = 0
         /// Farming and liquidity pools.
-        public var yield: Decimal = 0
+        public internal(set) var yield: Decimal = 0
         /// Vesting and other positions.
-        public var other: Decimal = 0
+        public internal(set) var other: Decimal = 0
 
         public var total: Decimal {
             lending + staked + yield + other
         }
     }
 
-    public var idle = Idle()
-    public var deployed = Deployed()
+    public internal(set) var idle = Idle()
+    public internal(set) var deployed = Deployed()
     /// "Borrowed": the debt of A2.
-    public var debt: Decimal = 0
+    public internal(set) var debt: Decimal = 0
 
     init(_ tokens: [ValuedToken]) {
         for token in tokens {

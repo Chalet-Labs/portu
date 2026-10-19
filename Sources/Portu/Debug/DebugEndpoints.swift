@@ -20,13 +20,21 @@
 
         // MARK: - Route Registration
 
-        static func register(on server: DebugServer, modelContainer: ModelContainer) {
+        static func register(
+            on server: DebugServer,
+            modelContainer: ModelContainer,
+            market: @escaping @MainActor () -> DebugMarketInputs,
+            defaults: UserDefaults = .standard) {
             server.addRoute("GET", "/state/accounts") { _ in
                 accounts(context: ModelContext(modelContainer))
             }
 
             server.addRoute("GET", "/state/positions") { request in
                 positions(context: ModelContext(modelContainer), request: request)
+            }
+
+            server.addRoute("GET", "/state/totals") { request in
+                totals(context: ModelContext(modelContainer), request: request, market: market(), defaults: defaults)
             }
 
             server.addRoute("GET", "/state/assets") { request in
@@ -117,6 +125,73 @@
                 dict["accountId"] = accountId.uuidString
             }
             return dict
+        }
+
+        // MARK: - /state/totals
+
+        /// The valued total and the sync-time total (A6) in USD, over the active accounts, or with
+        /// `accountId` over that account, active or not, as Accounts values it (S11, S9).
+        static func totals(
+            context: ModelContext,
+            request: HTTPRequest,
+            market: DebugMarketInputs,
+            defaults: UserDefaults = .standard,
+            now: Date = .now) -> HTTPResponse {
+            var accountId: UUID?
+            if let rawId = request.queryParams["accountId"] {
+                guard let id = UUID(uuidString: rawId) else {
+                    return errorResponse("Invalid accountId", statusCode: 400)
+                }
+                guard let count = try? context.fetchCount(FetchDescriptor<Account>(predicate: #Predicate { $0.id == id })) else {
+                    return errorResponse("Failed to fetch accounts")
+                }
+                guard count > 0 else {
+                    return errorResponse("Account not found", statusCode: 404)
+                }
+                accountId = id
+            }
+
+            let isBackfillEnabled = HistoricalPriceBackfillSettings.isEnabled(defaults: defaults)
+            guard
+                let tokens = try? context.fetch(FetchDescriptor<PositionToken>()),
+                let overrides = try? context.fetch(FetchDescriptor<TokenPricingOverride>()),
+                let mappings = try? context.fetch(FetchDescriptor<TokenIdentityMapping>()),
+                let historical = try? historicalPrices(context: context, isBackfillEnabled: isBackfillEnabled, now: now)
+            else {
+                return errorResponse("Failed to fetch valuation inputs")
+            }
+
+            let inputs = if let accountId {
+                ValuationInput.allAccounts(tokens).filter { $0.position.accountId == accountId }
+            } else {
+                ValuationInput.activeAccounts(tokens)
+            }
+            let totals = ValuationContext(
+                inputs: inputs,
+                overrides: overrides.map(TokenPricingOverrideSnapshot.init),
+                mappings: mappings.map(TokenIdentityMappingSnapshot.init),
+                settings: .showAll,
+                usdToDisplayRate: market.usdToDisplayRate,
+                prices: ValuationPriceInputs(livePricesUSD: market.livePricesUSD, historical: historical))
+                .valuation()
+                .totals
+            return jsonObjectResponse([
+                "valuedTotalUSD": totals.net.jsonDouble,
+                "rawSyncTotalUSD": totals.syncTotal.jsonDouble
+            ])
+        }
+
+        /// The USD closes in today's window, read as `HistoricalPricesProvider` reads them (I1). With
+        /// backfill off no row is read.
+        private static func historicalPrices(
+            context: ModelContext,
+            isBackfillEnabled: Bool,
+            now: Date) throws -> HistoricalMarketPrices {
+            guard isBackfillEnabled else { return .empty }
+            let startDate = MarketPrices.closeWindowStart(now: now)
+            let rows = try context.fetch(FetchDescriptor<HistoricalPricePoint>(
+                predicate: #Predicate { $0.day >= startDate }))
+            return HistoricalMarketPricesFeature.prices(from: rows, isBackfillEnabled: true, now: now)
         }
 
         // MARK: - /state/assets
@@ -292,12 +367,27 @@
             return HTTPResponse(statusCode: statusCode, body: data)
         }
 
+        private static func jsonObjectResponse(_ body: [String: any Sendable]) -> HTTPResponse {
+            guard let data = try? JSONSerialization.data(withJSONObject: body) else {
+                return errorResponse("serialization failed")
+            }
+            return HTTPResponse(statusCode: 200, body: data)
+        }
+
         private static func errorResponse(_ message: String, statusCode: Int = 500) -> HTTPResponse {
             guard let data = try? JSONSerialization.data(withJSONObject: ["error": message]) else {
                 return HTTPResponse(statusCode: 500, body: Data("{\"error\":\"serialization failed\"}".utf8))
             }
             return HTTPResponse(statusCode: statusCode, body: data)
         }
+    }
+
+    /// The store's USD live book and display rate, read each time a route runs.
+    struct DebugMarketInputs {
+        var livePricesUSD: [String: Decimal] = [:]
+        var usdToDisplayRate: Decimal = 1
+
+        static let empty = DebugMarketInputs()
     }
 
     // MARK: - Query Param Helpers

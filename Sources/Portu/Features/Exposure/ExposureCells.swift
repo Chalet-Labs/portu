@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ExposureSpotLiabilityCell<Row: ExposureRow>: View {
     let row: Row
+    var fractionDigits = 0
     @Environment(AppState.self) private var appState
 
     private var currencyCode: String {
@@ -12,11 +13,12 @@ struct ExposureSpotLiabilityCell<Row: ExposureRow>: View {
     var body: some View {
         HStack(spacing: 8) {
             Spacer(minLength: 0)
-            Text(ExposureFormat.currency(row.spotAssets, fractionDigits: 0, currencyCode: currencyCode))
+            Text(ExposureFormat.currency(row.spotAssets, fractionDigits: fractionDigits, currencyCode: currencyCode))
                 .foregroundStyle(PortuTheme.dashboardText)
             Text("/")
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
-            Text(ExposureFormat.currency(-row.liabilities, fractionDigits: 0, currencyCode: currencyCode))
+            // Liabilities show positive, in the warning colour (A2, decided 2026-10-13).
+            Text(ExposureFormat.currency(row.liabilities, fractionDigits: fractionDigits, currencyCode: currencyCode))
                 .foregroundStyle(row.liabilities > 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSecondaryText)
         }
         .font(DashboardStyle.monoTableFont)
@@ -41,6 +43,7 @@ struct ExposureCurrencyCell: View {
 
 struct ExposureNetExposureCell<Row: ExposureRow>: View {
     let row: Row
+    var showsShare = true
     @Environment(AppState.self) private var appState
 
     private var currencyCode: String {
@@ -54,7 +57,7 @@ struct ExposureNetExposureCell<Row: ExposureRow>: View {
                 .font(DashboardStyle.monoTableFont)
                 .foregroundStyle(row.netExposure < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardGold)
                 .lineLimit(1)
-            Text(ExposureFormat.percent(row.shareOfSpot, fractionDigits: 1))
+            Text(showsShare ? ExposureFormat.percent(row.shareOfSpot, fractionDigits: 1) : "")
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(PortuTheme.dashboardSecondaryText)
                 .frame(width: 46, alignment: .trailing)
@@ -135,7 +138,9 @@ enum ExposureFormat {
         return "\(prefix)\(currencyPrefix(currencyCode)) \(number(absoluteValue, fractionDigits: fractionDigits))"
     }
 
-    static func percent(_ value: Decimal, fractionDigits: Int) -> String {
+    /// `nil` shows "—".
+    static func percent(_ value: Decimal?, fractionDigits: Int) -> String {
+        guard let value else { return "—" }
         let percentValue = NSDecimalNumber(decimal: value * 100).doubleValue
         return percentValue.formatted(.number
             .locale(locale)

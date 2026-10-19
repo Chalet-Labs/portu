@@ -306,57 +306,50 @@ final class SyncEngine {
         let allPositions = try modelContext.fetch(allPositionsDescriptor)
             .filter { $0.account?.isActive == true }
         let activeAccounts = try fetchAllActiveAccounts()
+        let overrides = try modelContext.fetch(FetchDescriptor<TokenPricingOverride>())
+            .map(TokenPricingOverrideSnapshot.init)
 
-        createPortfolioSnapshot(batchId: batchId, timestamp: batchTimestamp, positions: allPositions, isPartial: isPartial)
+        // Totals are the sync-time sums over the tokens, leaving ignored assets out (N1). A failed
+        // account's kept positions stay in; only the asset rows skip them.
+        let inputs = ValuationInput.activeAccounts(allPositions.flatMap(\.tokens))
+        createPortfolioSnapshot(
+            batchId: batchId,
+            timestamp: batchTimestamp,
+            inputs: inputs,
+            overrides: overrides,
+            isPartial: isPartial)
         createAccountSnapshots(
             batchId: batchId,
             timestamp: batchTimestamp,
             accounts: activeAccounts,
+            totals: Dictionary(grouping: inputs, by: \.position.accountId).mapValues {
+                PortfolioValuation.syncTimeTotal(of: $0.map(\.token), excludingIgnoredIn: overrides)
+            },
             refreshedSyncableAccountIDs: refreshedSyncableAccountIDs)
         createAssetSnapshots(
             batchId: batchId,
             timestamp: batchTimestamp,
             positions: allPositions,
+            ignoredAssetIds: TokenPricingOverrideFeature.ignoredAssetIds(overrides),
             refreshedSyncableAccountIDs: refreshedSyncableAccountIDs)
 
         pruneSnapshots()
         try modelContext.save()
     }
 
-    private func createPortfolioSnapshot(batchId: UUID, timestamp: Date, positions: [Position], isPartial: Bool) {
-        var totalValue: Decimal = 0
-        var idleValue: Decimal = 0
-        var deployedValue: Decimal = 0
-        var debtValue: Decimal = 0
-
-        for pos in positions {
-            totalValue += pos.netUSDValue
-
-            switch pos.positionType {
-            case .idle:
-                let posIdle = pos.tokens
-                    .filter(\.role.isPositive)
-                    .reduce(Decimal.zero) { $0 + $1.usdValue }
-                idleValue += posIdle
-            case .lending, .staking, .farming, .liquidityPool:
-                let posDep = pos.tokens
-                    .filter(\.role.isPositive)
-                    .reduce(Decimal.zero) { $0 + $1.usdValue }
-                deployedValue += posDep
-            default:
-                break
-            }
-
-            let posBorrow = pos.tokens
-                .filter(\.role.isBorrow)
-                .reduce(Decimal.zero) { $0 + $1.usdValue }
-            debtValue += posBorrow
-        }
-
+    private func createPortfolioSnapshot(
+        batchId: UUID,
+        timestamp: Date,
+        inputs: [ValuationInput],
+        overrides: [TokenPricingOverrideSnapshot],
+        isPartial: Bool) {
+        let cards = SummaryCards.syncTime(of: inputs, excludingIgnoredIn: overrides)
         let snap = PortfolioSnapshot(
             syncBatchId: batchId, timestamp: timestamp,
-            totalValue: totalValue, idleValue: idleValue,
-            deployedValue: deployedValue, debtValue: debtValue,
+            totalValue: PortfolioValuation.syncTimeTotal(of: inputs.map(\.token), excludingIgnoredIn: overrides),
+            idleValue: cards.idle.total,
+            deployedValue: cards.deployed.total,
+            debtValue: cards.debt,
             isPartial: isPartial)
         modelContext.insert(snap)
     }
@@ -365,9 +358,11 @@ final class SyncEngine {
         batchId: UUID,
         timestamp: Date,
         accounts: [Account],
+        totals: [UUID?: Decimal],
         refreshedSyncableAccountIDs: Set<UUID>) {
+        // An account with no tokens records 0.
         for account in accounts {
-            let accountTotal = account.positions.reduce(Decimal.zero) { $0 + $1.netUSDValue }
+            let accountTotal = totals[account.id] ?? 0
             let isFresh = account.dataSource == .manual ||
                 (refreshedSyncableAccountIDs.contains(account.id) && account.lastSyncError == nil)
 
@@ -382,11 +377,13 @@ final class SyncEngine {
         batchId: UUID,
         timestamp: Date,
         positions: [Position],
+        ignoredAssetIds: Set<UUID>,
         refreshedSyncableAccountIDs: Set<UUID>) {
         for snap in Self.accumulatedAssetSnapshots(
             batchId: batchId,
             timestamp: timestamp,
             positions: positions,
+            ignoredAssetIds: ignoredAssetIds,
             refreshedSyncableAccountIDs: refreshedSyncableAccountIDs) {
             modelContext.insert(snap)
         }

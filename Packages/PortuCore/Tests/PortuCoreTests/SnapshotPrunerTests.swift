@@ -108,7 +108,7 @@ struct SnapshotPrunerTests {
 
     @Test func `recent batches are all kept and aged ones are thinned per tier`() throws {
         let dayBase = utcCalendar.startOfDay(for: now - 20 * day)
-        let weekBase = utcCalendar.dateInterval(of: .weekOfYear, for: now - 120 * day)!.start
+        let weekBase = try #require(utcCalendar.dateInterval(of: .weekOfYear, for: now - 120 * day)?.start)
         try assertPrunesLikeTheStore([
             Seed(timestamp: now - 3600), Seed(timestamp: now - 2 * day), Seed(timestamp: now - 6 * day),
             Seed(timestamp: dayBase + 3600 * 3), Seed(timestamp: dayBase + 3600 * 9),
@@ -141,7 +141,7 @@ struct SnapshotPrunerTests {
             [sevenDays, ninetyDays].map { Seed(timestamp: $0 + TimeInterval(offset)) }
         }
         for weeksBack in stride(from: 14, through: 40, by: 4) {
-            let monday = utcCalendar.dateInterval(of: .weekOfYear, for: now - TimeInterval(weeksBack) * 7 * day)!.start
+            let monday = try #require(utcCalendar.dateInterval(of: .weekOfYear, for: now - TimeInterval(weeksBack) * 7 * day)?.start)
             seeds.append(Seed(timestamp: monday))
             seeds.append(Seed(timestamp: monday - 1))
             seeds.append(Seed(timestamp: monday + 7 * day - 1))

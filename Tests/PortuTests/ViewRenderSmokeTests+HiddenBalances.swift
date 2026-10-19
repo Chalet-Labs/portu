@@ -11,8 +11,8 @@ extension ViewRenderSmokeTests {
     func `position cards render their hidden balances line`(_ tab: OverviewPositionTab) {
         let data = OverviewPositionProjection.tab(
             tab,
-            context: OverviewValuationFixture.context(),
-            positions: OverviewValuationFixture.positions)
+            context: PortfolioValuationFixture.context(),
+            positions: PortfolioValuationFixture.positions)
         #expect(data.groups.contains { $0.hidden != nil })
 
         let view = VStack {
@@ -40,14 +40,14 @@ extension ViewRenderSmokeTests {
         context.insert(Position(
             positionType: .idle,
             chain: .base,
-            tokens: [PositionToken(role: .balance, amount: 1, usdValue: OverviewValuationFixture.decimal("0.5"), asset: dust)],
+            tokens: [PositionToken(role: .balance, amount: 1, usdValue: PortfolioValuationFixture.decimal("0.5"), asset: dust)],
             account: account,
             syncedAt: now))
         context.insert(Position(
             positionType: .lending,
             chain: .base,
             protocolName: "Dust Lend",
-            tokens: [PositionToken(role: .borrow, amount: 1, usdValue: OverviewValuationFixture.decimal("0.4"), asset: dust)],
+            tokens: [PositionToken(role: .borrow, amount: 1, usdValue: PortfolioValuationFixture.decimal("0.4"), asset: dust)],
             account: account,
             syncedAt: now))
         try context.save()

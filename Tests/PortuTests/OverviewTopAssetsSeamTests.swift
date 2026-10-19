@@ -6,7 +6,7 @@ import Testing
 /// The Top Assets donut seam on ad-hoc portfolios: aggregation, ids, the remainder, the hidden line
 /// and F4 shares. Books are USD.
 struct OverviewTopAssetsSeamTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     @Test func `top assets aggregate by asset and put the residual into other`() throws {
         let btc = UUID()

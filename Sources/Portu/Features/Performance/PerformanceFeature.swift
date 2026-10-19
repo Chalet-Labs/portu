@@ -112,23 +112,6 @@ struct CategorySnapshotEntry: Equatable {
         self.categoryName = categoryName ?? category.rawValue.capitalized
         self.usdValue = usdValue
     }
-
-    @MainActor
-    init(
-        snapshot: AssetSnapshot,
-        categoryResolver: PortfolioCategoryResolver = .defaults) {
-        let resolved = categoryResolver.resolve(
-            symbol: snapshot.symbol,
-            legacyCategory: snapshot.category)
-        self.init(
-            accountId: snapshot.accountId,
-            assetId: snapshot.assetId,
-            timestamp: snapshot.timestamp,
-            category: snapshot.category,
-            categoryID: resolved.id.uuidString,
-            categoryName: resolved.name,
-            usdValue: snapshot.usdValue)
-    }
 }
 
 /// Aggregated category chart data point (one per day per category).
@@ -438,7 +421,7 @@ struct PerformanceFeature {
     static func computeHistoricalPriceChanges(
         rows: [HistoricalPriceEntry]) -> [AssetPricePeriodChange] {
         let normalizedRows = rows.compactMap { row -> HistoricalPriceEntry? in
-            guard let historicalPriceID = normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
+            guard let historicalPriceID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
             return HistoricalPriceEntry(coinGeckoId: historicalPriceID, day: row.day, usdPrice: row.usdPrice)
         }
         let grouped = Dictionary(grouping: normalizedRows) { $0.coinGeckoId }
@@ -467,7 +450,7 @@ struct PerformanceFeature {
         namesByHistoricalPriceID: [String: String]) -> [AssetPricePeriodChange] {
         let normalizedNames = Dictionary(
             namesByHistoricalPriceID.compactMap { id, name -> (String, String)? in
-                guard let normalizedID = normalizedHistoricalPriceID(id) else { return nil }
+                guard let normalizedID = TokenIdentityMappingFeature.normalizedHistoricalPriceID(id) else { return nil }
                 let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmedName.isEmpty else { return nil }
                 return (normalizedID, trimmedName)
@@ -517,8 +500,9 @@ struct PerformanceFeature {
         guard heldIDs.isEmpty == false else { return [] }
 
         return rows.compactMap { row in
-            guard let coinGeckoId = normalizedHistoricalPriceID(row.coinGeckoId) else { return nil }
-            guard row.day >= startDay, heldIDs.contains(coinGeckoId) else { return nil }
+            guard
+                let coinGeckoId = TokenIdentityMappingFeature.normalizedHistoricalPriceID(row.coinGeckoId), row.day >= startDay,
+                heldIDs.contains(coinGeckoId) else { return nil }
             return HistoricalPriceEntry(
                 coinGeckoId: coinGeckoId,
                 day: row.day,
@@ -531,9 +515,9 @@ struct PerformanceFeature {
         startDate: Date,
         accountId: UUID?) -> Set<String> {
         Set(snapshots.compactMap { snapshot in
-            guard snapshot.timestamp >= startDate else { return nil }
-            guard accountId == nil || snapshot.accountId == accountId else { return nil }
-            guard snapshot.amount - snapshot.borrowAmount != 0 else { return nil }
+            guard
+                snapshot.timestamp >= startDate, accountId == nil || snapshot.accountId == accountId,
+                snapshot.amount - snapshot.borrowAmount != 0 else { return nil }
             return resolvedCoinGeckoID(snapshot)
         })
     }
@@ -571,10 +555,6 @@ struct PerformanceFeature {
         return TokenIdentityMappingFeature.priceID(
             coinGeckoId: coinGeckoId,
             onchainIdentity: snapshot.onchainIdentity)
-    }
-
-    private static func normalizedHistoricalPriceID(_ id: String?) -> String? {
-        TokenIdentityMappingFeature.normalizedHistoricalPriceID(id)
     }
 
     static func utcStartOfDay(for date: Date) -> Date {

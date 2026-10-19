@@ -9,56 +9,17 @@ struct ExposureView: View {
     let store: StoreOf<AppFeature>
 
     @Environment(AppState.self) private var appState
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    var sources = ValuationSources()
     @Query private var allTokens: [PositionToken]
     @Query(sort: [SortDescriptor(\PortfolioCategory.sortOrder), SortDescriptor(\PortfolioCategory.name)])
     private var portfolioCategories: [PortfolioCategory]
     @Query(sort: \CategorySymbolRule.normalizedSymbol)
     private var categoryRules: [CategorySymbolRule]
-    @Query private var tokenPricingOverrides: [TokenPricingOverride]
-    @Query private var tokenIdentityMappings: [TokenIdentityMapping]
-    @AppStorage(TokenDashboardSettings.minimumDashboardValueKey)
-    private var minimumDashboardValue = NSDecimalNumber(decimal: TokenDashboardSettings.defaultMinimumDashboardValue).doubleValue
-    @AppStorage(TokenDashboardSettings.hideUnpricedKey)
-    private var hideUnpriced = true
-    @AppStorage(TokenDashboardSettings.hideDustKey)
-    private var hideDust = true
-
-    private var tokenEntries: [TokenEntry] {
-        TokenEntry.fromActiveTokens(
-            allTokens,
-            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
-    }
-
-    private var overrideSnapshots: [TokenPricingOverrideSnapshot] {
-        tokenPricingOverrides.map(TokenPricingOverrideSnapshot.init)
-    }
-
-    private var mappingSnapshots: [TokenIdentityMappingSnapshot] {
-        tokenIdentityMappings.map(TokenIdentityMappingSnapshot.init)
-    }
-
-    private var mappedTokenEntries: [TokenEntry] {
-        TokenSettingsFeature.applyIdentityMappings(
-            to: tokenEntries,
-            mappings: mappingSnapshots,
-            overrides: overrideSnapshots)
-    }
-
-    private var dashboardSettings: TokenDashboardSettings {
-        TokenDashboardSettings(
-            minimumDashboardValue: Decimal(minimumDashboardValue),
-            hideUnpriced: hideUnpriced,
-            hideDust: hideDust)
-    }
 
     var body: some View {
-        let data = ExposureFeature.computeDashboardData(
-            tokens: mappedTokenEntries,
-            prices: displayPrices,
-            overrides: overrideSnapshots,
-            settings: dashboardSettings,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
+        let data = sources.exposure(
+            allTokens,
+            categoryResolver: PortfolioCategoryResolver.live(categories: portfolioCategories, rules: categoryRules))
 
         return ScrollView {
             VStack(alignment: .leading, spacing: ExposureLayout.sectionSpacing) {
@@ -66,9 +27,9 @@ struct ExposureView: View {
 
                 ExposureSummaryGrid(summary: data.summary)
 
-                ExposureCategoryTable(rows: data.categoryRows)
+                ExposureCategoryTable(entries: data.categoryEntries)
 
-                ExposureAssetTable(rows: data.assetRows)
+                ExposureAssetTable(entries: data.assetEntries, visibleRowCount: data.assetRows.count)
             }
             .padding(DashboardStyle.pagePadding)
         }
@@ -94,12 +55,6 @@ struct ExposureView: View {
                     appState.onSyncRequested?()
                 }
         }
-    }
-
-    private var displayPrices: [String: Decimal] {
-        OverviewHistoricalPriceChangeFeature.mergedPrices(
-            live: store.liveDisplayPrices,
-            historical: historicalDisplayPrices)
     }
 }
 
@@ -145,32 +100,37 @@ private struct ExposureSummaryGrid: View {
             count: 2)
     }
 
-    private var netExposureShare: Decimal {
-        guard summary.totalSpot > 0 else { return 0 }
-        return summary.netExposure / summary.totalSpot
-    }
-
     var body: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: ExposureLayout.cardSpacing) {
             ExposureSummaryCard(title: "Spot total") {
-                Text(ExposureFormat.currency(summary.totalSpot, fractionDigits: 2, currencyCode: currencyCode))
-                    .font(.system(size: 16, weight: .medium, design: .monospaced))
-                    .foregroundStyle(PortuTheme.dashboardText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                amount(summary.totalSpot, color: PortuTheme.dashboardText)
+            }
+
+            ExposureSummaryCard(title: "Liabilities") {
+                amount(
+                    summary.totalLiabilities,
+                    color: summary.totalLiabilities > 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardText)
+            }
+
+            ExposureSummaryCard(title: "Net total") {
+                amount(summary.netTotal, color: summary.netTotal < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardText)
             }
 
             ExposureSummaryCard(title: "Net exposure (excl. stablecoins)") {
-                Text(ExposureFormat.currency(summary.netExposure, fractionDigits: 2, currencyCode: currencyCode))
-                    .font(.system(size: 16, weight: .medium, design: .monospaced))
-                    .foregroundStyle(PortuTheme.dashboardGold)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                Text("\(ExposureFormat.percent(netExposureShare, fractionDigits: 2)) of spot total")
+                amount(summary.netExposure, color: PortuTheme.dashboardGold)
+                Text("\(ExposureFormat.percent(summary.netExposureShare, fractionDigits: 2)) of spot total")
                     .font(.caption2)
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
             }
         }
+    }
+
+    private func amount(_ value: Decimal, color: Color) -> some View {
+        Text(ExposureFormat.currency(value, fractionDigits: 2, currencyCode: currencyCode))
+            .font(.system(size: 16, weight: .medium, design: .monospaced))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
     }
 }
 
@@ -196,13 +156,13 @@ private struct ExposureSummaryCard<Content: View>: View {
 }
 
 private struct ExposureCategoryTable: View {
-    let rows: [CategoryExposure]
+    let entries: [ExposureTableEntry<CategoryExposure>]
 
     var body: some View {
         ExposureTableSection(title: "Exposure by asset category") {
             ExposureTableHeader(firstColumnTitle: "Category")
 
-            ExposureTableRows(rows: rows, emptyTitle: "No category exposure") { row, index in
+            ExposureTableRows(entries: entries, emptyTitle: "No category exposure") { row, index in
                 ExposureCategoryRow(row: row, index: index)
             }
         }
@@ -210,17 +170,19 @@ private struct ExposureCategoryTable: View {
 }
 
 private struct ExposureAssetTable: View {
-    let rows: [AssetExposure]
+    let entries: [ExposureTableEntry<AssetExposure>]
+    /// The pill counts the visible assets, not the hidden line.
+    let visibleRowCount: Int
 
     var body: some View {
         ExposureTableSection(title: "Exposure by asset") {
             ExposureTableHeader(firstColumnTitle: "Asset")
 
-            ExposureTableRows(rows: rows, emptyTitle: "No asset exposure") { row, index in
+            ExposureTableRows(entries: entries, emptyTitle: "No asset exposure") { row, index in
                 ExposureAssetRow(row: row, index: index)
             }
         } trailing: {
-            ExposureCountPill(title: ExposureLabels.assetCountPillTitle, count: rows.count)
+            ExposureCountPill(title: ExposureLabels.assetCountPillTitle, count: visibleRowCount)
         }
     }
 }
@@ -294,12 +256,13 @@ private struct ExposureTableHeader: View {
 }
 
 private struct ExposureTableRows<Row: ExposureRow, RowView: View>: View {
-    let rows: [Row]
+    let entries: [ExposureTableEntry<Row>]
     let emptyTitle: String
     let rowView: (Row, Int) -> RowView
 
     var body: some View {
-        if rows.isEmpty {
+        // A table whose every row is hidden still has its hidden line.
+        if entries.isEmpty {
             ContentUnavailableView(
                 emptyTitle,
                 systemImage: "chart.bar.xaxis",
@@ -308,8 +271,13 @@ private struct ExposureTableRows<Row: ExposureRow, RowView: View>: View {
                 .frame(maxWidth: .infinity, minHeight: 180)
         } else {
             LazyVStack(spacing: 0) {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    rowView(row, index)
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    switch entry {
+                    case let .row(row):
+                        rowView(row, index)
+                    case let .hidden(row):
+                        ExposureHiddenTableRow(row: row, index: index)
+                    }
                 }
             }
         }
@@ -355,6 +323,30 @@ private struct ExposureAssetRow: View {
                 .frame(width: ExposureLayout.spotNetColumnWidth, alignment: .trailing)
 
             ExposureNetExposureCell(row: row)
+                .frame(width: ExposureLayout.netExposureColumnWidth, alignment: .trailing)
+        }
+    }
+}
+
+/// The hidden-balances line: its cells hold the hidden gross, debt and net, with no ratio. Its
+/// amounts are sums of dust, so they show cents (decided 2026-10-13).
+private struct ExposureHiddenTableRow: View {
+    let row: ExposureHiddenRow
+    let index: Int
+
+    var body: some View {
+        ExposureTableRow(index: index) {
+            Text(row.title)
+                .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                .exposureFirstColumn()
+
+            ExposureSpotLiabilityCell(row: row, fractionDigits: 2)
+                .frame(width: ExposureLayout.exposurePairColumnWidth, alignment: .trailing)
+
+            ExposureCurrencyCell(value: row.netExposure, fractionDigits: 2)
+                .frame(width: ExposureLayout.spotNetColumnWidth, alignment: .trailing)
+
+            ExposureNetExposureCell(row: row, showsShare: false)
                 .frame(width: ExposureLayout.netExposureColumnWidth, alignment: .trailing)
         }
     }

@@ -89,8 +89,7 @@ public actor PriceService {
         for coinId: String,
         currency: FiatCurrency = .default,
         days: Int = 365) async throws(PriceServiceError) -> [HistoricalPriceDTO] {
-        let normalized = coinId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !normalized.isEmpty else { return [] }
+        guard let normalized = TokenIdentityMappingFeature.normalizedProviderID(coinId) else { return [] }
         let data = try await rateLimitedFetch(
             pathComponents: ["coins", normalized, "market_chart"],
             queryItems: [

@@ -31,8 +31,7 @@ enum PortfolioCategoryWriter {
         save: () throws -> Void) throws {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let previousName = category.name
-        guard !trimmedName.isEmpty else { return }
-        guard trimmedName != previousName else { return }
+        guard !trimmedName.isEmpty, trimmedName != previousName else { return }
 
         category.name = trimmedName
         do {

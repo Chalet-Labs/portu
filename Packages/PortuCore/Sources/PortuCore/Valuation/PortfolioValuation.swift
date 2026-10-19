@@ -86,6 +86,27 @@ public struct ValuedToken: Equatable, Sendable {
         (token.role.isPositive || token.role.isBorrow) && token.amount > 0
     }
 
+    /// How a token-level row shows this token (All Positions, Asset Detail, the Token Settings
+    /// badges).
+    public var rowState: TokenRowState {
+        if isIgnored {
+            return .ignored
+        }
+        guard isCounted else { return .notCounted }
+        return isValued ? .counted : .unpriced
+    }
+
+    /// What a token-level row shows as its value (U4): the signed contribution of a counted row,
+    /// the unsigned value of a not-counted one, nothing for an unpriced or ignored row. Read it off
+    /// `display(rate:)` for the display currency.
+    public var rowValue: Decimal? {
+        switch rowState {
+        case .counted: contribution
+        case .notCounted: value
+        case .unpriced, .ignored: nil
+        }
+    }
+
     /// What polling ranks by and backfill gates on (S12): the value, or `|usdValue|` when the value
     /// is 0. Ignored tokens are never candidates.
     public var selectionValue: Decimal? {
@@ -106,6 +127,18 @@ public struct ValuedToken: Equatable, Sendable {
             change24h: change24h * rate,
             alwaysShow: alwaysShow)
     }
+}
+
+/// The state of a token-level row. The first match wins.
+public enum TokenRowState: Sendable {
+    /// The asset is ignored: no value, whatever the role or price.
+    case ignored
+    /// A reward or an amount ≤ 0. The row still shows the unsigned value, muted; it counts 0.
+    case notCounted
+    /// Counted, but with no price.
+    case unpriced
+    /// Counted and valued; the row shows the signed contribution.
+    case counted
 }
 
 /// Values every input once (V1–V4) and answers every aggregate from those values. Everything is in

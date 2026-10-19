@@ -9,14 +9,14 @@ import Testing
 
 /// The Overview views themselves, rendered over the in-memory store and read back through the
 /// accessibility tree, so a view that built its numbers some other way than through its
-/// `OverviewValuationSources` method would show other text.
+/// `ValuationSources` method would show other text.
 extension OverviewModelWiringTests {
     /// The mapping row values DEGEN at 100, ETH's +25% is only in `appState.priceChanges24h`, and
     /// the ignore row (second case) drops DEGEN.
     @Test(.renderedTextReadable, arguments: [false, true])
     func `the top bar and sidebar header show the sources headline`(ignoringDegen: Bool) throws {
         let store = try Store(ignoring: ignoringDegen ? ["DEGEN"] : [])
-        let expected = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(positions) })
+        let expected = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(ActivePortfolioProjection(positions)) })
         let currencyCode = store.appState.selectedCurrency.displayCode
         let shown = [
             OverviewPriceDisplay.currency(expected.total, currencyCode: currencyCode),
@@ -39,7 +39,7 @@ extension OverviewModelWiringTests {
         let wallet = try #require(store.positions.first { $0.account?.isActive == true })
         let eth = try #require(wallet.tokens.first { $0.asset?.symbol == "ETH" }?.asset)
         try store.insert([PositionToken(role: .borrow, amount: 3, usdValue: 8700, asset: eth, position: wallet)])
-        let headline = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(positions) })
+        let headline = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(ActivePortfolioProjection(positions)) })
 
         #expect(headline.changePercentage == nil)
         for view in [AnyView(OverviewTopBar()), AnyView(SidebarPortfolioHeader())] {
@@ -117,7 +117,7 @@ extension OverviewModelWiringTests {
         let texts = try Self.texts(of: PortfolioHealthPanel(store: appStore), over: store, size: CGSize(width: 400, height: 400))
         let line = { (code: String) in
             OverviewPriceDisplay.hiddenBalancesLine(
-                value: OverviewValuationFixture.decimal("0.5") * Self.rate,
+                value: PortfolioValuationFixture.decimal("0.5") * Self.rate,
                 rowCount: 1,
                 isAllDust: true,
                 currencyCode: code)
@@ -199,7 +199,7 @@ extension OverviewModelWiringTests {
         return images
     }
 
-    private static func accessibilityTexts(_ element: Any) -> [String] {
+    static func accessibilityTexts(_ element: Any) -> [String] {
         let object = element as AnyObject
         var texts: [String] = []
         if let value = (element as? NSObject)?.value(forKey: "accessibilityValue") as? String, !value.isEmpty {

@@ -1,3 +1,5 @@
+import Foundation
+
 public enum TokenRole: String, Codable, CaseIterable, Sendable {
     case supply
     case borrow
@@ -19,6 +21,12 @@ public enum TokenRole: String, Codable, CaseIterable, Sendable {
 
     public var isReward: Bool {
         self == .reward
+    }
+
+    /// An amount signed by role: − for borrows, + for every other role, rewards included. Values
+    /// sign differently (`signed`, where a reward counts 0).
+    public func signedAmount(_ amount: Decimal) -> Decimal {
+        isBorrow ? -amount : amount
     }
 
     public var displayLabel: String {

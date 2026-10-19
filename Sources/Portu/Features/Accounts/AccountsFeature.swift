@@ -15,6 +15,7 @@ struct AccountInput: Equatable {
     let isActive: Bool
     let lastSyncError: String?
     let totalBalance: Decimal
+    var providerTotal: Decimal = 0
     let firstAddress: String?
 }
 
@@ -35,6 +36,9 @@ nonisolated struct AccountRowData: Identifiable {
     let address: String
     let type: String
     let balance: Decimal
+    /// The sync-time total for the tooltip; `nil` for an exchange, which reports no USD value at
+    /// sync (U6).
+    var providerTotal: Decimal?
     let dataSource: DataSource
     let isActive: Bool
     let lastSyncError: String?
@@ -193,6 +197,7 @@ struct AccountsFeature {
                 address: addressDisplay(for: account),
                 type: account.kind.rawValue.capitalized,
                 balance: account.totalBalance,
+                providerTotal: account.kind == .exchange ? nil : account.providerTotal,
                 dataSource: account.dataSource,
                 isActive: account.isActive,
                 lastSyncError: account.lastSyncError)
@@ -221,6 +226,14 @@ struct AccountsFeature {
                 && (searchText.isEmpty || row.name.localizedCaseInsensitiveContains(searchText))
                 && (filterGroup == nil || row.group == filterGroup)
         }
+    }
+
+    /// Sorts rows by the table's column order, breaking ties by name, then account ID, so equal
+    /// rows keep one order while balances move with live prices.
+    static func sortAccountRows(
+        _ rows: [AccountRowData],
+        using sortOrder: [KeyPathComparator<AccountRowData>]) -> [AccountRowData] {
+        rows.sorted(using: sortOrder + [KeyPathComparator(\.name), KeyPathComparator(\.id)])
     }
 
     /// Extract sorted unique group names from account inputs.

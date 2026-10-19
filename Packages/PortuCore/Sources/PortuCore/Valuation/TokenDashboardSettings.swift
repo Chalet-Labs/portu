@@ -5,10 +5,12 @@ public struct TokenDashboardSettings: Equatable, Sendable {
     public static let hideUnpricedKey = "tokenSettings.hideUnpriced"
     public static let hideDustKey = "tokenSettings.hideDust"
     public static let hideUnpricedTitle = "Hide unpriced"
-    public static let hideUnpricedSubtitle = "Exclude tokens without a resolved price from dashboard totals."
+    public static let hideUnpricedSubtitle = "Hide tokens without a resolved price from dashboard lists. Totals never change."
     public static let hideDustTitle = "Hide dust"
     public static let defaultMinimumDashboardValue: Decimal = 1
     public static let defaults = TokenDashboardSettings()
+    /// For lists that never hide a row: dust and unpriced rows stay visible.
+    public static let showAll = TokenDashboardSettings(hideUnpriced: false, hideDust: false)
 
     public var minimumDashboardValue: Decimal
     public var hideUnpriced: Bool

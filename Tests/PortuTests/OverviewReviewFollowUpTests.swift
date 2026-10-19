@@ -4,7 +4,7 @@ import PortuCore
 import Testing
 
 struct OverviewReviewFollowUpTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     @Test func `tab rows use a manual price override`() throws {
         let assetId = UUID()
@@ -43,7 +43,7 @@ struct OverviewReviewFollowUpTests {
         let ignoredStable = token(symbol: "USDT", category: .stablecoin, coinGeckoId: "tether", amount: 1000, usdValue: 1000)
         let manualMajor = token(symbol: "ETH", category: .major, amount: 2, usdValue: 0)
         let staked = token(symbol: "STAKE", category: .defi, coinGeckoId: "old-stake", amount: 3, usdValue: 0)
-        let context = OverviewValuationContext(
+        let context = ValuationContext(
             inputs: [
                 Fixture.input(601, .wallet, token(symbol: "USDC", category: .stablecoin, coinGeckoId: "usd-coin", amount: 100, usdValue: 100)),
                 Fixture.input(602, .wallet, ignoredStable),
@@ -59,7 +59,7 @@ struct OverviewReviewFollowUpTests {
             mappings: [],
             settings: .defaults,
             usdToDisplayRate: 1,
-            prices: OverviewPriceInputs(livePricesUSD: ["usd-coin": 1, "tether": 1, "dust": 0.25, "old-stake": 100, "new-stake": 5]))
+            prices: ValuationPriceInputs(livePricesUSD: ["usd-coin": 1, "tether": 1, "dust": 0.25, "old-stake": 100, "new-stake": 5]))
 
         let cards = OverviewSummaryCardsFeature.cards(context, categories: PortfolioCategoryDefaults.categorySnapshots)
 
@@ -133,7 +133,7 @@ struct OverviewReviewFollowUpTests {
         #expect(slices.map(\.id) == [earlierID.uuidString, laterID.uuidString])
     }
 
-    private func tab(_ tab: OverviewPositionTab, _ context: OverviewValuationContext) -> OverviewPositionTabData {
+    private func tab(_ tab: OverviewPositionTab, _ context: ValuationContext) -> OverviewPositionTabData {
         OverviewPositionProjection.tab(tab, context: context, positions: Fixture.positions)
     }
 

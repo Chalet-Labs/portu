@@ -23,8 +23,7 @@ enum HistoricalPriceIDMigrator {
             try $0.fetch(FetchDescriptor<Asset>())
         },
         save: (ModelContext) throws -> Void = { try $0.save() }) throws {
-        guard storeIsEphemeral == false else { return }
-        guard defaults.bool(forKey: completionDefaultsKey) == false else { return }
+        guard storeIsEphemeral == false, defaults.bool(forKey: completionDefaultsKey) == false else { return }
 
         let solanaPriceIDs = try solanaPriceIDLookup(assets: fetchAssets(modelContext))
         let rows = try fetch(modelContext)

@@ -5,11 +5,19 @@ import SwiftData
 /// Source data for the estimated pre-snapshot segment of the portfolio value chart.
 /// Fetched from SwiftData at the model boundary so no live models escape into body.
 struct PortfolioValueChartEstimateSource: Equatable, Sendable {
-    /// Timestamp of the globally-earliest AssetSnapshot row.
+    /// Timestamp of the globally-earliest non-ignored AssetSnapshot row: the holdings date.
     let firstRealSnapshotDate: Date
     /// Deduped value-type projections of the first-day AssetSnapshot rows —
     /// earliest per (accountId, assetId) key, matching `earliestEstimateHoldings` dedup.
     let firstDayEntries: [HistoricalEstimateSnapshotEntry]
+    /// Timestamp of the earliest PortfolioSnapshot, the first point the chart draws.
+    var firstRecordedDate: Date?
+
+    var estimateEndDate: Date {
+        HistoricalPortfolioEstimator.estimateEndDate(
+            holdingsDate: firstRealSnapshotDate,
+            firstRecordedDate: firstRecordedDate)
+    }
 }
 
 /// Fetches the minimum `AssetSnapshot` rows required to back-fill the chart's estimated segment.
@@ -22,21 +30,35 @@ struct PortfolioValueChartEstimateSource: Equatable, Sendable {
 actor PortfolioValueChartEstimateFetcher {
     /// Returns the estimate source, or `nil` when no backfill is possible.
     ///
-    /// Steps: (1) limit-1 earliest row probe; (2) parity guard; (3) single UTC-day fetch;
-    /// (4) dedup by (accountId, assetId), keeping the earliest row per key; (5) targeted Asset
-    /// fetch from winner ids only; (6) project to value types. `try?` on any fetch → nil.
+    /// Steps: (1) limit-1 earliest row probe; (2) limit-1 earliest PortfolioSnapshot probe and
+    /// parity guard; (3) single UTC-day fetch; (4) dedup by (accountId, assetId), keeping the
+    /// earliest row per key; (5) targeted Asset fetch from winner ids only; (6) project to value
+    /// types. `try?` on any AssetSnapshot fetch → nil; a failed PortfolioSnapshot probe only
+    /// leaves the end where the holdings are. Both AssetSnapshot fetches leave out the assets
+    /// ignored now, old rows included (N2).
     func estimateSource(
         overrides: [TokenPricingOverrideSnapshot],
         chartStartDate: Date) -> PortfolioValueChartEstimateSource? {
-        // 1. Globally-earliest AssetSnapshot — limit-1 fetch, no full table scan.
+        let ignoredIDs = Array(TokenPricingOverrideFeature.ignoredAssetIds(overrides))
+
+        // 1. Globally-earliest non-ignored AssetSnapshot — limit-1 fetch, no full table scan.
         var earliestDescriptor = FetchDescriptor<AssetSnapshot>(
+            predicate: #Predicate<AssetSnapshot> { !ignoredIDs.contains($0.assetId) },
             sortBy: [SortDescriptor(\.timestamp, order: .forward)])
         earliestDescriptor.fetchLimit = 1
         guard let earliest = (try? modelContext.fetch(earliestDescriptor))?.first else { return nil }
 
-        // Parity guard: when earliest < chartStart, the price window [chartStartDay, firstRealDay)
-        // is empty (firstRealDay ≤ chartStart), so the estimator returns [].
-        if earliest.timestamp < chartStartDate {
+        var recordedDescriptor = FetchDescriptor<PortfolioSnapshot>(
+            sortBy: [SortDescriptor(\.timestamp, order: .forward)])
+        recordedDescriptor.fetchLimit = 1
+        let firstRecordedDate = (try? modelContext.fetch(recordedDescriptor))?.first?.timestamp
+        let estimateEndDate = HistoricalPortfolioEstimator.estimateEndDate(
+            holdingsDate: earliest.timestamp,
+            firstRecordedDate: firstRecordedDate)
+
+        // Parity guard: when the end < chartStart, the window [chartStartDay, utcStartOfDay(end))
+        // is empty, so the estimator returns [].
+        if estimateEndDate < chartStartDate {
             return nil
         }
 
@@ -45,7 +67,7 @@ actor PortfolioValueChartEstimateFetcher {
         let dayEnd = firstDay.addingTimeInterval(24 * 60 * 60)
         let dayDescriptor = FetchDescriptor<AssetSnapshot>(
             predicate: #Predicate<AssetSnapshot> {
-                $0.timestamp >= firstDay && $0.timestamp < dayEnd
+                $0.timestamp >= firstDay && $0.timestamp < dayEnd && !ignoredIDs.contains($0.assetId)
             },
             sortBy: [SortDescriptor(\.timestamp, order: .forward)])
         guard let dayRows = try? modelContext.fetch(dayDescriptor) else { return nil }
@@ -71,7 +93,7 @@ actor PortfolioValueChartEstimateFetcher {
         }
 
         // 5. Project winners to value types.
-        let overridesByAssetId = TokenSettingsFeature.overridesByAssetId(overrides)
+        let overridesByAssetId = TokenPricingOverrideFeature.overridesByAssetId(overrides)
         let entries: [HistoricalEstimateSnapshotEntry] = winners.map { snapshot in
             let asset = assetsById[snapshot.assetId]
             return HistoricalEstimateSnapshotEntry(
@@ -90,7 +112,8 @@ actor PortfolioValueChartEstimateFetcher {
 
         return PortfolioValueChartEstimateSource(
             firstRealSnapshotDate: earliest.timestamp,
-            firstDayEntries: entries)
+            firstDayEntries: entries,
+            firstRecordedDate: firstRecordedDate)
     }
 }
 
@@ -105,8 +128,9 @@ enum PortfolioValueChartFeature {
     /// Pure estimate computation — no models in the signature; safe to call on the main actor
     /// from a `.task` closure without any blocking.
     ///
-    /// The day-window filter (`>= chartStartDay`, `< firstRealSnapshotDate`) is applied here,
-    /// preserving exact parity with the former `estimatedPoints` computed property.
+    /// The price filter (`>= chartStartDay`, `< firstRealSnapshotDate`) is applied here,
+    /// preserving exact parity with the former `estimatedPoints` computed property. It keeps the
+    /// holdings day's close as the reference price; the points still end at `estimateEndDate`.
     static func estimatedPoints(
         source: PortfolioValueChartEstimateSource,
         prices: [HistoricalPriceEntry],
@@ -129,6 +153,7 @@ enum PortfolioValueChartFeature {
             prices: windowPrices,
             startDate: chartStartDate,
             firstRealSnapshotDate: source.firstRealSnapshotDate,
+            endDate: source.estimateEndDate,
             accountId: nil)
     }
 }

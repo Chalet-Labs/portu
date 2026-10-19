@@ -1,63 +1,6 @@
 import Foundation
 import PortuCore
 
-/// The USD prices an Overview seam values with (spec I1). The display rate is applied once, after
-/// valuation and the display filter.
-struct OverviewPriceInputs: Equatable {
-    var livePricesUSD: [String: Decimal] = [:]
-    /// Live 24h fractions keyed by price ID; merged over the historical ones.
-    var liveChanges24h: [String: Decimal] = [:]
-    var historical: HistoricalMarketPrices = .empty
-
-    var market: MarketPrices {
-        MarketPrices(liveUSD: livePricesUSD, liveChanges24h: liveChanges24h, historical: historical)
-    }
-
-    /// The app's USD book. Only views that show a 24h change read the live fractions, so the others
-    /// do not re-render on a change to the fractions alone. Every view reads the live prices, and a
-    /// poll writes prices and fractions together, so a price tick re-renders them all.
-    @MainActor
-    static func live(
-        _ appState: AppState,
-        historical: HistoricalMarketPrices,
-        includingLiveChanges: Bool) -> OverviewPriceInputs {
-        OverviewPriceInputs(
-            livePricesUSD: appState.livePricesUSD,
-            liveChanges24h: includingLiveChanges ? appState.priceChanges24h : [:],
-            historical: historical)
-    }
-}
-
-/// Everything an Overview seam values: the active-account inputs and the pricing context, gathered
-/// once per render pass.
-struct OverviewValuationContext {
-    let inputs: [ValuationInput]
-    let overrides: [TokenPricingOverrideSnapshot]
-    let mappings: [TokenIdentityMappingSnapshot]
-    let settings: TokenDashboardSettings
-    let usdToDisplayRate: Decimal
-    let prices: OverviewPriceInputs
-
-    func valuation(market: MarketPrices? = nil) -> PortfolioValuation {
-        PortfolioValuation(
-            inputs: inputs,
-            market: market ?? prices.market,
-            overrides: overrides,
-            mappings: mappings)
-    }
-
-    /// The same context over a subset of the inputs.
-    func restricted(to inputs: [ValuationInput]) -> OverviewValuationContext {
-        OverviewValuationContext(
-            inputs: inputs,
-            overrides: overrides,
-            mappings: mappings,
-            settings: settings,
-            usdToDisplayRate: usdToDisplayRate,
-            prices: prices)
-    }
-}
-
 // MARK: - Headline (Overview top bar, Sidebar header)
 
 struct OverviewHeadline: Equatable {
@@ -69,7 +12,7 @@ struct OverviewHeadline: Equatable {
 
 extension OverviewFeature {
     /// The net total and its 24h change over every valued token (A1, A4).
-    static func headline(_ context: OverviewValuationContext) -> OverviewHeadline {
+    static func headline(_ context: ValuationContext) -> OverviewHeadline {
         let totals = context.valuation().totals
         let display = totals.display(rate: context.usdToDisplayRate)
         return OverviewHeadline(
@@ -107,7 +50,7 @@ struct OverviewTopAssets: Equatable {
 
 extension OverviewFeature {
     /// Gross assets (A7): the top rows, an "other" remainder and the hidden line (F5).
-    static func topAssets(_ mode: TopAssetMode, context: OverviewValuationContext) -> OverviewTopAssets {
+    static func topAssets(_ mode: TopAssetMode, context: ValuationContext) -> OverviewTopAssets {
         let tokens = context.valuation().tokens
         switch mode {
         case .assets:
@@ -171,7 +114,7 @@ extension OverviewFeature {
     /// decided 2026-10-12). `assets` are every asset candidate, so a coin several assets share is
     /// judged on all of them.
     static func watchlistRows(
-        _ context: OverviewValuationContext,
+        _ context: ValuationContext,
         assets: [OverviewAssetCandidate],
         watchlistIDs: [String],
         portfolioLimit: Int = 10) -> [OverviewPriceRowData] {
@@ -248,13 +191,13 @@ extension OverviewFeature {
         _ watchlist: [String],
         tokens: [ValuedToken],
         assets: [OverviewAssetCandidate],
-        context: OverviewValuationContext,
+        context: ValuationContext,
         ignoredAssets: Set<UUID>) -> Set<String> {
         let overrides = TokenPricingOverrideFeature.overridesByAssetId(context.overrides)
         let mappings = TokenIdentityMappingFeature.mappingsByIdentity(context.mappings)
         var pricedAssets: [String: Set<UUID>] = [:]
         for asset in assets {
-            guard let coinGeckoId = OverviewWatchlistStore.normalizedID(asset.coinGeckoId) else { continue }
+            guard let coinGeckoId = TokenIdentityMappingFeature.normalizedProviderID(asset.coinGeckoId) else { continue }
             pricedAssets[coinGeckoId, default: []].insert(asset.id)
         }
         for token in tokens {
@@ -370,7 +313,7 @@ struct OverviewSummaryCard: Equatable, Identifiable {
 extension OverviewSummaryCardsFeature {
     /// Idle, Deployed and Debt in display order (A3). The rows are fixed and never display-filtered.
     static func cards(
-        _ context: OverviewValuationContext,
+        _ context: ValuationContext,
         categories: [PortfolioCategorySnapshot]) -> [OverviewSummaryCard] {
         let cards = context.valuation().summaryCards.display(rate: context.usdToDisplayRate)
         return [
@@ -453,7 +396,7 @@ extension PortfolioHealthFeature {
     /// Weights per symbol + name group, net and floored at 0 (A7), and the metrics and concentration
     /// risks over every such group, hidden ones included (S3). Only counted tokens that are not
     /// ignored can mark a group as a stablecoin.
-    static func health(_ context: OverviewValuationContext) -> PortfolioHealthData {
+    static func health(_ context: ValuationContext) -> PortfolioHealthData {
         let valuation = context.valuation()
         let rate = context.usdToDisplayRate
         let list = DashboardList(valuation.tokens, basis: .positiveNet, settings: context.settings) {

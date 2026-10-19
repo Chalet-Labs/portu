@@ -5,7 +5,7 @@ extension OverviewFeature {
     /// The live-polling set: the top holdings by selection value, then the watchlist (S12). Values
     /// and usable prices come from the module; the selection and ranking rules are polling's own.
     static func pricePollingIDs(
-        _ context: OverviewValuationContext,
+        _ context: ValuationContext,
         watchlistIDs: [String],
         portfolioLimit: Int = 25) -> [String] {
         let tokens = context.valuation().tokens
@@ -36,8 +36,7 @@ extension OverviewFeature {
         case .manual, .live, .close:
             return isVisible
         case .sync, .unpriced:
-            guard !isVisible, !token.alwaysShow, settings.hideUnpriced else { return true }
-            guard OnchainTokenIdentity(historicalPriceID: priceID) != nil else { return true }
+            guard !isVisible, !token.alwaysShow, settings.hideUnpriced, OnchainTokenIdentity(historicalPriceID: priceID) != nil else { return true }
             return !settings.hideDust || abs(token.token.usdValue) >= settings.dustThresholdUSD
         case .ignored:
             return false
@@ -70,7 +69,7 @@ extension OverviewFeature {
         var seen = Set(result)
 
         for watchlistID in watchlistIDs {
-            let normalizedID = normalizePollingID(watchlistID)
+            let normalizedID = OnchainTokenIdentity.normalizedHistoricalPriceID(watchlistID)
             guard !normalizedID.isEmpty, !seen.contains(normalizedID) else { continue }
             result.append(normalizedID)
             seen.insert(normalizedID)
@@ -90,7 +89,7 @@ extension OverviewFeature {
         priority: Decimal,
         insertionIndex: Int,
         candidates: inout [String: PollingIDCandidate]) {
-        let normalizedID = normalizePollingID(id)
+        let normalizedID = OnchainTokenIdentity.normalizedHistoricalPriceID(id)
         guard !normalizedID.isEmpty else { return }
 
         if var existing = candidates[normalizedID] {
@@ -102,9 +101,5 @@ extension OverviewFeature {
                 priority: priority,
                 firstIndex: insertionIndex)
         }
-    }
-
-    private static func normalizePollingID(_ id: String) -> String {
-        OnchainTokenIdentity.normalizedHistoricalPriceID(id)
     }
 }

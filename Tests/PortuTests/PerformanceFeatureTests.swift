@@ -244,8 +244,7 @@ struct PerformanceValueChangeTests {
 // MARK: - Category Change Breakdown
 
 struct PerformanceCategoryChangeTests {
-    @MainActor
-    @Test func `category snapshot entry resolves through supplied resolver`() {
+    @Test func `category entries resolve snapshot rows through the supplied resolver`() {
         let categoryID = UUID()
         let category = PortfolioCategorySnapshot(
             id: categoryID,
@@ -261,40 +260,44 @@ struct PerformanceCategoryChangeTests {
                     symbol: "ETH",
                     categoryId: categoryID)
             ])
-        let snapshot = AssetSnapshot(
-            syncBatchId: UUID(),
-            timestamp: Date(),
-            accountId: UUID(),
-            assetId: UUID(),
-            symbol: "ETH",
-            category: .major,
-            portfolioCategoryID: PortfolioCategoryDefaults.ethCategoryID.uuidString,
-            portfolioCategoryName: "Frozen ETH",
-            amount: 1,
-            usdValue: 100)
+        let timestamp = Date()
 
-        let entry = CategorySnapshotEntry(snapshot: snapshot, categoryResolver: resolver)
+        let entries = PerformanceDataShaping.categoryEntries(
+            rows: [snapshotRow(symbol: "ETH", category: .major, usdValue: 100, at: timestamp)],
+            from: timestamp,
+            resolver: resolver)
 
-        #expect(entry.categoryID == categoryID.uuidString)
-        #expect(entry.categoryName == "Custom ETH")
+        #expect(entries.map(\.categoryID) == [categoryID.uuidString])
+        #expect(entries.map(\.categoryName) == ["Custom ETH"])
     }
 
-    @MainActor
-    @Test func `category snapshot entry maps legacy known symbols to default portfolio category IDs`() {
-        let snapshot = AssetSnapshot(
-            syncBatchId: UUID(),
-            timestamp: Date(),
+    @Test func `category entries map legacy known symbols to default portfolio category IDs`() {
+        let timestamp = Date()
+
+        let entries = PerformanceDataShaping.categoryEntries(
+            rows: [snapshotRow(symbol: "ETH", category: .major, usdValue: 2000, at: timestamp)],
+            from: timestamp,
+            resolver: .defaults)
+
+        #expect(entries.map(\.categoryID) == [PortfolioCategoryDefaults.ethCategoryID.uuidString])
+        #expect(entries.map(\.categoryName) == ["ETH"])
+    }
+
+    private func snapshotRow(
+        symbol: String,
+        category: AssetCategory,
+        usdValue: Decimal,
+        at timestamp: Date) -> PerformanceSnapshotRow {
+        PerformanceSnapshotRow(
             accountId: UUID(),
             assetId: UUID(),
-            symbol: "ETH",
-            category: .major,
+            timestamp: timestamp,
+            symbol: symbol,
+            category: category,
             amount: 1,
-            usdValue: 2000)
-
-        let entry = CategorySnapshotEntry(snapshot: snapshot)
-
-        #expect(entry.categoryID == PortfolioCategoryDefaults.ethCategoryID.uuidString)
-        #expect(entry.categoryName == "ETH")
+            usdValue: usdValue,
+            borrowAmount: 0,
+            borrowUsdValue: 0)
     }
 
     @Test func `computes start end and percent change`() throws {
@@ -317,7 +320,7 @@ struct PerformanceCategoryChangeTests {
         let major = changes.first { $0.name == "Major" }
         #expect(major?.startValue == 1000)
         #expect(major?.endValue == 1200)
-        #expect(major?.percentChange == Decimal(string: "0.2")!) // 200/1000
+        #expect(try major?.percentChange == #require(Decimal(string: "0.2"))) // 200/1000
 
         let stable = changes.first { $0.name == "Stablecoin" }
         #expect(stable?.percentChange == 0)
@@ -434,7 +437,7 @@ struct PerformanceCategoryChangeTests {
 
         #expect(Set(chartPoints.map(\.categoryName)) == ["ETH"])
         #expect(changes.first?.name == "ETH")
-        #expect(changes.first?.percentChange == Decimal(string: "0.2")!)
+        #expect(try changes.first?.percentChange == #require(Decimal(string: "0.2")))
     }
 
     @Test func `uses category ids as stable identity when names collide`() throws {
@@ -594,7 +597,7 @@ struct PerformanceCategoryChangeTests {
         // Must use the latest snapshot per (day, accountId, assetId), not sum all syncs
         #expect(major?.startValue == 1000) // day1Evening only, not 900 + 1000 = 1900
         #expect(major?.endValue == 1200) // day2Evening only, not 1100 + 1200 = 2300
-        #expect(major?.percentChange == Decimal(string: "0.2")!)
+        #expect(try major?.percentChange == #require(Decimal(string: "0.2")))
     }
 }
 

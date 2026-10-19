@@ -36,7 +36,10 @@
             self.priceService = priceService
             registerBuiltInRoutes()
             if let modelContainer {
-                DebugEndpoints.register(on: self, modelContainer: modelContainer)
+                DebugEndpoints.register(on: self, modelContainer: modelContainer) { [store] in
+                    guard let store else { return .empty }
+                    return DebugMarketInputs(livePricesUSD: store.livePricesUSD, usdToDisplayRate: store.currentUSDToDisplayRate)
+                }
             }
             if store != nil {
                 registerTCARoutes()
@@ -152,11 +155,14 @@
                 guard let store = self?.store else {
                     return Self.jsonResponse(statusCode: 500, body: ["error": "Store unavailable"])
                 }
-                let prices = store.liveDisplayPrices.mapValues { ($0 as NSDecimalNumber).doubleValue }
+                let rate = store.currentUSDToDisplayRate
+                let prices = store.livePricesUSD.mapValues { ($0 * rate as NSDecimalNumber).doubleValue }
                 let changes = store.priceChanges24h.mapValues { ($0 as NSDecimalNumber).doubleValue }
                 var body: [String: any Sendable] = [
                     "currency": store.selectedCurrency.displayCode,
                     "prices": prices,
+                    "pricesUSD": store.livePricesUSD.mapValues(\.jsonDouble),
+                    "usdToDisplayRate": rate.jsonDouble,
                     "changes24h": changes
                 ]
                 if let date = store.lastPriceUpdate {

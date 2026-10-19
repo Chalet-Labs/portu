@@ -129,17 +129,15 @@ struct AppFeaturePricePollingIntervalTests {
             $0.lastPriceUpdate = testDate
             $0.connectionStatus = .idle
         }
-        #expect(store.state.liveDisplayPrices == ["bitcoin": 20])
 
         // The periodic refresh moves the rate only: the USD book, the 24h change and the
-        // update time stay, display prices follow the new rate, and polling is not restarted.
+        // update time stay, and polling is not restarted.
         currentRate = 3
         await testClock.advance(by: .seconds(900))
         await store.receive(.currentCurrencyConversionRateReceived(.eur, .success(3))) {
             $0.currentUSDToDisplayRate = 3
         }
         #expect(store.state.livePricesUSD == ["bitcoin": 10])
-        #expect(store.state.liveDisplayPrices == ["bitcoin": 30])
         #expect(store.state.priceChanges24h == ["bitcoin": 0.05])
         #expect(store.state.lastPriceUpdate == testDate)
         #expect(coinGeckoFetchCount == 1)

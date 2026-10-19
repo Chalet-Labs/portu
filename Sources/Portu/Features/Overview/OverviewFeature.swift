@@ -13,11 +13,11 @@ struct OverviewAssetCandidate: Equatable, Identifiable {
     static func fromAssets(
         _ assets: [Asset],
         overrides: [TokenPricingOverrideSnapshot]) -> [OverviewAssetCandidate] {
-        let overrideMap = TokenSettingsFeature.overridesByAssetId(overrides)
+        let overrideMap = TokenPricingOverrideFeature.overridesByAssetId(overrides)
         return assets.compactMap { asset -> OverviewAssetCandidate? in
-            let coinGeckoId = OverviewWatchlistStore.normalizedID(
+            let coinGeckoId = TokenIdentityMappingFeature.normalizedProviderID(
                 overrideMap[asset.id]?.coinGeckoIdOverride)
-                ?? OverviewWatchlistStore.normalizedID(asset.coinGeckoId)
+                ?? TokenIdentityMappingFeature.normalizedProviderID(asset.coinGeckoId)
             guard let coinGeckoId else { return nil }
             return OverviewAssetCandidate(
                 id: asset.id,
@@ -117,7 +117,7 @@ enum OverviewWatchlistStore {
     }
 
     static func remove(_ id: String, from ids: [String]) -> [String] {
-        let target = normalize(id)
+        let target = TokenIdentityMappingFeature.normalizedProviderID(id)
         return normalizedUniqueIDs(ids).filter { $0 != target }
     }
 
@@ -126,23 +126,14 @@ enum OverviewWatchlistStore {
         var result: [String] = []
 
         for id in ids {
-            let normalized = normalize(id)
-            guard !normalized.isEmpty, !seen.contains(normalized) else { continue }
+            guard
+                let normalized = TokenIdentityMappingFeature.normalizedProviderID(id),
+                !seen.contains(normalized) else { continue }
             seen.insert(normalized)
             result.append(normalized)
         }
 
         return result
-    }
-
-    static func normalizedID(_ id: String?) -> String? {
-        guard let id else { return nil }
-        let normalized = normalize(id)
-        return normalized.isEmpty ? nil : normalized
-    }
-
-    static func normalize(_ id: String) -> String {
-        id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
 
@@ -164,7 +155,7 @@ enum OverviewFeature {
         var candidates: [String: OverviewAssetCandidate] = [:]
 
         for asset in assets {
-            guard let coinGeckoId = OverviewWatchlistStore.normalizedID(asset.coinGeckoId) else { continue }
+            guard let coinGeckoId = TokenIdentityMappingFeature.normalizedProviderID(asset.coinGeckoId) else { continue }
 
             if let existing = candidates[coinGeckoId] {
                 candidates[coinGeckoId] = preferredAssetCandidate(asset, over: existing) ? asset : existing

@@ -36,9 +36,9 @@ struct AppFeature {
         // Settings renders checking copy with no notice. The application menu
         // gates on it.
         var updaterStatus = UpdaterStatus.resolving
-        // Live prices are kept in USD. A rate refresh or a currency switch only moves
-        // `currentUSDToDisplayRate`, so display prices are derived from this book instead
-        // of stored next to it, and nothing has to be thrown away when the rate changes.
+        // Live prices are kept in USD, the valuation input. A rate refresh or a currency
+        // switch only moves `currentUSDToDisplayRate`, so nothing has to be thrown away
+        // when the rate changes.
         var livePricesUSD: [String: Decimal] = [:]
         var priceChanges24h: [String: Decimal] = [:]
         var lastPriceUpdate: Date?
@@ -54,13 +54,6 @@ struct AppFeature {
         var performance = PerformanceFeature.State()
         var portfolioHealth = PortfolioHealthFeature.State()
         var historicalPriceBackfill = HistoricalPriceBackfillFeature.State()
-
-        /// The USD book at the committed display rate. During a pending currency switch
-        /// the rate is still the old one, matching the old currency label on screen.
-        var liveDisplayPrices: [String: Decimal] {
-            guard currentUSDToDisplayRate != 1 else { return livePricesUSD }
-            return livePricesUSD.mapValues { $0 * currentUSDToDisplayRate }
-        }
     }
 
     enum Action: Equatable {
@@ -322,8 +315,8 @@ struct AppFeature {
                     return commitDisplayCurrency(&state, currency: currency, rate: rate)
                 }
                 // Launch/refresh path for the already-selected currency. Live prices are in
-                // USD, so only the rate changes: display prices follow it, nothing is
-                // cleared and polling keeps running.
+                // USD, so only the rate changes: views apply the new rate when they
+                // render, nothing is cleared and polling keeps running.
                 guard currency == state.selectedCurrency else { return .none }
                 state.currentUSDToDisplayRate = rate
                 return historicalFXTopUpEffect(&state, currency: currency)

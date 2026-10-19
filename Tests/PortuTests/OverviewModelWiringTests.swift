@@ -7,7 +7,7 @@ import SwiftUI
 import Testing
 
 /// The seam inputs the Overview views build from their queries: the shared headline input (top bar
-/// and Sidebar header), the cards input and the Health input, and the `OverviewValuationSources`
+/// and Sidebar header), the cards input and the Health input, and the `ValuationSources`
 /// every Overview view reads them through. One store, in memory:
 ///
 /// | Token | Account | Amount | `usdValue` | USD value |
@@ -16,11 +16,10 @@ import Testing
 /// | DEGEN | active | 10,000 | 95 | 100 (Degen-chain token mapped to `degen-base`, live 0.01; sync 95) |
 /// | BTC | inactive | 1 | 60000 | not valued |
 ///
-/// The display book `appState.prices` holds ten times the USD book, so a view that read it would
-/// show other numbers. The rate is 0.9.
+/// The rate is 0.9.
 @MainActor
 struct OverviewModelWiringTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     private static let degenContract = "0xde9e000000000000000000000000000000000de9"
     static let rate = Fixture.decimal("0.9")
@@ -70,7 +69,7 @@ struct OverviewModelWiringTests {
             mappings: store.mappings,
             settings: .defaults,
             usdToDisplayRate: Self.rate,
-            prices: OverviewPriceInputs(livePricesUSD: store.appState.livePricesUSD)))
+            prices: ValuationPriceInputs(livePricesUSD: store.appState.livePricesUSD)))
 
         #expect(health.weights.map(\.symbol) == ["ETH", "DEGEN"])
         #expect(health.weights.map(\.usdValue) == [6000 * Self.rate, 100 * Self.rate])
@@ -94,11 +93,11 @@ struct OverviewModelWiringTests {
     }
 
     @Test(arguments: [false, true])
-    func `the overview price inputs read the usd book, not the display book`(includingLiveChanges: Bool) throws {
+    func `the overview price inputs read the usd book`(includingLiveChanges: Bool) throws {
         let store = try Store()
         let historical = HistoricalMarketPrices(closesUSD: [:], changes24h: ["bitcoin": Fixture.decimal("0.02")])
 
-        let prices = OverviewPriceInputs.live(store.appState, historical: historical, includingLiveChanges: includingLiveChanges)
+        let prices = ValuationPriceInputs.live(store.appState, historical: historical, includingLiveChanges: includingLiveChanges)
 
         #expect(prices.livePricesUSD == store.appState.livePricesUSD)
         #expect(prices.liveChanges24h == (includingLiveChanges ? store.appState.priceChanges24h : [:]))
@@ -109,12 +108,12 @@ struct OverviewModelWiringTests {
 
     private static var retainedWindows: [NSWindow] = []
 
-    /// Renders a view that reads `OverviewValuationSources` from the store, as the Overview views do,
+    /// Renders a view that reads `ValuationSources` from the store, as the Overview views do,
     /// and returns what `build` made on its last body pass. The view's `@AppStorage` reads a fresh,
     /// empty defaults suite, so the dashboard settings are the defaults whatever the test host stores.
     static func probe<Value>(
         _ store: Store,
-        _ build: @escaping @MainActor (OverviewValuationSources, [Position], [PositionToken], [Asset]) -> Value) -> Value? {
+        _ build: @escaping @MainActor (ValuationSources, [Position], [PositionToken], [Asset]) -> Value) -> Value? {
         let capture = Capture<Value>()
         let rendered = render(SourcesProbe { sources, positions, tokens, assets in
             capture.value = build(sources, positions, tokens, assets)
@@ -122,14 +121,14 @@ struct OverviewModelWiringTests {
         return rendered == nil ? nil : capture.value
     }
 
-    /// Hosts `view` in a window over the store's container and `AppState`, with `@AppStorage` on a
-    /// fresh, empty defaults suite.
+    /// Hosts `view` under the active portfolio provider, as the dashboard does, in a window over the
+    /// store's container and `AppState`, with `@AppStorage` on a fresh, empty defaults suite.
     @discardableResult
     static func render(_ view: some View, over store: Store, size: CGSize = CGSize(width: 200, height: 200)) -> NSHostingView<AnyView>? {
         let suiteName = "OverviewModelWiringTests.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else { return nil }
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let hostingView = NSHostingView(rootView: AnyView(view
+        let hostingView = NSHostingView(rootView: AnyView(ActivePortfolioProvider { view }
                 .modelContainer(store.container)
                 .environment(store.appState)
                 .defaultAppStorage(defaults)))
@@ -157,11 +156,11 @@ struct OverviewModelWiringTests {
     }
 
     private struct SourcesProbe: View {
-        var sources = OverviewValuationSources()
+        var sources = ValuationSources()
         @Query private var positions: [Position]
         @Query private var tokens: [PositionToken]
         @Query private var assets: [Asset]
-        let report: @MainActor (OverviewValuationSources, [Position], [PositionToken], [Asset]) -> Void
+        let report: @MainActor (ValuationSources, [Position], [PositionToken], [Asset]) -> Void
 
         var body: some View {
             report(sources, positions, tokens, assets)
@@ -245,10 +244,8 @@ struct OverviewModelWiringTests {
             self.tokens = try context.fetch(FetchDescriptor<PositionToken>())
             self.mappings = try context.fetch(FetchDescriptor<TokenIdentityMapping>())
 
-            let livePricesUSD: [String: Decimal] = ["ethereum": 3000, "degen-base": Fixture.decimal("0.01"), "bitcoin": 60000]
             self.appState = AppState()
-            appState.livePricesUSD = livePricesUSD
-            appState.prices = livePricesUSD.mapValues { $0 * 10 }
+            appState.livePricesUSD = ["ethereum": 3000, "degen-base": Fixture.decimal("0.01"), "bitcoin": 60000]
             appState.priceChanges24h = ["ethereum": Fixture.decimal("0.25")]
             appState.currentUSDToDisplayRate = OverviewModelWiringTests.rate
         }
@@ -279,7 +276,7 @@ struct OverviewModelWiringTests {
         func addDust() throws {
             let wallet = try #require(positions.first { $0.account?.isActive == true })
             let dust = Asset(symbol: "DUST", name: "Dust", category: .meme)
-            let usdValue = OverviewValuationFixture.decimal("0.5")
+            let usdValue = PortfolioValuationFixture.decimal("0.5")
             try insert([dust, PositionToken(role: .balance, amount: 1, usdValue: usdValue, asset: dust, position: wallet)])
         }
     }

@@ -13,10 +13,8 @@ struct AssetLookupCache {
     }
 
     mutating func record(_ asset: Asset) {
-        if let coinGeckoId = normalizedLookupKey(asset.coinGeckoId) {
-            if byCoinGeckoId[coinGeckoId] == nil {
-                byCoinGeckoId[coinGeckoId] = asset
-            }
+        if let coinGeckoId = normalizedLookupKey(asset.coinGeckoId), byCoinGeckoId[coinGeckoId] == nil {
+            byCoinGeckoId[coinGeckoId] = asset
         }
         if
             let chain = asset.upsertChain,
@@ -26,10 +24,8 @@ struct AssetLookupCache {
                 byChainContract[key] = asset
             }
         }
-        if let sourceKey = normalizedLookupKey(asset.sourceKey) {
-            if bySourceKey[sourceKey] == nil {
-                bySourceKey[sourceKey] = asset
-            }
+        if let sourceKey = normalizedLookupKey(asset.sourceKey), bySourceKey[sourceKey] == nil {
+            bySourceKey[sourceKey] = asset
         }
     }
 

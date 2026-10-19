@@ -47,9 +47,9 @@ struct PortfolioHealthDiversificationTests {
 
         #expect(metrics.assetCount == 3)
         #expect(metrics.chainCount == 2)
-        #expect(metrics.stablecoinRatio == Decimal(string: "0.2")!) // 20000/100000
+        #expect(try metrics.stablecoinRatio == #require(Decimal(string: "0.2"))) // 20000/100000
         // HHI = 0.5² + 0.3² + 0.2² = 0.25 + 0.09 + 0.04 = 0.38
-        #expect(metrics.herfindahlIndex == Decimal(string: "0.38")!)
+        #expect(try metrics.herfindahlIndex == #require(Decimal(string: "0.38")))
     }
 
     @Test func `empty portfolio returns zero metrics`() {
@@ -101,7 +101,7 @@ struct PortfolioHealthDiversificationTests {
         let metrics = PortfolioHealthFeature.computeDiversificationMetrics(
             tokens: tokens, weights: weights, chainCount: 1)
 
-        #expect(metrics.stablecoinRatio == Decimal(string: "0.5")!) // 50000/100000
+        #expect(try metrics.stablecoinRatio == #require(Decimal(string: "0.5"))) // 50000/100000
     }
 
     @Test func `stablecoin ratio uses resolved values when live prices available`() throws {
@@ -126,7 +126,7 @@ struct PortfolioHealthDiversificationTests {
                 usdValue: 10000)
         ]
         let prices: [String: Decimal] = try ["usd-coin": #require(Decimal(string: "1.05"))]
-        let metrics = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens, livePricesUSD: prices)).metrics
+        let metrics = PortfolioHealthFeature.health(PortfolioValuationFixture.context(tokens: tokens, livePricesUSD: prices)).metrics
 
         // Resolved USDC = 10000 * 1.05 = 10500, total = 60500
         #expect(metrics.stablecoinRatio == Decimal(10500) / Decimal(60500))
@@ -162,7 +162,7 @@ struct PortfolioHealthDiversificationTests {
                 amount: 5000,
                 usdValue: 5000)
         ]
-        let metrics = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens)).metrics
+        let metrics = PortfolioHealthFeature.health(PortfolioValuationFixture.context(tokens: tokens)).metrics
 
         // Only positive-role stablecoins: USDC supply (20000)
         // DAI borrow excluded by isPositive filter, also filtered from weights (net < 0)
@@ -201,7 +201,7 @@ struct PortfolioHealthDiversificationTests {
                 amount: 5000,
                 usdValue: 5000)
         ]
-        let metrics = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens)).metrics
+        let metrics = PortfolioHealthFeature.health(PortfolioValuationFixture.context(tokens: tokens)).metrics
 
         // USDC net = 20000 - 5000 = 15000, BTC = 50000, total = 65000
         #expect(metrics.stablecoinRatio == Decimal(15000) / Decimal(65000))
@@ -242,7 +242,7 @@ struct PortfolioHealthDiversificationTests {
             "ethereum": 3000,
             "usd-coin": #require(Decimal(string: "1.01"))
         ]
-        let metrics = PortfolioHealthFeature.health(OverviewValuationFixture.context(tokens: tokens, livePricesUSD: prices)).metrics
+        let metrics = PortfolioHealthFeature.health(PortfolioValuationFixture.context(tokens: tokens, livePricesUSD: prices)).metrics
 
         // Resolved: BTC=55000, ETH=30000, USDC=10100, total=95100
         #expect(metrics.stablecoinRatio == Decimal(10100) / Decimal(95100))

@@ -22,14 +22,13 @@ enum PricePollingIDResolver {
         var seenOnchainIdentities: Set<OnchainTokenIdentity> = []
 
         for id in ids {
-            let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-            if let identity = OnchainTokenIdentity(historicalPriceID: trimmed) {
+            // The onchain parser trims on its own and keeps Solana mint case, so it
+            // gets the raw ID; only CoinGecko IDs are lowercased.
+            if let identity = OnchainTokenIdentity(historicalPriceID: id) {
                 guard !seenOnchainIdentities.contains(identity) else { continue }
                 seenOnchainIdentities.insert(identity)
                 onchainIdentities.append(identity)
-            } else {
-                let normalized = trimmed.lowercased()
+            } else if let normalized = TokenIdentityMappingFeature.normalizedProviderID(id) {
                 guard !seenCoinGeckoIDs.contains(normalized) else { continue }
                 seenCoinGeckoIDs.insert(normalized)
                 coinGeckoIDs.append(normalized)

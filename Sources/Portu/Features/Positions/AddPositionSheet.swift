@@ -103,8 +103,13 @@ struct AddPositionSheet: View {
                 Spacer()
                 Button("Add") { savePosition() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(selectedAccountId == nil || amount == 0 ||
-                        (createNewAsset ? newSymbol.isEmpty || newName.isEmpty : selectedAsset == nil))
+                    .disabled(!ManualPositionEntry.canAdd(
+                        selectedAccountId: selectedAccountId,
+                        createNewAsset: createNewAsset,
+                        newSymbol: newSymbol,
+                        newName: newName,
+                        selectedAssetId: selectedAsset?.id,
+                        amount: amount))
             }
             .padding()
         }
@@ -149,12 +154,11 @@ struct AddPositionSheet: View {
             return
         }
 
-        let livePrice = asset.coinGeckoId.flatMap { appState.prices[$0] }
         let usdValue = ManualPositionPricing.usdValue(
             amount: amount,
             override: usdValueOverride,
-            displayPrice: livePrice,
-            usdToDisplayRate: appState.currentUSDToDisplayRate)
+            coinGeckoId: asset.coinGeckoId,
+            livePricesUSD: appState.livePricesUSD)
         let token = PositionToken(role: .balance, amount: amount, usdValue: usdValue, asset: asset)
         let position = Position(
             positionType: positionType,
@@ -173,25 +177,47 @@ struct AddPositionSheet: View {
     }
 }
 
+enum ManualPositionEntry {
+    /// Add needs an account, an asset and an amount above 0 (U1).
+    static func canAdd(hasAccount: Bool, hasAsset: Bool, amount: Decimal) -> Bool {
+        hasAccount && hasAsset && amount > 0
+    }
+
+    /// The Add button's state for the sheet's draft. A new asset needs a symbol and a name; the
+    /// selected asset counts only while the sheet is not creating one.
+    static func canAdd( // swiftlint:disable:this function_parameter_count
+        selectedAccountId: UUID?,
+        createNewAsset: Bool,
+        newSymbol: String,
+        newName: String,
+        selectedAssetId: UUID?,
+        amount: Decimal) -> Bool {
+        canAdd(
+            hasAccount: selectedAccountId != nil,
+            hasAsset: createNewAsset ? !newSymbol.isEmpty && !newName.isEmpty : selectedAssetId != nil,
+            amount: amount)
+    }
+}
+
 enum ManualPositionPricing {
-    /// Resolves the canonical USD value to persist for a manual position.
-    ///
-    /// `displayPrice` is the live price in the current display currency, so it is
-    /// converted back to USD via `usdToDisplayRate` before being applied. Without
-    /// this, adding a position while EUR/CHF is displayed would store a
-    /// display-currency notional into the canonical `usdValue`/`netUSDValue` fields
-    /// and corrupt totals after switching back to USD. An explicit override is
-    /// entered by the user as a USD amount, so it is used verbatim.
+    /// The USD value the sheet stores for a new manual position (U1). A typed value is a USD total
+    /// and is stored as entered; otherwise the asset's live USD price × the amount, or 0 with no
+    /// price. The display rate plays no part.
     static func usdValue(
         amount: Decimal,
         override: Decimal?,
-        displayPrice: Decimal?,
-        usdToDisplayRate: Decimal) -> Decimal {
+        coinGeckoId: String?,
+        livePricesUSD: [String: Decimal]) -> Decimal {
         if let override {
             return override
         }
-        guard let displayPrice, usdToDisplayRate > 0 else { return 0 }
-        return amount * (displayPrice / usdToDisplayRate)
+        guard let price = livePriceUSD(coinGeckoId: coinGeckoId, in: livePricesUSD) else { return 0 }
+        return amount * price
+    }
+
+    /// The live USD price under the normalized CoinGecko ID, the form the book is keyed by.
+    static func livePriceUSD(coinGeckoId: String?, in livePricesUSD: [String: Decimal]) -> Decimal? {
+        TokenIdentityMappingFeature.normalizedProviderID(coinGeckoId).flatMap { livePricesUSD[$0] }
     }
 }
 

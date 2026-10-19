@@ -358,10 +358,7 @@ enum AccountSheetSaveCoordinator {
     @MainActor
     private static func walletIdentityChanged(for account: Account, chain: Chain?, address: String) -> Bool {
         let addresses = Array(account.addresses)
-        guard addresses.count == 1, let existing = addresses.first else {
-            return true
-        }
-        guard existing.chain == chain else { return true }
+        guard addresses.count == 1, let existing = addresses.first, existing.chain == chain else { return true }
         let family: PortfolioAnalyticsAddressFamily = chain == .solana ? .solana : .evm
         return PortfolioAnalyticsAddress(family: family, value: existing.address)
             != PortfolioAnalyticsAddress(family: family, value: address)

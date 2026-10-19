@@ -6,7 +6,7 @@ import Testing
 /// T2 for the headline (top bar and Sidebar header, one seam) and the summary cards, fed the shared
 /// fixture. Expectations are worked out by hand from the spec.
 struct OverviewHeadlineSeamTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     // MARK: - Headline
 
@@ -119,13 +119,13 @@ struct OverviewHeadlineSeamTests {
                 syncedAt: Fixture.noon(0)),
             position: PositionContext(positionId: UUID(), positionType: .idle, chain: .ethereum))
         let rate = Fixture.decimal("0.9")
-        let context = OverviewValuationContext(
+        let context = ValuationContext(
             inputs: [input],
             overrides: [],
             mappings: [],
             settings: .defaults,
             usdToDisplayRate: rate,
-            prices: OverviewPriceInputs(livePricesUSD: [identity.historicalPriceID: 105]))
+            prices: ValuationPriceInputs(livePricesUSD: [identity.historicalPriceID: 105]))
 
         #expect(OverviewFeature.headline(context).total == Fixture.decimal("94.5"))
     }

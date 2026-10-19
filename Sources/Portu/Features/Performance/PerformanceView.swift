@@ -7,7 +7,7 @@ import SwiftUI
 struct PerformanceView: View {
     let store: StoreOf<AppFeature>
 
-    @Environment(\.historicalDisplayPrices) private var historicalDisplayPrices
+    @Environment(\.historicalMarketPrices) private var historicalMarketPrices
 
     @Query private var accounts: [Account]
 
@@ -78,8 +78,8 @@ struct PerformanceView: View {
             // re-evaluates the page, and neither price source can restart the load.
             store.send(.performance(.dataRequested(dataTaskID.request(
                 asOf: .now,
-                liveDisplayPrices: store.liveDisplayPrices,
-                historicalDisplayPrices: historicalDisplayPrices))))
+                livePricesUSD: store.livePricesUSD,
+                closesUSD: historicalMarketPrices.closesUSD))))
         }
         .task(id: analyticsTaskID(account: accountInput)) {
             if let context = makeAnalyticsContext(account: accountInput, asOf: .now) {
@@ -198,8 +198,8 @@ struct PerformanceView: View {
 
         func request(
             asOf date: Date,
-            liveDisplayPrices: [String: Decimal],
-            historicalDisplayPrices: [String: Decimal]) -> PerformanceDataRequest {
+            livePricesUSD: [String: Decimal],
+            closesUSD: [String: HistoricalClose]) -> PerformanceDataRequest {
             PerformanceDataRequest(
                 accountId: accountId,
                 startDate: range.startDate(at: date),
@@ -207,8 +207,8 @@ struct PerformanceView: View {
                 analyticsScopeFingerprint: analyticsScopeFingerprint,
                 displayCurrency: displayCurrency,
                 currentUSDToDisplayRate: currentUSDToDisplayRate,
-                liveDisplayPrices: liveDisplayPrices,
-                historicalDisplayPrices: historicalDisplayPrices,
+                livePricesUSD: livePricesUSD,
+                closesUSD: closesUSD,
                 minimumDashboardValue: minimumDashboardValue,
                 hideUnpriced: hideUnpriced,
                 hideDust: hideDust,

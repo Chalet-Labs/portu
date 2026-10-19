@@ -64,7 +64,7 @@ The app target in `Sources/Portu/` imports all three packages and contains featu
 - The app target does not use default MainActor isolation because it is incompatible with TCA.
 - PortuNetwork providers are `actor` types and run off the main thread.
 - DTOs and enums must be plain `Sendable` for cross-isolation safety.
-- SwiftData `@Model` types are implicitly `@MainActor`.
+- SwiftData `@Model` instances are read only on the actor that owns their `ModelContext` (the main actor for views, the `@ModelActor` for background fetchers).
 
 ## Testing
 
@@ -115,6 +115,7 @@ Never use `#Predicate` with optional chaining through relationships, such as `$0
 ## Formatting
 
 SwiftFormat is used for code formatting and runs automatically via hooks on file edits.
+SwiftFormat 0.64.0 or later is required: `.swiftformat` sets `--minversion 0.64.0`, and CI pins 0.64.0 in `.github/workflows/ci.yml`.
 
 ## Agent skills
 

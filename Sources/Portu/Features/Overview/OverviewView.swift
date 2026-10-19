@@ -9,7 +9,7 @@ struct OverviewView: View {
     @Environment(AppState.self) private var appState
     @Query private var allTokens: [PositionToken]
     @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
-    var sources = OverviewValuationSources()
+    var sources = ValuationSources()
 
     private var watchlistIDs: [String] {
         OverviewWatchlistStore.decode(watchlistRaw)

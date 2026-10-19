@@ -57,7 +57,7 @@ enum OverviewPositionProjection {
     /// Only the selected tab is resolved, and only the inputs it admits are valued.
     static func tab(
         _ tab: OverviewPositionTab,
-        context: OverviewValuationContext,
+        context: ValuationContext,
         positions: [UUID: OverviewPositionMeta]) -> OverviewPositionTabData {
         let admitted = context.inputs.filter { input in
             tab.admits(input.position.positionType)
@@ -136,7 +136,7 @@ enum OverviewPositionProjection {
         _ valuation: PortfolioValuation,
         basis: DashboardBasis,
         positions: [UUID: OverviewPositionMeta],
-        context: OverviewValuationContext) -> OverviewPositionTabData {
+        context: ValuationContext) -> OverviewPositionTabData {
         let rate = context.usdToDisplayRate
         var groups: [OverviewPositionGroupData] = []
         var folded: [ValuedToken] = []

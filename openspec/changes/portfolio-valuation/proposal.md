@@ -116,8 +116,12 @@ The implementation decisions below were made on 2026-10-10:
   - The historical USD closes come from a SwiftUI environment value that
     **replaces** `historicalDisplayPrices`, so there is one source of truth rather
     than two keys.
-- Views do not gain new high-frequency observed state. Overview re-renders cost
-  about 5 s in Debug, so each input is a swap, not an addition.
+- Views do not gain new high-frequency observed state where they can avoid it. Overview
+  re-renders cost about 5 s in Debug, so each Overview input is a swap, not an
+  addition. In PR (b), the screens that read stored totals today (Accounts,
+  Platforms, Networks, All Positions) must read the live USD book every tick,
+  because S5, S6 and S9 need token-level values. Each computes one valuation per
+  body pass. A stall-probe A/B against master is the check.
 
 ## Risks
 
@@ -129,3 +133,5 @@ The implementation decisions below were made on 2026-10-10:
 | Grep gates produce false positives (`netUSDValue` name collisions) | The gate regex is scoped to `Position` reads, and the PR lists the colliding names. |
 | Two inputs coexist during the PR (a)→(b) transition (`historicalDisplayPrices` and `appState.prices` next to the USD inputs) | Migrated screens read only the USD inputs. PR (b) deletes the old ones. Spec I2 states this transitional rule. |
 | Values that polling ranks by now follow V1, so the polled set can change at the margin | The ranking semantics are unchanged and stay #101's. The PR lists this change. |
+| Screens that read stored totals start reading the live book every tick (PR b) | One valuation per body pass; a stall-probe A/B against master accepts a median regression of 10% at most. |
+| N2 filters the estimated segment but N3 keeps the recorded totals, so the value chart can step at the join | Accepted 2026-10-13; the PR notes it. |

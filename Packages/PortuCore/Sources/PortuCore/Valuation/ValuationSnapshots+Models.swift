@@ -5,8 +5,8 @@ import SwiftData
 // reading SwiftData models happens here.
 
 public extension TokenEntry {
-    /// Projects a position token. Callers choose the category and CoinGecko ID, since screens
-    /// resolve those differently today.
+    /// Projects a position token for `ValuationInput`; the caller supplies the resolved category
+    /// and CoinGecko ID.
     init(
         _ token: PositionToken,
         asset: Asset,
@@ -26,24 +26,9 @@ public extension TokenEntry {
             logoURL: asset.logoURL,
             syncedAt: token.position?.syncedAt)
     }
-
-    /// Convert active PositionTokens to TokenEntries, filtering out tokens without assets or inactive accounts.
-    static func fromActiveTokens(
-        _ tokens: [PositionToken],
-        categoryResolver: PortfolioCategoryResolver = .defaults) -> [TokenEntry] {
-        tokens.compactMap { token in
-            guard let asset = token.asset, token.position?.account?.isActive == true else { return nil }
-            return TokenEntry(
-                token,
-                asset: asset,
-                portfolioCategory: categoryResolver.resolve(symbol: asset.symbol, legacyCategory: asset.category),
-                coinGeckoId: asset.coinGeckoId)
-        }
-    }
 }
 
 public extension TokenIdentityMappingSnapshot {
-    @MainActor
     init(_ mapping: TokenIdentityMapping) {
         self.id = mapping.id
         self.canonicalKey = mapping.canonicalKey
@@ -55,7 +40,6 @@ public extension TokenIdentityMappingSnapshot {
 }
 
 public extension TokenPricingOverrideSnapshot {
-    @MainActor
     init(_ override: TokenPricingOverride) {
         self.init(
             id: override.id,

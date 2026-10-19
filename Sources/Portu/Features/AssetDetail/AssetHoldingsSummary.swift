@@ -1,27 +1,9 @@
-import ComposableArchitecture
-import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
 struct AssetHoldingsSummary: View {
-    let assetId: UUID
-    let store: StoreOf<AppFeature>
-
-    @Environment(AppState.self) private var appState
-    @Query private var allTokens: [PositionToken]
-
-    private var summary: HoldingsSummary {
-        let entries = PositionTokenEntry.fromActiveTokens(allTokens, assetId: assetId)
-        return AssetDetailFeature.computeHoldingsSummary(
-            tokens: entries,
-            prices: store.liveDisplayPrices,
-            fallbackUSDToDisplayRate: appState.currentUSDToDisplayRate)
-    }
-
-    private var currencyCode: String {
-        appState.selectedCurrency.displayCode
-    }
+    let holdings: AssetHoldings
+    let currencyCode: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -32,31 +14,34 @@ struct AssetHoldingsSummary: View {
             HStack(spacing: 24) {
                 VStack(alignment: .leading) {
                     Text("Accounts").font(.caption).foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    Text("\(summary.accountCount)")
+                    Text("\(holdings.accountCount)")
                         .font(.system(size: 18, weight: .semibold, design: .monospaced))
                 }
                 VStack(alignment: .leading) {
                     Text("Total Amount").font(.caption).foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    Text(summary.totalAmount, format: .number.precision(.fractionLength(2 ... 8)))
+                    Text(AssetDetailFormat.amount(holdings.totalAmount))
                         .font(.system(size: 18, weight: .semibold, design: .monospaced))
                 }
                 VStack(alignment: .leading) {
                     Text("Total Value").font(.caption).foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    Text(summary.totalValue, format: .currency(code: currencyCode))
+                    Text(AssetDetailFormat.currency(holdings.totalValue, code: currencyCode))
                         .font(.system(size: 18, weight: .semibold, design: .monospaced))
                 }
             }
 
-            if !summary.byChain.isEmpty {
+            if !holdings.chains.isEmpty {
                 Text("On Networks").font(.subheadline.weight(.medium))
                     .foregroundStyle(PortuTheme.dashboardText)
-                ForEach(summary.byChain) { chain in
+                ForEach(holdings.chains) { chain in
                     HStack {
                         Text(chain.name)
                         Spacer()
-                        Text(chain.share, format: .percent.precision(.fractionLength(1)))
+                        Text(AssetDetailFormat.amount(chain.amount))
+                            .font(DashboardStyle.monoTableFont)
                             .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                        Text(chain.value, format: .currency(code: currencyCode))
+                        Text(AssetDetailFormat.share(chain.share))
+                            .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                        Text(AssetDetailFormat.currency(chain.value, code: currencyCode))
                             .font(DashboardStyle.monoTableFont)
                             .frame(width: 100, alignment: .trailing)
                     }

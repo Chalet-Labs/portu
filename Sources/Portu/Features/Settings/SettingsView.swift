@@ -5,14 +5,16 @@ import SwiftUI
 struct SettingsView: View {
     let store: StoreOf<AppFeature>
     let secretStore: any SecretStore
-    @State private var selectedTab: SettingsTab? = .general
+    @State private var selectedTab: SettingsTab?
     @State private var searchText = ""
 
     init(
         store: StoreOf<AppFeature>,
-        secretStore: any SecretStore = PortuApp.makeSecretStore()) {
+        secretStore: any SecretStore = PortuApp.makeSecretStore(),
+        initialTab: SettingsTab = .general) {
         self.store = store
         self.secretStore = secretStore
+        _selectedTab = State(initialValue: initialTab)
     }
 
     private var allVisibleTabs: [SettingsTab] {
@@ -23,18 +25,22 @@ struct SettingsView: View {
         SettingsTab.filter(allVisibleTabs, query: searchText)
     }
 
+    /// The Settings window is a scene of its own, so it mounts the historical provider for the
+    /// Tokens tab's closes (S8).
     var body: some View {
-        NavigationSplitView {
-            sidebarContent
-                .navigationSplitViewColumnWidth(min: 190, ideal: 215, max: 250)
-        } detail: {
-            if let tab = selectedTab {
-                selectedContent(for: tab)
-            } else {
-                ContentUnavailableView(
-                    "Select a Setting",
-                    systemImage: "gearshape",
-                    description: Text("Choose a category from the sidebar."))
+        HistoricalPricesProvider {
+            NavigationSplitView {
+                sidebarContent
+                    .navigationSplitViewColumnWidth(min: 190, ideal: 215, max: 250)
+            } detail: {
+                if let tab = selectedTab {
+                    selectedContent(for: tab)
+                } else {
+                    ContentUnavailableView(
+                        "Select a Setting",
+                        systemImage: "gearshape",
+                        description: Text("Choose a category from the sidebar."))
+                }
             }
         }
         .frame(

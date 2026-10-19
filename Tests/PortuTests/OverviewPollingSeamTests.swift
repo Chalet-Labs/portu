@@ -6,7 +6,7 @@ import Testing
 /// The live-polling set through the production seam (S12): who is a candidate, the usable-price
 /// check, the ranking and the watchlist append. Books are USD.
 struct OverviewPollingSeamTests {
-    private typealias Fixture = OverviewValuationFixture
+    private typealias Fixture = PortfolioValuationFixture
 
     private static let hideBoth = TokenDashboardSettings(minimumDashboardValue: 1, hideUnpriced: true, hideDust: true)
 

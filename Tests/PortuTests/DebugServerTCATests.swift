@@ -79,6 +79,49 @@
             #expect(json["lastUpdate"] == nil)
         }
 
+        @Test func `prices endpoint adds the usd book and the display rate`() async throws {
+            let rate = try #require(Decimal(string: "1.25"))
+            let store = makeStore(selectedCurrency: .chf, currentUSDToDisplayRate: rate, livePricesUSD: ["bitcoin": 50000])
+            let json = try await pricesJSON(store)
+
+            let prices = try #require(json["prices"] as? [String: Double])
+            #expect(prices == ["bitcoin": 62500])
+            #expect(json["pricesUSD"] as? [String: Double] == ["bitcoin": 50000])
+            #expect(json["usdToDisplayRate"] as? Double == 1.25)
+        }
+
+        /// Display = USD × rate for every price (I2). The values are exact in binary floating point.
+        @Test func `prices endpoint shows every usd price at the display rate`() async throws {
+            let rate = try #require(Decimal(string: "1.25"))
+            let half = try #require(Decimal(string: "0.5"))
+            let store = makeStore(
+                selectedCurrency: .eur,
+                currentUSDToDisplayRate: rate,
+                livePricesUSD: ["bitcoin": 50000, "ethereum": 3000, "usd-coin": 1, "dogecoin": half])
+            let json = try await pricesJSON(store)
+
+            let prices = try #require(json["prices"] as? [String: Double])
+            #expect(prices == ["bitcoin": 62500, "ethereum": 3750, "usd-coin": 1.25, "dogecoin": 0.625])
+            let pricesUSD = try #require(json["pricesUSD"] as? [String: Double])
+            let displayRate = try #require(json["usdToDisplayRate"] as? Double)
+            #expect(displayRate == 1.25)
+            #expect(pricesUSD.keys.sorted() == prices.keys.sorted())
+            for (id, usd) in pricesUSD {
+                #expect(prices[id] == usd * displayRate)
+            }
+        }
+
+        private func pricesJSON(_ store: StoreOf<AppFeature>) async throws -> [String: Any] {
+            let server = DebugServer(port: 0, store: store)
+            try await server.start()
+            defer { server.stop() }
+
+            let port = try #require(server.listeningPort)
+            let (data, _) = try await URLSession.shared.data(
+                from: #require(URL(string: "http://127.0.0.1:\(port)/state/prices")))
+            return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        }
+
         // MARK: - GET /state/sync
 
         @Test func `sync endpoint returns idle statuses`() async throws {

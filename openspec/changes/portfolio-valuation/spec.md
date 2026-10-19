@@ -38,8 +38,9 @@
   - In PR (a) the Overview and Sidebar switch their historical 24h-change input to the USD consecutive-day fractions. Asset Detail's header reads the live changes only, and it moves to the merged fractions in PR (b) (S7).
 - **PR (b) cleanup:**
   - It deletes `historicalDisplayPrices`.
-  - It deletes `appState.prices` if no reader remains.
+  - It deletes `appState.prices` and its bridge once manual entry, its last reader, moves to the USD book.
   - Manual entry and the debug `/state/prices` route read the USD book or the store directly.
+  - It deletes `AppFeature.State.liveDisplayPrices`, the derived display copy of the live book. Its last reader was the `appState.prices` bridge; `/state/prices` computes `livePricesUSD × currentUSDToDisplayRate` in place. Decided 2026-10-13.
 
 ### I3: Price ID
 - **CoinGecko ID**: the override CoinGecko ID, else the asset CoinGecko ID, else the identity-mapped CoinGecko ID. Each is normalized.
@@ -98,7 +99,7 @@ The rules are evaluated in order. The first rule that applies decides the value 
   - `1 + p ≤ 0`
 
 ### V5: Price, source and fraction of a row
-- **Price.** Some rows show a unit price: the watchlist, the Asset Detail header, Token Settings.
+- **Price.** Some rows show a unit price: the watchlist and the Asset Detail header. Token Settings shows no unit price, so it does not compute one. Decided 2026-10-13.
   - The price is Σ value ÷ Σ amount over the row's counted tokens that have a value.
   - When every such token shares one live or close price, this is exactly that price.
   - With no valued counted token, the row has no price.
@@ -290,7 +291,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - Rows are sums of contributions per asset, per protocol and per chain. They stop reading `Position.netUSDValue`.
 - Each tab's total equals the Overview net total.
 - Platforms and Networks gain the display filter and the hidden line, as dashboards under rule 3.
-- For an asset with at least one counted token, the Assets row value equals the Token Settings row value.
+- For an asset with at least one counted token, the Assets row value equals the Token Settings row value. The one exception is an unpriced row: the Assets tab values it at 0, while Token Settings shows no value (U4).
 
 ### S6: All Positions (PR b)
 - A card is Σ its tokens' contributions. A section is Σ its cards. A filter-sidebar option is Σ its cards.
@@ -299,6 +300,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
   - a reward is shown as not counted
   - an ignored token is greyed, with an "Ignored" badge and no value
 - No row is hidden.
+- Cards within a section sort by value, highest first, ties by position ID. Token rows within a card sort by contribution, highest first, then symbol, then token ID, so rows that count 0 (not counted, unpriced, ignored) sit between the supplies and the borrows. Decided 2026-10-14.
 
 ### S7: Asset Detail (PR b)
 - **Header:** the V5 price and its V5 fraction, from merged live and historical fractions. Today it reads live changes only.
@@ -311,7 +313,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - Token Settings uses the **active-accounts** valuation input, like the Assets tab.
 - Each position token is valued by the module. Nothing is netted before pricing.
 - **A row:**
-  - value: Σ its tokens' contributions
+  - value: Σ its tokens' contributions. Following U4, an unpriced row shows no value, and a not-counted row shows its tokens' own value, muted, while counting 0.
   - source: V5
   - status: F1, plus alwaysShow
 - Rows with no counted token (reward-only) show the status **notCounted**.
@@ -322,7 +324,7 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 
 ### S9: Accounts (PR b)
 - A balance is Σ the contributions of that account's own tokens, **active or not**. It uses the all-accounts valuation input.
-- A tooltip on the Balance cell shows the sync-time total (A6) as "Provider total at last sync".
+- A tooltip on the Balance cell of a wallet or manual account shows the sync-time total (A6) as "Provider total at last sync". An exchange account shows none, because the exchange reports no USD value at sync. Decided 2026-10-14.
 - Σ of the active balances = the Overview net total.
 
 ### S10: Performance eligibility (PR b)
@@ -336,18 +338,21 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
   - `valuedTotalUSD`
   - `rawSyncTotalUSD` (A6)
 - **Inputs:** the same as the views. The USD book and rate come from the store through a closure. The closes are fetched from the store with the I1 window and the backfill-enabled rule. Overrides and mappings come from the store too.
+- **Wiring:** the route registers in `DebugEndpoints`, which has no store access. `DebugServer` therefore injects a `@MainActor` closure that returns the USD book and rate. The backfill flag is read from `UserDefaults`. Decided 2026-10-13.
+- **Scope with `accountId`:** the all-accounts input, filtered to that account, so the route reconciles with the Accounts balance (S9) for an inactive account too. An unknown account gives 404; a malformed ID gives 400. Decided 2026-10-13.
+- **`/state/prices`:** keeps its `prices` key in the display currency, computed in place as `livePricesUSD × currentUSDToDisplayRate`. It adds `pricesUSD` and `usdToDisplayRate`. Decided 2026-10-13.
 - **Tests:** a characterization test pins the route.
 
 ### S12: Polling and backfill eligibility (PR a for polling, PR b for backfill)
 - **Shared rule:** their value checks call the module, and their own selection rules stay. Ignored tokens are never candidates, which is today's rule.
-- **Selection value:** the module value, or `|usdValue|` when the module value is 0 (`ValuedToken.selectionValue`). Polling ranks by it (`OverviewFeature.pricePollingIDs`); backfill uses it for eligibility (`HistoricalPriceBackfillFeature.shouldIncludeToken`) and keeps its own price-ID ordering.
+- **Selection value:** the module value, or `|usdValue|` when the module value is 0 (`ValuedToken.selectionValue`). Polling ranks by it (`OverviewFeature.pricePollingIDs`); backfill uses it for eligibility (`HistoricalBackfillCandidateResolver.shouldIncludeToken`) and keeps its own price-ID ordering.
 - **Polling:**
-  - It keeps today's rank-by-value top N plus the watchlist.
+  - Overview keeps today's rank-by-value top N plus the watchlist. Exposure keeps its own rule: no ranking, no cap and no watchlist. It polls a counted, non-ignored token with a price ID when the token is in a visible row of the Exposure asset table, or when its source is *sync* or *unpriced* (for recovery). Manual, reward and `amount ≤ 0` tokens are never polled. Decided 2026-10-13.
   - A token is a candidate while it is in a visible row (F2) of the net asset-row list, which holds every token the tabs, Key Changes, the donut and the watchlist show, or of the Health list. Outside every such row, only the branch below for tokens with no usable price keeps it. Category slices, the headline, the cards and the hidden line never make a token a candidate.
-  - Two copies exist: Overview's (PR a) and Exposure's `dashboardPollingPriceID`, which migrates with Exposure in PR (b).
+  - Two rules exist: Overview's `OverviewFeature.pricePollingIDs` (PR a) and Exposure's `ExposureFeature.pollingIDs` (PR b).
   - The branch that keeps unpriced onchain IDs in the set stays. A token with an implausible onchain live price stays ranked by its sync value and stays polled, so it can recover.
   - Its ranking semantics belong to #101.
-- **Backfill:** it keeps today's candidate rules. The value is now USD (a unit fix), and the threshold is unscaled USD.
+- **Backfill:** it keeps today's candidate rules, and it values tokens over an empty market, as it effectively does today. No production caller passes a price book, so today's value is already USD: manual price × amount, else `usdValue`. The candidate, source and identity-resolution sets therefore do not change. The threshold is unscaled USD. Decided 2026-10-13.
 - The PR lists the marginal change in the polled and backfilled sets.
 
 ## Snapshots (PR b, separate commit)
@@ -364,8 +369,13 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
   - the Performance fetcher: category chart, bottom panel, estimate
   - the Overview value-chart estimate
 - **Limit-1 "earliest" probes:** they skip ignored assets inside the fetch, either with a predicate on `assetId` or by fetching in order until a non-ignored row turns up. A test against an in-memory store pins the chosen approach.
+- **Chosen approach (decided 2026-10-13):** a predicate that excludes the ignored IDs, `!ignoredIDs.contains($0.assetId)`, on the scalar `assetId`. It is used by the windowed reader and both probes, and `ignoredIDs` is captured as an `Array<UUID>`.
+  - Tests pin it on an in-memory store and on one disk-backed store, each with an empty list and with thousands of IDs.
+  - If a large list fails, the windowed reader filters in Swift after the fetch, and the probes page in timestamp order.
 - **Not filtered:** Asset Detail's charts (S7).
 - **Un-ignoring:** the old rows become readable again. Nothing is backfilled.
+- **The step at the join (accepted 2026-10-13):** N2 filters the estimated segment, but N3 keeps the recorded totals. A holding that is ignored now therefore drops out of the estimate and stays in the recorded series it joins, so the chart can step at the join.
+- **The estimate ends at the first recorded point (decided 2026-10-16):** each estimate ends at the earlier of the first non-ignored asset row and the first point of the recorded series that chart draws in its scope, so it never overlaps that series. This also covers a total recorded with no asset rows. The holdings still come from the first non-ignored asset batch.
 
 ### N3: History is not rewritten
 - Existing `PortfolioSnapshot` and `AccountSnapshot` rows keep their values.
@@ -408,9 +418,10 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
   - `[pP]lausib`
   - `normalizedThreshold`
 - **Allowlist** (listed in the PR):
-  - time-series math: `HistoricalPortfolioEstimator`, the Performance series, `AssetPriceChart`, and the backfill `snapshotValue` over `AssetSnapshot` rows
-  - `ManualPositionPricing` and `AddPositionSheet`, the manual-entry write path. When PR (b) moves the sheet to the USD book, its `displayPrice:` argument must stay a display-currency price (USD × rate). A USD price must never be passed where a display price is expected.
+  - time-series math: `HistoricalPortfolioEstimator`, the Performance series (including `ProviderPortfolioHistory`), `AssetPriceChart`, and the backfill `snapshotValue` over `AssetSnapshot` rows
+  - `ManualPositionPricing` and `AddPositionSheet`, the manual-entry write path. PR (b) moves the sheet to the USD book. `ManualPositionPricing` then takes the USD price, so no display price and no rate round trip remain; the sheet disables Add for an amount ≤ 0. Decided 2026-10-13.
   - display formatting of a module result
+- **Supplementary sweep:** the PR also lists the hits of `[aA]mount\)?\s*\*`, which the case-sensitive `amount \*` misses.
 
 ### G2: `netUSDValue`
 - `Position.netUSDValue` is **written** by SyncEngine and by the manual-entry path.
@@ -421,8 +432,8 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - **Name collisions** the PR lists (not `Position` reads):
   - `StagedPosition.netUSDValue`
   - `HistoricalEstimateSnapshotEntry.netUSDValue`
-  - the `NetworksTab` tuple
-  - the Token Settings aggregate
+
+  PR (b) removes the two other collisions: the `NetworksTab` tuple and the Token Settings aggregate.
 
 ### G3: Verification gate (#116)
 - `just test-packages`
@@ -554,3 +565,85 @@ Dust is judged on the **displayed row**, after aggregation. Two dusty tokens tha
 - An ignored token is absent from dashboard rows, slices and hidden summaries.
 - It is greyed with an "Ignored" badge and no value on All Positions and Asset Detail.
 - It contributes 0 to every total.
+
+## PR (b) decisions (2026-10-13)
+
+The PR (b) description lists the commits in order and every intentional number change.
+
+### Decided by the user
+- **Manual entry:** see G1. `ManualPositionPricing` takes the USD price, and Add is disabled for an amount ≤ 0.
+- **The hidden line in tables** is the last table row:
+  - Exposure: its spot, liabilities and net cells hold the table's hidden gross, debt and net.
+  - Platforms and Networks: it carries its share, so the shares sum to 100%.
+  - Assets tab: it shows only while the search box is empty. Search never changes the line's numbers.
+- **The Asset Detail header:**
+  - A held asset follows V5. With no valued counted token, for example an implausible onchain price, it shows no card.
+  - An asset with no counted, non-ignored token shows the market quote: the live price, else the latest close, under its market price ID (`MarketPrices.quote`).
+- **Token-level rows** on All Positions, Asset Detail and Token Settings:
+  - A reward or zero-amount token shows its value muted, tagged "Not counted".
+  - A counted, unpriced token shows an "Unpriced" caption and no value.
+  - An ignored token is greyed, with an "Ignored" badge and no value.
+  - Token Settings gains a Not counted badge, a count and a filter entry.
+
+#### User, 2026-10-14
+- **All Positions order:**
+  - Cards within a section sort by value, highest first, with ties by position ID.
+  - Token rows within a card sort by contribution, highest first, then symbol, then token ID. The first key is Asset Detail's row rule (Asset Detail then breaks ties by account name, then token ID), so not-counted, unpriced and ignored rows (contribution 0) sit between the supplies and the borrows.
+  - The section and sidebar orders are unchanged.
+- **The Accounts tooltip:** exchange accounts show no "Provider total at last sync" tooltip, because the exchange reports no USD value at sync (Kraken stores 0). Wallet and manual accounts keep it. This narrows the Accounts bullet below.
+
+### Decided in implementation (veto in review)
+- **One shared valuation context.** `ValuationContext`, `ValuationPriceInputs` and `ValuationSources` live in `Features/Shared` and replace the Overview-named types. Each screen adds its own methods to the shared sources type.
+- **`TokenDashboardSettings.showAll`:** lists that never hide rows use it, whatever settings the context carries.
+- **A token-level row state on `ValuedToken`,** in this precedence: ignored, then notCounted, then unpriced, then counted.
+- **`TokenPricingOverrideSnapshot.init(_:)` and `TokenIdentityMappingSnapshot.init(_:)` are nonisolated.** Models are read only on the actor that owns their context.
+- **Per-asset rows are keyed by `assetId`** on Exposure, Assets, Token Settings and Performance. Overview keeps its price-ID + symbol key.
+- **Exposure:**
+  - Liabilities show as a positive amount, on the card and in the row cells (A2).
+  - "% of spot" shows "—" when Spot ≤ 0.
+  - The Assets pill counts visible rows.
+  - The hidden line's first cell reads "N small balances" (all dust) or "N hidden balances". Its amounts sit in the spot, liabilities and net cells, shown with cents, and it has no "% of spot".
+- **Platforms and Networks:**
+  - "# Positions" and "# Networks" count counted, non-ignored tokens.
+  - A platform's name is its lowest non-nil `protocolName`. A platform with none shows its protocol ID; it used to show "Unknown", which could repeat across rows.
+  - Ties break by name, then by key.
+  - No total row is rendered.
+  - The hidden line has its label in the first cell, its value, and its share in the Share cell. Its count cells are empty.
+- **Assets tab:**
+  - The clock badge marks the *sync* source only, and a missing price shows "—". The badge is labelled "Sync-time price" for VoiceOver.
+  - CSV exports the visible rows, with an empty cell for a missing price.
+  - The hidden line's label spans Symbol and Name. Only its Value cell is filled.
+- **Token Settings:**
+  - Its status is `RowStatus`, with `alwaysShow` as a separate flag.
+  - It gains a *close* source.
+  - The manual-price count and filter read the override.
+  - An ignored row shows "—" as its source, as does a not-counted row (V5 gives neither a source).
+  - An ignored asset's Ignored badge, no-value rule, count and filter win over its F1 status, so an ignored reward-only asset counts as Ignored, not Not counted.
+  - Rows with a value that counts sort first, by value descending, ties by symbol, then asset ID. One trailing group follows, ordered by symbol, then asset ID. It holds the rows with no value (ignored and unpriced) and the not-counted rows, whose own value counts nowhere. Unpriced rows do count; they trail only because they have no value.
+  - A row's amount covers the tokens the row describes. A counted row (priced, dust or unpriced) shows the net amount of its counted tokens, so a reward does not add to it. An ignored or not-counted row shows the net amount of all its tokens. In both, borrows subtract, as in `ValuationTotals.netAmount`.
+  - The view builds its context with `ValuationContext.activeAccounts` from its own override and mapping queries, rather than through `ValuationSources`. It already owns the override query and the dashboard settings for its writers.
+  - `SettingsView` mounts `HistoricalPricesProvider`, so the Settings window sees closes (S8). The provider reads only the USD closes, with no currency or rate.
+- **Accounts:** the tooltip shows on every wallet and manual account, converted at the current rate. Exchange accounts show none (decided by the user, 2026-10-14).
+- **Asset Detail:**
+  - Active accounts only.
+  - Token rows sort by contribution descending, then account name, then token ID.
+  - The account count is the distinct `accountId`s.
+  - Total Amount excludes ignored tokens.
+- **Performance:** the request carries `livePricesUSD` and the USD closes, still read inside `.task`.
+- **Price-ID normalization:** every duplicate routes through the Core helpers. The scope extends past `Features/` to:
+  - PortuNetwork's `PriceService.fetchHistoricalPrices` and `CoinGeckoDTO` (both trim, lowercase and drop empties, as `normalizedProviderID` does)
+  - `HistoricalBackfillPriceSource.hash`
+  - the `TokenIdentityMapping` model copy
+
+  `ZerionChainMapping` normalizes a chain, not a price ID, and stays.
+- **Manual-entry price key:** the asset's CoinGecko ID is normalized with `TokenIdentityMappingFeature.normalizedProviderID` before the USD book lookup.
+- **The Core API is tightened** once PR (b)'s consumers exist:
+  - `public internal(set)` on the fields of `ValuationTotals`, `HiddenBalances` and `SummaryCards` (nested `Idle`/`Deployed` included), so Core can still mutate them while the app only reads.
+  - The memberwise inits of `ValuationTotals` and `ListShares` become internal.
+- **Out of scope** (listed in the PR):
+  - the drift of the sidebar type labels
+  - `TokenRole.signed` visibility
+  - the Asset Detail chart key ignoring identity mappings
+  - Performance `priceChanges` ignoring mappings
+  - backfill's raw `manualPriceUSD != nil` check
+  - `computeDiversificationMetrics` re-summing its weights (a follow-up for #123/#124)

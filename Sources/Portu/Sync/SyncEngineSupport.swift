@@ -39,11 +39,12 @@ struct AssetSnapshotAccumulator {
 extension SyncEngine {
     /// Aggregates positions into per-account/asset snapshot rows without touching
     /// the model context. Accounts with static holdings (manual/zapper) always
-    /// contribute; others only when refreshed in this batch.
+    /// contribute; others only when refreshed in this batch. Ignored assets get no row.
     static func accumulatedAssetSnapshots(
         batchId: UUID,
         timestamp: Date,
         positions: [Position],
+        ignoredAssetIds: Set<UUID>,
         refreshedSyncableAccountIDs: Set<UUID>) -> [AssetSnapshot] {
         var accumulators: [String: AssetSnapshotAccumulator] = [:]
 
@@ -55,7 +56,7 @@ extension SyncEngine {
             }
 
             for token in pos.tokens {
-                guard let asset = token.asset else { continue }
+                guard let asset = token.asset, !ignoredAssetIds.contains(asset.id) else { continue }
                 if token.role.isReward {
                     continue
                 }
