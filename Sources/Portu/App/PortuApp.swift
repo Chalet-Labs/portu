@@ -368,9 +368,9 @@ struct PortuApp: App {
     nonisolated static func secretStoreService(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.portu.app") -> String {
-        environment["XCTestConfigurationFilePath"] == nil
-            ? bundleIdentifier
-            : "\(bundleIdentifier).tests"
+        PortuMain.isTestHost(environment: environment)
+            ? "\(bundleIdentifier).tests"
+            : bundleIdentifier
     }
 
     nonisolated static func makeSecretStore(
