@@ -119,7 +119,6 @@ actor APIKeyAvailabilityReader {
     }
 }
 
-@main
 struct PortuApp: App {
     let store: StoreOf<AppFeature>
     @State private var appState = AppState()
