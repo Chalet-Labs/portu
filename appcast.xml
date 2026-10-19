@@ -3,6 +3,23 @@
     <channel>
         <title>Portu</title>
         <item>
+            <title>1.11.0</title>
+            <pubDate>Mon, 19 Oct 2026 15:48:18 +0000</pubDate>
+            <link>https://github.com/Chalet-Labs/portu</link>
+            <sparkle:version>39</sparkle:version>
+            <sparkle:shortVersionString>1.11.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[# [1.11.0](https://github.com/Chalet-Labs/portu/compare/v1.10.0...v1.11.0) (2026-10-19)
+
+
+### Features
+
+* one valuation policy for every remaining screen ([#144](https://github.com/Chalet-Labs/portu/issues/144)) ([50e0329](https://github.com/Chalet-Labs/portu/commit/50e03292f2dd8c56669a6fa5f6a37d8730c5f299)), closes [#122](https://github.com/Chalet-Labs/portu/issues/122) [#122](https://github.com/Chalet-Labs/portu/issues/122)
+
+]]></description>
+            <enclosure url="https://github.com/Chalet-Labs/portu/releases/download/v1.11.0/Portu-1.11.0.dmg" length="14048848" type="application/octet-stream" sparkle:edSignature="3b8bANdHRJu9W3E/C3NPxfhgjbXCS3Qx+FhYgQ1wD944U0zydHCMRNmAObedYsLqC8NgN96eibmxQIzCdP96Dg=="/>
+        </item>
+        <item>
             <title>1.10.0</title>
             <pubDate>Tue, 13 Oct 2026 09:53:20 +0000</pubDate>
             <link>https://github.com/Chalet-Labs/portu</link>
