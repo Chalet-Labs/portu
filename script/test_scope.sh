@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prints the test groups that changed paths can affect, one per line, sorted.
 # The rules live in script/test-scope.json: every rule whose glob matches a path adds its groups,
-# and a path that no rule matches selects every group. `just test-affected` and PR CI read this.
+# and a path that no rule matches selects every group. `just test-affected` reads this, and PR CI will (#143).
 #
 # Usage:
 #   script/test_scope.sh --base <ref>     <ref>...HEAD plus staged, unstaged and untracked files
@@ -34,7 +34,8 @@ fallback="all"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base)
-      [[ -n ${2:-} ]] || usage
+      # A value starting with - would reach git diff as an option.
+      [[ -n ${2:-} && ${2:-} != -* ]] || usage
       base="$2"
       shift 2
       ;;
@@ -54,31 +55,43 @@ if [[ -n $base && $from_stdin -eq 1 ]] || [[ -z $base && $from_stdin -eq 0 ]]; t
 
 command -v jq >/dev/null || { echo "test_scope.sh: jq is required" >&2; exit 1; }
 
-rules="$(jq -r '.[] | [.glob, (.groups | join(" "))] | @tsv' "$rules_file")"
+# A misspelled group would select a group no recipe runs, so every entry is checked before use.
+rules="$(jq -r --arg known "core network ui app release all none" '
+  ($known | split(" ")) as $known
+  | .[]
+  | if (.glob | type == "string" and length > 0)
+      and (.groups | type == "array" and length > 0 and all(.[]; IN($known[])))
+    then [.glob, (.groups | join(" "))] | @tsv
+    else error("invalid entry \(tojson): needs a glob and groups from \($known | join(", "))")
+    end' "$rules_file")"
 if [[ -n $base ]]; then
   paths="$(changed_paths "$base")"
 else
   paths="$(cat)"
 fi
 
+# Split on newlines, with globbing off. Not here-strings: bash needs a temp file for those, and where
+# it can't create one (a sandboxed agent) the loop would silently select nothing.
+set -f
 selected=""
-while IFS= read -r path; do
-  if [[ -z $path ]]; then continue; fi
+IFS=$'\n'
+for path in $paths; do
   matched=0
-  while IFS=$'\t' read -r glob groups; do
+  for rule in $rules; do
+    glob="${rule%%$'\t'*}"
     # Unquoted on purpose: $glob is a pattern, and * also matches /.
     if [[ $path == $glob ]]; then
       matched=1
-      selected+=" $groups"
+      selected+=" ${rule#*$'\t'}"
     fi
-  done <<<"$rules"
+  done
   if [[ $matched -eq 0 ]]; then selected+=" $fallback"; fi
-done <<<"$paths"
+done
+IFS=$' \t\n'
 
 # A function, because bash 3.2 can't parse a case statement inside $( ).
 expand_groups() {
   local group
-  set -f
   for group in $selected; do
     case "$group" in
       all) printf '%s\n' $all_groups ;;
