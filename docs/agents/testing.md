@@ -33,7 +33,7 @@ script/test_scope.sh --base origin/master
 
 ## Rules
 
-`script/test-scope.json` is the source of truth; PR CI reads the same file. Every entry whose glob matches a path adds its groups, and a path that matches no entry selects every group. Globs use bash `[[ $path == $glob ]]` matching, where `*` also matches `/`. `all` means `core network ui app release`.
+`script/test-scope.json` is the source of truth; PR CI is to read the same file once #143 lands. Every entry whose glob matches a path adds its groups, and a path that matches no entry selects every group. Globs use bash `[[ $path == $glob ]]` matching, where `*` also matches `/`. `all` means `core network ui app release`. Each entry needs a non-empty `glob` and at least one group from `core`, `network`, `ui`, `app`, `release`, `all` and `none`; otherwise the selector exits with an error rather than selecting a group nothing runs.
 
 | Path | Groups |
 |---|---|
