@@ -1,0 +1,35 @@
+[
+  { "glob": "Packages/PortuCore/*", "groups": ["core", "network", "ui", "app"] },
+  { "glob": "Packages/PortuNetwork/*", "groups": ["network", "app"] },
+  { "glob": "Packages/PortuUI/*", "groups": ["ui", "app"] },
+  { "glob": "Sources/Portu/*", "groups": ["app"] },
+  { "glob": "Tests/PortuTests/*", "groups": ["app"] },
+
+  { "glob": ".github/workflows/*", "groups": ["release"] },
+  { "glob": ".releaserc.json", "groups": ["release"] },
+  { "glob": "package.json", "groups": ["release"] },
+  { "glob": "package-lock.json", "groups": ["release"] },
+  { "glob": "Configs/*", "groups": ["release"] },
+  { "glob": "README.md", "groups": ["release"] },
+  { "glob": "docs/agents/production-signing.md", "groups": ["release"] },
+  { "glob": "docs/agents/sparkle-adhoc-proof.md", "groups": ["release"] },
+  { "glob": "script/*", "groups": ["release"] },
+  { "glob": "scripts/*", "groups": ["release"] },
+  { "glob": "Sources/Portu/Resources/Info.plist", "groups": ["release"] },
+  { "glob": "Tests/Fixtures/ReleaseAutomation/*", "groups": ["release"] },
+  { "glob": "Tests/PortuTests/ReleaseAutomation*.swift", "groups": ["release"] },
+  { "glob": "Tests/PortuTests/LocalSigningSetupTests.swift", "groups": ["release"] },
+
+  { "glob": "project.yml", "groups": ["all"] },
+  { "glob": "Portu.xcodeproj/*", "groups": ["all"] },
+  { "glob": "*Package.swift", "groups": ["all"] },
+  { "glob": "*Package.resolved", "groups": ["all"] },
+  { "glob": "script/test-scope.json", "groups": ["all"] },
+  { "glob": "script/test_scope.sh", "groups": ["all"] },
+
+  { "glob": "docs/*", "groups": ["none"] },
+  { "glob": "*.md", "groups": ["none"] },
+  { "glob": ".claude/*", "groups": ["none"] },
+  { "glob": ".agents/*", "groups": ["none"] },
+  { "glob": "openspec/*", "groups": ["none"] }
+]
