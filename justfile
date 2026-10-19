@@ -29,6 +29,53 @@ test-packages:
 test:
     xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test
 
+# Run app test suites: the ones named, or all of them except ReleaseAutomationTests
+[positional-arguments]
+test-app *suites:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ $# -eq 0 ]; then
+      filters=(-skip-testing:PortuTests/ReleaseAutomationTests)
+    else
+      filters=()
+      for suite in "$@"; do filters+=("-only-testing:PortuTests/$suite"); done
+    fi
+    xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test "${filters[@]}"
+
+# Run one package's tests, optionally filtered (pkg: Core, Network or UI)
+[positional-arguments]
+test-pkg pkg filter="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "$1" in
+      Core|Network|UI) ;;
+      *) echo "test-pkg: pkg must be Core, Network or UI, got '$1'" >&2; exit 2 ;;
+    esac
+    cd "Packages/Portu$1"
+    if [ -n "${2:-}" ]; then swift test --filter "$2"; else swift test; fi
+
+# Run the package and app tests that changes since base can affect (rules: script/test-scope.json)
+[positional-arguments]
+test-affected base="origin/master":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    base="$1"
+    groups="$(script/test_scope.sh --base "$base")"
+    if [ "$groups" = none ]; then
+      echo "no test groups affected by $base...HEAD"
+      exit 0
+    fi
+    selected() { printf '%s\n' "$groups" | grep -qx "$1"; }
+    echo "test groups affected by $base...HEAD:" $groups
+    if selected core; then "{{just_executable()}}" test-pkg Core; fi
+    if selected network; then "{{just_executable()}}" test-pkg Network; fi
+    if selected ui; then "{{just_executable()}}" test-pkg UI; fi
+    if selected release; then
+      xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test
+    elif selected app; then
+      xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test -skip-testing:PortuTests/ReleaseAutomationTests
+    fi
+
 # Lint all Swift files
 lint:
     swiftlint lint --quiet
