@@ -6,6 +6,7 @@
 # Usage:
 #   script/test_scope.sh --base <ref>     <ref>...HEAD plus staged, unstaged and untracked files
 #   script/test_scope.sh --paths-from -   newline-separated paths on stdin
+#   --no-fallback                         a path no rule matches selects nothing (for the guard test)
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,31 +14,43 @@ rules_file="$script_dir/test-scope.json"
 all_groups="core network ui app release"
 
 usage() {
-  echo "usage: script/test_scope.sh --base <ref> | --paths-from -" >&2
+  echo "usage: script/test_scope.sh [--no-fallback] --base <ref> | --paths-from -" >&2
   exit 2
 }
 
+repo_git() { git -C "$script_dir/.." -c core.quotePath=false "$@"; }
+
 # --no-renames lists both sides of a move, so a file moved out of a package still selects it.
 changed_paths() {
-  local repo_root
-  repo_root="$(cd "$script_dir/.." && pwd)"
-  git -C "$repo_root" diff --name-only --no-renames "$1...HEAD" &&
-    git -C "$repo_root" diff --name-only --no-renames --cached &&
-    git -C "$repo_root" diff --name-only --no-renames &&
-    git -C "$repo_root" ls-files --others --exclude-standard
+  repo_git diff --name-only --no-renames "$1...HEAD" &&
+    repo_git diff --name-only --no-renames --cached &&
+    repo_git diff --name-only --no-renames &&
+    repo_git ls-files --others --exclude-standard
 }
 
-case "${1:-}" in
-  --base)
-    [[ $# -eq 2 && -n ${2:-} ]] || usage
-    base="$2"
-    ;;
-  --paths-from)
-    [[ $# -eq 2 && ${2:-} == - ]] || usage
-    base=""
-    ;;
-  *) usage ;;
-esac
+base=""
+from_stdin=0
+fallback="all"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --base)
+      [[ -n ${2:-} ]] || usage
+      base="$2"
+      shift 2
+      ;;
+    --paths-from)
+      [[ ${2:-} == - ]] || usage
+      from_stdin=1
+      shift 2
+      ;;
+    --no-fallback)
+      fallback=""
+      shift
+      ;;
+    *) usage ;;
+  esac
+done
+if [[ -n $base && $from_stdin -eq 1 ]] || [[ -z $base && $from_stdin -eq 0 ]]; then usage; fi
 
 command -v jq >/dev/null || { echo "test_scope.sh: jq is required" >&2; exit 1; }
 
@@ -59,7 +72,7 @@ while IFS= read -r path; do
       selected+=" $groups"
     fi
   done <<<"$rules"
-  if [[ $matched -eq 0 ]]; then selected+=" all"; fi
+  if [[ $matched -eq 0 ]]; then selected+=" $fallback"; fi
 done <<<"$paths"
 
 # A function, because bash 3.2 can't parse a case statement inside $( ).

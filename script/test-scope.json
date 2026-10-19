@@ -6,6 +6,7 @@
   { "glob": "Tests/PortuTests/*", "groups": ["app"] },
 
   { "glob": ".github/workflows/*", "groups": ["release"] },
+  { "glob": ".gitignore", "groups": ["release"] },
   { "glob": ".releaserc.json", "groups": ["release"] },
   { "glob": "package.json", "groups": ["release"] },
   { "glob": "package-lock.json", "groups": ["release"] },
