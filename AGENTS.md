@@ -22,6 +22,9 @@ just build
 just release
 just test-packages
 just test
+just test-app [Suite ...]
+just test-pkg <Core|Network|UI> [filter]
+just test-affected [base]
 just lint
 just lint-strict
 just lint-fix
@@ -72,7 +75,9 @@ The app target in `Sources/Portu/` imports all three packages and contains featu
 - Use `@Test`, `#expect()`, `#require()`, and async test methods.
 - Use `@Suite(.serialized)` only when tests share mutable state. Do not add plain `@Suite` without traits.
 - Tests live in each package's `Tests/` directory and in `Tests/PortuTests/`.
-- For behavior changes, run focused tests first, then the full Xcode scheme before calling the work complete.
+- During TDD (test-driven development), run only the suites you touch.
+- For app suites use `just test-app <Suite>`; for package suites use `just test-pkg <Core|Network|UI> <filter>`.
+- Before pushing, run `just test-affected`. PR CI runs the full unit suite. Recipes and path rules: `docs/agents/testing.md`.
 - When testing initializer default parameter behavior, call the initializer without those arguments instead of explicitly passing the default values.
 
 Full Xcode scheme test command:
@@ -88,7 +93,7 @@ xcodebuild -project Portu.xcodeproj -scheme Portu -configuration Debug -derivedD
 - Full cycle: RED (failing test), GREEN (minimal implementation), REFACTOR (clean up).
 - No implementation plans with code snippets. Tests are the spec.
 - When a test fails unexpectedly, diagnose before changing the test.
-- Run the full test suite before considering behavior complete.
+- Run `just test-affected` before considering behavior complete; CI runs the full suite.
 - Read specs from `openspec/changes/` before generating tests.
 - Refactor only when tests are green. Do not refactor and change behavior simultaneously.
 
