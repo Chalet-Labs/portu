@@ -3,6 +3,23 @@
     <channel>
         <title>Portu</title>
         <item>
+            <title>1.12.0</title>
+            <pubDate>Tue, 20 Oct 2026 20:28:12 +0000</pubDate>
+            <link>https://github.com/Chalet-Labs/portu</link>
+            <sparkle:version>43</sparkle:version>
+            <sparkle:shortVersionString>1.12.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[# [1.12.0](https://github.com/Chalet-Labs/portu/compare/v1.11.1...v1.12.0) (2026-10-20)
+
+
+### Features
+
+* test-scope rules and fast-loop test recipes for agents ([#150](https://github.com/Chalet-Labs/portu/issues/150)) ([6fe4776](https://github.com/Chalet-Labs/portu/commit/6fe4776eafd39914df12a80ae7c76d62c6652d3c)), closes [#143](https://github.com/Chalet-Labs/portu/issues/143)
+
+]]></description>
+            <enclosure url="https://github.com/Chalet-Labs/portu/releases/download/v1.12.0/Portu-1.12.0.dmg" length="13525920" type="application/octet-stream" sparkle:edSignature="p/MM80bftdRx0ITi/HXqeaY1q6+d5P3QVR6mW5Tl5lThD8cRslz9lQwduSD15UmxfNUFiKG85M2QAtWn5DPQBA=="/>
+        </item>
+        <item>
             <title>1.11.1</title>
             <pubDate>Tue, 20 Oct 2026 19:47:59 +0000</pubDate>
             <link>https://github.com/Chalet-Labs/portu</link>
