@@ -11,7 +11,7 @@ struct ScopeStepCase: Sendable, CustomTestStringConvertible {
     }
 
     static let all = [
-        ScopeStepCase(groups: ["none"], skipAll: true, skipRelease: false),
+        ScopeStepCase(groups: ["none"], skipAll: true, skipRelease: true),
         ScopeStepCase(groups: ["app"], skipAll: false, skipRelease: true),
         ScopeStepCase(groups: ["app", "core", "network", "ui"], skipAll: false, skipRelease: true),
         ScopeStepCase(groups: ["release"], skipAll: false, skipRelease: false),
