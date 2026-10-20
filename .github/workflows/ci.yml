@@ -86,13 +86,27 @@ jobs:
           just lint-strict
 
       # The scope outputs are empty on push, so `!= 'true'` runs everything there.
-      - name: Cache SPM packages
+      # A cache from another Xcode or other dependencies isn't reused; `latest-stable` moves.
+      - name: Compute build cache key
+        id: cache-key
         if: steps.scope.outputs.skip_all != 'true'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        env:
+          DEPENDENCIES: ${{ hashFiles('**/Package.swift', '**/Package.resolved') }}
+        run: |
+          set -euo pipefail
+          xcode="$(xcodebuild -version | awk '/^Build version/ { print $3 }')"
+          test -n "$xcode"
+          echo "prefix=build-$RUNNER_OS-xcode-$xcode-$DEPENDENCIES-" >> "$GITHUB_OUTPUT"
+
+      # Restores the newest cache master saved for this prefix. A PR can't see another PR's caches.
+      - name: Restore build cache
+        id: cache
+        if: steps.scope.outputs.skip_all != 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .build
-          key: spm-${{ runner.os }}-${{ hashFiles('**/Package.swift', '**/Package.resolved') }}
-          restore-keys: spm-${{ runner.os }}-
+          key: ${{ steps.cache-key.outputs.prefix }}${{ github.sha }}
+          restore-keys: ${{ steps.cache-key.outputs.prefix }}
 
       - name: Generate Xcode project
         if: steps.scope.outputs.skip_all != 'true'
@@ -108,3 +122,12 @@ jobs:
           TEST_FILTERS: ${{ steps.scope.outputs.skip_release == 'true' && '-skip-testing:PortuTests/ReleaseAutomationTests' || '' }}
         # Unquoted: no filter passes no argument
         run: just test-without-building $TEST_FILTERS
+
+      # Only master saves, and only after its tests pass: PR caches would evict master's under the repo's
+      # 10 GB limit. A re-run of the same commit restores its own entry exactly, which can't be saved again.
+      - name: Save build cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .build
+          key: ${{ steps.cache-key.outputs.prefix }}${{ github.sha }}
