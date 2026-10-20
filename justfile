@@ -74,7 +74,8 @@ test-affected base="origin/master":
       echo "no test groups affected by $base...HEAD"
       exit 0
     fi
-    selected() { printf '%s\n' "$groups" | grep -qx "$1"; }
+    # Not printf | grep -q: grep can exit before printf is done, and pipefail would read that as no match.
+    selected() { [[ $'\n'$groups$'\n' == *$'\n'"$1"$'\n'* ]]; }
     echo "test groups affected by $base...HEAD:" $groups
     if selected core; then "{{just_executable()}}" test-pkg Core; fi
     if selected network; then "{{just_executable()}}" test-pkg Network; fi

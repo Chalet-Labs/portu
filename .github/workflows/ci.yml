@@ -18,6 +18,48 @@ jobs:
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          # The scope step diffs origin/<base>...HEAD, which needs the history of both
+          fetch-depth: 0
+
+      # Runs first, while the worktree is clean: the script also counts modified and untracked files.
+      # The base ref reaches the script through env, never interpolated into the shell source.
+      - name: Select test scope
+        id: scope
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          groups="$(script/test_scope.sh --base "origin/$BASE_REF")"
+          skip_all=false
+          skip_release=false
+          # Neither the selector nor this step can vouch for a change to itself: a broken one could skip the
+          # tests that would catch it.
+          if ! git diff --quiet "origin/$BASE_REF...HEAD" -- script/test_scope.sh script/test-scope.json .github/workflows/ci.yml; then
+            plan="every suite, because the selector, its rules or this workflow changed"
+          elif [ "$groups" = none ]; then
+            skip_all=true
+            skip_release=true
+            plan="format and lint only"
+          # Not printf | grep -q: grep can exit before printf is done, and pipefail would read that as no match.
+          elif [[ $'\n'$groups$'\n' != *$'\n'release$'\n'* ]]; then
+            skip_release=true
+            plan="every suite except ReleaseAutomationTests"
+          else
+            plan="every suite"
+          fi
+          echo "skip_all=$skip_all" >> "$GITHUB_OUTPUT"
+          echo "skip_release=$skip_release" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Test scope"
+            echo
+            echo "Groups selected by changes since \`origin/$BASE_REF\`:"
+            echo
+            printf -- '- `%s`\n' $groups
+            echo
+            echo "Runs: $plan."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
@@ -43,7 +85,9 @@ jobs:
           just format-check
           just lint-strict
 
+      # The scope outputs are empty on push, so `!= 'true'` runs everything there.
       - name: Cache SPM packages
+        if: steps.scope.outputs.skip_all != 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .build
@@ -51,10 +95,16 @@ jobs:
           restore-keys: spm-${{ runner.os }}-
 
       - name: Generate Xcode project
+        if: steps.scope.outputs.skip_all != 'true'
         run: just generate
 
       - name: Build for testing
+        if: steps.scope.outputs.skip_all != 'true'
         run: just build-for-testing
 
       - name: Test
-        run: just test-without-building
+        if: steps.scope.outputs.skip_all != 'true'
+        env:
+          TEST_FILTERS: ${{ steps.scope.outputs.skip_release == 'true' && '-skip-testing:PortuTests/ReleaseAutomationTests' || '' }}
+        # Unquoted: no filter passes no argument
+        run: just test-without-building $TEST_FILTERS

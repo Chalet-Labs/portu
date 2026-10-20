@@ -2,6 +2,8 @@
 
 Which tests to run while working, and how changed paths map to test groups. `just test` runs every app and package suite from one Xcode build of the `Portu` scheme, which tests `PortuTests`, `PortuCoreTests`, `PortuNetworkTests` and `PortuUITests`. `just test-packages` (every package suite, through `swift test`) stays available. CI runs the same scheme with `just build-for-testing`, then `just test-without-building`, so every module compiles once.
 
+On a pull request, CI first runs `script/test_scope.sh --base origin/<base>` and lists the selected groups in the job summary. Format and lint always run. When the result is `none`, the build and the tests are skipped, so format and lint decide the check. When `release` isn't selected, the tests run with `-skip-testing:PortuTests/ReleaseAutomationTests`. Otherwise, and on every push to master, the full scheme runs. A PR that changes `script/test_scope.sh`, `script/test-scope.json` or `.github/workflows/ci.yml` also runs the full scheme, whatever the selector prints, so a broken selector or scope step can't skip the tests that check it.
+
 ## Recipes
 
 | Recipe | Runs | Use it |
@@ -33,7 +35,7 @@ script/test_scope.sh --base origin/master
 
 ## Rules
 
-`script/test-scope.json` is the source of truth; PR CI is to read the same file once #143 lands. Every entry whose glob matches a path adds its groups, and a path that matches no entry selects every group. Globs use bash `[[ $path == $glob ]]` matching, where `*` also matches `/`. `all` means `core network ui app release`. Each entry needs a non-empty `glob` and at least one group from `core`, `network`, `ui`, `app`, `release`, `all` and `none`; otherwise the selector exits with an error rather than selecting a group nothing runs.
+`script/test-scope.json` is the source of truth for `just test-affected` and for PR CI. Every entry whose glob matches a path adds its groups, and a path that matches no entry selects every group. Globs use bash `[[ $path == $glob ]]` matching, where `*` also matches `/`. `all` means `core network ui app release`. Each entry needs a non-empty `glob` and at least one group from `core`, `network`, `ui`, `app`, `release`, `all` and `none`; otherwise the selector exits with an error rather than selecting a group nothing runs.
 
 | Path | Groups |
 |---|---|
@@ -46,7 +48,7 @@ script/test_scope.sh --base origin/master
 | Other `docs/*`, `*.md`, `.claude/*`, `.agents/*`, `openspec/*` | none |
 | Anything else | all |
 
-When a release test starts reading a new repo file, add a `release` entry for it, and name any new file of the `ReleaseAutomationTests` suite `ReleaseAutomation*.swift`. The `TestScopeGuardTests` suite scans every file that declares `struct` or `extension ReleaseAutomationTests`. It fails when one of those files, or a path literal passed to `string(`, `jsonObject(`, `fileExists(`, `runScript(` or `repoURL(` in them, matches no `release` or `all` entry (it runs the selector with `--no-fallback`, so the select-everything fallback doesn't count). It sits outside `ReleaseAutomationTests` so that it runs with every unfiltered app run (`just test`, `just test-app` with no suites, `just test-affected`), including the ones that skip that suite. It only sees literals in the test files, not files that the scripts themselves read.
+When a release test starts reading a new repo file, add a `release` entry for it, and name any new file of the `ReleaseAutomationTests` suite `ReleaseAutomation*.swift`. The `TestScopeGuardTests` suite scans every file that declares `struct` or `extension ReleaseAutomationTests`. It fails when one of those files, or a path literal passed to `string(`, `jsonObject(`, `fileExists(`, `runScript(` or `repoURL(` in them, matches no `release` or `all` entry (it runs the selector with `--no-fallback`, so the select-everything fallback doesn't count). It sits outside `ReleaseAutomationTests` so that it runs with every unfiltered app run (`just test`, `just test-app` with no suites, `just test-affected`, PR CI), including the ones that skip that suite. It only sees literals in the test files, not files that the scripts themselves read.
 
 ## Test host
 
