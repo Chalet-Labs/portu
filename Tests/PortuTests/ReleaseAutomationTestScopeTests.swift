@@ -194,8 +194,8 @@ extension ReleaseAutomationTests {
     }
 }
 
-/// Lives outside `ReleaseAutomationTests` so it runs with every app run: `just test-affected` skips that
-/// suite when no release file changed, which would also skip a guard placed inside it.
+/// Lives outside `ReleaseAutomationTests` so it runs with every unfiltered app run: `just test-affected`
+/// skips that suite when no release file changed, which would also skip a guard placed inside it.
 struct TestScopeGuardTests {
     private let release = ReleaseAutomationTests()
 
