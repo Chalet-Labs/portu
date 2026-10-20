@@ -118,7 +118,13 @@ jobs:
 
       - name: Build for testing
         if: steps.scope.outputs.skip_all != 'true'
-        run: just build-for-testing
+        run: xcodebuild -scheme Portu -configuration Debug -derivedDataPath .build/DerivedData -skipMacroValidation build-for-testing 'OTHER_SWIFT_FLAGS=$(inherited) -driver-show-incremental'
+
+      - name: PROBE no-op rebuild
+        run: |
+          just generate
+          git restore-mtime --commit-time --merge --first-parent
+          xcodebuild -scheme Portu -configuration Debug -derivedDataPath .build/DerivedData -skipMacroValidation build-for-testing 'OTHER_SWIFT_FLAGS=$(inherited) -driver-show-incremental'
 
       - name: Test
         if: false # PROBE: build only
