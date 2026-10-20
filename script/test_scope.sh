@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prints the test groups that changed paths can affect, one per line, sorted.
 # The rules live in script/test-scope.json: every rule whose glob matches a path adds its groups,
-# and a path that no rule matches selects every group. `just test-affected` reads this, and PR CI will (#143).
+# and a path that no rule matches selects every group. `just test-affected` and PR CI read this.
 #
 # Usage:
 #   script/test_scope.sh --base <ref>     <ref>...HEAD plus staged, unstaged and untracked files

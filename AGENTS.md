@@ -77,7 +77,7 @@ The app target in `Sources/Portu/` imports all three packages and contains featu
 - Tests live in each package's `Tests/` directory and in `Tests/PortuTests/`.
 - During TDD (test-driven development), run only the suites you touch.
 - For app suites use `just test-app <Suite>`; for package suites use `just test-pkg <Core|Network|UI> <filter>`.
-- Before pushing, run `just test-affected`. PR CI runs the full unit suite. Recipes and path rules: `docs/agents/testing.md`.
+- Before pushing, run `just test-affected`. PR CI builds and runs every suite, except `ReleaseAutomationTests` when no release file changed, and skips build and tests for docs-only changes; a push to master runs everything. Recipes and path rules: `docs/agents/testing.md`.
 - When testing initializer default parameter behavior, call the initializer without those arguments instead of explicitly passing the default values.
 
 Full Xcode scheme test command (the app suites and every package suite, in one build):
@@ -93,7 +93,7 @@ xcodebuild -project Portu.xcodeproj -scheme Portu -configuration Debug -derivedD
 - Full cycle: RED (failing test), GREEN (minimal implementation), REFACTOR (clean up).
 - No implementation plans with code snippets. Tests are the spec.
 - When a test fails unexpectedly, diagnose before changing the test.
-- Run `just test-affected` before considering behavior complete; CI runs the full suite.
+- Run `just test-affected` before considering behavior complete; PR CI then runs the scheme as scoped above.
 - Read specs from `openspec/changes/` before generating tests.
 - Refactor only when tests are green. Do not refactor and change behavior simultaneously.
 
