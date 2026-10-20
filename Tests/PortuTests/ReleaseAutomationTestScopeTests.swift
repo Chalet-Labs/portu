@@ -150,6 +150,7 @@ extension ReleaseAutomationTests {
 
         #expect(result.status != 0)
         #expect(result.output.isEmpty)
+        #expect(result.error.contains("invalid entry"), "\(result.error)")
     }
 
     /// Agents often run in sandboxes that can't write temp files; the selector must still select, not print `none`.
@@ -210,13 +211,14 @@ extension ReleaseAutomationTests {
     }
 
     private func git(_ arguments: [String], in checkout: URL) throws {
-        let identity = [
+        let isolated = [
             "-C", checkout.path(percentEncoded: false),
-            "-c", "user.name=Portu Tests", "-c", "user.email=tests@example.com"
+            "-c", "user.name=Portu Tests", "-c", "user.email=tests@example.com",
+            "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"
         ]
         let result = try runScript(
             at: URL(fileURLWithPath: "/usr/bin/git"),
-            arguments: identity + arguments,
+            arguments: isolated + arguments,
             environment: Self.isolatedGitConfig)
         try #require(result.status == 0, "git \(arguments.joined(separator: " ")): \(result.error)")
     }
