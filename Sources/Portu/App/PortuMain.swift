@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 
+/// CI scope probe for #143.
 @main
 enum PortuMain {
     @MainActor
