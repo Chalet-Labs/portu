@@ -108,13 +108,13 @@ jobs:
           key: ${{ steps.cache-key.outputs.prefix }}${{ github.sha }}
           restore-keys: ${{ steps.cache-key.outputs.prefix }}
 
-      - name: PROBE restore mtimes
-        if: steps.scope.outputs.skip_all != 'true'
-        run: time git restore-mtime --commit-time
-
       - name: Generate Xcode project
         if: steps.scope.outputs.skip_all != 'true'
         run: just generate
+
+      - name: PROBE restore mtimes
+        if: steps.scope.outputs.skip_all != 'true'
+        run: time git restore-mtime --commit-time --merge --first-parent
 
       - name: Build for testing
         if: steps.scope.outputs.skip_all != 'true'
