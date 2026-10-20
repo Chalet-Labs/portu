@@ -1,5 +1,5 @@
 #if DEBUG
-
+    // #152 verification: one-line change
     import SwiftUI
 
     struct DebugSettingsView: View {
