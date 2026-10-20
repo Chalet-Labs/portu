@@ -34,10 +34,15 @@ jobs:
           groups="$(script/test_scope.sh --base "origin/$BASE_REF")"
           skip_all=false
           skip_release=false
-          if [ "$groups" = none ]; then
+          # The selector can't vouch for a change to itself: a broken one could print none and skip the tests
+          # that would catch it.
+          if ! git diff --quiet "origin/$BASE_REF...HEAD" -- script/test_scope.sh script/test-scope.json; then
+            plan="every suite, because the selector or its rules changed"
+          elif [ "$groups" = none ]; then
             skip_all=true
             plan="format and lint only"
-          elif ! printf '%s\n' "$groups" | grep -qx release; then
+          # Not printf | grep -q: grep can exit before printf is done, and pipefail would read that as no match.
+          elif [[ $'\n'$groups$'\n' != *$'\n'release$'\n'* ]]; then
             skip_release=true
             plan="every suite except ReleaseAutomationTests"
           else

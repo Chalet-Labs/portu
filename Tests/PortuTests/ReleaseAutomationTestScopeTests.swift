@@ -159,7 +159,7 @@ extension ReleaseAutomationTests {
         return (checkout, script)
     }
 
-    private func write(_ contents: String, to file: URL) throws {
+    func write(_ contents: String, to file: URL) throws {
         try FileManager.default.createDirectory(
             at: file.deletingLastPathComponent(),
             withIntermediateDirectories: true)
@@ -167,7 +167,7 @@ extension ReleaseAutomationTests {
     }
 
     /// Keeps the developer's git settings, such as `diff.renames` or a global ignore file, out of the temp checkout.
-    private static let isolatedGitConfig = [
+    static let isolatedGitConfig = [
         "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CONFIG_COUNT": "1",
@@ -175,12 +175,12 @@ extension ReleaseAutomationTests {
         "GIT_CONFIG_VALUE_0": "/dev/null"
     ]
 
-    private func commitAll(_ message: String, in checkout: URL) throws {
+    func commitAll(_ message: String, in checkout: URL) throws {
         try git(["add", "-A"], in: checkout)
         try git(["commit", "-q", "-m", message], in: checkout)
     }
 
-    private func git(_ arguments: [String], in checkout: URL) throws {
+    func git(_ arguments: [String], in checkout: URL) throws {
         let isolated = [
             "-C", checkout.path(percentEncoded: false),
             "-c", "user.name=Portu Tests", "-c", "user.email=tests@example.com",
