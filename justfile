@@ -25,9 +25,18 @@ test-packages:
     cd Packages/PortuNetwork && swift test
     cd Packages/PortuUI && swift test
 
-# Run all tests (Xcode scheme)
+# Run all tests: the app and package suites, in one build (Xcode scheme)
 test:
     xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test
+
+# Build the app, the packages and every test bundle once, for test-without-building
+build-for-testing:
+    xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation build-for-testing
+
+# Run the tests that build-for-testing built, optionally filtered (e.g. -only-testing:PortuTests)
+[positional-arguments]
+test-without-building *args:
+    xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test-without-building "$@"
 
 # Run app test suites: the ones named, or all of them except ReleaseAutomationTests
 [positional-arguments]
@@ -35,7 +44,7 @@ test-app *suites:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ $# -eq 0 ]; then
-      filters=(-skip-testing:PortuTests/ReleaseAutomationTests)
+      filters=(-only-testing:PortuTests -skip-testing:PortuTests/ReleaseAutomationTests)
     else
       filters=()
       for suite in "$@"; do filters+=("-only-testing:PortuTests/$suite"); done
@@ -71,9 +80,9 @@ test-affected base="origin/master":
     if selected network; then "{{just_executable()}}" test-pkg Network; fi
     if selected ui; then "{{just_executable()}}" test-pkg UI; fi
     if selected release; then
-      xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test
+      xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test -only-testing:PortuTests
     elif selected app; then
-      xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test -skip-testing:PortuTests/ReleaseAutomationTests
+      xcodebuild -scheme Portu -configuration Debug -derivedDataPath {{derived_data}} -skipMacroValidation test -only-testing:PortuTests -skip-testing:PortuTests/ReleaseAutomationTests
     fi
 
 # Lint all Swift files

@@ -59,11 +59,7 @@ jobs:
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just build
 
-      - name: Test SPM packages
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
-        run: just test-packages
-
-      - name: Test app
+      - name: Test
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.retry_version == '' }}
         run: just test
 

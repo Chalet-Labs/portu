@@ -64,6 +64,39 @@
                ReferencedContainer = "container:Portu.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "PortuCoreTests"
+               BuildableName = "PortuCoreTests"
+               BlueprintName = "PortuCoreTests"
+               ReferencedContainer = "container:Packages/PortuCore">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "PortuNetworkTests"
+               BuildableName = "PortuNetworkTests"
+               BlueprintName = "PortuNetworkTests"
+               ReferencedContainer = "container:Packages/PortuNetwork">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "PortuUITests"
+               BuildableName = "PortuUITests"
+               BlueprintName = "PortuUITests"
+               ReferencedContainer = "container:Packages/PortuUI">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
          <CommandLineArgument

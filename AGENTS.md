@@ -80,7 +80,7 @@ The app target in `Sources/Portu/` imports all three packages and contains featu
 - Before pushing, run `just test-affected`. PR CI runs the full unit suite. Recipes and path rules: `docs/agents/testing.md`.
 - When testing initializer default parameter behavior, call the initializer without those arguments instead of explicitly passing the default values.
 
-Full Xcode scheme test command:
+Full Xcode scheme test command (the app suites and every package suite, in one build):
 
 ```bash
 xcodebuild -project Portu.xcodeproj -scheme Portu -configuration Debug -derivedDataPath .build/DerivedData -skipMacroValidation test

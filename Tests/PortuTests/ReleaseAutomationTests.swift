@@ -103,17 +103,15 @@ struct ReleaseAutomationTests {
         #expect(workflow.contains("npm ci"))
         #expect(workflow.contains("just generate"))
         #expect(workflow.contains("just build"))
-        #expect(workflow.contains("just test-packages"))
         #expect(workflow.contains("just test"))
+        #expect(!workflow.contains("just test-packages"))
         #expect(workflow.contains("npx semantic-release"))
         #expect(workflow.contains("SEMANTIC_RELEASE_TOKEN"))
         #expect(workflow.contains("semantic-release-bot"))
 
-        let testPackagesIndex = try #require(workflow.range(of: "just test-packages")?.lowerBound)
-        let testAppIndex = try #require(workflow.range(of: "just test\n")?.lowerBound)
+        let testIndex = try #require(workflow.range(of: "just test\n")?.lowerBound)
         let releaseIndex = try #require(workflow.range(of: "npx semantic-release")?.lowerBound)
-        #expect(testPackagesIndex < testAppIndex)
-        #expect(testAppIndex < releaseIndex)
+        #expect(testIndex < releaseIndex)
     }
 
     @Test func `pull request title workflow enforces conventional squash titles`() throws {
