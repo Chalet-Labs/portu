@@ -3,6 +3,23 @@
     <channel>
         <title>Portu</title>
         <item>
+            <title>1.11.1</title>
+            <pubDate>Tue, 20 Oct 2026 19:47:59 +0000</pubDate>
+            <link>https://github.com/Chalet-Labs/portu</link>
+            <sparkle:version>40</sparkle:version>
+            <sparkle:shortVersionString>1.11.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## [1.11.1](https://github.com/Chalet-Labs/portu/compare/v1.11.0...v1.11.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* test host never starts the real app or opens the real store ([#149](https://github.com/Chalet-Labs/portu/issues/149)) ([26a7a38](https://github.com/Chalet-Labs/portu/commit/26a7a3802e302e864f77995b5bef63a2e11fc2dc))
+
+]]></description>
+            <enclosure url="https://github.com/Chalet-Labs/portu/releases/download/v1.11.1/Portu-1.11.1.dmg" length="13525826" type="application/octet-stream" sparkle:edSignature="BfEltxQSG+lSe1OUOxJUkRBtj4kvkltBESeY4Z5CjeNvogJeL9n2RonQfuByOF9pLbkVB1Fazkpx1BSOtLykAg=="/>
+        </item>
+        <item>
             <title>1.11.0</title>
             <pubDate>Mon, 19 Oct 2026 15:48:18 +0000</pubDate>
             <link>https://github.com/Chalet-Labs/portu</link>
