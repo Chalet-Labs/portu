@@ -180,7 +180,7 @@ extension ReleaseAutomationTests {
         try git(["commit", "-q", "-m", message], in: checkout)
     }
 
-    func git(_ arguments: [String], in checkout: URL) throws {
+    func git(_ arguments: [String], in checkout: URL, environment: [String: String] = [:]) throws {
         let isolated = [
             "-C", checkout.path(percentEncoded: false),
             "-c", "user.name=Portu Tests", "-c", "user.email=tests@example.com",
@@ -189,7 +189,7 @@ extension ReleaseAutomationTests {
         let result = try runScript(
             at: URL(fileURLWithPath: "/usr/bin/git"),
             arguments: isolated + arguments,
-            environment: Self.isolatedGitConfig)
+            environment: Self.isolatedGitConfig.merging(environment) { $1 })
         try #require(result.status == 0, "git \(arguments.joined(separator: " ")): \(result.error)")
     }
 }
