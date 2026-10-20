@@ -117,7 +117,7 @@ jobs:
         run: just build-for-testing
 
       - name: Test
-        if: steps.scope.outputs.skip_all != 'true'
+        if: false # PROBE: build only
         env:
           TEST_FILTERS: ${{ steps.scope.outputs.skip_release == 'true' && '-skip-testing:PortuTests/ReleaseAutomationTests' || '' }}
         # Unquoted: no filter passes no argument
@@ -126,8 +126,12 @@ jobs:
       # Only master saves, and only after its tests pass: PR caches would evict master's under the repo's
       # 10 GB limit. A re-run of the same commit restores its own entry exactly, which can't be saved again.
       - name: Save build cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.cache.outputs.cache-hit != 'true'
+        if: github.event_name == 'pull_request' # PROBE: save from this PR
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .build
           key: ${{ steps.cache-key.outputs.prefix }}${{ github.sha }}
+
+      - name: PROBE cache size
+        if: always()
+        run: du -sh .build .build/* .build/DerivedData/* .build/DerivedData/Logs/* || true
