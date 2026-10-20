@@ -114,7 +114,10 @@ jobs:
 
       - name: PROBE restore mtimes
         if: steps.scope.outputs.skip_all != 'true'
-        run: time git restore-mtime --commit-time --merge --first-parent
+        run: |
+          time git restore-mtime --commit-time --merge --first-parent
+          defaults write org.swift.swift-build EnableBuildBacktraceRecording -bool YES
+          defaults write com.apple.dt.XCBuild EnableBuildBacktraceRecording -bool YES
 
       - name: Build for testing
         if: steps.scope.outputs.skip_all != 'true'
