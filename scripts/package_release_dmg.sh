@@ -137,3 +137,4 @@ verify_dmg "$DMG_PATH"
 
 echo "Created $DMG_PATH"
 echo "Created $CHECKSUM_PATH"
+# CI scope probe for #143
