@@ -2,7 +2,7 @@
 
 Which tests to run while working, and how changed paths map to test groups. `just test` runs every app and package suite from one Xcode build of the `Portu` scheme, which tests `PortuTests`, `PortuCoreTests`, `PortuNetworkTests` and `PortuUITests`. `just test-packages` (every package suite, through `swift test`) stays available. CI runs the same scheme with `just build-for-testing`, then `just test-without-building`, so every module compiles once.
 
-On a pull request, CI first runs `script/test_scope.sh --base origin/<base>` and lists the selected groups in the job summary. Format and lint always run. When the result is `none`, the build and the tests are skipped, so format and lint decide the check. When `release` isn't selected, the tests run with `-skip-testing:PortuTests/ReleaseAutomationTests`. Otherwise, and on every push to master, the full scheme runs. A PR that changes `script/test_scope.sh` or `script/test-scope.json` also runs the full scheme, whatever they select, so a broken selector can't skip the tests that check it.
+On a pull request, CI first runs `script/test_scope.sh --base origin/<base>` and lists the selected groups in the job summary. Format and lint always run. When the result is `none`, the build and the tests are skipped, so format and lint decide the check. When `release` isn't selected, the tests run with `-skip-testing:PortuTests/ReleaseAutomationTests`. Otherwise, and on every push to master, the full scheme runs. A PR that changes `script/test_scope.sh`, `script/test-scope.json` or `.github/workflows/ci.yml` also runs the full scheme, whatever the selector prints, so a broken selector or scope step can't skip the tests that check it.
 
 ## Recipes
 

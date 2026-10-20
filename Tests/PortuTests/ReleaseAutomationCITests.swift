@@ -103,8 +103,8 @@ extension ReleaseAutomationTests {
         #expect(step.outputs.isEmpty)
     }
 
-    @Test(arguments: ["script/test_scope.sh", "script/test-scope.json"])
-    func `scope step runs everything when the selector or its rules change`(_ selectorFile: String) throws {
+    @Test(arguments: ["script/test_scope.sh", "script/test-scope.json", ".github/workflows/ci.yml"])
+    func `scope step runs everything when the selector, its rules or the workflow change`(_ selectorFile: String) throws {
         let step = try runScopeStep(selecting: ["none"], changing: selectorFile)
 
         #expect(step.status == 0, "\(step.error)")
@@ -135,15 +135,47 @@ extension ReleaseAutomationTests {
 
     /// One step of a job's `steps:` list.
     private struct WorkflowStep {
-        /// The step's lines, with the `- ` of its first line blanked so every key shares one indent.
+        /// The step's lines without YAML comments, so a comment can't stand in for a key, and with the `- ` of
+        /// its first line blanked so every key shares one indent. A `#` line inside a `run:` block is shell
+        /// source and stays.
         let lines: [Substring]
+        /// Every `run:` value: the rest of its line, plus the lines indented deeper than the key.
+        let runs: [String]
+        private let keyIndent: Int
+
+        init(_ rawLines: [Substring]) {
+            self.keyIndent = Self.indent(of: rawLines[0])
+            var lines: [Substring] = []
+            var runs: [String] = []
+            var block: [Substring]?
+            for line in rawLines {
+                let content = line.drop { $0 == " " }
+                if block != nil, content.isEmpty || Self.indent(of: line) > keyIndent {
+                    block?.append(line)
+                    lines.append(line)
+                    continue
+                }
+                if let finished = block {
+                    runs.append(finished.joined(separator: "\n"))
+                    block = nil
+                }
+                if content.hasPrefix("#") {
+                    continue
+                }
+                if content.hasPrefix("run:") {
+                    block = [content.dropFirst("run:".count)]
+                }
+                lines.append(line)
+            }
+            if let finished = block {
+                runs.append(finished.joined(separator: "\n"))
+            }
+            self.lines = lines
+            self.runs = runs
+        }
 
         var text: String {
             lines.joined(separator: "\n")
-        }
-
-        private var keyIndent: Int {
-            Self.indent(of: lines[0])
         }
 
         /// The value of a key of the step itself, such as `if` or `id`, not of a key nested under `with:` or `env:`.
@@ -156,37 +188,12 @@ extension ReleaseAutomationTests {
                 .map { $0.dropFirst(key.count + 1).trimmingCharacters(in: .whitespaces) }
         }
 
-        /// Every `run:` value: the rest of its line, plus the lines indented deeper than the key.
-        var runs: [String] {
-            var blocks: [String] = []
-            var block: [Substring]?
-            for line in lines {
-                let content = line.drop { $0 == " " }
-                if block != nil, content.isEmpty || Self.indent(of: line) > keyIndent {
-                    block?.append(line)
-                    continue
-                }
-                if let finished = block {
-                    blocks.append(finished.joined(separator: "\n"))
-                    block = nil
-                }
-                if content.hasPrefix("run:") {
-                    block = [content.dropFirst("run:".count)]
-                }
-            }
-            if let finished = block {
-                blocks.append(finished.joined(separator: "\n"))
-            }
-            return blocks
-        }
-
         private static func indent(of line: Substring) -> Int {
             line.prefix { $0 == " " }.count
         }
     }
 
-    /// The steps of the single job in `ci.yml`, split at the `- ` items of its `steps:` list. Comment lines are
-    /// dropped, so a comment can't stand in for a key.
+    /// The steps of the single job in `ci.yml`, split at the `- ` items of its `steps:` list.
     private static func ciSteps(in workflow: String) throws -> [WorkflowStep] {
         let lines = workflow.split(separator: "\n", omittingEmptySubsequences: false)
         let list = try #require(lines.firstIndex { $0.trimmingCharacters(in: .whitespaces) == "steps:" })
@@ -196,7 +203,7 @@ extension ReleaseAutomationTests {
         for line in lines[(list + 1)...] {
             if line.hasPrefix(itemPrefix) {
                 steps.append([Substring(String(repeating: " ", count: itemPrefix.count)) + line.dropFirst(itemPrefix.count)])
-            } else if !steps.isEmpty, !line.drop(while: { $0 == " " }).hasPrefix("#") {
+            } else if !steps.isEmpty {
                 steps[steps.count - 1].append(line)
             }
         }
