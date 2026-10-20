@@ -1,13 +1,13 @@
 # Testing
 
-Which tests to run while working, and how changed paths map to test groups. `just test` (every app suite) and `just test-packages` (every package suite) stay available; PR CI runs the full unit suite.
+Which tests to run while working, and how changed paths map to test groups. `just test` runs every app and package suite from one Xcode build of the `Portu` scheme, which tests `PortuTests`, `PortuCoreTests`, `PortuNetworkTests` and `PortuUITests`. `just test-packages` (every package suite, through `swift test`) stays available. CI runs the same scheme with `just build-for-testing`, then `just test-without-building`, so every module compiles once.
 
 ## Recipes
 
 | Recipe | Runs | Use it |
 |---|---|---|
 | `just test-app <Suite> [<Suite> ...]` | `xcodebuild test` with `-only-testing:PortuTests/<Suite>` for each suite | During TDD on app code (`Sources/Portu/`, `Tests/PortuTests/`) |
-| `just test-app` | Every app suite except `ReleaseAutomationTests` | After a change that touches many app suites |
+| `just test-app` | Every app suite except `ReleaseAutomationTests` (`-only-testing:PortuTests`, so no package bundle) | After a change that touches many app suites |
 | `just test-pkg <Core\|Network\|UI> [filter]` | `swift test` in `Packages/Portu<pkg>`, with `--filter <filter>` when given | During TDD on package code |
 | `just test-affected [base]` | The groups your changes select against `base` (default `origin/master`) | Before pushing, and before calling behavior complete |
 
@@ -20,7 +20,7 @@ Measured on an M4 Pro (2026-10-20): `just test-app OverviewFeatureTests` takes 8
 `script/test_scope.sh` lists the groups that changed paths select. `just test-affected` passes it `--base <base>`, which covers `<base>...HEAD` plus staged, unstaged and untracked files. Then it runs:
 
 - `test-pkg` for each selected package group (`core`, `network`, `ui`);
-- one `xcodebuild test` when `app` or `release` is selected: every app suite, plus `-skip-testing:PortuTests/ReleaseAutomationTests` unless `release` is selected.
+- one `xcodebuild test -only-testing:PortuTests` when `app` or `release` is selected: every app suite, plus `-skip-testing:PortuTests/ReleaseAutomationTests` unless `release` is selected. The package bundles of the scheme don't run here; `test-pkg` covers the selected ones.
 
 When nothing is selected it prints `no test groups affected by <base>...HEAD` and exits 0. Report that line as it is; no tests ran.
 

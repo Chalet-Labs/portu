@@ -53,11 +53,8 @@ jobs:
       - name: Generate Xcode project
         run: just generate
 
-      - name: Build
-        run: just build
+      - name: Build for testing
+        run: just build-for-testing
 
-      - name: Test SPM packages
-        run: just test-packages
-
-      - name: Test app
-        run: just test
+      - name: Test
+        run: just test-without-building

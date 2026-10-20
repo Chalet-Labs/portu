@@ -109,6 +109,9 @@ schemes:
         "NO": true
       targets:
         - PortuTests
+        - package: PortuCore/PortuCoreTests
+        - package: PortuNetwork/PortuNetworkTests
+        - package: PortuUI/PortuUITests
     profile:
       config: Release
     analyze:
