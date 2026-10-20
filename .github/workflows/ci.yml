@@ -118,6 +118,7 @@ jobs:
           time git restore-mtime --commit-time --merge --first-parent
           defaults write org.swift.swift-build EnableBuildBacktraceRecording -bool YES
           defaults write com.apple.dt.XCBuild EnableBuildBacktraceRecording -bool YES
+          echo "TOOLCHAINS=com.apple.dt.toolchain.XcodeDefault" >> "$GITHUB_ENV"
 
       - name: Build for testing
         if: steps.scope.outputs.skip_all != 'true'
