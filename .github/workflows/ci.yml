@@ -70,7 +70,7 @@ jobs:
           SWIFTFORMAT_VERSION: 0.64.0
           SWIFTFORMAT_SHA256: 95ea62625d0b898a7af870293311ae6f09e4a3147ecd900593687e4b9ab2fd98
         run: |
-          brew install xcodegen just swiftlint
+          brew install xcodegen just swiftlint git-tools
           # Pinned instead of the runner image's SwiftFormat, whose version moves and brings new rules
           curl -fsSL -o "$RUNNER_TEMP/swiftformat.zip" \
             "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip"
@@ -107,6 +107,10 @@ jobs:
           path: .build
           key: ${{ steps.cache-key.outputs.prefix }}${{ github.sha }}
           restore-keys: ${{ steps.cache-key.outputs.prefix }}
+
+      - name: PROBE restore mtimes
+        if: steps.scope.outputs.skip_all != 'true'
+        run: time git restore-mtime --commit-time
 
       - name: Generate Xcode project
         if: steps.scope.outputs.skip_all != 'true'
