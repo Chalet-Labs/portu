@@ -114,7 +114,9 @@ extension ReleaseAutomationTests {
     @Test func `docs-only pull requests skip build and test`() throws {
         let steps = try Self.ciSteps(in: string(".github/workflows/ci.yml"))
 
-        for recipe in ["build-for-testing", "test-without-building"] {
+        let cache = try #require(steps.first { $0.value(of: "uses")?.hasPrefix("actions/cache@") == true })
+        #expect(cache.value(of: "if") == "steps.scope.outputs.skip_all != 'true'", "the SPM cache isn't skipped")
+        for recipe in ["generate", "build-for-testing", "test-without-building"] {
             let step = try #require(steps.first { Self.justRecipes(in: $0.text).contains(recipe) })
             // `!= 'true'`: a push to master has no scope step, so the output is empty and the step must still run.
             #expect(step.value(of: "if") == "steps.scope.outputs.skip_all != 'true'", "\(recipe) isn't skipped")
