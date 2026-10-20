@@ -15,11 +15,17 @@ jobs:
     name: Build & Test
     runs-on: macos-15
     timeout-minutes: 30
+    # The runner mounts the Metal toolchain at a path that differs per machine, and Xcode lists it among the
+    # toolchains. With it, every link's signature changed between runs while the logged command lines didn't, so
+    # all products relinked, the macro plugins came out newer, and every file that uses a macro recompiled despite
+    # the cache. Pinning the toolchain stopped that. Nothing here compiles Metal.
+    env:
+      TOOLCHAINS: com.apple.dt.toolchain.XcodeDefault
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          # The scope step diffs origin/<base>...HEAD, which needs the history of both
+          # The scope step diffs origin/<base>...HEAD, and restore-mtime reads every file's last commit
           fetch-depth: 0
 
       # Runs first, while the worktree is clean: the script also counts modified and untracked files.
@@ -70,7 +76,7 @@ jobs:
           SWIFTFORMAT_VERSION: 0.64.0
           SWIFTFORMAT_SHA256: 95ea62625d0b898a7af870293311ae6f09e4a3147ecd900593687e4b9ab2fd98
         run: |
-          brew install xcodegen just swiftlint
+          brew install xcodegen just swiftlint git-tools
           # Pinned instead of the runner image's SwiftFormat, whose version moves and brings new rules
           curl -fsSL -o "$RUNNER_TEMP/swiftformat.zip" \
             "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip"
@@ -86,17 +92,41 @@ jobs:
           just lint-strict
 
       # The scope outputs are empty on push, so `!= 'true'` runs everything there.
-      - name: Cache SPM packages
+      # Another Xcode's build products aren't reused; `latest-stable` moves. The hash covers the local package
+      # manifests only: no Package.resolved is tracked, and the remote packages in project.yml resolve every run.
+      - name: Compute build cache key
+        id: cache-key
         if: steps.scope.outputs.skip_all != 'true'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        env:
+          DEPENDENCIES: ${{ hashFiles('**/Package.swift', '**/Package.resolved') }}
+        run: |
+          set -euo pipefail
+          xcode="$(xcodebuild -version | awk '/^Build version/ { print $3 }')"
+          test -n "$xcode"
+          echo "prefix=build-$RUNNER_OS-xcode-$xcode-$DEPENDENCIES-" >> "$GITHUB_OUTPUT"
+
+      # Restores the newest cache master saved for this prefix. A PR can't see another PR's caches.
+      - name: Restore build cache
+        id: cache
+        if: steps.scope.outputs.skip_all != 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .build
-          key: spm-${{ runner.os }}-${{ hashFiles('**/Package.swift', '**/Package.resolved') }}
-          restore-keys: spm-${{ runner.os }}-
+          key: ${{ steps.cache-key.outputs.prefix }}${{ github.sha }}
+          restore-keys: ${{ steps.cache-key.outputs.prefix }}
 
       - name: Generate Xcode project
         if: steps.scope.outputs.skip_all != 'true'
         run: just generate
+
+      # Checkout stamps every file with the checkout time, and the Swift driver recompiles any source whose mtime
+      # differs from the cached build's record, so every local file would recompile. A file's last commit time is
+      # the same in every run. --first-parent --merge: a PR's merge commit stamps every file the PR changes with its
+      # own time, also when master edited the file later. Two versions of a file committed within one second would
+      # share a time; release builds don't use the cache. After generate, which rewrites the tracked project.
+      - name: Restore file times from history
+        if: steps.scope.outputs.skip_all != 'true'
+        run: git restore-mtime --commit-time --merge --first-parent
 
       - name: Build for testing
         if: steps.scope.outputs.skip_all != 'true'
@@ -108,3 +138,12 @@ jobs:
           TEST_FILTERS: ${{ steps.scope.outputs.skip_release == 'true' && '-skip-testing:PortuTests/ReleaseAutomationTests' || '' }}
         # Unquoted: no filter passes no argument
         run: just test-without-building $TEST_FILTERS
+
+      # Only master saves, and only after its tests pass: PR caches would evict master's under the repo's
+      # 10 GB limit. A re-run of the same commit restores its own entry exactly, which can't be saved again.
+      - name: Save build cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .build
+          key: ${{ steps.cache-key.outputs.prefix }}${{ github.sha }}

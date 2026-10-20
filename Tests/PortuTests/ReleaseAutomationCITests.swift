@@ -114,8 +114,10 @@ extension ReleaseAutomationTests {
     @Test func `docs-only pull requests skip build and test`() throws {
         let steps = try Self.ciSteps(in: string(".github/workflows/ci.yml"))
 
-        let cache = try #require(steps.first { $0.value(of: "uses")?.hasPrefix("actions/cache@") == true })
-        #expect(cache.value(of: "if") == "steps.scope.outputs.skip_all != 'true'", "the SPM cache isn't skipped")
+        for id in ["cache-key", "cache"] {
+            let step = try #require(steps.first { $0.value(of: "id") == id })
+            #expect(step.value(of: "if") == "steps.scope.outputs.skip_all != 'true'", "step \(id) isn't skipped")
+        }
         for recipe in ["generate", "build-for-testing", "test-without-building"] {
             let step = try #require(steps.first { Self.justRecipes(in: $0.text).contains(recipe) })
             // `!= 'true'`: a push to master has no scope step, so the output is empty and the step must still run.
@@ -136,7 +138,7 @@ extension ReleaseAutomationTests {
     }
 
     /// One step of a job's `steps:` list.
-    private struct WorkflowStep {
+    struct WorkflowStep {
         /// The step's lines without YAML comments, so a comment can't stand in for a key, and with the `- ` of
         /// its first line blanked so every key shares one indent. A `#` line inside a `run:` block is shell
         /// source and stays.
@@ -196,7 +198,7 @@ extension ReleaseAutomationTests {
     }
 
     /// The steps of the single job in `ci.yml`, split at the `- ` items of its `steps:` list.
-    private static func ciSteps(in workflow: String) throws -> [WorkflowStep] {
+    static func ciSteps(in workflow: String) throws -> [WorkflowStep] {
         let lines = workflow.split(separator: "\n", omittingEmptySubsequences: false)
         let list = try #require(lines.firstIndex { $0.trimmingCharacters(in: .whitespaces) == "steps:" })
         let itemPrefix = String(repeating: " ", count: lines[list].prefix { $0 == " " }.count + 2) + "- "
@@ -220,16 +222,22 @@ extension ReleaseAutomationTests {
         let selectorArguments: String
     }
 
+    /// The shell source of a `run: |` block, dedented.
+    static func shellSource(of run: String) throws -> String {
+        let lines = run.split(separator: "\n", omittingEmptySubsequences: false)
+        try #require(lines.first?.trimmingCharacters(in: .whitespaces) == "|", "step isn't a run: | block")
+        let body = lines.dropFirst()
+        let indent = body.filter { !$0.allSatisfy { $0 == " " } }.map { $0.prefix { $0 == " " }.count }.min() ?? 0
+        return body.map { $0.dropFirst(indent) }.joined(separator: "\n") + "\n"
+    }
+
     /// Runs the shell body of `ci.yml`'s scope step with `BASE_REF=master`, in a checkout whose
     /// `script/test_scope.sh` prints `groups`, or fails when `groups` is nil. `changedFile`, if given,
     /// is committed on top of `origin/master`.
     private func runScopeStep(selecting groups: [String]?, changing changedFile: String? = nil) throws -> ScopeStepRun {
         let steps = try Self.ciSteps(in: string(".github/workflows/ci.yml"))
         let run = try #require(steps.first { $0.value(of: "id") == "scope" }?.runs.first)
-        let lines = run.split(separator: "\n", omittingEmptySubsequences: false)
-        try #require(lines.first?.trimmingCharacters(in: .whitespaces) == "|", "scope step isn't a run: | block")
-        let body = lines.dropFirst()
-        let indent = body.filter { !$0.allSatisfy { $0 == " " } }.map { $0.prefix { $0 == " " }.count }.min() ?? 0
+        let source = try Self.shellSource(of: run)
 
         let root = FileManager.default.temporaryDirectory
             .appending(path: "portu-scope-step-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -252,7 +260,7 @@ extension ReleaseAutomationTests {
             try commitAll("change", in: checkout)
         }
 
-        try write(body.map { $0.dropFirst(indent) }.joined(separator: "\n") + "\n", to: work.appending(path: "step.sh"))
+        try write(source, to: work.appending(path: "step.sh"))
         for name in ["output", "summary", "arguments"] {
             try write("", to: work.appending(path: name))
         }
@@ -275,7 +283,7 @@ extension ReleaseAutomationTests {
     }
 
     /// The recipe of every `just` command, whether in a single-line `run:` step or a `run: |` block.
-    private static func justRecipes(in workflow: String) -> [String] {
+    static func justRecipes(in workflow: String) -> [String] {
         workflow.split(separator: "\n").compactMap { line in
             var command = line.trimmingCharacters(in: .whitespaces)
             if command.hasPrefix("run: ") {
