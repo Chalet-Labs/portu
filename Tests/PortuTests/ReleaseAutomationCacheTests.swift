@@ -92,14 +92,9 @@ extension ReleaseAutomationTests {
         let test = try #require(steps.firstIndex { Self.justRecipes(in: $0.text).contains("test-without-building") })
         #expect(test < save)
         // No always() or failure(): a failed or cancelled build isn't saved.
-        let defaultBranchPush = "github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.cache.outputs.cache-hit != 'true'"
-        #expect(steps[save].value(of: "if") == defaultBranchPush)
+        #expect(steps[save].value(of: "if")
+            == "github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.cache.outputs.cache-hit != 'true'")
         #expect(Self.input("path", of: steps[save]) == ".build")
-
-        // Test results would otherwise pile up across chained caches.
-        let drop = try #require(steps.firstIndex { $0.runs.contains { $0.contains("rm -rf .build/DerivedData/Logs") } })
-        #expect(test < drop && drop < save)
-        #expect(steps[drop].value(of: "if") == defaultBranchPush)
     }
 
     @Test func `the saved key is per commit and the restored prefix is not`() throws {

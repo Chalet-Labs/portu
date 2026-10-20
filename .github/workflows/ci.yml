@@ -141,11 +141,6 @@ jobs:
 
       # Only master saves, and only after its tests pass: PR caches would evict master's under the repo's
       # 10 GB limit. A re-run of the same commit restores its own entry exactly, which can't be saved again.
-      # Each run's test results (100+ MB) would otherwise ride along in every later cache; nothing reads them back.
-      - name: Drop logs from the build cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.cache.outputs.cache-hit != 'true'
-        run: rm -rf .build/DerivedData/Logs
-
       - name: Save build cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/master' && steps.cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
