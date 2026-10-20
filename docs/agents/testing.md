@@ -46,7 +46,7 @@ script/test_scope.sh --base origin/master
 | Other `docs/*`, `*.md`, `.claude/*`, `.agents/*`, `openspec/*` | none |
 | Anything else | all |
 
-When a release test starts reading a new repo file, add a `release` entry for it, and name any new file of the `ReleaseAutomationTests` suite `ReleaseAutomation*.swift`. A guard test in that suite scans every file that declares `struct` or `extension ReleaseAutomationTests`. It fails when one of those files, or a path literal passed to `string(`, `jsonObject(`, `fileExists(`, `runScript(` or `repoURL(` in them, matches no `release` or `all` entry (it runs the selector with `--no-fallback`, so the select-everything fallback doesn't count). It only sees literals in the test files, not files that the scripts themselves read.
+When a release test starts reading a new repo file, add a `release` entry for it, and name any new file of the `ReleaseAutomationTests` suite `ReleaseAutomation*.swift`. The `TestScopeGuardTests` suite scans every file that declares `struct` or `extension ReleaseAutomationTests`. It fails when one of those files, or a path literal passed to `string(`, `jsonObject(`, `fileExists(`, `runScript(` or `repoURL(` in them, matches no `release` or `all` entry (it runs the selector with `--no-fallback`, so the select-everything fallback doesn't count). It sits outside `ReleaseAutomationTests` so that it runs with every app run, including the ones that skip that suite. It only sees literals in the test files, not files that the scripts themselves read.
 
 ## Test host
 

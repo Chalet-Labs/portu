@@ -42,36 +42,6 @@ extension ReleaseAutomationTests {
         #expect(try selectedGroups(["Unknown/file.txt", "scripts/x.sh"], options: ["--no-fallback"]) == ["release"])
     }
 
-    /// Release tests are skipped on PRs whose paths don't select `release`, so every repo file a release
-    /// test reads, and every file of the suite itself, must match a `release` or `all` rule; the fallback
-    /// for unmatched paths doesn't count. Only literals in the test files are seen, not files the scripts read.
-    @Test func `every path a release test reads matches a release rule`() throws {
-        let testsDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        let releaseSuite = #/(?:struct|extension)\s+ReleaseAutomationTests\b/#
-        let pathArgument = #/\b(?:string|jsonObject|fileExists|runScript|repoURL)\(\s*"((?:[^"\\]|\\.)*)"/#
-
-        var paths = Set<String>()
-        for file in try FileManager.default.subpathsOfDirectory(atPath: testsDirectory.path(percentEncoded: false))
-            where file.hasSuffix(".swift") {
-            let source = try String(contentsOf: testsDirectory.appending(path: file), encoding: .utf8)
-            guard source.contains(releaseSuite) else { continue }
-            paths.insert("Tests/PortuTests/" + file)
-            let literals = source.matches(of: pathArgument).map { match in
-                let literal = String(match.output.1)
-                return literal.components(separatedBy: "\\(").first ?? literal
-            }
-            #expect(!literals.isEmpty, "found no repo path literal in \(file)")
-            paths.formUnion(literals)
-        }
-
-        #expect(paths.contains(".github/workflows/"))
-        for path in paths.sorted() {
-            #expect(
-                try selectedGroups([path], options: ["--no-fallback"]).contains("release"),
-                "no release or all rule matches \(path)")
-        }
-    }
-
     @Test func `scope from a base ref covers committed, staged, unstaged, untracked and moved files`() throws {
         let (checkout, script) = try scopeCheckout(rules: """
         [
@@ -168,7 +138,7 @@ extension ReleaseAutomationTests {
         #expect(result.output == "app\n")
     }
 
-    private func selectedGroups(_ paths: [String], options: [String] = []) throws -> [String] {
+    func selectedGroups(_ paths: [String], options: [String] = []) throws -> [String] {
         let result = try runScript(
             "script/test_scope.sh",
             arguments: options + ["--paths-from", "-"],
@@ -221,6 +191,42 @@ extension ReleaseAutomationTests {
             arguments: isolated + arguments,
             environment: Self.isolatedGitConfig)
         try #require(result.status == 0, "git \(arguments.joined(separator: " ")): \(result.error)")
+    }
+}
+
+/// Lives outside `ReleaseAutomationTests` so it runs with every app run: `just test-affected` skips that
+/// suite when no release file changed, which would also skip a guard placed inside it.
+struct TestScopeGuardTests {
+    private let release = ReleaseAutomationTests()
+
+    /// Release tests are skipped when the changed paths don't select `release`, so every file of the suite,
+    /// and every repo file a release test reads, must match a `release` or `all` rule; the fallback for
+    /// unmatched paths doesn't count. Only literals in the test files are seen, not files the scripts read.
+    @Test func `every path a release test reads matches a release rule`() throws {
+        let testsDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        let releaseSuite = #/(?:struct|extension)\s+ReleaseAutomationTests\b/#
+        let pathArgument = #/\b(?:string|jsonObject|fileExists|runScript|repoURL)\(\s*"((?:[^"\\]|\\.)*)"/#
+
+        var paths = Set<String>()
+        for file in try FileManager.default.subpathsOfDirectory(atPath: testsDirectory.path(percentEncoded: false))
+            where file.hasSuffix(".swift") {
+            let source = try String(contentsOf: testsDirectory.appending(path: file), encoding: .utf8)
+            guard source.contains(releaseSuite) else { continue }
+            paths.insert("Tests/PortuTests/" + file)
+            let literals = source.matches(of: pathArgument).map { match in
+                let literal = String(match.output.1)
+                return literal.components(separatedBy: "\\(").first ?? literal
+            }
+            #expect(!literals.isEmpty, "found no repo path literal in \(file)")
+            paths.formUnion(literals)
+        }
+
+        #expect(paths.contains(".github/workflows/"))
+        for path in paths.sorted() {
+            #expect(
+                try release.selectedGroups([path], options: ["--no-fallback"]).contains("release"),
+                "no release or all rule matches \(path)")
+        }
     }
 }
 

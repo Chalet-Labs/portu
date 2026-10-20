@@ -75,7 +75,8 @@ The app target in `Sources/Portu/` imports all three packages and contains featu
 - Use `@Test`, `#expect()`, `#require()`, and async test methods.
 - Use `@Suite(.serialized)` only when tests share mutable state. Do not add plain `@Suite` without traits.
 - Tests live in each package's `Tests/` directory and in `Tests/PortuTests/`.
-- During TDD, run only the suites you touch (`just test-app <Suite>`, `just test-pkg <Core|Network|UI> <filter>`). Before pushing, run `just test-affected`. PR CI runs the full unit suite. See `docs/agents/testing.md`.
+- During TDD (test-driven development), run only the suites you touch: `just test-app <Suite>` or `just test-pkg <Core|Network|UI> <filter>`.
+- Before pushing, run `just test-affected`. PR CI runs the full unit suite. Recipes and path rules: `docs/agents/testing.md`.
 - When testing initializer default parameter behavior, call the initializer without those arguments instead of explicitly passing the default values.
 
 Full Xcode scheme test command:
