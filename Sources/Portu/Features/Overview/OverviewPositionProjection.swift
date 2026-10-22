@@ -18,12 +18,6 @@ enum OverviewPositionTab: String, CaseIterable {
     }
 }
 
-/// Valuation inputs for the position tabs, with the position metadata the groups show.
-struct OverviewPositionInputs {
-    let inputs: [ValuationInput]
-    let positions: [UUID: OverviewPositionMeta]
-}
-
 /// A tab as shown: its position groups, each ending with its own hidden-balances line, then one line
 /// for the groups that have no visible row (S3). Money is in the display currency, and the total and
 /// change are the module's aggregates over the tab on its basis.
@@ -42,30 +36,33 @@ struct OverviewPositionTabData: Equatable {
     }
 }
 
-/// The boundary between SwiftData and the Overview position UI.
+/// The Overview position tabs' seam over value types (#103, #124).
 ///
 /// `SyncEngine` deletes and reinserts `Position` rows on the main actor while SwiftUI
 /// may still be evaluating a body. Reading a deleted model's property trips a
 /// SwiftData assertion that terminates the process, which is the 1.9.0 crash in
-/// issue #103. Every model read for the position tabs happens in this type, and only
-/// value types cross the boundary, so no view body can observe a deleted model.
+/// issue #103. No view body reads a model now: `PortfolioProjector` is the only reader, on its own
+/// context, and only the value types it projects (the holdings and each position's
+/// `OverviewPositionMeta`) reach this type and the reducer state.
 enum OverviewPositionProjection {
     static let keyChangeLimit = 20
 
     /// The position-tab seam: one tab of the active-account inputs.
     ///
-    /// Only the selected tab is resolved, and only the inputs it admits are valued.
+    /// The tab keeps the valued tokens it admits from the context's valuation, which equals valuing
+    /// those inputs alone (`PortfolioValuation.restricted`), so the read model values the holdings
+    /// once for every tab.
     static func tab(
         _ tab: OverviewPositionTab,
         context: ValuationContext,
         positions: [UUID: OverviewPositionMeta]) -> OverviewPositionTabData {
-        let admitted = context.inputs.filter { input in
+        let admitted = Set(context.inputs.lazy.filter { input in
             tab.admits(input.position.positionType)
                 && tab.admits(input.token.role)
                 && tab.admits(input.token.portfolioCategory)
                 && positions[input.position.positionId] != nil
-        }
-        let valuation = context.restricted(to: admitted).valuation()
+        }.map(\.tokenId))
+        let valuation = context.valuation().restricted { admitted.contains($0.tokenId) }
         let rate = context.usdToDisplayRate
 
         switch tab {
@@ -95,35 +92,6 @@ enum OverviewPositionProjection {
         case .borrowing:
             return filtered(valuation, basis: .debt, positions: positions, context: context)
         }
-    }
-
-    // MARK: - Model boundary
-
-    /// The only place position models are read: the active-account valuation inputs `tab` can show
-    /// and the metadata of the positions they belong to.
-    ///
-    /// Work is discarded as early as possible: positions are rejected on their type before any
-    /// token is projected, tokens on their role before they become inputs, and metadata is
-    /// faulted only for positions that still contribute an input.
-    static func inputs(
-        from positions: [Position],
-        for tab: OverviewPositionTab,
-        categoryResolver: PortfolioCategoryResolver) -> OverviewPositionInputs {
-        let tokens = positions
-            .filter { tab.admits($0.positionType) }
-            .flatMap(\.tokens)
-            .filter { tab.admits($0.role) }
-        let inputs = ValuationInput.activeAccounts(tokens, categoryResolver: categoryResolver)
-        let positionIDs = Set(inputs.map(\.position.positionId))
-        var meta: [UUID: OverviewPositionMeta] = [:]
-        for position in positions where positionIDs.contains(position.id) {
-            meta[position.id] = OverviewPositionMeta(
-                id: position.id,
-                title: position.protocolName ?? position.account?.name ?? "Wallet",
-                positionType: position.positionType,
-                chain: position.chain)
-        }
-        return OverviewPositionInputs(inputs: inputs, positions: meta)
     }
 
     // MARK: - Filtered tabs

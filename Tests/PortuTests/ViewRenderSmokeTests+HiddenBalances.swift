@@ -29,8 +29,9 @@ extension ViewRenderSmokeTests {
     }
 
     /// A dust holding and a dust borrow in a position of its own, so the donut, Health and the
-    /// tabs have hidden rows to render.
-    @Test func `overview renders a portfolio with hidden balances`() throws {
+    /// tabs have hidden rows to render. The store's projectors read the container, and the render
+    /// waits for the read model's first builds, so the panels render those rows.
+    @Test func `overview renders a portfolio with hidden balances`() async throws {
         let container = try makeContainer()
         let context = container.mainContext
         let account = try #require(context.fetch(FetchDescriptor<Account>()).first)
@@ -52,7 +53,7 @@ extension ViewRenderSmokeTests {
             syncedAt: now))
         try context.save()
 
-        let store = makeStore(section: .overview)
+        let store = makeStore(section: .overview, container: container)
         let appState = AppState()
         appState.bridge(from: store)
         let view = ContentView(store: store)
@@ -60,6 +61,12 @@ extension ViewRenderSmokeTests {
             .environment(appState)
             .frame(width: 1400, height: 900)
 
-        render(view)
+        let hostingView = render(view)
+        try await Self.awaitBuilds(of: store, relayouting: hostingView)
+
+        let overview = store.portfolio.overview
+        #expect(overview.topAssets?[.assets]?.hidden != nil, "the donut has a hidden line to render")
+        #expect(overview.positionTabs?[.borrowing]?.hidden != nil, "the Borrowing tab folds the dust borrow into its hidden line")
+        #expect(overview.health?.hidden != nil, "Health lists the dust as hidden balances")
     }
 }

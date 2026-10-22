@@ -85,20 +85,22 @@ struct OverviewView: View {
     }
 
     private var overviewMainContent: some View {
-        VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
+        let portfolio = store.scope(state: \.portfolio, action: \.portfolio)
+
+        return VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
             DashboardCard {
                 HStack(alignment: .top, spacing: 22) {
-                    OverviewTopBar(store: store.scope(state: \.portfolio, action: \.portfolio))
+                    OverviewTopBar(store: portfolio)
                         .frame(width: 260, alignment: .leading)
 
-                    PortfolioValueChart()
+                    PortfolioValueChart(store: portfolio)
                         .frame(maxWidth: .infinity)
                 }
             }
 
-            OverviewSummaryCards()
+            OverviewSummaryCards(store: portfolio)
 
-            OverviewPositionTabs()
+            OverviewPositionTabs(store: portfolio)
                 .dashboardCard(horizontalPadding: 0, verticalPadding: 0)
         }
     }

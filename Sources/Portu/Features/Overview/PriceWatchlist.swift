@@ -1,30 +1,24 @@
+import ComposableArchitecture
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
+/// The portfolio + watchlist prices from the portfolio read model (#124). Add and Remove go
+/// through the reducer, which persists the watchlist; suggestions search the projection's assets.
 struct PriceWatchlist: View {
-    @Environment(AppState.self) private var appState
-    @Query private var assets: [Asset]
-    @Query private var tokens: [PositionToken]
-    @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
-    var sources = ValuationSources()
+    let store: StoreOf<AppFeature>
     @State private var searchText = ""
 
-    private var watchlistIDs: [String] {
-        OverviewWatchlistStore.decode(watchlistRaw)
-    }
-
-    private var rows: [OverviewPriceRowData] {
-        sources.watchlistRows(tokens, assets: assets, watchlistIDs: watchlistIDs)
-    }
-
+    /// Empty before the first build: there is nothing to search yet.
     private var matchingAssets: [OverviewAssetCandidate] {
-        sources.watchlistSuggestions(assets, watchlistIDs: watchlistIDs, query: searchText)
+        OverviewFeature.watchlistSuggestions(
+            assets: store.portfolio.projection?.watchlistCandidates ?? [],
+            watchlistIDs: store.portfolio.settings.watchlistIDs,
+            query: searchText)
     }
 
     var body: some View {
-        let currentRows = rows
+        let overview = store.portfolio.overview
         let currentMatchingAssets = matchingAssets
 
         VStack(alignment: .leading, spacing: 12) {
@@ -39,7 +33,7 @@ struct PriceWatchlist: View {
             }
 
             PriceCountdownText(
-                lastPriceUpdate: appState.lastPriceUpdate,
+                lastPriceUpdate: store.lastPriceUpdate,
                 refreshInterval: PricePollingSettings.refreshIntervalSeconds())
 
             watchlistSearchField
@@ -55,26 +49,35 @@ struct PriceWatchlist: View {
                     .fill(PortuTheme.dashboardStroke)
                     .frame(height: 1)
 
-                if currentRows.isEmpty {
-                    Text("No priced assets")
-                        .font(.caption)
-                        .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
-                } else {
-                    ForEach(currentRows) { row in
-                        PriceWatchlistRow(
-                            row: row,
-                            currencyCode: appState.selectedCurrency.displayCode,
-                            remove: removeFromWatchlist)
+                if let rows = overview.watchlistRows, let currencyCode = overview.currencyCode {
+                    if rows.isEmpty {
+                        placeholder("No priced assets")
+                    } else {
+                        ForEach(rows) { row in
+                            PriceWatchlistRow(
+                                row: row,
+                                currencyCode: currencyCode,
+                                remove: removeFromWatchlist)
 
-                        Rectangle()
-                            .fill(PortuTheme.dashboardStroke.opacity(0.75))
-                            .frame(height: 1)
+                            Rectangle()
+                                .fill(PortuTheme.dashboardStroke.opacity(0.75))
+                                .frame(height: 1)
+                        }
                     }
+                } else {
+                    placeholder(OverviewPriceDisplay.unvaluedPlaceholder)
+                        .help(OverviewPriceDisplay.unavailableHelp(buildError: store.portfolio.buildError))
                 }
             }
         }
+    }
+
+    private func placeholder(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(PortuTheme.dashboardSecondaryText)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, minHeight: 96, alignment: .center)
     }
 
     private var livePill: some View {
@@ -175,14 +178,12 @@ struct PriceWatchlist: View {
     }
 
     private func addToWatchlist(_ coinGeckoId: String) {
-        watchlistRaw = OverviewWatchlistStore.encode(
-            OverviewWatchlistStore.add(coinGeckoId, to: watchlistIDs))
+        store.send(.portfolio(.watchlistAdded(coinGeckoId)))
         searchText = ""
     }
 
     private func removeFromWatchlist(_ coinGeckoId: String) {
-        watchlistRaw = OverviewWatchlistStore.encode(
-            OverviewWatchlistStore.remove(coinGeckoId, from: watchlistIDs))
+        store.send(.portfolio(.watchlistRemoved(coinGeckoId)))
     }
 }
 

@@ -246,6 +246,7 @@ struct PortuApp: App {
             $0.performanceData = .live(modelContainer: modelContext.container)
             $0.modelSave = .live(container: modelContext.container)
             $0.portfolioProjector = .live(modelContainer: modelContext.container)
+            $0.portfolioValueChartProjector = .live(modelContainer: modelContext.container)
             if let ctrl = updaterController {
                 $0.updater = .live(controller: ctrl)
             } else {

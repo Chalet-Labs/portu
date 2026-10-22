@@ -60,18 +60,17 @@ struct ActivePortfolioStallEvidenceTests {
         print("C-P timing: shape B (one fetch, one projection) cpu-ms runs=\(Self.format(timesB)) median=\(Self.format([Self.median(timesB)]))")
     }
 
-    /// The branch before C-P: the header values `activePortfolio` over its own fetch, and the page
-    /// builds its projection over another.
+    /// The branch before C-P: the header values the active accounts' tokens over its own fetch, and the
+    /// page builds its projection over another.
     private static func twoWalks(_ context: ModelContext, appState: AppState) throws -> Pass {
         let headerPositions = try context.fetch(FetchDescriptor<Position>())
-        let headline = OverviewFeature.headline(.activePortfolio(
-            positions: headerPositions,
+        let headline = OverviewFeature.headline(.activeAccounts(
+            headerPositions.filter { $0.account?.isActive == true }.flatMap(\.tokens),
             overrides: [],
             mappings: [],
             settings: .defaults,
-            appState: appState,
-            historical: .empty,
-            includingLiveChanges: true))
+            usdToDisplayRate: appState.currentUSDToDisplayRate,
+            prices: .live(appState, historical: .empty, includingLiveChanges: true)))
         let pagePositions = try context.fetch(FetchDescriptor<Position>())
         let projection = ActivePortfolioProjection(pagePositions)
         let page = AllPositionsFeature.page(

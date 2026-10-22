@@ -1,53 +1,59 @@
 import ComposableArchitecture
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
+/// Portfolio Health from the portfolio read model (#124).
 struct PortfolioHealthPanel: View {
     let store: StoreOf<AppFeature>
-    @Environment(AppState.self) private var appState
-    @Query private var allTokens: [PositionToken]
-    var sources = ValuationSources()
-    var categories = OverviewCategorySource()
-
-    private var health: PortfolioHealthData {
-        sources.health(
-            allTokens,
-            categoryResolver: categories.resolver)
-    }
 
     var body: some View {
-        let currentHealth = health
-        let riskLevel = PortfolioHealthFeature.classifyRiskLevel(metrics: currentHealth.metrics)
-        let risks = currentHealth.concentrationRisks
-        let weightList = currentHealth.weightList(showAll: store.portfolioHealth.showAllAssets)
+        let overview = store.portfolio.overview
 
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            if let health = overview.health, let currencyCode = overview.currencyCode {
+                content(health, currencyCode: currencyCode)
+            } else {
                 Text("Portfolio Health")
                     .font(DashboardStyle.sectionTitleFont)
                     .foregroundStyle(PortuTheme.dashboardText)
-                Spacer()
-                riskBadge(riskLevel)
+                Text(OverviewPriceDisplay.unvaluedPlaceholder)
+                    .font(.caption)
+                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
+                    .help(OverviewPriceDisplay.unavailableHelp(buildError: store.portfolio.buildError))
             }
+        }
+    }
 
-            metricsRow(currentHealth.metrics)
+    @ViewBuilder
+    private func content(_ health: PortfolioHealthData, currencyCode: String) -> some View {
+        let riskLevel = PortfolioHealthFeature.classifyRiskLevel(metrics: health.metrics)
+        let risks = health.concentrationRisks
+        let weightList = health.weightList(showAll: store.portfolioHealth.showAllAssets)
 
-            if !risks.isEmpty {
-                concentrationWarnings(risks)
+        HStack {
+            Text("Portfolio Health")
+                .font(DashboardStyle.sectionTitleFont)
+                .foregroundStyle(PortuTheme.dashboardText)
+            Spacer()
+            riskBadge(riskLevel)
+        }
+
+        metricsRow(health.metrics)
+
+        if !risks.isEmpty {
+            concentrationWarnings(risks)
+        }
+
+        weightsList(weightList, currencyCode: currencyCode)
+
+        if health.weights.count > PortfolioHealthWeightList.previewCount {
+            Button(store.portfolioHealth.showAllAssets ? "Show Top 5" : "Show All") {
+                store.send(.portfolioHealth(.showAllAssetsToggled))
             }
-
-            weightsList(weightList)
-
-            if currentHealth.weights.count > PortfolioHealthWeightList.previewCount {
-                Button(store.portfolioHealth.showAllAssets ? "Show Top 5" : "Show All") {
-                    store.send(.portfolioHealth(.showAllAssetsToggled))
-                }
-                .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundStyle(PortuTheme.dashboardGold)
-            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            .foregroundStyle(PortuTheme.dashboardGold)
         }
     }
 
@@ -96,7 +102,7 @@ struct PortfolioHealthPanel: View {
         }
     }
 
-    private func weightsList(_ list: PortfolioHealthWeightList) -> some View {
+    private func weightsList(_ list: PortfolioHealthWeightList, currencyCode: String) -> some View {
         VStack(spacing: 4) {
             ForEach(list.rows) { row in
                 HStack {
@@ -135,11 +141,6 @@ struct PortfolioHealthPanel: View {
             .foregroundStyle(PortuTheme.dashboardSecondaryText)
             .frame(width: 40, alignment: .trailing)
     }
-
-    /// `AppState`'s currency, like the rate the hidden line is converted at, so the two always match.
-    private var currencyCode: String {
-        appState.selectedCurrency.displayCode
-    }
 }
 
 // MARK: - RiskLevel UI
@@ -162,4 +163,4 @@ extension RiskLevel {
     }
 }
 
-// #Preview requires a ModelContainer for @Query — use Xcode's preview canvas with the running app instead
+// #Preview needs a store holding a revaluation — use Xcode's preview canvas with the running app instead

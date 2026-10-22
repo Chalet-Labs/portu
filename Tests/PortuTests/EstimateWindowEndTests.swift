@@ -121,7 +121,7 @@ struct EstimateWindowEndTests {
 
     private func overviewSource(_ container: ModelContainer) async throws -> PortfolioValueChartEstimateSource? {
         let overrides = try overrides(container)
-        return await PortfolioValueChartEstimateFetcher(modelContainer: container)
+        return await PortfolioValueChartProjectorClient.makeProjector(modelContainer: container)
             .estimateSource(overrides: overrides, chartStartDate: Self.chartStart)
     }
 

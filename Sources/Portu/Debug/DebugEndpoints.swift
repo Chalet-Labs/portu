@@ -64,11 +64,12 @@
 
         // MARK: - /state/portfolio/timings
 
-        /// The read model's most recent projection build and valuation, in milliseconds; `null` before
-        /// the first of each (#123).
+        /// The read model's most recent projection build, value-chart build and valuation, in
+        /// milliseconds; `null` before the first of each (#123, #124).
         static func portfolioTimings(_ snapshot: PortfolioTimings.Snapshot) -> HTTPResponse {
             jsonObjectResponse([
                 "projectionBuildMs": snapshot.projectionBuild.map(milliseconds),
+                "valueChartBuildMs": snapshot.valueChartBuild.map(milliseconds),
                 "valuationMs": snapshot.valuation.map(milliseconds)
             ])
         }

@@ -8,7 +8,8 @@ import Testing
 /// What the dashboard's portfolio readers and the provider hold, read through `Mirror`. A position
 /// query owned by a view re-fetches and re-faults the store on every body pass of that view; the
 /// stall the U8 probe measured was two of them walking the same portfolio. Since #123 the Sidebar
-/// header and the Overview top bar read only the portfolio reducer's state.
+/// header and the Overview top bar read only the portfolio reducer's state, and since #124 so do the
+/// other Overview views.
 @MainActor
 struct ActivePortfolioStructureTests {
     private typealias PositionQuery = Query<Position, [Position]>
@@ -23,16 +24,49 @@ struct ActivePortfolioStructureTests {
         ]
     }
 
-    @Test func `the sidebar header and top bar render only from the portfolio reducer`() {
-        for slice in Self.sliceViews {
-            let properties = Self.properties(of: slice.view)
+    /// The migrated Overview views that render from the portfolio store.
+    private static var portfolioPanels: [(name: String, view: Any)] {
+        let store = StoreOf<PortfolioFeature>(initialState: PortfolioFeature.State()) { PortfolioFeature() }
+        return [
+            ("OverviewSummaryCards", OverviewSummaryCards(store: store)),
+            ("OverviewPositionTabs", OverviewPositionTabs(store: store)),
+            ("PortfolioValueChart", PortfolioValueChart(store: store))
+        ]
+    }
+
+    /// The migrated Overview views that render from the app store.
+    private static var appPanels: [(name: String, view: Any)] {
+        let store = StoreOf<AppFeature>(initialState: AppFeature.State()) { AppFeature() }
+        return [
+            ("TopAssetsDonut", TopAssetsDonut(store: store)),
+            ("PortfolioHealthPanel", PortfolioHealthPanel(store: store)),
+            ("PriceWatchlist", PriceWatchlist(store: store))
+        ]
+    }
+
+    /// Each view holds a store, and at no depth a query, app storage, an environment value (which a
+    /// model context would be), `ValuationSources` or the category source the views used to share.
+    private static func expectRendersOnlyFromItsStore(_ views: [(name: String, view: Any)], isStore: (Any) -> Bool) {
+        for entry in views {
+            let properties = Self.properties(of: entry.view)
             let names = properties.map { String(describing: type(of: $0)) }
-            #expect(properties.contains { $0 is StoreOf<PortfolioFeature> }, "\(slice.name): the walk never reached its store")
-            #expect(!names.contains { $0.hasPrefix("Query<") }, "\(slice.name): \(names)")
-            #expect(!names.contains { $0.hasPrefix("AppStorage<") }, "\(slice.name): \(names)")
-            #expect(!names.contains { $0.hasPrefix("Environment<") }, "\(slice.name): \(names)")
-            #expect(!properties.contains { $0 is ValuationSources }, "\(slice.name): \(names)")
+            let holdsStore = properties.contains(where: isStore)
+            #expect(holdsStore, "\(entry.name): the walk never reached its store")
+            #expect(!names.contains { $0.hasPrefix("Query<") }, "\(entry.name): \(names)")
+            #expect(!names.contains { $0.hasPrefix("AppStorage<") }, "\(entry.name): \(names)")
+            #expect(!names.contains { $0.hasPrefix("Environment<") }, "\(entry.name): \(names)")
+            #expect(!names.contains { $0.contains("OverviewCategorySource") }, "\(entry.name): \(names)")
+            #expect(!properties.contains { $0 is ValuationSources }, "\(entry.name): \(names)")
         }
+    }
+
+    @Test func `the sidebar header and top bar render only from the portfolio reducer`() {
+        Self.expectRendersOnlyFromItsStore(Self.sliceViews) { $0 is StoreOf<PortfolioFeature> }
+    }
+
+    @Test func `the migrated Overview views render only from their store`() {
+        Self.expectRendersOnlyFromItsStore(Self.portfolioPanels) { $0 is StoreOf<PortfolioFeature> }
+        Self.expectRendersOnlyFromItsStore(Self.appPanels) { $0 is StoreOf<AppFeature> }
     }
 
     @Test func `the All Positions page owns no position or token query and reads the shared projection`() {

@@ -114,6 +114,7 @@ struct AppFeature {
         case automaticChecksWrite
         case updateChannelWrite
         case portfolioValuation
+        case valueChartConversion
     }
 
     @Dependency(\.syncEngine) var syncEngine
@@ -338,6 +339,7 @@ struct AppFeature {
                 state.currentUSDToDisplayRate = rate
                 return .merge(
                     revaluePortfolio(state),
+                    convertValueChart(state),
                     historicalFXTopUpEffect(&state, currency: currency))
 
             case let .currentCurrencyConversionRateReceived(currency, .failure(error)):
@@ -444,6 +446,9 @@ struct AppFeature {
             case .portfolio(.delegate(.revaluationNeeded)):
                 return revaluePortfolio(state)
 
+            case .portfolio(.delegate(.valueChartConversionNeeded)):
+                return convertValueChart(state)
+
             case .portfolio:
                 return .none
             }
@@ -527,6 +532,7 @@ private extension AppFeature {
 
         return .merge(
             revaluePortfolio(state),
+            convertValueChart(state),
             armDisplayRateRefresh(currency: currency),
             .cancel(id: CancelID.historicalFXTopUp))
     }
@@ -547,6 +553,25 @@ private extension AppFeature {
             await send(.portfolio(.revalued(portfolioValuator.valueOffMain(request))))
         }
         .cancellable(id: CancelID.portfolioValuation, cancelInFlight: true)
+    }
+
+    /// Converts the kept value-chart source into the display currency, off the main thread: on a
+    /// new source, a currency or rate change, each UTC midnight and a reopened window, never on a
+    /// price tick (#124). The latest conversion wins.
+    func convertValueChart(_ state: State) -> Effect<Action> {
+        guard let source = state.portfolio.valueChartSource else { return .none }
+        let currency = state.selectedCurrency
+        let rate = state.currentUSDToDisplayRate
+        let today = currentDate.now()
+        return .run { send in
+            let chart = await PortfolioValueChartData.convertingOffMain(
+                source,
+                currency: currency,
+                usdToDisplayRate: rate,
+                today: today)
+            await send(.portfolio(.valueChartConverted(chart)))
+        }
+        .cancellable(id: CancelID.valueChartConversion, cancelInFlight: true)
     }
 
     /// Starts price polling for the current `pricePollingIDs`, replacing any running

@@ -9,7 +9,7 @@ struct OverviewAssetCandidate: Equatable, Identifiable {
     let coinGeckoId: String
     let logoURL: String?
 
-    @MainActor
+    /// Reads the models on the caller's actor: the `PortfolioProjector` for the read model.
     static func fromAssets(
         _ assets: [Asset],
         overrides: [TokenPricingOverrideSnapshot]) -> [OverviewAssetCandidate] {

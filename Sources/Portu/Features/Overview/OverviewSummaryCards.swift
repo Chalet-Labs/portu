@@ -1,40 +1,35 @@
+import ComposableArchitecture
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
+/// Idle, Deployed and Debt from the portfolio read model (#124). Before the first build the rows
+/// are known but nothing is valued, so each shows a dash.
 struct OverviewSummaryCards: View {
-    @Environment(AppState.self) private var appState
-    @Query private var allPositions: [Position]
-    var sources = ValuationSources()
-    var categories = OverviewCategorySource()
-
-    private var cards: [OverviewSummaryCard] {
-        sources.summaryCards(
-            allPositions,
-            categoryResolver: categories.resolver)
-    }
-
-    private var currencyCode: String {
-        appState.selectedCurrency.displayCode
-    }
+    let store: StoreOf<PortfolioFeature>
 
     var body: some View {
+        let overview = store.overview
+        // Read here, not in the `ForEach` closure, so the body's observation tracks it.
+        let currencyCode = overview.currencyCode
+        let isValued = overview.summaryCards != nil
+
         HStack(alignment: .top, spacing: PortuTheme.dashboardContentSpacing) {
-            ForEach(cards) { card in
-                summaryCard(title: card.title, items: card.rows)
+            ForEach(overview.summaryCards ?? OverviewSummaryCardsFeature.unvalued) { card in
+                summaryCard(card, isValued: isValued, currencyCode: currencyCode)
             }
         }
+        .help(isValued ? "" : OverviewPriceDisplay.unavailableHelp(buildError: store.buildError))
     }
 
-    private func summaryCard(title: String, items: [OverviewSummaryCardRow]) -> some View {
+    private func summaryCard(_ card: OverviewSummaryCard, isValued: Bool, currencyCode: String?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
+            Text(card.title)
                 .font(DashboardStyle.sectionTitleFont)
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
 
-            ForEach(items) { item in
+            ForEach(card.rows) { item in
                 HStack(spacing: 8) {
                     Text(item.label)
                         .font(.caption)
@@ -42,7 +37,7 @@ struct OverviewSummaryCards: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer()
-                    Text(OverviewPriceDisplay.currency(item.value, currencyCode: currencyCode))
+                    Text(OverviewPriceDisplay.currency(isValued ? item.value : nil, currencyCode: currencyCode))
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundStyle(PortuTheme.dashboardText)
                         .lineLimit(1)
@@ -55,4 +50,15 @@ struct OverviewSummaryCards: View {
     }
 }
 
-enum OverviewSummaryCardsFeature {}
+enum OverviewSummaryCardsFeature {
+    /// The cards' titles and row labels before anything is valued; the majors row is generic.
+    static let unvalued = cards(
+        ValuationContext(
+            inputs: [],
+            overrides: [],
+            mappings: [],
+            settings: .defaults,
+            usdToDisplayRate: 1,
+            prices: ValuationPriceInputs()),
+        categories: [])
+}

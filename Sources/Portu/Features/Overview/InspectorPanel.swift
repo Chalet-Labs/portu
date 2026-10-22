@@ -13,7 +13,7 @@ struct InspectorPanel: View {
                 inspectorDivider
                 PortfolioHealthPanel(store: store)
                 inspectorDivider
-                PriceWatchlist()
+                PriceWatchlist(store: store)
             }
             .padding(18)
         }

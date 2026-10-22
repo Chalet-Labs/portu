@@ -29,7 +29,7 @@ struct ValuationPriceInputs: Equatable {
 }
 
 /// Everything a valuation seam values: the inputs and the pricing context, gathered once per
-/// render pass.
+/// render pass, or once per revaluation for the read model.
 struct ValuationContext {
     let inputs: [ValuationInput]
     let overrides: [TokenPricingOverrideSnapshot]
@@ -39,9 +39,31 @@ struct ValuationContext {
     let prices: ValuationPriceInputs
     /// The inputs with their overrides and price IDs resolved, when the caller prepared them once
     /// per data change (the read model). They are `inputs` prepared with `overrides` and `mappings`.
-    var prepared: [PreparedValuationInput]?
+    let prepared: [PreparedValuationInput]?
+    /// The valuation with `prices`, computed once by `memoized()`.
+    private var memo: PortfolioValuation?
+
+    init(
+        inputs: [ValuationInput],
+        overrides: [TokenPricingOverrideSnapshot],
+        mappings: [TokenIdentityMappingSnapshot],
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal,
+        prices: ValuationPriceInputs,
+        prepared: [PreparedValuationInput]? = nil) {
+        self.inputs = inputs
+        self.overrides = overrides
+        self.mappings = mappings
+        self.settings = settings
+        self.usdToDisplayRate = usdToDisplayRate
+        self.prices = prices
+        self.prepared = prepared
+    }
 
     func valuation(market: MarketPrices? = nil) -> PortfolioValuation {
+        if market == nil, let memo {
+            return memo
+        }
         if let prepared {
             return PortfolioValuation(prepared: prepared, market: market ?? prices.market)
         }
@@ -50,6 +72,14 @@ struct ValuationContext {
             market: market ?? prices.market,
             overrides: overrides,
             mappings: mappings)
+    }
+
+    /// The same context, valued once: every seam run over it shares the valuation instead of
+    /// valuing the inputs again (#124).
+    func memoized() -> ValuationContext {
+        var context = self
+        context.memo = valuation()
+        return context
     }
 
     /// The context over prepared inputs, valued without resolving overrides or price IDs again.
@@ -68,17 +98,6 @@ struct ValuationContext {
             usdToDisplayRate: usdToDisplayRate,
             prices: prices,
             prepared: prepared)
-    }
-
-    /// The same context over a subset of the inputs.
-    func restricted(to inputs: [ValuationInput]) -> ValuationContext {
-        ValuationContext(
-            inputs: inputs,
-            overrides: overrides,
-            mappings: mappings,
-            settings: settings,
-            usdToDisplayRate: usdToDisplayRate,
-            prices: prices)
     }
 }
 
@@ -100,29 +119,5 @@ extension ValuationContext {
             settings: settings,
             usdToDisplayRate: usdToDisplayRate,
             prices: prices)
-    }
-
-    /// The input over the active portfolio with the app's USD books, for the summary cards. The
-    /// headline (top bar and Sidebar header) is the portfolio read model's, which takes the same
-    /// active accounts' tokens through the same `ValuationInput.activeAccounts` (#123).
-    /// Inactive accounts' positions are skipped before their tokens are read;
-    /// `ValuationInput.activeAccounts` still decides.
-    static func activePortfolio( // swiftlint:disable:this function_parameter_count
-        positions: [Position],
-        overrides: [TokenPricingOverride],
-        mappings: [TokenIdentityMapping],
-        settings: TokenDashboardSettings,
-        categoryResolver: PortfolioCategoryResolver = .defaults,
-        appState: AppState,
-        historical: HistoricalMarketPrices,
-        includingLiveChanges: Bool) -> ValuationContext {
-        activeAccounts(
-            positions.filter { $0.account?.isActive == true }.flatMap(\.tokens),
-            overrides: overrides,
-            mappings: mappings,
-            settings: settings,
-            categoryResolver: categoryResolver,
-            usdToDisplayRate: appState.currentUSDToDisplayRate,
-            prices: .live(appState, historical: historical, includingLiveChanges: includingLiveChanges))
     }
 }

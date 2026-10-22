@@ -6,24 +6,27 @@ import SwiftData
 import SwiftUI
 import Testing
 
-/// Guards the contract from issue #103: `OverviewPositionProjection` is the only code
-/// that reads position models, and everything it hands to the UI must remain valid
-/// after those models are deleted. `SyncEngine` deletes and reinserts positions on the
-/// main actor while SwiftUI may still be evaluating a body, and reading a deleted
+/// Guards the contract from issue #103: the `PortfolioProjector` is the only code that reads position
+/// models for the Overview (`PortfolioProjection.init`, on its own context), and everything it hands
+/// to the UI must remain valid after those models are deleted. `SyncEngine` deletes and reinserts
+/// positions on the main actor while SwiftUI may still be evaluating a body, and reading a deleted
 /// model's property trips a SwiftData assertion that terminates the process.
 @Suite(.serialized)
 @MainActor
 struct OverviewPositionValueDataTests {
     private static let maxRetainedWindows = 8
     private static var retainedWindows: [NSWindow] = []
+    private static let now = Date(timeIntervalSinceReferenceDate: 800_000_000)
+    /// Visibility is permissive so tests exercise projection and grouping, not thresholds.
+    private static let permissive = TokenDashboardSettings(minimumDashboardValue: 0, hideUnpriced: false, hideDust: false)
+    private static let usdBook = ["usd-coin": Decimal(1), "tether": 1]
 
-    @Test func `projection outlives deletion of its source models`() throws {
+    @Test func `projection outlives deletion of its source models`() async throws {
         let container = try makeContainer()
         let context = container.mainContext
         try seedAccount(in: context, positionType: .lending, protocolName: "Aave V3", includeBorrow: true)
-        let positions = try context.fetch(FetchDescriptor<Position>())
 
-        let groups = tab(.borrowing, positions: positions).groups
+        let groups = try await tab(.borrowing, in: container).groups
 
         let group = try #require(groups.first)
         #expect(groups.count == 1)
@@ -32,7 +35,7 @@ struct OverviewPositionValueDataTests {
         #expect(group.value == 500)
 
         // What the sync does mid-render: delete the positions this data came from.
-        for position in positions {
+        for position in try context.fetch(FetchDescriptor<Position>()) {
             context.delete(position)
         }
         try context.save()
@@ -46,34 +49,28 @@ struct OverviewPositionValueDataTests {
         render(OverviewPositionGroupCard(group: group, currencyCode: "USD"))
     }
 
-    @Test func `the borrowing group total is its debt as a positive amount`() throws {
+    @Test func `the borrowing group total is its debt as a positive amount`() async throws {
         let container = try makeContainer()
-        let context = container.mainContext
-        try seedAccount(in: context, positionType: .lending, protocolName: "Aave V3", includeBorrow: true)
-        let positions = try context.fetch(FetchDescriptor<Position>())
+        try seedAccount(in: container.mainContext, positionType: .lending, protocolName: "Aave V3", includeBorrow: true)
 
-        let borrowing = try #require(tab(.borrowing, positions: positions).groups.first)
+        let borrowing = try #require(await tab(.borrowing, in: container).groups.first)
         // Only the borrow leg reaches this tab, and the tab shows debt as a positive amount.
         #expect(borrowing.value == 500)
         #expect(borrowing.basis == .debt)
     }
 
-    @Test func `idle tabs exclude positions that are not idle`() throws {
+    @Test func `idle tabs exclude positions that are not idle`() async throws {
         let container = try makeContainer()
-        let context = container.mainContext
-        try seedAccount(in: context, positionType: .lending, protocolName: "Aave V3", includeBorrow: false)
-        let positions = try context.fetch(FetchDescriptor<Position>())
+        try seedAccount(in: container.mainContext, positionType: .lending, protocolName: "Aave V3", includeBorrow: false)
 
-        #expect(tab(.idleStables, positions: positions).groups.isEmpty)
+        #expect(try await tab(.idleStables, in: container).groups.isEmpty)
     }
 
-    @Test func `idle stables tab titles wallet positions by account name`() throws {
+    @Test func `idle stables tab titles wallet positions by account name`() async throws {
         let container = try makeContainer()
-        let context = container.mainContext
-        try seedAccount(in: context, positionType: .idle, protocolName: nil, includeBorrow: false)
-        let positions = try context.fetch(FetchDescriptor<Position>())
+        try seedAccount(in: container.mainContext, positionType: .idle, protocolName: nil, includeBorrow: false)
 
-        let group = try #require(tab(.idleStables, positions: positions).groups.first)
+        let group = try #require(await tab(.idleStables, in: container).groups.first)
 
         // No protocol name, so the account name is the fallback title.
         #expect(group.position.title == "Primary Wallet")
@@ -85,17 +82,21 @@ struct OverviewPositionValueDataTests {
         #expect(OverviewPositionTab.allCases == [.keyChanges, .idleStables, .idleMajors, .borrowing])
     }
 
-    @Test func `position tabs render when every position is deleted mid-session`() throws {
+    /// A smoke, not a proof: the view reads only the values in its store, so deleting the models they
+    /// were projected from can't reach it. Kept so a view that took a model again would crash here,
+    /// as the 1.9.0 crash (#103) did.
+    @Test func `position tabs render from a value store after every position is deleted mid-session`() async throws {
         let container = try makeContainer()
         try seedAccount(
             in: container.mainContext,
             positionType: .idle,
             protocolName: nil,
             includeBorrow: true)
+        let revaluation = try await revaluation(of: container)
+        let tabs = try #require(revaluation.overview.positionTabs[.borrowing])
+        #expect(!tabs.groups.isEmpty, "the view has a group to render")
 
-        let view = OverviewPositionTabs()
-            .modelContainer(container)
-            .environment(AppState())
+        let view = OverviewPositionTabs(store: OverviewModelWiringTests.portfolioStore(revaluation))
             .frame(width: 1400, height: 900)
 
         render(view)
@@ -111,20 +112,33 @@ struct OverviewPositionValueDataTests {
 
     // MARK: - Fixtures
 
-    /// The production path: the model boundary, then the tab seam. Visibility is permissive so tests
-    /// exercise projection and grouping, not thresholds.
-    private func tab(_ tab: OverviewPositionTab, positions: [Position]) -> OverviewPositionTabData {
-        let projected = OverviewPositionProjection.inputs(from: positions, for: tab, categoryResolver: .defaults)
+    /// What the projector builds from the store's rows, on its own executor.
+    private func projection(of container: ModelContainer) async throws -> PortfolioProjection {
+        let projector = await PortfolioProjectorClient.makeProjector(modelContainer: container)
+        return try await projector.build(PortfolioProjectionRequest(isHistoricalBackfillEnabled: false, now: Self.now))
+    }
+
+    private func revaluation(of container: ModelContainer) async throws -> PortfolioRevaluation {
+        try await PortfolioValuator.compute(PortfolioValuationRequest(
+            projection: projection(of: container),
+            prices: PortfolioPriceInputs(livePricesUSD: Self.usdBook, liveChanges24h: [:], usdToDisplayRate: 1, currency: .usd),
+            settings: DashboardSettings(dashboard: Self.permissive, isHistoricalBackfillEnabled: false, watchlistIDs: [])))
+    }
+
+    /// The production path: the projector's projection of the store, then the tab seam over its
+    /// holdings and position metadata.
+    private func tab(_ tab: OverviewPositionTab, in container: ModelContainer) async throws -> OverviewPositionTabData {
+        let projection = try await projection(of: container)
         return OverviewPositionProjection.tab(
             tab,
-            context: ValuationContext(
-                inputs: projected.inputs,
-                overrides: [],
-                mappings: [],
-                settings: TokenDashboardSettings(minimumDashboardValue: 0, hideUnpriced: false, hideDust: false),
+            context: .prepared(
+                projection.holdings,
+                overrides: projection.overrides,
+                mappings: projection.mappings,
+                settings: Self.permissive,
                 usdToDisplayRate: 1,
-                prices: ValuationPriceInputs(livePricesUSD: ["usd-coin": 1, "tether": 1])),
-            positions: projected.positions)
+                prices: ValuationPriceInputs(livePricesUSD: Self.usdBook)),
+            positions: projection.positionMeta)
     }
 
     private func seedAccount(

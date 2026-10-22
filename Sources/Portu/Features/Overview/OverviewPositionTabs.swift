@@ -1,19 +1,14 @@
+import ComposableArchitecture
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
+/// The position tabs from the portfolio read model (#124): every tab is valued with each
+/// revaluation, so a tab click only re-renders.
 struct OverviewPositionTabs: View {
-    @Environment(AppState.self) private var appState
-    @Query private var allPositions: [Position]
-    var sources = ValuationSources()
-    var categories = OverviewCategorySource()
+    let store: StoreOf<PortfolioFeature>
 
     @State private var selectedTab: OverviewPositionTab = .keyChanges
-
-    private var positions: [Position] {
-        allPositions.filter { $0.account?.isActive == true }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -41,24 +36,28 @@ struct OverviewPositionTabs: View {
 
     @ViewBuilder
     private var tabContent: some View {
-        let data = tabData
-        let currencyCode = appState.selectedCurrency.displayCode
+        let overview = store.overview
 
-        if data.showsEmptyState {
-            emptyState(selectedTab.emptyMessage)
-        } else {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(data.groups) { group in
-                    OverviewPositionGroupCard(group: group, currencyCode: currencyCode)
-                }
+        if let data = overview.positionTabs?[selectedTab], let currencyCode = overview.currencyCode {
+            if data.showsEmptyState {
+                emptyState(selectedTab.emptyMessage)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(data.groups) { group in
+                        OverviewPositionGroupCard(group: group, currencyCode: currencyCode)
+                    }
 
-                // Groups with no visible row have no card; their rows end the tab in one line (S3).
-                if let hidden = data.hidden {
-                    OverviewHiddenBalancesLine(
-                        text: OverviewPriceDisplay.hiddenBalancesLine(hidden, basis: data.basis, currencyCode: currencyCode))
-                        .overviewPositionPanel()
+                    // Groups with no visible row have no card; their rows end the tab in one line (S3).
+                    if let hidden = data.hidden {
+                        OverviewHiddenBalancesLine(
+                            text: OverviewPriceDisplay.hiddenBalancesLine(hidden, basis: data.basis, currencyCode: currencyCode))
+                            .overviewPositionPanel()
+                    }
                 }
             }
+        } else {
+            emptyState(OverviewPriceDisplay.unvaluedPlaceholder)
+                .help(OverviewPriceDisplay.unavailableHelp(buildError: store.buildError))
         }
     }
 
@@ -86,21 +85,5 @@ struct OverviewPositionTabs: View {
             .foregroundStyle(PortuTheme.dashboardTertiaryText)
             .lineLimit(1)
             .frame(maxWidth: .infinity, minHeight: 180, alignment: .center)
-    }
-
-    // MARK: - Context
-
-    /// Built fresh on every body evaluation, including tab clicks.
-    ///
-    /// Deliberately not memoized (issue #98 residual, audited 2026-09-02):
-    /// the rebuild — the valuation inputs, the USD price inputs, small-table
-    /// maps and resolver construction — is dominated by the per-tab projection that
-    /// a tab click runs anyway. A staleness-free `@State` cache key is buildable
-    /// today (`PortfolioCategoryResolver` is `Equatable`, with snapshot-based stored
-    /// properties), but building and comparing the key on every body would re-pay
-    /// most of the rebuild it avoids. If this ever shows up in Instruments, memoize
-    /// keyed on those resolver snapshots.
-    private var tabData: OverviewPositionTabData {
-        sources.positionTab(selectedTab, positions: positions, categoryResolver: categories.resolver)
     }
 }

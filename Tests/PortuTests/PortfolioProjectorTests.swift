@@ -4,9 +4,9 @@ import PortuCore
 import SwiftData
 import Testing
 
-/// The projector against today's in-view pipeline (#123, spec P1–P4, B2). One in-memory store holds
-/// an active wallet (ETH idle, a manually priced and an ignored token, a mapped onchain token, an
-/// empty lending position), an inactive wallet (BTC), the user's categories with a DEGEN →
+/// The projector against today's in-view pipeline (#123, spec P1–P4, B2; #124 PR 1). One in-memory
+/// store holds an active wallet (ETH idle, a manually priced and an ignored token, a mapped onchain
+/// token, an empty lending position), an inactive wallet (BTC), the user's categories with a DEGEN →
 /// Stablecoins rule, and historical rows inside and outside the window, USD and CHF.
 @MainActor
 struct PortfolioProjectorTests {
@@ -24,6 +24,7 @@ struct PortfolioProjectorTests {
         let context = store.container.mainContext
         let positions = try context.fetch(FetchDescriptor<Position>())
         let tokens = try context.fetch(FetchDescriptor<PositionToken>())
+        let assets = try context.fetch(FetchDescriptor<Asset>())
         let overrides = try context.fetch(FetchDescriptor<TokenPricingOverride>()).map(TokenPricingOverrideSnapshot.init)
         let mappings = try context.fetch(FetchDescriptor<TokenIdentityMapping>()).map(TokenIdentityMappingSnapshot.init)
         let resolver = try PortfolioCategoryResolver.live(
@@ -40,13 +41,58 @@ struct PortfolioProjectorTests {
         #expect(resolver != .defaults, "the store's categories must differ from the defaults")
         #expect(projection.holdings == PortfolioValuation.prepare(headline.inputs, overrides: overrides, mappings: mappings))
         #expect(projection.positionGroups == headline.cards)
-        #expect(projection.pollingCandidates == PortfolioValuation.prepare(
-            ValuationInput.activeAccounts(tokens, categoryResolver: .defaults),
+        #expect(projection.activeTokens == PortfolioValuation.prepare(
+            ValuationInput.activeAccounts(tokens, categoryResolver: resolver),
             overrides: overrides,
             mappings: mappings))
+        #expect(projection.categories == resolver.categories)
+        #expect(projection.watchlistCandidates == OverviewAssetCandidate.fromAssets(assets, overrides: overrides))
         #expect(projection.historical == HistoricalMarketPricesFeature.prices(from: rows, isBackfillEnabled: true, now: Self.now))
         #expect(projection.overrides == overrides)
         #expect(projection.mappings == mappings)
+    }
+
+    /// Every active position has an entry, including the lending one with no token, titled by its
+    /// protocol and else by its account; the inactive wallet's position has none.
+    @Test func `the position metadata holds every active position's title, type and chain`() async throws {
+        let store = try Self.seededStore()
+
+        let projection = try await Self.build(store.container)
+
+        let positions = try store.container.mainContext.fetch(FetchDescriptor<Position>())
+        let wallet = try #require(positions.first { $0.positionType == .idle && $0.account?.id == store.activeID })
+        let lending = try #require(positions.first { $0.positionType == .lending })
+        #expect(positions.count == 3, "the inactive wallet's position is in the store")
+        #expect(projection.positionMeta == [
+            wallet.id: OverviewPositionMeta(id: wallet.id, title: "Active Wallet", positionType: .idle, chain: .ethereum),
+            lending.id: OverviewPositionMeta(id: lending.id, title: "Aave V3", positionType: .lending, chain: nil)
+        ])
+    }
+
+    /// With no category in the store the resolver falls back to the defaults, and the majors label
+    /// reads the defaults' names, not the generic "Majors".
+    @Test func `an empty category table yields the default categories`() async throws {
+        let container = try ModelContainerFactory().makeInMemory()
+
+        let projection = try await Self.build(container)
+
+        #expect(projection.categories == PortfolioCategoryResolver.defaults.categories)
+        #expect(OverviewSummaryLabels.majorCategoryTitle(categories: projection.categories) != OverviewSummaryLabels.genericMajorsTitle)
+    }
+
+    @Test func `watchlist candidates follow the coin gecko override and skip assets without an id`() async throws {
+        let store = try Self.seededStore()
+        let context = store.container.mainContext
+        let degen = try #require(context.fetch(FetchDescriptor<Asset>()).first { $0.symbol == "DEGEN" })
+        context.insert(TokenPricingOverride(assetId: degen.id, coinGeckoIdOverride: " Degen-Base "))
+        try context.save()
+
+        let projection = try await Self.build(store.container)
+
+        let ids = Dictionary(uniqueKeysWithValues: projection.watchlistCandidates.map { ($0.symbol, $0.coinGeckoId) })
+        #expect(ids["DEGEN"] == "degen-base", "the override gives the onchain asset a coin")
+        #expect(ids["ETH"] == "ethereum")
+        #expect(ids["BTC"] == "bitcoin", "an inactive account's asset is still a candidate")
     }
 
     @Test func `the projection holds the store's categories, mappings and overrides already resolved`() async throws {
@@ -60,9 +106,9 @@ struct PortfolioProjectorTests {
         #expect(bySymbol["MNL"]?.priceID == nil, "a manual price needs no price ID")
         #expect(bySymbol["MNL"]?.override?.manualPriceUSD == 7)
         #expect(bySymbol["SCAM"]?.override?.isIgnored == true)
-        let candidateDegen = projection.pollingCandidates.first { $0.input.token.symbol == "DEGEN" }
-        #expect(candidateDegen?.input.token.portfolioCategory.name != "Stablecoins", "candidates use the default rules")
-        #expect(candidateDegen?.input.token.usdValue == 95, "candidates carry their sync-time value")
+        let tokenDegen = projection.activeTokens.first { $0.input.token.symbol == "DEGEN" }
+        #expect(tokenDegen?.input.token.portfolioCategory.name == "Stablecoins", "active tokens use the store's rules too")
+        #expect(tokenDegen?.input.token.usdValue == 95, "active tokens carry their sync-time value")
     }
 
     @Test func `inactive accounts are excluded from every list but the account index`() async throws {
@@ -70,7 +116,7 @@ struct PortfolioProjectorTests {
 
         let projection = try await Self.build(store.container)
 
-        let symbols = Set(projection.holdings.map(\.input.token.symbol) + projection.pollingCandidates.map(\.input.token.symbol))
+        let symbols = Set(projection.holdings.map(\.input.token.symbol) + projection.activeTokens.map(\.input.token.symbol))
         #expect(!symbols.contains("BTC"))
         #expect(symbols == ["ETH", "MNL", "SCAM", "DEGEN"])
         #expect(projection.positionGroups.count == 2, "the active wallet and its empty lending position")
@@ -142,6 +188,7 @@ struct PortfolioProjectorTests {
 
         #expect(projection.holdings.map(\.input.token.symbol).sorted() == ["DEGEN", "ETH", "MNL", "SCAM"])
         #expect(projection.positionGroups.count == 2)
+        #expect(Set(projection.positionMeta.values.map(\.title)) == ["Active Wallet", "Aave V3"])
     }
 
     @Test func `the client factory keeps the projector off the main thread`() async throws {

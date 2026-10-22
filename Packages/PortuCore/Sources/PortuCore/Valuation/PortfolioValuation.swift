@@ -200,6 +200,17 @@ public struct PortfolioValuation: Equatable, Sendable {
         }
     }
 
+    private init(valued tokens: [ValuedToken]) {
+        self.tokens = tokens
+        self.totals = ValuationTotals(tokens)
+    }
+
+    /// The valuation of the tokens `isIncluded` keeps, in order. Each token is valued on its own,
+    /// so this equals valuing that subset of the inputs, without valuing it again.
+    public func restricted(_ isIncluded: (ValuedToken) -> Bool) -> PortfolioValuation {
+        PortfolioValuation(valued: tokens.filter(isIncluded))
+    }
+
     public func totals(where isIncluded: (ValuedToken) -> Bool) -> ValuationTotals {
         ValuationTotals(tokens.lazy.filter(isIncluded))
     }

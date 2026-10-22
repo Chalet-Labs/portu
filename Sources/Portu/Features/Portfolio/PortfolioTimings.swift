@@ -2,12 +2,13 @@ import Foundation
 import os
 import Synchronization
 
-/// The read model's two hot intervals (#123): one projector build and one revaluation. Each is an
-/// `OSSignposter` interval, read with Instruments on a Release build, and its most recent duration
-/// is kept for the Debug server's `/state/portfolio/timings`.
+/// The read model's hot intervals (#123, #124): one projector build, one value-chart build and one
+/// revaluation. Each is an `OSSignposter` interval, read with Instruments on a Release build, and
+/// its most recent duration is kept for the Debug server's `/state/portfolio/timings`.
 enum PortfolioTimings {
     struct Snapshot: Equatable, Sendable {
         var projectionBuild: Duration?
+        var valueChartBuild: Duration?
         var valuation: Duration?
     }
 
@@ -34,6 +35,18 @@ enum PortfolioTimings {
         guard completed else { return }
         let elapsed = ContinuousClock.now - interval.start
         latest.withLock { $0.projectionBuild = elapsed }
+    }
+
+    static func beginValueChartBuild() -> Interval {
+        Interval(state: signposter.beginInterval("PortfolioValueChartBuild"), start: .now)
+    }
+
+    /// As `endProjectionBuild`, for the value chart's build.
+    static func endValueChartBuild(_ interval: Interval, completed: Bool) {
+        signposter.endInterval("PortfolioValueChartBuild", interval.state)
+        guard completed else { return }
+        let elapsed = ContinuousClock.now - interval.start
+        latest.withLock { $0.valueChartBuild = elapsed }
     }
 
     /// Runs one revaluation inside the `PortfolioValuation` interval.

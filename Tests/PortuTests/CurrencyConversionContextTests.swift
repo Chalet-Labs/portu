@@ -41,4 +41,20 @@ struct CurrencyConversionContextTests {
         // Past days are unaffected — the cached historical rate still wins there.
         #expect(context.rate(for: yesterday, today: today) == 1.00)
     }
+
+    @Test func `the rate entry initializer reads only USD rows quoted in the display currency`() throws {
+        let day = HistoricalPriceCalendar.utcStartOfDay(for: Date(timeIntervalSince1970: 1_000_000))
+        let rate = try #require(Decimal(string: "0.90"))
+
+        let context = try CurrencyConversionContext(
+            displayCurrency: .eur,
+            currentUSDToDisplayRate: 1,
+            historicalRates: [
+                CurrencyConversionRateEntry(baseCurrency: .usd, quoteCurrency: .chf, day: day, rate: #require(Decimal(string: "0.80"))),
+                CurrencyConversionRateEntry(baseCurrency: .chf, quoteCurrency: .eur, day: day, rate: #require(Decimal(string: "1.05"))),
+                CurrencyConversionRateEntry(baseCurrency: .usd, quoteCurrency: .eur, day: day, rate: rate)
+            ])
+
+        #expect(context.historicalUSDToDisplayRatesByDay == [day: rate])
+    }
 }
