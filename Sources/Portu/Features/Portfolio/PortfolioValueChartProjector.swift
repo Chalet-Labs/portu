@@ -80,7 +80,13 @@ actor PortfolioValueChartProjector {
                     totalValueUSD: snapshot.totalValue,
                     isPartial: snapshot.isPartial)
             },
-            rates: rates.map(CurrencyConversionRateEntry.init),
+            // By day as the chart's query sorted, then by currency pair, so equal rows always give
+            // an equal source. The sort is stable: duplicates of one day and pair keep fetch order,
+            // which decides the latest-wins row as it did in the view.
+            rates: rates.map(CurrencyConversionRateEntry.init).sorted {
+                ($0.day, $0.baseCurrency.rawValue, $0.quoteCurrency.rawValue)
+                    < ($1.day, $1.baseCurrency.rawValue, $1.quoteCurrency.rawValue)
+            },
             estimatedUSD: estimatedUSD)
         completed = true
         return source

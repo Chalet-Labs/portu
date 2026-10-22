@@ -42,7 +42,8 @@ The chart source holds, as values:
 - every `PortfolioSnapshot` from `ChartTimeRange.oneMonth.startDate(at: now)` on, sorted by
   timestamp: ID, timestamp, USD total, partial flag;
 - every `CurrencyConversionRatePoint` from that start's UTC day on, for every quote
-  currency, sorted by day;
+  currency, sorted by day, then by currency pair (stable, so a day's duplicate rows keep
+  fetch order and the latest still wins);
 - the USD estimated segment: `PortfolioValueChartFeature.estimatedPoints` over the estimate
   source and the USD price rows in `[chartStartDay, firstRealSnapshotDate)`, sorted by day.
   With backfill off, neither the source nor the prices are fetched and the segment is empty.
