@@ -56,6 +56,26 @@
             server.addRoute("GET", "/network/log") { request in
                 await networkLog(request: request)
             }
+
+            server.addRoute("GET", "/state/portfolio/timings") { _ in
+                portfolioTimings(PortfolioTimings.snapshot)
+            }
+        }
+
+        // MARK: - /state/portfolio/timings
+
+        /// The read model's most recent projection build and valuation, in milliseconds; `null` before
+        /// the first of each (#123).
+        static func portfolioTimings(_ snapshot: PortfolioTimings.Snapshot) -> HTTPResponse {
+            jsonObjectResponse([
+                "projectionBuildMs": snapshot.projectionBuild.map(milliseconds),
+                "valuationMs": snapshot.valuation.map(milliseconds)
+            ])
+        }
+
+        private static func milliseconds(_ duration: Duration) -> Double {
+            let (seconds, attoseconds) = duration.components
+            return Double(seconds) * 1000 + Double(attoseconds) / 1e15
         }
 
         // MARK: - /state/accounts

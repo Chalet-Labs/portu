@@ -37,13 +37,37 @@ struct ValuationContext {
     let settings: TokenDashboardSettings
     let usdToDisplayRate: Decimal
     let prices: ValuationPriceInputs
+    /// The inputs with their overrides and price IDs resolved, when the caller prepared them once
+    /// per data change (the read model). They are `inputs` prepared with `overrides` and `mappings`.
+    var prepared: [PreparedValuationInput]?
 
     func valuation(market: MarketPrices? = nil) -> PortfolioValuation {
-        PortfolioValuation(
+        if let prepared {
+            return PortfolioValuation(prepared: prepared, market: market ?? prices.market)
+        }
+        return PortfolioValuation(
             inputs: inputs,
             market: market ?? prices.market,
             overrides: overrides,
             mappings: mappings)
+    }
+
+    /// The context over prepared inputs, valued without resolving overrides or price IDs again.
+    static func prepared( // swiftlint:disable:this function_parameter_count
+        _ prepared: [PreparedValuationInput],
+        overrides: [TokenPricingOverrideSnapshot],
+        mappings: [TokenIdentityMappingSnapshot],
+        settings: TokenDashboardSettings,
+        usdToDisplayRate: Decimal,
+        prices: ValuationPriceInputs) -> ValuationContext {
+        ValuationContext(
+            inputs: prepared.map(\.input),
+            overrides: overrides,
+            mappings: mappings,
+            settings: settings,
+            usdToDisplayRate: usdToDisplayRate,
+            prices: prices,
+            prepared: prepared)
     }
 
     /// The same context over a subset of the inputs.
@@ -79,8 +103,8 @@ extension ValuationContext {
     }
 
     /// The input over the active portfolio with the app's USD books, for the summary cards. The
-    /// headline (top bar and Sidebar header) values `ActivePortfolioProvider`'s projection instead,
-    /// which takes the same active accounts' tokens through the same `ValuationInput.activeAccounts`.
+    /// headline (top bar and Sidebar header) is the portfolio read model's, which takes the same
+    /// active accounts' tokens through the same `ValuationInput.activeAccounts` (#123).
     /// Inactive accounts' positions are skipped before their tokens are read;
     /// `ValuationInput.activeAccounts` still decides.
     static func activePortfolio( // swiftlint:disable:this function_parameter_count

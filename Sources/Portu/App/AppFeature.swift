@@ -54,6 +54,17 @@ struct AppFeature {
         var performance = PerformanceFeature.State()
         var portfolioHealth = PortfolioHealthFeature.State()
         var historicalPriceBackfill = HistoricalPriceBackfillFeature.State()
+        var portfolio = PortfolioFeature.State()
+
+        /// The prices the portfolio read model values with. They stay owned here: `AppState`, the
+        /// debug server and the unmigrated screens read them too.
+        var portfolioPriceInputs: PortfolioPriceInputs {
+            PortfolioPriceInputs(
+                livePricesUSD: livePricesUSD,
+                liveChanges24h: priceChanges24h,
+                usdToDisplayRate: currentUSDToDisplayRate,
+                currency: selectedCurrency)
+        }
     }
 
     enum Action: Equatable {
@@ -89,6 +100,7 @@ struct AppFeature {
         case performance(PerformanceFeature.Action)
         case portfolioHealth(PortfolioHealthFeature.Action)
         case historicalPriceBackfill(HistoricalPriceBackfillFeature.Action)
+        case portfolio(PortfolioFeature.Action)
     }
 
     private enum CancelID {
@@ -101,6 +113,7 @@ struct AppFeature {
         case updaterStatus
         case automaticChecksWrite
         case updateChannelWrite
+        case portfolioValuation
     }
 
     @Dependency(\.syncEngine) var syncEngine
@@ -112,6 +125,7 @@ struct AppFeature {
     @Dependency(\.continuousClock) var clock
     @Dependency(\.currentDate) var currentDate
     @Dependency(\.updater) var updater
+    @Dependency(\.portfolioValuator) var portfolioValuator
 
     var body: some ReducerOf<Self> {
         Scope(state: \.allAssets, action: \.allAssets) {
@@ -131,6 +145,9 @@ struct AppFeature {
         }
         Scope(state: \.historicalPriceBackfill, action: \.historicalPriceBackfill) {
             HistoricalPriceBackfillFeature()
+        }
+        Scope(state: \.portfolio, action: \.portfolio) {
+            PortfolioFeature()
         }
         Reduce { state, action in
             switch action {
@@ -319,7 +336,9 @@ struct AppFeature {
                 // render, nothing is cleared and polling keeps running.
                 guard currency == state.selectedCurrency else { return .none }
                 state.currentUSDToDisplayRate = rate
-                return historicalFXTopUpEffect(&state, currency: currency)
+                return .merge(
+                    revaluePortfolio(state),
+                    historicalFXTopUpEffect(&state, currency: currency))
 
             case let .currentCurrencyConversionRateReceived(currency, .failure(error)):
                 if state.pendingCurrency == currency {
@@ -384,7 +403,7 @@ struct AppFeature {
                 // The book is USD; an update in any other currency would corrupt it.
                 guard update.currency == .usd else { return .none }
                 applyLivePrices(update, at: currentDate.now(), to: &state)
-                return .none
+                return revaluePortfolio(state)
 
             case let .onchainFallbackPricesReceived(update, identities):
                 guard update.currency == .usd else { return .none }
@@ -393,7 +412,7 @@ struct AppFeature {
                 for identity in identities {
                     state.onchainFallbackFetchedAt[identity] = now
                 }
-                return .none
+                return revaluePortfolio(state)
 
             case let .priceFetchFailed(failure):
                 state.connectionStatus = .error(failure.message)
@@ -420,6 +439,12 @@ struct AppFeature {
                 return .none
 
             case .historicalPriceBackfill:
+                return .none
+
+            case .portfolio(.delegate(.revaluationNeeded)):
+                return revaluePortfolio(state)
+
+            case .portfolio:
                 return .none
             }
         }
@@ -501,6 +526,7 @@ private extension AppFeature {
         }
 
         return .merge(
+            revaluePortfolio(state),
             armDisplayRateRefresh(currency: currency),
             .cancel(id: CancelID.historicalFXTopUp))
     }
@@ -510,6 +536,17 @@ private extension AppFeature {
         state.priceChanges24h.merge(update.changes24h) { _, new in new }
         state.lastPriceUpdate = date
         state.connectionStatus = .idle
+    }
+
+    /// One revaluation of the portfolio read model with the current prices, rate and currency, in an
+    /// effect: on the real store it misses the 16 ms main-thread budget (#123 spec V3), so the reducer
+    /// stores only its result. The latest request wins. A tick never rebuilds the projection.
+    func revaluePortfolio(_ state: State) -> Effect<Action> {
+        guard let request = state.portfolio.valuationRequest(state.portfolioPriceInputs) else { return .none }
+        return .run { [portfolioValuator] send in
+            await send(.portfolio(.revalued(portfolioValuator.valueOffMain(request))))
+        }
+        .cancellable(id: CancelID.portfolioValuation, cancelInFlight: true)
     }
 
     /// Starts price polling for the current `pricePollingIDs`, replacing any running

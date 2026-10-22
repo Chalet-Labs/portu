@@ -3,12 +3,12 @@ import PortuCore
 import PortuUI
 import SwiftUI
 
-/// Everything on the dashboard that follows the selected section, so a navigation click re-runs
-/// this view and not the `ActivePortfolioProvider` above it.
+/// Everything on the dashboard that follows the selected section.
 ///
 /// `HistoricalPricesProvider` stays here, below the split: it fixes its close window to the date
 /// it is built, and this view is rebuilt on every click. Above the split it would keep the
-/// window of the launch day.
+/// window of the launch day. `ActivePortfolioProvider` wraps only All Positions, its last reader,
+/// so its main-thread walk per save runs only while that page is shown (#123).
 struct DashboardView: View {
     let store: StoreOf<AppFeature>
     let secretStore: any SecretStore
@@ -71,7 +71,9 @@ struct DashboardView: View {
         case .allAssets:
             AllAssetsView(store: store)
         case .allPositions:
-            AllPositionsView()
+            ActivePortfolioProvider {
+                AllPositionsView()
+            }
         case .accounts:
             AccountsView(store: store, secretStore: secretStore)
         }

@@ -28,7 +28,7 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    SidebarPortfolioHeader()
+                    SidebarPortfolioHeader(store: store.scope(state: \.portfolio, action: \.portfolio))
 
                     DashboardSearchField(placeholder: "Search", text: $searchText)
 
@@ -66,24 +66,16 @@ struct SidebarView: View {
     }
 }
 
-// Values the portfolio `ActivePortfolioProvider` publishes and owns no position
-// query, so it never walks the store itself. `ValuationSources` is a dynamic
-// property, so this body still re-evaluates with `SidebarView`'s on every
-// navigation click (issue #98) and on every save; each re-evaluation values the
-// published values and reads no model.
-
+/// The portfolio headline, from the portfolio read model only (#123): no query, no app storage and no
+/// `AppState`, so a navigation click or a save that changes no valued figure leaves it alone. Before
+/// the first projection build every figure is a dash; a failed build says so on the dash.
 struct SidebarPortfolioHeader: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.activePortfolio) private var portfolio
-    var sources = ValuationSources()
-
-    private var headline: OverviewHeadline {
-        sources.headline(portfolio)
-    }
+    let store: StoreOf<PortfolioFeature>
 
     var body: some View {
-        let currentHeadline = headline
-        let currencyCode = appState.selectedCurrency.displayCode
+        let valued = store.valued
+        let headline = valued?.headline
+        let currencyCode = valued?.currencyCode
 
         HStack(alignment: .top, spacing: 10) {
             ZStack {
@@ -96,20 +88,21 @@ struct SidebarPortfolioHeader: View {
             .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(OverviewPriceDisplay.currency(currentHeadline.total, currencyCode: currencyCode))
+                Text(OverviewPriceDisplay.currency(headline?.total, currencyCode: currencyCode))
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
+                    .help(valued == nil ? OverviewPriceDisplay.unavailableHelp(buildError: store.buildError) : "")
                 Group {
                     HStack(spacing: 4) {
-                        Text(OverviewPriceDisplay.currency(currentHeadline.change24h, currencyCode: currencyCode))
+                        Text(OverviewPriceDisplay.currency(headline?.change24h, currencyCode: currencyCode))
                         Text("24h")
                     }
-                    .foregroundStyle(currentHeadline.change24h < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSuccess)
+                    .foregroundStyle(changeColor(headline?.change24h))
 
-                    Text(OverviewPriceDisplay.changePercentage(currentHeadline.changePercentage))
-                        .foregroundStyle(percentageColor(currentHeadline.changePercentage))
+                    Text(OverviewPriceDisplay.changePercentage(headline?.changePercentage))
+                        .foregroundStyle(percentageColor(headline?.changePercentage))
                 }
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                 .lineLimit(1)
@@ -117,6 +110,11 @@ struct SidebarPortfolioHeader: View {
             }
         }
         .padding(.horizontal, 4)
+    }
+
+    private func changeColor(_ change: Decimal?) -> Color {
+        guard let change else { return PortuTheme.dashboardTertiaryText }
+        return change < 0 ? PortuTheme.dashboardWarning : PortuTheme.dashboardSuccess
     }
 
     private func percentageColor(_ percentage: Decimal?) -> Color {

@@ -39,7 +39,9 @@ struct ActivePortfolioProviderTests {
         #expect(changed.withLock { $0 } == false, "ContentView.body read store state")
     }
 
-    @Test(.renderedTextReadable) func `the dashboard shows the published projection`() throws {
+    /// All Positions shows the projection the provider publishes. The headline above it comes from
+    /// the portfolio read model since #123 (`ViewRenderSmokeTests+PortfolioSlice`).
+    @Test(.renderedTextReadable) func `the All Positions page shows the published projection`() throws {
         let suiteName = "ActivePortfolioProviderTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -74,13 +76,8 @@ struct ActivePortfolioProviderTests {
                 usdToDisplayRate: appState.currentUSDToDisplayRate,
                 prices: .live(appState, historical: .empty, includingLiveChanges: includingLiveChanges))
         }
-        let headline = OverviewFeature.headline(context(true))
         let section = try #require(AllPositionsFeature.page(context(false), cards: portfolio.cards, filter: .all).sections.first)
-        let expected = [
-            OverviewPriceDisplay.currency(headline.total, currencyCode: appState.selectedCurrency.displayCode),
-            AllPositionsFormat.currency(section.total, code: appState.currencyCode)
-        ]
-        #expect(headline.total != 0)
+        let expected = [AllPositionsFormat.currency(section.total, code: appState.currencyCode)]
         #expect(section.total != 0)
 
         var texts = ViewRenderSmokeTests.accessibilityLabels(hostingView)
@@ -184,25 +181,22 @@ struct ActivePortfolioProviderTests {
         print("C-P count: T6 save builds=\(counter.summary)")
     }
 
-    @Test func `switching sections builds nothing`() throws {
+    /// The provider walks the store on the main actor, so it is mounted only on All Positions, its
+    /// last reader (#123): Overview builds nothing, and entering All Positions builds once.
+    @Test func `only All Positions builds a projection`() throws {
         let suiteName = "ActivePortfolioProviderTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let counter = BuildCounter()
         let dashboard = try Dashboard(section: .overview, counter: counter, defaults: defaults)
 
-        let built = waitUntil { counter.builds >= 1 }
-        #expect(built, "the provider never built a projection")
-        guard built else { return }
         spin(0.5)
-        print("C-P count: T7 mount builds=\(counter.summary)")
-        counter.reset()
+        print("C-P count: T7 overview builds=\(counter.summary)")
+        #expect(counter.builds == 0, "Overview built the All Positions projection")
 
         dashboard.store.send(.sectionSelected(.allPositions))
-        #expect(waitUntil { dashboard.store.selectedSection == .allPositions })
-        spin(0.5)
+        #expect(waitUntil { counter.builds >= 1 }, "entering All Positions built no projection")
         print("C-P count: T7 navigation builds=\(counter.summary)")
-        #expect(counter.builds == 0, "switching to All Positions rebuilt the projection")
     }
 
     // MARK: - Hosts

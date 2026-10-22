@@ -31,6 +31,19 @@ enum OverviewPriceDisplay {
         return sign + formattedMagnitude(abs(number), compactFractionDigits: 1)
     }
 
+    /// A headline figure, or "—" while there is none to show (before the read model's first build).
+    static func currency(_ value: Decimal?, currencyCode: String?) -> String {
+        guard let value, let currencyCode else { return "—" }
+        return currency(value, currencyCode: currencyCode)
+    }
+
+    /// The tooltip on a dashed headline whose read model failed to build, or empty. Callers read the
+    /// error only while the headline is dashed, so a failed rebuild under a shown total re-renders
+    /// nothing.
+    static func unavailableHelp(buildError: String?) -> String {
+        buildError.map { "Portfolio unavailable: \($0)" } ?? ""
+    }
+
     static func axisCurrency(_ value: Double, currencyCode: String = "USD") -> String {
         let sign = value < 0 ? "-\(currencyPrefix(currencyCode)) " : "\(currencyPrefix(currencyCode)) "
         return sign + standardNumber(abs(value), maximumFractionDigits: 0)
