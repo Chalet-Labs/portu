@@ -37,6 +37,22 @@ public struct ValuationInput: Equatable, Sendable {
     }
 }
 
+/// A valuation input with the override and price ID the module resolves for it (I3). Both depend
+/// only on the override and mapping rows and the asset, so a read model prepares inputs once per
+/// data change and values them on every price tick with `PortfolioValuation(prepared:market:)`.
+public struct PreparedValuationInput: Equatable, Sendable {
+    public let input: ValuationInput
+    /// `nil` when a manual price makes the price ID irrelevant, or when nothing resolves one.
+    public let priceID: String?
+    public let override: TokenPricingOverrideSnapshot?
+
+    public init(input: ValuationInput, priceID: String?, override: TokenPricingOverrideSnapshot?) {
+        self.input = input
+        self.priceID = priceID
+        self.override = override
+    }
+}
+
 /// Which rule of V1 decided a token's value. The declaration order is the V5 tie-break order.
 public enum ValuationSource: Int, Comparable, Sendable {
     case manual
@@ -153,17 +169,35 @@ public struct PortfolioValuation: Equatable, Sendable {
         market: MarketPrices,
         overrides: [TokenPricingOverrideSnapshot] = [],
         mappings: [TokenIdentityMappingSnapshot] = []) {
-        let overrideMap = TokenPricingOverrideFeature.overridesByAssetId(overrides)
-        let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
-        let tokens = inputs.map { input in
-            Self.value(
-                input,
-                override: overrideMap[input.token.assetId],
-                mappings: mappingMap,
-                market: market)
-        }
+        self.init(prepared: Self.prepare(inputs, overrides: overrides, mappings: mappings), market: market)
+    }
+
+    /// Values inputs whose override and price ID are already resolved: the per-price-tick half of
+    /// the valuation.
+    public init(prepared: [PreparedValuationInput], market: MarketPrices) {
+        let tokens = prepared.map { Self.value($0, market: market) }
         self.tokens = tokens
         self.totals = ValuationTotals(tokens)
+    }
+
+    /// Resolves each input's override and price ID (I3). Both depend only on the override and
+    /// mapping rows and the asset, never on a price, so a caller can prepare once per data change.
+    public static func prepare(
+        _ inputs: [ValuationInput],
+        overrides: [TokenPricingOverrideSnapshot],
+        mappings: [TokenIdentityMappingSnapshot]) -> [PreparedValuationInput] {
+        let overrideMap = TokenPricingOverrideFeature.overridesByAssetId(overrides)
+        let mappingMap = TokenIdentityMappingFeature.mappingsByIdentity(mappings)
+        return inputs.map { input in
+            let override = overrideMap[input.token.assetId]
+            return PreparedValuationInput(
+                input: input,
+                priceID: TokenPricingOverrideFeature.resolvedPriceID(
+                    token: input.token,
+                    override: override,
+                    mappingsByIdentity: mappingMap),
+                override: override)
+        }
     }
 
     public func totals(where isIncluded: (ValuedToken) -> Bool) -> ValuationTotals {
@@ -217,16 +251,11 @@ public struct PortfolioValuation: Equatable, Sendable {
 
     private static let plausibleRatio = Decimal(sign: .plus, exponent: -2, significand: 1) ... 100
 
-    private static func value(
-        _ input: ValuationInput,
-        override: TokenPricingOverrideSnapshot?,
-        mappings: [OnchainTokenIdentity: TokenIdentityMappingSnapshot],
-        market: MarketPrices) -> ValuedToken {
+    private static func value(_ prepared: PreparedValuationInput, market: MarketPrices) -> ValuedToken {
+        let input = prepared.input
         let token = input.token
-        let priceID = TokenPricingOverrideFeature.resolvedPriceID(
-            token: token,
-            override: override,
-            mappingsByIdentity: mappings)
+        let priceID = prepared.priceID
+        let override = prepared.override
         let (source, value) = price(token, priceID: priceID, override: override, market: market)
         let contribution = token.role.signed(value)
         let fraction = source.isValued && source != .manual ? priceID.flatMap { market.changes24h[$0] } : nil
