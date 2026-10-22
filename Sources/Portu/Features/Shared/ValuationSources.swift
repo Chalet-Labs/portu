@@ -36,21 +36,6 @@ struct ValuationSources: DynamicProperty {
 
     // MARK: - Contexts
 
-    func activePortfolio(
-        _ positions: [Position],
-        categoryResolver: PortfolioCategoryResolver,
-        includingLiveChanges: Bool) -> ValuationContext {
-        .activePortfolio(
-            positions: positions,
-            overrides: overrides,
-            mappings: mappings,
-            settings: settings,
-            categoryResolver: categoryResolver,
-            appState: appState,
-            historical: historical,
-            includingLiveChanges: includingLiveChanges)
-    }
-
     func activeAccounts(
         _ tokens: [PositionToken],
         categoryResolver: PortfolioCategoryResolver,

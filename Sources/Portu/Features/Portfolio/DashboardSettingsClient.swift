@@ -39,6 +39,9 @@ struct DashboardSettingsClient {
     var current: @Sendable () -> DashboardSettings
     /// The current settings, then each distinct change, until the stream is cancelled.
     var changes: @Sendable () -> AsyncStream<DashboardSettings>
+    /// Read-modify-writes of the watchlist key under one lock, so two quick edits both persist.
+    var addWatchlistID: @Sendable (String) -> Void
+    var removeWatchlistID: @Sendable (String) -> Void
 }
 
 extension DashboardSettingsClient: DependencyKey {
@@ -46,7 +49,9 @@ extension DashboardSettingsClient: DependencyKey {
 
     static let testValue = Self(
         current: { .defaults },
-        changes: { AsyncStream { $0.finish() } })
+        changes: { AsyncStream { $0.finish() } },
+        addWatchlistID: unimplemented("DashboardSettingsClient.addWatchlistID"),
+        removeWatchlistID: unimplemented("DashboardSettingsClient.removeWatchlistID"))
 }
 
 extension DependencyValues {
@@ -60,6 +65,13 @@ extension DashboardSettingsClient {
     static func live(defaults: UserDefaults) -> Self {
         // `UserDefaults` is documented as thread-safe.
         nonisolated(unsafe) let defaults = defaults
+        let watchlistWrite = Mutex(())
+        let editWatchlist: @Sendable (([String]) -> [String]) -> Void = { edit in
+            watchlistWrite.withLock { _ in
+                let ids = OverviewWatchlistStore.decode(defaults.string(forKey: OverviewWatchlistStore.key) ?? "[]")
+                defaults.set(OverviewWatchlistStore.encode(edit(ids)), forKey: OverviewWatchlistStore.key)
+            }
+        }
         return Self(
             current: { DashboardSettings(defaults: defaults) },
             changes: {
@@ -85,6 +97,8 @@ extension DashboardSettingsClient {
                         NotificationCenter.default.removeObserver(observer)
                     }
                 }
-            })
+            },
+            addWatchlistID: { id in editWatchlist { OverviewWatchlistStore.add(id, to: $0) } },
+            removeWatchlistID: { id in editWatchlist { OverviewWatchlistStore.remove(id, from: $0) } })
     }
 }

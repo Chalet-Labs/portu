@@ -32,7 +32,7 @@ struct PortfolioFeatureTests {
         let output = PortfolioValuator.compute(PortfolioValuationRequest(
             projection: projection,
             prices: Self.usdPrices,
-            settings: settings))
+            settings: settings)).valued
 
         let holdingsToday = Fixture.context(inputs: Array(Fixture.inputs.dropFirst()))
         let candidatesToday = Fixture.context(liveChanges24h: [:])
@@ -51,7 +51,7 @@ struct PortfolioFeatureTests {
         let output = PortfolioValuator.compute(PortfolioValuationRequest(
             projection: .fixture(historical: Fixture.historical),
             prices: prices,
-            settings: settings))
+            settings: settings)).valued
 
         let today = Fixture.context(livePricesUSD: prices.livePricesUSD, liveChanges24h: [:])
         #expect(output.pricePollingIDs == OverviewFeature.pricePollingIDs(today, watchlistIDs: []))
@@ -73,7 +73,7 @@ struct PortfolioFeatureTests {
             $0.lastPriceUpdate = Self.now
         }
         await store.receive(\.portfolio.revalued) {
-            $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
+            $0.portfolio.store(Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings))
         }
 
         #expect(counts.valuations == 1)
@@ -131,7 +131,7 @@ struct PortfolioFeatureTests {
             $0.livePricesUSD["ethereum"] = 3200
         }
         await store.receive(\.portfolio.revalued) {
-            $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
+            $0.portfolio.store(Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings))
         }
         await clock.advance(by: .seconds(1))
 
@@ -173,7 +173,7 @@ struct PortfolioFeatureTests {
             $0.currentUSDToDisplayRate = 1
         }
         await store.receive(\.portfolio.revalued) {
-            $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
+            $0.portfolio.store(Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings))
         }
 
         #expect(counts.valuations == 1)
@@ -190,7 +190,7 @@ struct PortfolioFeatureTests {
             $0.currentUSDToDisplayRate = Fixture.decimal("0.95")
         }
         await store.receive(\.portfolio.revalued) {
-            $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
+            $0.portfolio.store(Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings))
         }
 
         #expect(counts.valuations == 1)
@@ -199,26 +199,41 @@ struct PortfolioFeatureTests {
 
     // MARK: - B1/B4: building
 
+    /// The dashboard task asks for both builds once each: the holdings and the value chart. The
+    /// holdings are valued, and the chart source is converted. The two chains of actions land in
+    /// whichever order their effects finish, so the test takes them all as received and checks the
+    /// state they leave and how many of each there were, the task's own among them.
     @Test func `launch builds once and revalues the new projection`() async {
         let counts = Counts()
-        let store = Self.store(counts: counts, projection: nil, built: Self.projection)
+        let log = ActionLog()
+        let store = Self.store(counts: counts, projection: nil, built: Self.projection, builtChart: Self.chartSource, log: log)
+        store.exhaustivity = .off(showSkippedAssertions: false)
 
         let task = await store.send(.portfolio(.task))
-        await store.receive(\.portfolio.rebuildRequested)
-        await store.receive(\.portfolio.projectionBuilt) {
-            $0.portfolio.projection = Self.projection
-        }
-        await store.receive(\.portfolio.delegate.revaluationNeeded)
-        await store.receive(\.portfolio.revalued) {
-            $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
-        }
+        await Self.settle(store)
         await task.cancel()
 
+        let state = store.state
+        #expect(state.portfolio.projection == Self.projection)
+        #expect(state.portfolio.valued == Self.expected(prices: state.portfolioPriceInputs, settings: state.portfolio.settings)?.valued)
+        #expect(state.portfolio.overview.summaryCards != nil)
+        #expect(state.portfolio.valueChartSource == Self.chartSource)
+        #expect(state.portfolio.valueChart == Self.convertedChart(Self.chartSource))
+        #expect(log.count(of: \.portfolio.rebuildRequested) == 1)
+        #expect(log.count(of: \.portfolio.valueChartRebuildRequested) == 1)
+        #expect(log.count(of: \.portfolio.projectionBuilt) == 1)
+        #expect(log.count(of: \.portfolio.valueChartBuilt) == 1)
+        #expect(log.count(of: \.portfolio.delegate.revaluationNeeded) == 1)
+        #expect(log.count(of: \.portfolio.delegate.valueChartConversionNeeded) == 1)
+        #expect(log.count(of: \.portfolio.revalued) == 1)
+        #expect(log.count(of: \.portfolio.valueChartConverted) == 1)
+        #expect(log.total == 9, "the task and its eight actions, no others")
         #expect(counts.builds == 1)
         #expect(counts.requests == [PortfolioProjectionRequest(
             isHistoricalBackfillEnabled: HistoricalPriceBackfillSettings.defaultIsEnabled,
             now: Self.now)])
         #expect(counts.valuations == 1)
+        #expect(counts.chartRequests == counts.requests, "the chart is built for the same day and backfill setting")
     }
 
     @Test func `a burst of saves to read entities builds once after the debounce`() async {
@@ -244,6 +259,8 @@ struct PortfolioFeatureTests {
         #expect(counts.builds == 1)
     }
 
+    /// Only entities no build reads: a sync's wallet or provider rows touch neither the holdings
+    /// nor the chart.
     @Test func `a save touching no read entity builds nothing`() async {
         let counts = Counts()
         let saves = AsyncStream.makeStream(of: ModelSaveEvent.self)
@@ -251,15 +268,16 @@ struct PortfolioFeatureTests {
         let store = Self.store(counts: counts, projection: Self.projection, built: Self.projection, saves: saves.stream, clock: clock)
         store.exhaustivity = .off(showSkippedAssertions: false)
 
-        let task = await store.send(.portfolio(.task))
-        await store.receive(\.portfolio.projectionBuilt)
+        let task = await Self.launched(store)
         counts.reset()
 
-        saves.continuation.yield(.entities(["CurrencyConversionRatePoint", "AssetSnapshot", "PortfolioSnapshot"]))
+        saves.continuation.yield(.entities(["WalletAddress", "AccountSnapshot", "ProviderPnLSnapshot"]))
         await clock.advance(by: .seconds(1))
+        await Self.settle()
         await task.cancel()
 
         #expect(counts.builds == 0)
+        #expect(counts.chartBuilds == 0)
     }
 
     @Test func `an equal build stores nothing and revalues nothing`() async {
@@ -325,7 +343,7 @@ struct PortfolioFeatureTests {
         }
         await store.receive(\.portfolio.delegate.revaluationNeeded)
         await store.receive(\.portfolio.revalued) {
-            $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
+            $0.portfolio.store(Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings))
         }
         #expect(calls.withLock { $0 } == 2)
     }
@@ -380,117 +398,5 @@ struct PortfolioFeatureTests {
         await task.cancel()
 
         #expect(counts.builds == 1)
-    }
-
-    // MARK: - Harness
-
-    final class Counts: Sendable {
-        private let state = Mutex((builds: 0, valuations: 0, requests: [PortfolioProjectionRequest]()))
-
-        var builds: Int {
-            state.withLock { $0.builds }
-        }
-
-        var valuations: Int {
-            state.withLock { $0.valuations }
-        }
-
-        var requests: [PortfolioProjectionRequest] {
-            state.withLock { $0.requests }
-        }
-
-        func built(_ request: PortfolioProjectionRequest) {
-            state.withLock {
-                $0.builds += 1
-                $0.requests.append(request)
-            }
-        }
-
-        func valued() {
-            state.withLock { $0.valuations += 1 }
-        }
-
-        func reset() {
-            state.withLock { $0 = (0, 0, []) }
-        }
-    }
-
-    static func state(
-        projection: PortfolioProjection?,
-        currency: FiatCurrency = .usd,
-        rate: Decimal = 1) -> AppFeature.State {
-        var state = AppFeature.State()
-        state.selectedCurrency = currency
-        state.currentUSDToDisplayRate = rate
-        // Today's historical FX is already fetched, so a rate refresh starts no top-up.
-        state.historicalFXLastRefreshDayByCurrency[currency] = HistoricalPriceCalendar.utcStartOfDay(for: now)
-        state.livePricesUSD = Fixture.livePricesUSD
-        state.priceChanges24h = Fixture.liveChanges24h
-        state.portfolio.projection = projection
-        if projection != nil {
-            state.portfolio.valued = expected(prices: state.portfolioPriceInputs, settings: state.portfolio.settings, projection: projection)
-        }
-        return state
-    }
-
-    static func store(
-        counts: Counts,
-        projection: PortfolioProjection?,
-        built: PortfolioProjection = .empty,
-        failing: Bool = false,
-        currency: FiatCurrency = .usd,
-        rate: Decimal = 1,
-        saves: AsyncStream<ModelSaveEvent> = AsyncStream { $0.finish() },
-        settings: AsyncStream<DashboardSettings>? = nil,
-        current: @escaping @Sendable () -> DashboardSettings = { .defaults },
-        clock: TestClock<Duration> = TestClock()) -> TestStoreOf<AppFeature> {
-        TestStore(initialState: state(projection: projection, currency: currency, rate: rate)) {
-            AppFeature()
-        } withDependencies: {
-            $0.continuousClock = clock
-            $0.currentDate.now = { Self.now }
-            $0.modelSave.saves = { saves }
-            $0.dashboardSettings.current = current
-            if let settings {
-                $0.dashboardSettings.changes = { settings }
-            }
-            $0.portfolioProjector.build = { request in
-                counts.built(request)
-                if failing {
-                    throw PortfolioProjectorError(message: "store unavailable")
-                }
-                return built
-            }
-            $0.portfolioValuator.value = { request in
-                counts.valued()
-                return PortfolioValuator.compute(request)
-            }
-            $0.displayCurrencyPreference.save = { _ in }
-        }
-    }
-
-    static func expected(
-        prices: PortfolioPriceInputs,
-        settings: DashboardSettings,
-        projection: PortfolioProjection? = projection) -> PortfolioValuedOutput? {
-        projection.map { PortfolioValuator.compute(PortfolioValuationRequest(projection: $0, prices: prices, settings: settings)) }
-    }
-}
-
-extension PortfolioProjection {
-    /// The 18-token valuation fixture as a prepared projection: every input both as a holding and
-    /// as a polling candidate. `dropping` leaves out that many leading inputs, so two fixtures differ.
-    static func fixture(dropping count: Int = 0, historical: HistoricalMarketPrices = .empty) -> PortfolioProjection {
-        let prepared = PortfolioValuation.prepare(
-            Array(PortfolioValuationFixture.inputs.dropFirst(count)),
-            overrides: PortfolioValuationFixture.overrides,
-            mappings: PortfolioValuationFixture.mappings)
-        var projection = PortfolioProjection.empty
-        projection.holdings = prepared
-        projection.pollingCandidates = prepared
-        projection.overrides = PortfolioValuationFixture.overrides
-        projection.mappings = PortfolioValuationFixture.mappings
-        projection.historical = historical
-        return projection
     }
 }

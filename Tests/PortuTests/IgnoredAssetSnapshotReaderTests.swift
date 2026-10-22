@@ -108,7 +108,7 @@ struct IgnoredAssetSnapshotReaderTests {
     private func overviewSource(
         _ container: ModelContainer,
         overrides: [TokenPricingOverrideSnapshot]) async -> PortfolioValueChartEstimateSource? {
-        await PortfolioValueChartEstimateFetcher(modelContainer: container)
+        await PortfolioValueChartProjectorClient.makeProjector(modelContainer: container)
             .estimateSource(overrides: overrides, chartStartDate: Self.chartStart)
     }
 

@@ -2,27 +2,17 @@ import Charts
 import ComposableArchitecture
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
+/// The top-assets donut from the portfolio read model (#124): both modes are valued with each
+/// revaluation, so a mode click only re-renders.
 struct TopAssetsDonut: View {
     let store: StoreOf<AppFeature>
-    @Environment(AppState.self) private var appState
-    @Query private var tokens: [PositionToken]
-    var sources = ValuationSources()
-    var categories = OverviewCategorySource()
 
     @State private var selectedMode: TopAssetMode = .assets
 
-    private var topAssets: OverviewTopAssets {
-        sources.topAssets(
-            selectedMode,
-            tokens: tokens,
-            categoryResolver: categories.resolver)
-    }
-
     var body: some View {
-        let current = topAssets
+        let overview = store.portfolio.overview
 
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline, spacing: 18) {
@@ -39,22 +29,31 @@ struct TopAssetsDonut: View {
                 .buttonStyle(.plain)
             }
 
-            if current.isEmpty {
-                Text("No data")
-                    .font(.caption)
-                    .foregroundStyle(PortuTheme.dashboardSecondaryText)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, minHeight: 180, alignment: .center)
-            } else {
-                HStack(alignment: .center, spacing: 16) {
-                    chart(current)
-                        .frame(width: 162, height: 162)
+            if let current = overview.topAssets?[selectedMode], let currencyCode = overview.currencyCode {
+                if current.isEmpty {
+                    placeholder("No data")
+                } else {
+                    HStack(alignment: .center, spacing: 16) {
+                        chart(current)
+                            .frame(width: 162, height: 162)
 
-                    legend(current)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        legend(current, currencyCode: currencyCode)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
+            } else {
+                placeholder(OverviewPriceDisplay.unvaluedPlaceholder)
+                    .help(OverviewPriceDisplay.unavailableHelp(buildError: store.portfolio.buildError))
             }
         }
+    }
+
+    private func placeholder(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(PortuTheme.dashboardSecondaryText)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, minHeight: 180, alignment: .center)
     }
 
     private func chart(_ topAssets: OverviewTopAssets) -> some View {
@@ -78,7 +77,7 @@ struct TopAssetsDonut: View {
         .chartLegend(.hidden)
     }
 
-    private func legend(_ topAssets: OverviewTopAssets) -> some View {
+    private func legend(_ topAssets: OverviewTopAssets, currencyCode: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(topAssets.slices) { slice in
                 HStack(spacing: 7) {
@@ -104,7 +103,7 @@ struct TopAssetsDonut: View {
                     Text(OverviewPriceDisplay.hiddenBalancesLine(
                         hidden,
                         basis: .gross,
-                        currencyCode: appState.selectedCurrency.displayCode))
+                        currencyCode: currencyCode))
                         .font(.system(size: 11))
                         .foregroundStyle(PortuTheme.dashboardSecondaryText)
                         .lineLimit(3)
@@ -177,7 +176,7 @@ enum TopAssetsDonutText {
     static let seeAllButtonTitle = "See all →"
 }
 
-enum TopAssetMode {
+enum TopAssetMode: CaseIterable {
     case assets
     case category
 

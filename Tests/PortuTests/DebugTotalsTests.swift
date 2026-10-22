@@ -155,18 +155,18 @@
             try OverviewFeature.headline(overviewContext(isBackfillEnabled: isBackfillEnabled))
         }
 
-        /// The Overview's input over the same store, under the default dashboard settings.
+        /// The Overview's input over the same store, under the default dashboard settings: the active
+        /// accounts' tokens, as the read model's headline takes them.
         func overviewContext(isBackfillEnabled: Bool) throws -> ValuationContext {
             let appState = AppState()
             appState.livePricesUSD = Self.livePricesUSD
-            return try .activePortfolio(
-                positions: context.fetch(FetchDescriptor<Position>()),
+            return try .activeAccounts(
+                context.fetch(FetchDescriptor<Position>()).filter { $0.account?.isActive == true }.flatMap(\.tokens),
                 overrides: context.fetch(FetchDescriptor<TokenPricingOverride>()),
                 mappings: context.fetch(FetchDescriptor<TokenIdentityMapping>()),
                 settings: .defaults,
-                appState: appState,
-                historical: historical(isBackfillEnabled: isBackfillEnabled),
-                includingLiveChanges: true)
+                usdToDisplayRate: appState.currentUSDToDisplayRate,
+                prices: .live(appState, historical: historical(isBackfillEnabled: isBackfillEnabled), includingLiveChanges: true))
         }
 
         /// Every account's Accounts balance over the same store, at a display rate of 1.

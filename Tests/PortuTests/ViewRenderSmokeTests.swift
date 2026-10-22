@@ -20,9 +20,9 @@ struct ViewRenderSmokeTests {
         .allPositions,
         .accounts
     ])
-    func `dashboard section renders without crashing`(_ section: SidebarSection) throws {
+    func `dashboard section renders without crashing`(_ section: SidebarSection) async throws {
         let container = try makeContainer()
-        let store = makeStore(section: section)
+        let store = makeStore(section: section, container: container)
         let appState = AppState()
         appState.bridge(from: store)
 
@@ -31,13 +31,14 @@ struct ViewRenderSmokeTests {
             .environment(appState)
             .frame(width: 1400, height: 900)
 
-        render(view)
+        let hostingView = render(view)
+        try await Self.awaitBuilds(of: store, relayouting: hostingView)
     }
 
     @Test(arguments: OverviewRenderSize.allCases)
-    func `overview renders at supported dashboard sizes`(_ renderSize: OverviewRenderSize) throws {
+    func `overview renders at supported dashboard sizes`(_ renderSize: OverviewRenderSize) async throws {
         let container = try makeContainer()
-        let store = makeStore(section: .overview)
+        let store = makeStore(section: .overview, container: container)
         let appState = AppState()
         appState.bridge(from: store)
         let size = renderSize.size
@@ -47,7 +48,8 @@ struct ViewRenderSmokeTests {
             .environment(appState)
             .frame(width: size.width, height: size.height)
 
-        render(view, size: size)
+        let hostingView = render(view, size: size)
+        try await Self.awaitBuilds(of: store, relayouting: hostingView)
     }
 
     @Test(arguments: ExposureRenderSize.allCases)
@@ -240,11 +242,14 @@ struct ViewRenderSmokeTests {
         render(view, size: CGSize(width: 780, height: 200))
     }
 
-    func makeStore(section: SidebarSection) -> StoreOf<AppFeature> {
-        makeStore(state: populatedState(section: section))
+    func makeStore(section: SidebarSection, container: ModelContainer? = nil) -> StoreOf<AppFeature> {
+        makeStore(state: populatedState(section: section), container: container)
     }
 
-    private func makeStore(state: AppFeature.State) -> StoreOf<AppFeature> {
+    /// With a `container`, the portfolio's projectors read it, so the dashboard's `.task` builds the
+    /// read model the panels render. Without one they build an empty portfolio, as every dependency
+    /// does under test.
+    private func makeStore(state: AppFeature.State, container: ModelContainer? = nil) -> StoreOf<AppFeature> {
         Store(initialState: state) {
             AppFeature()
         } withDependencies: {
@@ -253,6 +258,10 @@ struct ViewRenderSmokeTests {
             $0.priceService.invalidateCache = {}
             $0.continuousClock = TestClock()
             $0.currentDate.now = { Date(timeIntervalSince1970: 1_000_000) }
+            if let container {
+                $0.portfolioProjector = .live(modelContainer: container)
+                $0.portfolioValueChartProjector = .live(modelContainer: container)
+            }
         }
     }
 

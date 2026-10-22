@@ -107,5 +107,5 @@ A price tick never rebuilds the projection (B1). A non-USD price update changes 
 ## Timing
 
 ### T1: Signposts
-- `PortfolioProjectionBuild` wraps each projector build; `PortfolioValuation` wraps each revaluation.
-- In Debug, the debug server serves the most recent duration of each, in milliseconds, at `GET /state/portfolio/timings`. Before the first interval a duration is `null`.
+- `PortfolioProjectionBuild` wraps each projector build; `PortfolioValueChartBuild` each value-chart build (#124); `PortfolioValuation` each revaluation.
+- In Debug, the debug server serves the most recent duration of each, in milliseconds, at `GET /state/portfolio/timings` (`projectionBuildMs`, `valueChartBuildMs`, `valuationMs`). Before the first interval a duration is `null`.

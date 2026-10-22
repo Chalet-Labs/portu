@@ -7,73 +7,74 @@ import SwiftData
 import SwiftUI
 import Testing
 
-/// The Overview views themselves, rendered over the in-memory store and read back through the
-/// accessibility tree, so a view that built its numbers some other way than through its
-/// `ValuationSources` method, or the read model's valued output, would show other text.
+/// The Overview views themselves, rendered from a store holding what the read model values from the
+/// in-memory store and read back through the accessibility tree, so a view that built its numbers some
+/// other way than from the reducer's state would show other text.
 extension OverviewModelWiringTests {
     /// The mapping row values DEGEN at 100, ETH's +25% is only in the live fractions, and the ignore
     /// row (second case) drops DEGEN.
     @Test(.renderedTextReadable, arguments: [false, true])
-    func `the top bar and sidebar header show the read model's headline`(ignoringDegen: Bool) throws {
+    func `the top bar and sidebar header show the read model's headline`(ignoringDegen: Bool) async throws {
         let store = try Store(ignoring: ignoringDegen ? ["DEGEN"] : [])
-        let readModel = try Self.readModel(store)
-        let expected = readModel.headline
+        let revaluation = try await Self.readModel(store)
+        let expected = revaluation.valued.headline
         let shown = [
-            OverviewPriceDisplay.currency(expected.total, currencyCode: readModel.currencyCode),
-            OverviewPriceDisplay.currency(expected.change24h, currencyCode: readModel.currencyCode),
+            OverviewPriceDisplay.currency(expected.total, currencyCode: revaluation.valued.currencyCode),
+            OverviewPriceDisplay.currency(expected.change24h, currencyCode: revaluation.valued.currencyCode),
             OverviewPriceDisplay.changePercentage(expected.changePercentage)
         ]
 
         #expect(expected.total == (ignoringDegen ? 6000 : 6100) * Self.rate)
         #expect(expected.change24h == 1200 * Self.rate)
-        for view in Self.sliceViews(readModel) {
-            let texts = try Self.texts(of: view, over: store)
+        for view in Self.sliceViews(revaluation) {
+            let texts = try Self.texts(of: view)
             #expect(shown.allSatisfy(texts.contains), "\(texts)")
         }
     }
 
     /// A 3 ETH borrow outweighs the holdings, so the prior total (−2900 + 600) is not positive: both
     /// headers show "—", and the top bar drops the arrow it draws next to a percentage.
-    @Test(.renderedTextReadable) func `the top bar and sidebar header show a dash and no arrow without a positive prior`() throws {
+    @Test(.renderedTextReadable) func `the top bar and sidebar header show a dash and no arrow without a positive prior`() async throws {
         let store = try Store()
         let wallet = try #require(store.positions.first { $0.account?.isActive == true })
         let eth = try #require(wallet.tokens.first { $0.asset?.symbol == "ETH" }?.asset)
         try store.insert([PositionToken(role: .borrow, amount: 3, usdValue: 8700, asset: eth, position: wallet)])
-        let readModel = try Self.readModel(store)
+        let borrowing = try await Self.readModel(store)
+        let positive = try await Self.readModel(Store())
 
-        #expect(readModel.headline.changePercentage == nil)
-        for view in Self.sliceViews(readModel) {
-            let texts = try Self.texts(of: view, over: store)
+        #expect(borrowing.valued.headline.changePercentage == nil)
+        for view in Self.sliceViews(borrowing) {
+            let texts = try Self.texts(of: view)
             #expect(texts.contains("—"), "\(texts)")
         }
-        let arrows = try Self.images(of: Self.topBar(Self.readModel(Store())), over: Store())
-        #expect(!arrows.isEmpty, "the positive-prior top bar draws its arrow")
-        #expect(try Self.images(of: Self.topBar(readModel), over: store).isEmpty)
+        #expect(try !Self.images(of: Self.topBar(positive)).isEmpty, "the positive-prior top bar draws its arrow")
+        #expect(try Self.images(of: Self.topBar(borrowing)).isEmpty)
     }
 
-    private static func portfolioStore(_ valued: PortfolioValuedOutput) -> StoreOf<PortfolioFeature> {
+    /// A portfolio store holding `revaluation`, as the dashboard holds it after a build.
+    static func portfolioStore(_ revaluation: PortfolioRevaluation?) -> StoreOf<PortfolioFeature> {
         var state = PortfolioFeature.State()
         state.projection = .empty
-        state.valued = valued
+        state.store(revaluation)
         return StoreOf<PortfolioFeature>(initialState: state) { PortfolioFeature() }
     }
 
-    private static func topBar(_ valued: PortfolioValuedOutput) -> OverviewTopBar {
-        OverviewTopBar(store: portfolioStore(valued))
+    private static func topBar(_ revaluation: PortfolioRevaluation) -> OverviewTopBar {
+        OverviewTopBar(store: portfolioStore(revaluation))
     }
 
-    private static func sliceViews(_ valued: PortfolioValuedOutput) -> [AnyView] {
-        [AnyView(topBar(valued)), AnyView(SidebarPortfolioHeader(store: portfolioStore(valued)))]
+    private static func sliceViews(_ revaluation: PortfolioRevaluation) -> [AnyView] {
+        [AnyView(topBar(revaluation)), AnyView(SidebarPortfolioHeader(store: portfolioStore(revaluation)))]
     }
 
-    /// The cards view builds its resolver from the store's categories and rules: renamed major
-    /// categories and a DEGEN → Stablecoins rule.
-    @Test(.renderedTextReadable) func `the cards view uses the store's categories and rules`() throws {
+    /// The cards show the store's renamed major categories, and its DEGEN → Stablecoins rule.
+    @Test(.renderedTextReadable) func `the cards view shows the store's categories and rules`() async throws {
         let store = try Store()
         try store.seedCategories()
-        let currencyCode = store.appState.selectedCurrency.displayCode
+        let revaluation = try await Self.readModel(store)
+        let currencyCode = revaluation.overview.currencyCode
 
-        let texts = try Self.texts(of: OverviewSummaryCards(), over: store, size: CGSize(width: 1200, height: 300))
+        let texts = try Self.texts(of: OverviewSummaryCards(store: Self.portfolioStore(revaluation)), size: CGSize(width: 1200, height: 300))
         // Each row's label is followed by its value (the tree runs across the cards row by row).
         let idle = ["Stablecoins & Fiat", "Majors / L1s / SOL", "Tokens & Memecoins"].map { label in
             texts.firstIndex(of: label).flatMap { texts.indices.contains($0 + 1) ? texts[$0 + 1] : nil }
@@ -83,24 +84,28 @@ extension OverviewModelWiringTests {
     }
 
     /// The Idle Stables tab shows DEGEN only under the store's DEGEN → Stablecoins rule.
-    @Test(.renderedTextReadable) func `the position tabs view uses the store's categories and rules`() throws {
+    @Test(.renderedTextReadable) func `the position tabs view shows the store's categories and rules`() async throws {
         let store = try Store()
         try store.seedCategories()
+        let revaluation = try await Self.readModel(store)
 
-        let texts = try Self.texts(of: OverviewPositionTabs(), over: store, size: CGSize(width: 800, height: 400), pressing: "Idle Stables")
+        let texts = try Self.texts(
+            of: OverviewPositionTabs(store: Self.portfolioStore(revaluation)),
+            size: CGSize(width: 800, height: 400),
+            pressing: "Idle Stables")
 
         #expect(texts.contains("DEGEN"), "\(texts)")
         #expect(!texts.contains(OverviewPositionTab.idleStables.emptyMessage), "\(texts)")
     }
 
     /// Category mode files DEGEN under the store's Stablecoins category.
-    @Test(.renderedTextReadable) func `the donut view uses the store's categories and rules`() throws {
+    @Test(.renderedTextReadable) func `the donut view shows the store's categories and rules`() async throws {
         let store = try Store()
         try store.seedCategories()
+        let revaluation = try await Self.readModel(store)
 
         let texts = try Self.texts(
-            of: TopAssetsDonut(store: Self.appStore()),
-            over: store,
+            of: TopAssetsDonut(store: Self.appStore(revaluation)),
             size: CGSize(width: 600, height: 400),
             pressing: TopAssetMode.category.title)
 
@@ -109,11 +114,12 @@ extension OverviewModelWiringTests {
     }
 
     /// DEGEN (100 of 6100) is the only stablecoin, under the store's rule.
-    @Test(.renderedTextReadable) func `the health view uses the store's categories and rules`() throws {
+    @Test(.renderedTextReadable) func `the health view shows the store's categories and rules`() async throws {
         let store = try Store()
         try store.seedCategories()
+        let revaluation = try await Self.readModel(store)
 
-        let texts = try Self.texts(of: PortfolioHealthPanel(store: Self.appStore()), over: store, size: CGSize(width: 400, height: 400))
+        let texts = try Self.texts(of: PortfolioHealthPanel(store: Self.appStore(revaluation)), size: CGSize(width: 400, height: 400))
         // The metric values come first, then their labels: Assets, Chains, Stables, HHI.
         let stables = texts.firstIndex(of: "Assets").flatMap { $0 >= 4 ? texts[$0 - 2] : nil }
 
@@ -121,15 +127,15 @@ extension OverviewModelWiringTests {
         #expect(stables != Decimal.zero.formatted(.percent.precision(.fractionLength(0))))
     }
 
-    /// The hidden line pairs its amount, converted at `AppState`'s rate, with `AppState`'s currency
-    /// code, so it never shows the new code with the old rate while the store's currency switches.
-    @Test(.renderedTextReadable) func `the health hidden line uses the app state currency code`() throws {
+    /// The hidden line pairs its amount with the code of the currency the revaluation converted it
+    /// in, so it never shows the new code with the old amount while the store's currency switches:
+    /// the store has switched to CHF, the panel still holds the USD revaluation, and shows USD.
+    @Test(.renderedTextReadable) func `the health hidden line uses the currency code of its revaluation`() async throws {
         let store = try Store()
         try store.addDust()
+        let usd = try await Self.readModel(store)
         store.appState.selectedCurrency = .chf
-        let appStore = Self.appStore()
-
-        let texts = try Self.texts(of: PortfolioHealthPanel(store: appStore), over: store, size: CGSize(width: 400, height: 400))
+        let chf = try await Self.readModel(store)
         let line = { (code: String) in
             OverviewPriceDisplay.hiddenBalancesLine(
                 value: PortfolioValuationFixture.decimal("0.5") * Self.rate,
@@ -138,19 +144,22 @@ extension OverviewModelWiringTests {
                 currencyCode: code)
         }
 
-        #expect(appStore.selectedCurrency == .usd)
-        #expect(texts.contains(line(FiatCurrency.chf.displayCode)), "\(texts)")
-        #expect(!texts.contains(line(FiatCurrency.usd.displayCode)), "\(texts)")
+        let size = CGSize(width: 400, height: 400)
+        let converted = try Self.texts(of: PortfolioHealthPanel(store: Self.appStore(chf)), size: size)
+        let switching = try Self.texts(of: PortfolioHealthPanel(store: Self.appStore(usd, selectedCurrency: .chf)), size: size)
+
+        #expect(converted.contains(line(FiatCurrency.chf.displayCode)), "\(converted)")
+        #expect(switching.contains(line(FiatCurrency.usd.displayCode)), "\(switching)")
+        #expect(!switching.contains(line(FiatCurrency.chf.displayCode)), "\(switching)")
     }
 
     /// The text every element in the rendered view exposes, in tree order. `pressing` names a
     /// button to press first (a tab or a mode the view starts without).
     static func texts(
         of view: some View,
-        over store: Store,
         size: CGSize = CGSize(width: 400, height: 200),
         pressing button: String? = nil) throws -> [String] {
-        let hostingView = try #require(render(view, over: store, size: size))
+        let hostingView = render(view, size: size)
         if let button {
             try #require(press(button, in: hostingView), "no button \(button) in \(accessibilityTexts(hostingView))")
             hostingView.layoutSubtreeIfNeeded()
@@ -159,9 +168,18 @@ extension OverviewModelWiringTests {
         return accessibilityTexts(hostingView)
     }
 
-    /// An `AppFeature` store for the views that take one; nothing is sent while they render.
-    static func appStore() -> StoreOf<AppFeature> {
-        StoreOf<AppFeature>(initialState: AppFeature.State()) {
+    /// An `AppFeature` store holding `revaluation` in its portfolio state, and the failure of its last
+    /// build if `buildError` is given, for the views that take one; nothing is sent while they render.
+    static func appStore(
+        _ revaluation: PortfolioRevaluation? = nil,
+        selectedCurrency: FiatCurrency = .usd,
+        buildError: String? = nil) -> StoreOf<AppFeature> {
+        var state = AppFeature.State()
+        state.selectedCurrency = selectedCurrency
+        state.portfolio.projection = .empty
+        state.portfolio.buildError = buildError
+        state.portfolio.store(revaluation)
+        return StoreOf<AppFeature>(initialState: state) {
             AppFeature()
         } withDependencies: {
             $0.syncEngine.sync = { _ in SyncResult(failedAccounts: []) }
@@ -169,6 +187,22 @@ extension OverviewModelWiringTests {
             $0.priceService.invalidateCache = {}
             $0.continuousClock = TestClock()
         }
+    }
+
+    private static var retainedWindows: [NSWindow] = []
+
+    /// Hosts `view` in a window, laid out and drawn once.
+    @discardableResult
+    static func render(_ view: some View, size: CGSize = CGSize(width: 200, height: 200)) -> NSHostingView<some View> {
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.frame = CGRect(origin: .zero, size: size)
+        let window = NSWindow(contentRect: hostingView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = hostingView
+        window.layoutIfNeeded()
+        hostingView.layoutSubtreeIfNeeded()
+        hostingView.displayIfNeeded()
+        retainedWindows.append(window)
+        return hostingView
     }
 
     private static func accessibilityString(_ selector: String, of element: Any) -> String? {
@@ -197,9 +231,8 @@ extension OverviewModelWiringTests {
     }
 
     /// The image elements in the rendered view, by their accessibility description or label.
-    static func images(of view: some View, over store: Store) throws -> [String] {
-        let hostingView = try #require(render(view, over: store, size: CGSize(width: 400, height: 200)))
-        return accessibilityImages(hostingView)
+    static func images(of view: some View) throws -> [String] {
+        accessibilityImages(render(view, size: CGSize(width: 400, height: 200)))
     }
 
     private static func accessibilityImages(_ element: Any) -> [String] {
@@ -226,7 +259,7 @@ extension OverviewModelWiringTests {
         return texts
     }
 
-    /// Whether this host builds SwiftUI's accessibility tree, which `texts(of:over:)` reads.
+    /// Whether this host builds SwiftUI's accessibility tree, which `texts(of:)` reads.
     static func renderedTextIsReadable() -> Bool {
         let hostingView = NSHostingView(rootView: Text("accessibility probe"))
         hostingView.frame = CGRect(x: 0, y: 0, width: 200, height: 40)
@@ -242,7 +275,7 @@ extension OverviewModelWiringTests {
 extension Trait where Self == ConditionTrait {
     /// GitHub's macOS runner builds no SwiftUI accessibility tree, so every rendered element reads
     /// back empty there. Tests that read rendered text skip on such a host and run where the tree
-    /// exists; `OverviewModelWiringTests`' probe tests pin the same sources on every host.
+    /// exists; `OverviewModelWiringTests`' read-model tests pin the same outputs on every host.
     static var renderedTextReadable: Self {
         .enabled("SwiftUI builds no accessibility tree on this host") {
             await MainActor.run { OverviewModelWiringTests.renderedTextIsReadable() }

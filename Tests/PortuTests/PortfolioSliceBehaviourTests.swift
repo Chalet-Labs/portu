@@ -8,7 +8,8 @@ import SwiftUI
 import Synchronization
 import Testing
 
-/// What re-renders the slice and what it polls (#123, spec S1 and S2).
+/// What re-renders the slice and the Overview panels, and what Overview polls (#123, spec S1 and
+/// S2; #124, spec O3).
 @MainActor
 struct PortfolioSliceBehaviourTests {
     private typealias Fixture = PortfolioValuationFixture
@@ -17,6 +18,27 @@ struct PortfolioSliceBehaviourTests {
         headline: OverviewHeadline(total: 6100, change24h: 1200, changePercentage: Decimal(1200) / Decimal(4900)),
         currencyCode: "USD",
         pricePollingIDs: ["ethereum", "degen-base", "bitcoin"])
+
+    /// The fixture's panels at the fixture's prices.
+    private static let revaluation = revaluation(liveChanges24h: Fixture.liveChanges24h)
+
+    private static func revaluation(
+        liveChanges24h: [String: Decimal],
+        currency: FiatCurrency = .usd,
+        rate: Decimal = 1) -> PortfolioRevaluation {
+        PortfolioValuator.compute(PortfolioValuationRequest(
+            projection: .fixture(historical: Fixture.historical),
+            prices: PortfolioPriceInputs(
+                livePricesUSD: Fixture.livePricesUSD,
+                liveChanges24h: liveChanges24h,
+                usdToDisplayRate: rate,
+                currency: currency),
+            settings: .defaults))
+    }
+
+    private static func revalued(_ valued: PortfolioValuedOutput) -> PortfolioFeature.Action {
+        .revalued(PortfolioRevaluation(valued: valued, overview: revaluation.overview))
+    }
 
     // MARK: - S1
 
@@ -37,7 +59,7 @@ struct PortfolioSliceBehaviourTests {
 
         track()
         store.send(.sectionSelected(.exposure))
-        store.send(.portfolio(.revalued(Self.valued)))
+        store.send(.portfolio(Self.revalued(Self.valued)))
         // A rebuild that fails under a shown total changes only `buildError`, which is read only
         // while the totals are dashed.
         store.send(.portfolio(.projectionBuildFailed("store unavailable")))
@@ -45,8 +67,163 @@ struct PortfolioSliceBehaviourTests {
 
         var moved = Self.valued
         moved.headline = OverviewHeadline(total: 6200, change24h: 1300, changePercentage: nil)
-        store.send(.portfolio(.revalued(moved)))
+        store.send(.portfolio(Self.revalued(moved)))
         #expect(changed.withLock { $0 } == true, "a changed output must re-render the slice")
+    }
+
+    // MARK: - O3: each panel re-renders only for its own output
+
+    private enum Panel: CaseIterable {
+        case cards, tabs, donut, health, watchlist, chart, header
+    }
+
+    /// Whether anything a panel read under observation has changed since.
+    private final class Changed: Sendable {
+        private let flag = Mutex(false)
+
+        var value: Bool {
+            flag.withLock { $0 }
+        }
+
+        func set() {
+            flag.withLock { $0 = true }
+        }
+    }
+
+    /// Reads one panel's body under observation.
+    private static func tracking(_ panel: Panel, in store: StoreOf<AppFeature>) -> Changed {
+        let portfolio = store.scope(state: \.portfolio, action: \.portfolio)
+        let changed = Changed()
+        withObservationTracking {
+            switch panel {
+            case .cards: _ = OverviewSummaryCards(store: portfolio).body
+            case .tabs: _ = OverviewPositionTabs(store: portfolio).body
+            case .donut: _ = TopAssetsDonut(store: store).body
+            case .health: _ = PortfolioHealthPanel(store: store).body
+            case .watchlist: _ = PriceWatchlist(store: store).body
+            case .chart: _ = PortfolioValueChart(store: portfolio).body
+            case .header:
+                _ = SidebarPortfolioHeader(store: portfolio).body
+                _ = OverviewTopBar(store: portfolio).body
+            }
+        } onChange: {
+            changed.set()
+        }
+        return changed
+    }
+
+    /// Reads one panel's body under observation, then reports whether `act` notified it.
+    private static func notified(_ panel: Panel, in store: StoreOf<AppFeature>, by act: () -> Void) -> Bool {
+        let changed = tracking(panel, in: store)
+        act()
+        return changed.value
+    }
+
+    /// As `notified`, for an action whose effects land later: waits until a revaluation and a
+    /// conversion have, which a rate or currency change starts together.
+    private static func notified(
+        _ panel: Panel,
+        in store: StoreOf<AppFeature>,
+        landed: Landed,
+        by act: () -> Void) async throws -> Bool {
+        let changed = tracking(panel, in: store)
+        act()
+        let deadline = Date().addingTimeInterval(5)
+        while landed.revaluations == 0 || landed.conversions == 0, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(landed.revaluations == 1 && landed.conversions == 1, "\(panel): the rate change's effects never landed")
+        return changed.value
+    }
+
+    @Test func `a navigation click or a failed rebuild re-renders no panel`() {
+        for panel in Panel.allCases {
+            let store = Self.appStore()
+            #expect(!Self.notified(panel, in: store) {
+                store.send(.sectionSelected(.exposure))
+                store.send(.sectionSelected(.overview))
+                store.send(.portfolio(.projectionBuildFailed("store unavailable")))
+            }, "\(panel)")
+        }
+    }
+
+    /// Only the cards and health move (the headline and every other output are equal): they alone
+    /// re-render, and no headline reader, tab, donut, watchlist or chart does.
+    @Test func `a revaluation with an equal headline re-renders only the panels whose output moved`() {
+        var moved = Self.revaluation
+        moved.overview.summaryCards = []
+        moved.overview.health = PortfolioHealthFeature.health(Fixture.context(inputs: []))
+        let expected: [Panel: Bool] = [
+            .cards: true, .health: true,
+            .tabs: false, .donut: false, .watchlist: false, .chart: false, .header: false
+        ]
+
+        #expect(Set(expected.keys) == Set(Panel.allCases), "the table covers every panel")
+        for (panel, notifies) in expected {
+            let store = Self.appStore()
+            #expect(Self.notified(panel, in: store) { store.send(.portfolio(.revalued(moved))) } == notifies, "\(panel)")
+        }
+    }
+
+    /// The cards, the donut and health show no 24h figure, so a change of the fractions alone
+    /// leaves them, and the chart, alone.
+    @Test func `a change to the live fractions alone re-renders only the panels that show one`() {
+        var fractions = Fixture.liveChanges24h
+        for key in fractions.keys {
+            fractions[key] = -(fractions[key] ?? 0)
+        }
+        let flipped = Self.revaluation(liveChanges24h: fractions)
+        let expected: [Panel: Bool] = [
+            .cards: false, .donut: false, .health: false, .chart: false,
+            .tabs: true, .watchlist: true, .header: true
+        ]
+
+        for (panel, notifies) in expected {
+            let store = Self.appStore()
+            #expect(Self.notified(panel, in: store) { store.send(.portfolio(.revalued(flipped))) } == notifies, "\(panel)")
+        }
+    }
+
+    /// A converted chart re-renders the chart and nothing else; an equal one re-renders nothing.
+    @Test func `only a changed chart re-renders the chart`() throws {
+        let store = Self.appStore()
+        let chart = try #require(store.portfolio.valueChart)
+        #expect(!Self.notified(.chart, in: store) { store.send(.portfolio(.valueChartConverted(chart))) })
+
+        var moved = chart
+        moved.currencyCode = "EUR"
+        #expect(Self.notified(.chart, in: store) { store.send(.portfolio(.valueChartConverted(moved))) })
+        for panel in Panel.allCases where panel != .chart {
+            let store = Self.appStore()
+            #expect(!Self.notified(panel, in: store) { store.send(.portfolio(.valueChartConverted(moved))) }, "\(panel)")
+        }
+    }
+
+    /// The periodic refresh sends the rate the dashboard already has: the panels are revalued and the
+    /// chart converted again, nothing differs, and nothing re-renders.
+    @Test func `an equal rate refresh re-renders no panel`() async throws {
+        let rate = Fixture.decimal("0.95")
+        for panel in Panel.allCases {
+            let landed = Landed()
+            let store = Self.appStore(currency: .eur, rate: rate, landed: landed)
+            let changed = try await Self.notified(panel, in: store, landed: landed) {
+                store.send(.currentCurrencyConversionRateReceived(.eur, .success(rate)))
+            }
+            #expect(!changed, "\(panel)")
+        }
+    }
+
+    /// A new rate moves every money figure: the chart and the headline both re-render.
+    @Test func `a changed rate re-renders the chart and the headline`() async throws {
+        let refreshed = Fixture.decimal("0.96")
+        for panel in [Panel.chart, .header] {
+            let landed = Landed()
+            let store = Self.appStore(currency: .eur, rate: Fixture.decimal("0.95"), landed: landed)
+            let changed = try await Self.notified(panel, in: store, landed: landed) {
+                store.send(.currentCurrencyConversionRateReceived(.eur, .success(refreshed)))
+            }
+            #expect(changed, "\(panel)")
+        }
     }
 
     // MARK: - S2
@@ -64,21 +241,21 @@ struct PortfolioSliceBehaviourTests {
         // A revaluation that only re-ranks the same IDs sends no new start.
         var reranked = try #require(store.portfolio.valued)
         reranked.pricePollingIDs.reverse()
-        store.send(.portfolio(.revalued(reranked)))
+        store.send(.portfolio(Self.revalued(reranked)))
         try await Self.redraw(view)
         #expect(starts.total == 1, "the driver restarted polling for the same set")
 
         // A different set restarts it.
         var widened = reranked
         widened.pricePollingIDs.append("cardano")
-        store.send(.portfolio(.revalued(widened)))
+        store.send(.portfolio(Self.revalued(widened)))
         try await Self.wait(redrawing: view) { starts.total == 2 }
         #expect(store.pricePollingIDs.contains("cardano"))
 
         // An empty set stops it.
         var empty = widened
         empty.pricePollingIDs = []
-        store.send(.portfolio(.revalued(empty)))
+        store.send(.portfolio(Self.revalued(empty)))
         try await Self.wait(redrawing: view) { store.pricePollingIDs.isEmpty }
         #expect(store.connectionStatus == .idle)
     }
@@ -93,7 +270,7 @@ struct PortfolioSliceBehaviourTests {
         #expect(store.pricePollingIDs.isEmpty)
 
         // The first valued output starts polling: the driver was running and waiting.
-        store.send(.portfolio(.revalued(PortfolioValuedOutput(
+        store.send(.portfolio(Self.revalued(PortfolioValuedOutput(
             headline: OverviewHeadline(total: 1, change24h: 0, changePercentage: nil),
             currencyCode: "USD",
             pricePollingIDs: ["ethereum"]))))
@@ -115,30 +292,71 @@ struct PortfolioSliceBehaviourTests {
         }
     }
 
+    /// Counts the revaluations and conversions that land.
+    private final class Landed: Sendable {
+        private let counts = Mutex((revaluations: 0, conversions: 0))
+
+        var revaluations: Int {
+            counts.withLock { $0.revaluations }
+        }
+
+        var conversions: Int {
+            counts.withLock { $0.conversions }
+        }
+
+        func record(_ action: AppFeature.Action) {
+            counts.withLock {
+                if action.is(\.portfolio.revalued) {
+                    $0.revaluations += 1
+                }
+                if action.is(\.portfolio.valueChartConverted) {
+                    $0.conversions += 1
+                }
+            }
+        }
+    }
+
     /// The valuation fixture's prices and, once `built`, its projection with the output those prices
-    /// value it at. A fetch never returns, so no tick revalues over the outputs a test sends: the
-    /// only polling activity is what the driver starts and stops. `starts` counts every
-    /// `startPricePolling` the driver sends.
+    /// value it at, and a converted chart, in `currency` at `rate`. A fetch never returns, so no tick
+    /// revalues over the outputs a test sends: the only polling activity is what the driver starts
+    /// and stops. `starts` counts every `startPricePolling` the driver sends, `landed` every
+    /// revaluation and conversion.
     private static func appStore(
         valued override: PortfolioValuedOutput? = nil,
         starts: StartCounter = StartCounter(),
-        built: Bool = true) -> StoreOf<AppFeature> {
+        built: Bool = true,
+        currency: FiatCurrency = .usd,
+        rate: Decimal = 1,
+        landed: Landed = Landed()) -> StoreOf<AppFeature> {
         var state = AppFeature.State()
+        state.selectedCurrency = currency
+        state.currentUSDToDisplayRate = rate
+        // Today's historical FX is already fetched, so a rate refresh starts no top-up.
+        state.historicalFXLastRefreshDayByCurrency[currency] = HistoricalPriceCalendar.utcStartOfDay(for: Fixture.noon(0))
         state.livePricesUSD = Fixture.livePricesUSD
         state.priceChanges24h = Fixture.liveChanges24h
         if built {
-            let projection = PortfolioProjection.fixture()
-            state.portfolio.projection = projection
-            state.portfolio.valued = override ?? PortfolioValuator.compute(PortfolioValuationRequest(
-                projection: projection,
-                prices: state.portfolioPriceInputs,
-                settings: state.portfolio.settings))
+            let panels = revaluation(liveChanges24h: Fixture.liveChanges24h, currency: currency, rate: rate)
+            state.portfolio.projection = PortfolioProjection.fixture(historical: Fixture.historical)
+            state.portfolio.valued = override ?? panels.valued
+            state.portfolio.overview.update(with: panels.overview)
+            let source = PortfolioValueChartSource(
+                snapshots: [PortfolioValueSnapshotPoint(id: Fixture.uuid(7001), timestamp: Fixture.noon(-1), totalValueUSD: 10000, isPartial: false)],
+                rates: [],
+                estimatedUSD: [])
+            state.portfolio.valueChartSource = source
+            state.portfolio.valueChart = PortfolioValueChartData.converting(
+                source,
+                currency: currency,
+                usdToDisplayRate: rate,
+                today: Fixture.noon(0))
         }
         return Store(initialState: state) {
             Reduce { _, action in
                 if case .startPricePolling = action {
                     starts.started()
                 }
+                landed.record(action)
                 return .none
             }
             AppFeature()

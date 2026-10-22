@@ -34,7 +34,7 @@ actor PortfolioProjector {
         let accounts = try modelContext.fetch(FetchDescriptor<Account>())
         let overrides = try modelContext.fetch(FetchDescriptor<TokenPricingOverride>())
         let mappings = try modelContext.fetch(FetchDescriptor<TokenIdentityMapping>())
-        // The same order `OverviewCategorySource` queries them in.
+        // Sorted as the category settings list them, so the resolver resolves as it did in the views.
         let categories = try modelContext.fetch(FetchDescriptor<PortfolioCategory>(sortBy: [
             SortDescriptor(\PortfolioCategory.sortOrder),
             SortDescriptor(\PortfolioCategory.name)

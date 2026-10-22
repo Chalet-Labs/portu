@@ -56,8 +56,11 @@ It equals what the chart's queries, month filter and estimate task produced on m
   `PortfolioSnapshot`, `CurrencyConversionRatePoint`, `AssetSnapshot`,
   `HistoricalPricePoint`, `TokenPricingOverride` or `Asset`, debounced by 300 ms; a
   backfill-flag change; each UTC midnight. The latest build wins.
-- It never throws. A failed fetch yields an empty series or no estimate.
+- A failed snapshot or rate fetch fails the build: the current source stays and the error is
+  logged. A failed override or price fetch for the estimate yields no estimate, logged.
 - An equal source is not stored.
+- The `PortfolioValueChartBuild` signpost wraps each build; Debug serves its latest duration as
+  `valueChartBuildMs` at `GET /state/portfolio/timings`.
 
 ### C3: Conversion
 - Through `CurrencyConversionContext`: the live rate for today's UTC day, the historical

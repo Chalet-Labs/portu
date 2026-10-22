@@ -112,8 +112,8 @@ struct PortfolioValueChartFeatureTests {
 
     @Test func `estimateSource returns nil on empty store`() async throws {
         let container = try makeContainer()
-        let fetcher = PortfolioValueChartEstimateFetcher(modelContainer: container)
-        let result = await fetcher.estimateSource(overrides: [], chartStartDate: utcDate(2024, 1, 1))
+        let projector = await PortfolioValueChartProjectorClient.makeProjector(modelContainer: container)
+        let result = await projector.estimateSource(overrides: [], chartStartDate: utcDate(2024, 1, 1))
         #expect(result == nil)
     }
 
@@ -133,8 +133,8 @@ struct PortfolioValueChartFeatureTests {
             usdValue: 40000))
         try context.save()
 
-        let fetcher = PortfolioValueChartEstimateFetcher(modelContainer: container)
-        let result = await fetcher.estimateSource(overrides: [], chartStartDate: utcDate(2024, 1, 5))
+        let projector = await PortfolioValueChartProjectorClient.makeProjector(modelContainer: container)
+        let result = await projector.estimateSource(overrides: [], chartStartDate: utcDate(2024, 1, 5))
         #expect(result == nil)
     }
 
@@ -144,9 +144,9 @@ struct PortfolioValueChartFeatureTests {
         let chartStart = utcDate(2024, 1, 1)
         let fixture = try seedFirstDayFixture(in: context)
 
-        let fetcher = PortfolioValueChartEstimateFetcher(modelContainer: container)
+        let projector = await PortfolioValueChartProjectorClient.makeProjector(modelContainer: container)
         let source = try #require(
-            await fetcher.estimateSource(overrides: [], chartStartDate: chartStart))
+            await projector.estimateSource(overrides: [], chartStartDate: chartStart))
 
         #expect(source.firstRealSnapshotDate == fixture.t1)
         // t2 is deduped away (same account/asset A as t1, t1 is earlier); 3 winners remain.
@@ -176,9 +176,9 @@ struct PortfolioValueChartFeatureTests {
         let chartStart = utcDate(2024, 1, 1)
         let fixture = try seedParityFixture(in: context)
 
-        let fetcher = PortfolioValueChartEstimateFetcher(modelContainer: container)
+        let projector = await PortfolioValueChartProjectorClient.makeProjector(modelContainer: container)
         let source = try #require(
-            await fetcher.estimateSource(overrides: [], chartStartDate: chartStart))
+            await projector.estimateSource(overrides: [], chartStartDate: chartStart))
 
         // Manually project all rows using the same field mapping as estimateSource:
         //   coinGeckoId from asset lookup, netUSDValue = usdValue - borrowUsdValue.

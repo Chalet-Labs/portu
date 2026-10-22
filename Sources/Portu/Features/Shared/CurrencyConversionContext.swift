@@ -32,13 +32,23 @@ struct CurrencyConversionContext: Equatable {
         displayCurrency: FiatCurrency,
         currentUSDToDisplayRate: Decimal,
         historicalRatePoints: [CurrencyConversionRatePoint]) {
+        self.init(
+            displayCurrency: displayCurrency,
+            currentUSDToDisplayRate: currentUSDToDisplayRate,
+            historicalRates: historicalRatePoints.lazy.map(CurrencyConversionRateEntry.init))
+    }
+
+    init(
+        displayCurrency: FiatCurrency,
+        currentUSDToDisplayRate: Decimal,
+        historicalRates: some Sequence<CurrencyConversionRateEntry>) {
         let rates = Dictionary(
-            historicalRatePoints.compactMap { point -> (Date, Decimal)? in
+            historicalRates.compactMap { rate -> (Date, Decimal)? in
                 guard
-                    point.baseCurrency == .usd,
-                    point.quoteCurrency == displayCurrency
+                    rate.baseCurrency == .usd,
+                    rate.quoteCurrency == displayCurrency
                 else { return nil }
-                return (point.day, point.rate)
+                return (rate.day, rate.rate)
             },
             uniquingKeysWith: { _, latest in latest })
         self.init(
@@ -67,5 +77,19 @@ struct CurrencyConversionContext: Equatable {
             date: point.date,
             value: convertUSDValue(point.value, on: point.date, today: today),
             kind: point.kind)
+    }
+}
+
+/// A `CurrencyConversionRatePoint` as a value, so a rate row can leave the actor that fetched it.
+struct CurrencyConversionRateEntry: Equatable, Sendable {
+    let baseCurrency: FiatCurrency
+    let quoteCurrency: FiatCurrency
+    let day: Date
+    let rate: Decimal
+}
+
+extension CurrencyConversionRateEntry {
+    init(_ point: CurrencyConversionRatePoint) {
+        self.init(baseCurrency: point.baseCurrency, quoteCurrency: point.quoteCurrency, day: point.day, rate: point.rate)
     }
 }

@@ -1,5 +1,6 @@
 import ComposableArchitecture
 import Foundation
+import PortuCore
 import SwiftData
 
 // swiftformat:disable redundantSendable
@@ -61,11 +62,14 @@ extension PortfolioProjection {
     /// An empty store's projection.
     static let empty = PortfolioProjection(
         holdings: [],
-        pollingCandidates: [],
+        activeTokens: [],
         positionGroups: [],
+        positionMeta: [:],
         assets: [:],
         accounts: [:],
         overrides: [],
         mappings: [],
+        categories: PortfolioCategoryResolver.defaults.categories,
+        watchlistCandidates: [],
         historical: .empty)
 }

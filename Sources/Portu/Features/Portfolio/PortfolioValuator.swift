@@ -27,10 +27,16 @@ struct PortfolioValuedOutput: Equatable, Sendable {
     var pricePollingIDs: [String]
 }
 
+/// One revaluation: the headline and polling IDs, and the Overview panels (#124).
+struct PortfolioRevaluation: Equatable, Sendable {
+    var valued: PortfolioValuedOutput
+    var overview: OverviewValuedOutput
+}
+
 /// Values the projection with the current prices (#123). A dependency so tests count revaluations
 /// and hold one open to prove a newer one wins; the per-tick valuation itself is synchronous.
 struct PortfolioValuator {
-    var value: @Sendable (PortfolioValuationRequest) async -> PortfolioValuedOutput
+    var value: @Sendable (PortfolioValuationRequest) async -> PortfolioRevaluation
 }
 
 extension PortfolioValuator: DependencyKey {
@@ -52,35 +58,54 @@ extension PortfolioValuator {
     /// Values on the concurrent executor whatever the caller's isolation: the per-tick valuation
     /// misses its main-thread budget on the real store (#123 spec V3).
     @concurrent
-    func valueOffMain(_ request: PortfolioValuationRequest) async -> PortfolioValuedOutput {
+    func valueOffMain(_ request: PortfolioValuationRequest) async -> PortfolioRevaluation {
         await value(request)
     }
 }
 
 extension PortfolioValuator {
-    /// Today's Overview seams over the prepared projection: the headline values the holdings with
-    /// the live 24h fractions; polling values the candidates without them, as the Overview view
-    /// did when it ranked its own query.
-    static func compute(_ request: PortfolioValuationRequest) -> PortfolioValuedOutput {
+    /// Today's Overview seams over the prepared projection. Each list is valued once, with the live
+    /// 24h fractions, and every seam over it shares that valuation: the panels that show no 24h
+    /// figure (cards, donut, health, polling) read neither fraction nor change, so the fractions
+    /// leave them as they were without.
+    static func compute(_ request: PortfolioValuationRequest) -> PortfolioRevaluation {
         let projection = request.projection
         let prices = request.prices
-        let context = { (inputs: [PreparedValuationInput], includingLiveChanges: Bool) in
+        let settings = request.settings
+        let context = { (inputs: [PreparedValuationInput]) in
             ValuationContext.prepared(
                 inputs,
                 overrides: projection.overrides,
                 mappings: projection.mappings,
-                settings: request.settings.dashboard,
+                settings: settings.dashboard,
                 usdToDisplayRate: prices.usdToDisplayRate,
                 prices: ValuationPriceInputs(
                     livePricesUSD: prices.livePricesUSD,
-                    liveChanges24h: includingLiveChanges ? prices.liveChanges24h : [:],
+                    liveChanges24h: prices.liveChanges24h,
                     historical: projection.historical))
+                .memoized()
         }
-        return PortfolioValuedOutput(
-            headline: OverviewFeature.headline(context(projection.holdings, true)),
-            currencyCode: prices.currency.displayCode,
-            pricePollingIDs: OverviewFeature.pricePollingIDs(
-                context(projection.pollingCandidates, false),
-                watchlistIDs: request.settings.watchlistIDs))
+        let holdings = context(projection.holdings)
+        let tokens = context(projection.activeTokens)
+        let currencyCode = prices.currency.displayCode
+        return PortfolioRevaluation(
+            valued: PortfolioValuedOutput(
+                headline: OverviewFeature.headline(holdings),
+                currencyCode: currencyCode,
+                pricePollingIDs: OverviewFeature.pricePollingIDs(tokens, watchlistIDs: settings.watchlistIDs)),
+            overview: OverviewValuedOutput(
+                currencyCode: currencyCode,
+                summaryCards: OverviewSummaryCardsFeature.cards(holdings, categories: projection.categories),
+                positionTabs: Dictionary(uniqueKeysWithValues: OverviewPositionTab.allCases.map { tab in
+                    (tab, OverviewPositionProjection.tab(tab, context: holdings, positions: projection.positionMeta))
+                }),
+                topAssets: Dictionary(uniqueKeysWithValues: TopAssetMode.allCases.map { mode in
+                    (mode, OverviewFeature.topAssets(mode, context: tokens))
+                }),
+                health: PortfolioHealthFeature.health(tokens),
+                watchlistRows: OverviewFeature.watchlistRows(
+                    tokens,
+                    assets: projection.watchlistCandidates,
+                    watchlistIDs: settings.watchlistIDs)))
     }
 }

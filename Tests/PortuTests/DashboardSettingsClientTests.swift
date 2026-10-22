@@ -44,6 +44,41 @@ struct DashboardSettingsClientTests {
         #expect(values[3].watchlistIDs == ["cardano"])
     }
 
+    /// The watchlist's Add and Remove edit the one key the Overview and the Settings window share.
+    @Test func `add and remove round trip through the watchlist key`() throws {
+        let (defaults, suite) = try Self.suite()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let client = DashboardSettingsClient.live(defaults: defaults)
+
+        client.addWatchlistID(" Cardano ")
+        client.addWatchlistID("chainlink")
+        client.addWatchlistID("cardano")
+
+        #expect(client.current().watchlistIDs == ["cardano", "chainlink"], "normalized, in order, once")
+        #expect(OverviewWatchlistStore.decode(defaults.string(forKey: OverviewWatchlistStore.key) ?? "") == ["cardano", "chainlink"])
+
+        client.removeWatchlistID("Cardano")
+        client.removeWatchlistID("bitcoin")
+
+        #expect(client.current().watchlistIDs == ["chainlink"])
+    }
+
+    /// Each edit reads the key under the lock before it writes, so edits from several threads never
+    /// overwrite one another.
+    @Test func `adds from several threads all persist`() throws {
+        let (defaults, suite) = try Self.suite()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let client = DashboardSettingsClient.live(defaults: defaults)
+        let coins = (0 ..< 64).map { "coin-\($0)" }
+
+        DispatchQueue.concurrentPerform(iterations: coins.count) { index in
+            client.addWatchlistID(coins[index])
+        }
+
+        #expect(Set(client.current().watchlistIDs) == Set(coins))
+        #expect(client.current().watchlistIDs.count == coins.count)
+    }
+
     /// The first `count` values, or fewer if they don't arrive within `timeout`.
     private static func first(
         _ count: Int,

@@ -119,7 +119,7 @@ extension OverviewFeature {
         watchlistIDs: [String],
         portfolioLimit: Int = 10) -> [OverviewPriceRowData] {
         let market = context.prices.market
-        let tokens = context.valuation(market: market).tokens
+        let tokens = context.valuation().tokens
         let rate = context.usdToDisplayRate
         let list = DashboardList(tokens, basis: .net, settings: context.settings) { assetRowKey($0) }
         let info = assetRowInfo(list.rows)

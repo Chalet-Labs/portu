@@ -44,6 +44,10 @@ enum OverviewPriceDisplay {
         buildError.map { "Portfolio unavailable: \($0)" } ?? ""
     }
 
+    /// What a panel shows before the read model's first build, instead of its empty text, which
+    /// would claim an empty portfolio.
+    static let unvaluedPlaceholder = "—"
+
     static func axisCurrency(_ value: Double, currencyCode: String = "USD") -> String {
         let sign = value < 0 ? "-\(currencyPrefix(currencyCode)) " : "\(currencyPrefix(currencyCode)) "
         return sign + standardNumber(abs(value), maximumFractionDigits: 0)

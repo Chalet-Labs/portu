@@ -10,16 +10,17 @@ import Testing
 extension PortfolioFeatureTests {
     // MARK: - V1/B1: settings
 
+    /// A dashboard setting reaches the valuation and the holdings, and nothing the chart reads.
     @Test func `a dashboard setting change revalues once and rebuilds`() async {
         let counts = Counts()
         let settings = AsyncStream.makeStream(of: DashboardSettings.self)
         let store = Self.store(counts: counts, projection: Self.projection, built: Self.projection, settings: settings.stream)
         store.exhaustivity = .off(showSkippedAssertions: false)
-        let task = await store.send(.portfolio(.task))
-        await store.receive(\.portfolio.projectionBuilt)
+        let task = await Self.launched(store)
         counts.reset()
 
-        let showAll = DashboardSettings(dashboard: .showAll, isHistoricalBackfillEnabled: false, watchlistIDs: [])
+        var showAll = DashboardSettings.defaults
+        showAll.dashboard = .showAll
         settings.continuation.yield(showAll)
         await store.receive(\.portfolio.settingsChanged)
         await store.receive(\.portfolio.delegate.revaluationNeeded)
@@ -33,12 +34,14 @@ extension PortfolioFeatureTests {
                 }
             }
         }
+        await Self.settle()
         await task.cancel()
 
         #expect(store.state.portfolio.settings == showAll)
         #expect(counts.builds == 1)
         #expect(counts.valuations == 1, "the rebuild is equal, so it adds no revaluation")
-        #expect(store.state.portfolio.valued == Self.expected(prices: store.state.portfolioPriceInputs, settings: showAll))
+        #expect(counts.chartBuilds == 0, "the chart reads no dashboard setting")
+        #expect(store.state.portfolio.valued == Self.expected(prices: store.state.portfolioPriceInputs, settings: showAll)?.valued)
     }
 
     @Test func `a watchlist change revalues once and rebuilds nothing`() async {
@@ -46,18 +49,20 @@ extension PortfolioFeatureTests {
         let settings = AsyncStream.makeStream(of: DashboardSettings.self)
         let store = Self.store(counts: counts, projection: Self.projection, built: Self.projection, settings: settings.stream)
         store.exhaustivity = .off(showSkippedAssertions: false)
-        let task = await store.send(.portfolio(.task))
-        await store.receive(\.portfolio.projectionBuilt)
+        let task = await Self.launched(store)
         counts.reset()
 
-        let watching = DashboardSettings(dashboard: .defaults, isHistoricalBackfillEnabled: false, watchlistIDs: ["cardano"])
+        var watching = DashboardSettings.defaults
+        watching.watchlistIDs = ["cardano"]
         settings.continuation.yield(watching)
         await store.receive(\.portfolio.settingsChanged)
         await store.receive(\.portfolio.delegate.revaluationNeeded)
         await store.receive(\.portfolio.revalued)
+        await Self.settle()
         await task.cancel()
 
         #expect(counts.builds == 0)
+        #expect(counts.chartBuilds == 0)
         #expect(counts.valuations == 1)
         #expect(store.state.portfolio.valued?.pricePollingIDs.last == "cardano")
     }
@@ -130,9 +135,10 @@ extension PortfolioFeatureTests {
         #expect(store.state.portfolio.valued == Self.expected(
             prices: store.state.portfolioPriceInputs,
             settings: store.state.portfolio.settings,
-            projection: newer))
+            projection: newer)?.valued)
     }
 
+    /// The estimate is the backfill's: the chart rebuilds with the flag, and the holdings with it.
     @Test func `a backfill change rebuilds and revalues only through the new projection`() async {
         let counts = Counts()
         let settings = AsyncStream.makeStream(of: DashboardSettings.self)
@@ -143,17 +149,21 @@ extension PortfolioFeatureTests {
         await store.receive(\.portfolio.projectionBuilt)
         await store.receive(\.portfolio.delegate.revaluationNeeded)
         await store.receive(\.portfolio.revalued)
+        await Self.settle()
         counts.reset()
 
         let enabled = DashboardSettings(dashboard: .defaults, isHistoricalBackfillEnabled: true, watchlistIDs: [])
         settings.continuation.yield(enabled)
         await store.receive(\.portfolio.settingsChanged)
         await store.receive(\.portfolio.projectionBuilt)
+        await Self.settle()
         await task.cancel()
 
         #expect(counts.builds == 1)
         #expect(counts.requests.last?.isHistoricalBackfillEnabled == true)
         #expect(counts.valuations == 0, "the rebuilt projection is equal to the one already stored")
+        #expect(counts.chartBuilds == 1)
+        #expect(counts.chartRequests.last?.isHistoricalBackfillEnabled == true)
     }
 
     // MARK: - B1: subscriptions

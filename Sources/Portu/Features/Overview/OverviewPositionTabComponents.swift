@@ -3,7 +3,7 @@ import PortuCore
 import PortuUI
 import SwiftUI
 
-/// Position-level presentation data, projected from a `Position` once per render pass.
+/// Position-level presentation data, projected from a `Position` once per projector build.
 ///
 /// Holds no SwiftData references. A sync can delete and reinsert the underlying
 /// `Position` while SwiftUI is still evaluating a body; reading a deleted model's
@@ -36,6 +36,17 @@ struct OverviewPositionMeta: Identifiable, Equatable {
         case .vesting: "Vesting on"
         case .other: "Position on"
         }
+    }
+}
+
+extension OverviewPositionMeta {
+    /// Reads the model on the caller's actor: the `PortfolioProjector` for the read model.
+    init(_ position: Position) {
+        self.init(
+            id: position.id,
+            title: position.protocolName ?? position.account?.name ?? "Wallet",
+            positionType: position.positionType,
+            chain: position.chain)
     }
 }
 

@@ -6,9 +6,10 @@ import SwiftData
 import SwiftUI
 import Testing
 
-/// The seam inputs the Overview views build from their queries: the shared headline input (top bar
-/// and Sidebar header), the cards input and the Health input, and the `ValuationSources`
-/// every Overview view reads them through. One store, in memory:
+/// What the portfolio read model values from a real store for the Overview panels (#123, #124): the
+/// projector projects the store's models (identity mappings, override rows, categories and rules)
+/// and the valuator values that projection, so these pin the shared headline input (top bar and
+/// Sidebar header), the cards input, the Health input and the polling IDs. One store, in memory:
 ///
 /// | Token | Account | Amount | `usdValue` | USD value |
 /// |---|---|---|---|---|
@@ -24,70 +25,39 @@ struct OverviewModelWiringTests {
     private static let degenContract = "0xde9e000000000000000000000000000000000de9"
     static let rate = Fixture.decimal("0.9")
 
-    @Test func `the active portfolio headline values the usd book with mappings and live changes`() throws {
+    @Test func `the active portfolio headline values the usd book with mappings and live changes`() async throws {
         let store = try Store()
 
-        let headline = OverviewFeature.headline(.activePortfolio(
-            positions: store.positions,
-            overrides: [],
-            mappings: store.mappings,
-            settings: .defaults,
-            appState: store.appState,
-            historical: .empty,
-            includingLiveChanges: true))
+        let headline = try await Self.readModel(store).valued.headline
 
         #expect(headline.total == 6100 * Self.rate)
         #expect(headline.change24h == 1200 * Self.rate)
         #expect(headline.changePercentage == Decimal(1200) / Decimal(4900))
     }
 
-    @Test func `cards value a mapped token through its identity mapping`() throws {
+    @Test func `cards value a mapped token through its identity mapping`() async throws {
         let store = try Store()
 
-        let cards = OverviewSummaryCardsFeature.cards(
-            .activePortfolio(
-                positions: store.positions,
-                overrides: [],
-                mappings: store.mappings,
-                settings: .defaults,
-                categoryResolver: .defaults,
-                appState: store.appState,
-                historical: .empty,
-                includingLiveChanges: false),
-            categories: PortfolioCategoryDefaults.categorySnapshots)
+        let cards = try await Self.readModel(store).overview.summaryCards
         let idle = try #require(cards.first { $0.title == "Idle" })
 
         #expect(idle.rows.map(\.value) == [0, 6000 * Self.rate, 100 * Self.rate])
     }
 
-    @Test func `health weights a mapped token through its identity mapping`() throws {
+    @Test func `health weights a mapped token through its identity mapping`() async throws {
         let store = try Store()
 
-        let health = PortfolioHealthFeature.health(.activeAccounts(
-            store.tokens,
-            overrides: [],
-            mappings: store.mappings,
-            settings: .defaults,
-            usdToDisplayRate: Self.rate,
-            prices: ValuationPriceInputs(livePricesUSD: store.appState.livePricesUSD)))
+        let health = try await Self.readModel(store).overview.health
 
         #expect(health.weights.map(\.symbol) == ["ETH", "DEGEN"])
         #expect(health.weights.map(\.usdValue) == [6000 * Self.rate, 100 * Self.rate])
         #expect(health.metrics.assetCount == 2)
     }
 
-    @Test func `an ignore override from the store excludes the token`() throws {
-        let store = try Store()
-        let degen = try #require(store.tokens.first { $0.asset?.symbol == "DEGEN" }?.asset)
+    @Test func `an ignore override from the store excludes the token`() async throws {
+        let store = try Store(ignoring: ["DEGEN"])
 
-        let headline = OverviewFeature.headline(.activePortfolio(
-            positions: store.positions,
-            overrides: [TokenPricingOverride(assetId: degen.id, isIgnored: true)],
-            mappings: store.mappings,
-            settings: .defaults,
-            appState: store.appState,
-            historical: .empty,
-            includingLiveChanges: true))
+        let headline = try await Self.readModel(store).valued.headline
 
         #expect(headline.total == 6000 * Self.rate)
     }
@@ -104,78 +74,33 @@ struct OverviewModelWiringTests {
         #expect(prices.historical == historical)
     }
 
-    // MARK: - Probe
+    // MARK: - The read model over a store
 
-    private static var retainedWindows: [NSWindow] = []
-
-    /// Renders a view that reads `ValuationSources` from the store, as the Overview views do,
-    /// and returns what `build` made on its last body pass. The view's `@AppStorage` reads a fresh,
-    /// empty defaults suite, so the dashboard settings are the defaults whatever the test host stores.
-    static func probe<Value>(
-        _ store: Store,
-        _ build: @escaping @MainActor (ValuationSources, [Position], [PositionToken], [Asset]) -> Value) -> Value? {
-        let capture = Capture<Value>()
-        let rendered = render(SourcesProbe { sources, positions, tokens, assets in
-            capture.value = build(sources, positions, tokens, assets)
-        }, over: store)
-        return rendered == nil ? nil : capture.value
+    /// The projection the projector builds from the store's rows, on its own executor and context as
+    /// in production.
+    static func project(_ store: Store) async throws -> PortfolioProjection {
+        let projector = await PortfolioProjectorClient.makeProjector(modelContainer: store.container)
+        return try await projector.build(PortfolioProjectionRequest(isHistoricalBackfillEnabled: false, now: .now))
     }
 
-    /// Hosts `view` under the active portfolio provider, as the dashboard does, in a window over the
-    /// store's container and `AppState`, with `@AppStorage` on a fresh, empty defaults suite.
-    @discardableResult
-    static func render(_ view: some View, over store: Store, size: CGSize = CGSize(width: 200, height: 200)) -> NSHostingView<AnyView>? {
-        let suiteName = "OverviewModelWiringTests.\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: suiteName) else { return nil }
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-        let hostingView = NSHostingView(rootView: AnyView(ActivePortfolioProvider { view }
-                .modelContainer(store.container)
-                .environment(store.appState)
-                .defaultAppStorage(defaults)))
-        hostingView.frame = CGRect(origin: .zero, size: size)
-        let window = NSWindow(contentRect: hostingView.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        window.contentView = hostingView
-        window.layoutIfNeeded()
-        hostingView.layoutSubtreeIfNeeded()
-        hostingView.displayIfNeeded()
-        retainedWindows.append(window)
-        return hostingView
+    /// `projection` valued with the app state's books, rate and currency.
+    static func value(
+        _ projection: PortfolioProjection,
+        in store: Store,
+        settings: DashboardSettings = .defaults) -> PortfolioRevaluation {
+        PortfolioValuator.compute(PortfolioValuationRequest(
+            projection: projection,
+            prices: PortfolioPriceInputs(
+                livePricesUSD: store.appState.livePricesUSD,
+                liveChanges24h: store.appState.priceChanges24h,
+                usdToDisplayRate: store.appState.currentUSDToDisplayRate,
+                currency: store.appState.selectedCurrency),
+            settings: settings))
     }
 
-    /// The resolver an `OverviewCategorySource` builds from the store, on a rendered view's last
-    /// body pass.
-    static func categoryResolver(_ store: Store) -> PortfolioCategoryResolver? {
-        let capture = Capture<PortfolioCategoryResolver>()
-        let rendered = render(CategorySourceProbe { capture.value = $0 }, over: store)
-        return rendered == nil ? nil : capture.value
-    }
-
-    @MainActor
-    private final class Capture<Value> {
-        var value: Value?
-    }
-
-    private struct SourcesProbe: View {
-        var sources = ValuationSources()
-        @Query private var positions: [Position]
-        @Query private var tokens: [PositionToken]
-        @Query private var assets: [Asset]
-        let report: @MainActor (ValuationSources, [Position], [PositionToken], [Asset]) -> Void
-
-        var body: some View {
-            report(sources, positions, tokens, assets)
-            return Color.clear
-        }
-    }
-
-    private struct CategorySourceProbe: View {
-        var categories = OverviewCategorySource()
-        let report: @MainActor (PortfolioCategoryResolver) -> Void
-
-        var body: some View {
-            report(categories.resolver)
-            return Color.clear
-        }
+    /// What the read model values from the store: the projection of its rows, valued.
+    static func readModel(_ store: Store, settings: DashboardSettings = .defaults) async throws -> PortfolioRevaluation {
+        try await value(project(store), in: store, settings: settings)
     }
 
     @MainActor
@@ -188,10 +113,7 @@ struct OverviewModelWiringTests {
 
         /// `ignoring` adds an ignore override row for each listed symbol.
         init(ignoring ignoredSymbols: Set<String> = []) throws {
-            self.container = try ModelContainer(
-                for: Account.self, Position.self, PositionToken.self, Asset.self, TokenIdentityMapping.self,
-                TokenPricingOverride.self, PortfolioCategory.self, CategorySymbolRule.self,
-                configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+            self.container = try ModelContainerFactory().makeInMemory()
             let context = container.mainContext
             let syncedAt = Fixture.noon(0)
 
@@ -250,7 +172,7 @@ struct OverviewModelWiringTests {
             appState.currentUSDToDisplayRate = OverviewModelWiringTests.rate
         }
 
-        /// Adds rows after setup; a probe's queries read them on its first body pass.
+        /// Adds rows after setup; the next projector build reads them.
         func insert(_ models: [any PersistentModel]) throws {
             for model in models {
                 container.mainContext.insert(model)
@@ -258,9 +180,9 @@ struct OverviewModelWiringTests {
             try container.mainContext.save()
         }
 
-        /// The seeded categories, with the BTC and ETH categories renamed "Majors" and "L1s", and a
-        /// user rule that files DEGEN under Stablecoins.
-        func seedCategories() throws {
+        /// The seeded categories, with the BTC and ETH categories renamed "Majors" and "L1s", and, by
+        /// default, a user rule that files DEGEN under Stablecoins.
+        func seedCategories(degenIsStable: Bool = true) throws {
             let context = container.mainContext
             try PortfolioCategorySeeder.seedIfNeeded(in: context)
             let categories = try context.fetch(FetchDescriptor<PortfolioCategory>())
@@ -268,6 +190,8 @@ struct OverviewModelWiringTests {
             for category in categories {
                 category.name = names[category.id] ?? category.name
             }
+            try context.save()
+            guard degenIsStable else { return }
             let stablecoins = categories.first { $0.id == PortfolioCategoryDefaults.stablecoinsCategoryID }
             try insert([CategorySymbolRule(normalizedSymbol: "DEGEN", category: stablecoins)])
         }

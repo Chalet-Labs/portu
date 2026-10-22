@@ -118,8 +118,13 @@ extension ViewRenderSmokeTests {
         }
     }
 
-    /// The dashboard store for the slice: EUR at 0.9 with the seeded portfolio priced live.
-    static func sliceStore(projector: PortfolioProjectorClient) -> StoreOf<AppFeature> {
+    /// The dashboard store for the slice: EUR at 0.9 with the seeded portfolio priced live. The Overview
+    /// panels' specs also give it a chart projector, the clock the seeded data is dated by, and settings.
+    static func sliceStore(
+        projector: PortfolioProjectorClient,
+        chartProjector: PortfolioValueChartProjectorClient = .testValue,
+        now: Date = Date(timeIntervalSince1970: 1_000_000),
+        settings: DashboardSettings = .defaults) -> StoreOf<AppFeature> {
         var state = AppFeature.State(selectedSection: .overview)
         state.selectedCurrency = .eur
         state.currentUSDToDisplayRate = PortfolioValuationFixture.decimal("0.9")
@@ -133,8 +138,10 @@ extension ViewRenderSmokeTests {
             $0.priceService.fetchPrices = { _ in PriceUpdate(prices: [:], changes24h: [:]) }
             $0.priceService.invalidateCache = {}
             $0.continuousClock = TestClock()
-            $0.currentDate.now = { Date(timeIntervalSince1970: 1_000_000) }
+            $0.currentDate.now = { now }
             $0.portfolioProjector = projector
+            $0.portfolioValueChartProjector = chartProjector
+            $0.dashboardSettings.current = { settings }
         }
     }
 }

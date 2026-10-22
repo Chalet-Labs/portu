@@ -9,8 +9,14 @@ the in-view `@Query`s, `ActivePortfolioProvider`, `HistoricalPricesProvider`) ar
 once their last reader moves.
 
 Issue: #124 (epic #116). Type: **Refactor**. Every rendered value stays as it is on
-master after #122; the only differences are the launch transient from #123 ("—" until the
-first build) and the two chart timing points listed under PR 1.
+master after #122. The only differences are the launch transient from #123 ("—" until the
+first build) and three timing points, all PR 1:
+
+- the chart's month window moves at each chart rebuild (every sync's snapshot save and every
+  UTC midnight), not at every render;
+- the chart's "today" (the day converted at the live rate) moves at UTC midnight;
+- the panels' recent-window closes move at UTC midnight, as the headline's have since #123,
+  not at the next navigation click.
 
 It ships as three PRs:
 
@@ -64,8 +70,8 @@ Each is listed so it can be vetoed in review.
    beyond the issue's "snapshot series"). A separate `PortfolioValueChartProjector`
    (its own `@ModelActor`, model context and creation queue, so the headline never waits
    behind it) builds the month of snapshots, the month of FX rate rows for every quote
-   currency and the USD estimated segment. It never throws: a failed fetch yields what a
-   failed `@Query` or today's `try?` yielded. The chart is converted to the display
+   currency and the USD estimated segment. A failed snapshot or rate fetch keeps the chart
+   already shown (logged); a failed estimate fetch draws no estimate (logged). The chart is converted to the display
    currency off the main thread on a new chart source, a currency or rate change, every
    UTC midnight and a reopened window, never on a price tick.
 8. **The watchlist writes through the reducer.** The Add and Remove buttons send an action
@@ -85,8 +91,9 @@ Each is listed so it can be vetoed in review.
 - The watchlist actions and client methods.
 - The six Overview views on the read model, and deleting the per-view Overview path
   (`ValuationSources+Overview`, `OverviewCategorySource`, `ValuationContext.activePortfolio`,
-  `OverviewPositionProjection.inputs(from:)`, the model overload of
-  `OverviewAssetCandidate.fromAssets`, `PortfolioValueChartEstimateFetcher`).
+  `ValuationContext.restricted(to:)`, `OverviewPositionProjection.inputs(from:)`,
+  `PortfolioValueChartEstimateFetcher`). `OverviewAssetCandidate.fromAssets` stays: the
+  projector calls it, off the main actor.
 
 ### Out of scope
 - PR 2 and PR 3 screens; `ValuationSources` itself stays until PR 3.
