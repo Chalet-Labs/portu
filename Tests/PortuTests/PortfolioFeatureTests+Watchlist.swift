@@ -78,10 +78,11 @@ extension PortfolioFeatureTests {
         #expect(counts.builds == 0)
     }
 
-    /// Two edits sent back to back on the real client, over a suite of its own. Each runs in its own
-    /// effect, so they may persist in either order, and the first echo may already hold both coins.
-    /// Whatever the order, both persist, and every echo holds every coin an earlier one held (the
-    /// state never reverts), the last holding both.
+    /// The echo path, on the real client over a suite of its own. Two edits sent back to back each
+    /// run in their own effect and may persist in either order, so the first echo may already hold
+    /// both coins. Every echo the reducer sees holds every coin an earlier one held, so the state
+    /// never reverts, and the last holds both. That the writes can't overwrite one another is the
+    /// client's lock, which `DashboardSettingsClientTests` exercises from several threads.
     @Test func `two quick adds both persist and the state never reverts`() async throws {
         let suiteName = "PortfolioFeatureTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

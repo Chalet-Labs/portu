@@ -10,11 +10,13 @@ struct OverviewSummaryCards: View {
 
     var body: some View {
         let overview = store.overview
+        // Read here, not in the `ForEach` closure, so the body's observation tracks it.
+        let currencyCode = overview.currencyCode
         let isValued = overview.summaryCards != nil
 
         HStack(alignment: .top, spacing: PortuTheme.dashboardContentSpacing) {
             ForEach(overview.summaryCards ?? OverviewSummaryCardsFeature.unvalued) { card in
-                summaryCard(card, isValued: isValued, currencyCode: overview.currencyCode)
+                summaryCard(card, isValued: isValued, currencyCode: currencyCode)
             }
         }
         .help(isValued ? "" : OverviewPriceDisplay.unavailableHelp(buildError: store.buildError))

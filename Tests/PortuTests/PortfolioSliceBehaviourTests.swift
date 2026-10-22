@@ -136,6 +136,8 @@ struct PortfolioSliceBehaviourTests {
         return changed.value
     }
 
+    /// A failed rebuild of the holdings or of the chart, while both show, notifies no panel: neither
+    /// error is read until a panel is dashed.
     @Test func `a navigation click or a failed rebuild re-renders no panel`() {
         for panel in Panel.allCases {
             let store = Self.appStore()
@@ -143,25 +145,49 @@ struct PortfolioSliceBehaviourTests {
                 store.send(.sectionSelected(.exposure))
                 store.send(.sectionSelected(.overview))
                 store.send(.portfolio(.projectionBuildFailed("store unavailable")))
+                store.send(.portfolio(.valueChartBuildFailed("chart store unavailable")))
             }, "\(panel)")
         }
     }
 
-    /// Only the cards and health move (the headline and every other output are equal): they alone
-    /// re-render, and no headline reader, tab, donut, watchlist or chart does.
+    /// The chart's build error is its own field, read only by the dashed chart: when the first chart
+    /// build fails, that chart re-renders to carry it, and no other panel does, nor the headline.
+    @Test func `a failed first chart build re-renders only the dashed chart`() {
+        for panel in Panel.allCases {
+            let store = Self.appStore(built: false)
+            let notifies = Self.notified(panel, in: store) { store.send(.portfolio(.valueChartBuildFailed("chart store unavailable"))) }
+
+            #expect(notifies == (panel == .chart), "\(panel)")
+        }
+    }
+
+    /// Each output is its own observed field: with the headline equal, outputs that move re-render
+    /// the panels that read them, and no headline reader, other panel or chart.
     @Test func `a revaluation with an equal headline re-renders only the panels whose output moved`() {
-        var moved = Self.revaluation
-        moved.overview.summaryCards = []
-        moved.overview.health = PortfolioHealthFeature.health(Fixture.context(inputs: []))
-        let expected: [Panel: Bool] = [
-            .cards: true, .health: true,
-            .tabs: false, .donut: false, .watchlist: false, .chart: false, .header: false
+        let noHealth = PortfolioHealthFeature.health(Fixture.context(inputs: []))
+        let scenarios: [(panels: Set<Panel>, move: (inout OverviewValuedOutput) -> Void)] = [
+            ([.cards], { $0.summaryCards = [] }),
+            ([.tabs], { $0.positionTabs = [:] }),
+            ([.donut], { $0.topAssets = [:] }),
+            ([.health], { $0.health = noHealth }),
+            ([.watchlist], { $0.watchlistRows = [] }),
+            ([.cards, .health], {
+                $0.summaryCards = []
+                $0.health = noHealth
+            })
         ]
 
-        #expect(Set(expected.keys) == Set(Panel.allCases), "the table covers every panel")
-        for (panel, notifies) in expected {
-            let store = Self.appStore()
-            #expect(Self.notified(panel, in: store) { store.send(.portfolio(.revalued(moved))) } == notifies, "\(panel)")
+        for scenario in scenarios {
+            var moved = Self.revaluation
+            scenario.move(&moved.overview)
+            #expect(moved.valued == Self.revaluation.valued, "the headline is equal")
+            #expect(moved.overview != Self.revaluation.overview)
+            for panel in Panel.allCases {
+                let store = Self.appStore()
+                let notifies = Self.notified(panel, in: store) { store.send(.portfolio(.revalued(moved))) }
+
+                #expect(notifies == scenario.panels.contains(panel), "\(scenario.panels) moved, \(panel)")
+            }
         }
     }
 
@@ -213,10 +239,11 @@ struct PortfolioSliceBehaviourTests {
         }
     }
 
-    /// A new rate moves every money figure: the chart and the headline both re-render.
-    @Test func `a changed rate re-renders the chart and the headline`() async throws {
+    /// A new rate moves every money figure, so every panel re-renders: the headline, the cards, the
+    /// tabs, the donut, health, the watchlist and the chart.
+    @Test func `a changed rate re-renders every panel that shows money`() async throws {
         let refreshed = Fixture.decimal("0.96")
-        for panel in [Panel.chart, .header] {
+        for panel in Panel.allCases {
             let landed = Landed()
             let store = Self.appStore(currency: .eur, rate: Fixture.decimal("0.95"), landed: landed)
             let changed = try await Self.notified(panel, in: store, landed: landed) {

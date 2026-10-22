@@ -24,6 +24,9 @@ struct PortfolioFeature {
         var valueChartSource: PortfolioValueChartSource?
         /// `valueChartSource` in the display currency.
         var valueChart: PortfolioValueChartData?
+        /// The last chart build's failure, cleared by the next chart build that lands. Only the
+        /// chart's dash shows it.
+        var valueChartBuildError: String?
         /// The last build's failure, cleared by the next build that lands. The slice shows it on its
         /// dashes, so "unavailable" is not mistaken for "loading".
         var buildError: String?
@@ -48,6 +51,7 @@ struct PortfolioFeature {
         case revalued(PortfolioRevaluation)
         case valueChartRebuildRequested
         case valueChartBuilt(PortfolioValueChartSource)
+        case valueChartBuildFailed(String)
         /// A conversion's result, computed off the main thread by the parent's effect.
         case valueChartConverted(PortfolioValueChartData)
         /// The watchlist's Add and Remove: persisted through the settings client, whose echo then
@@ -125,9 +129,21 @@ struct PortfolioFeature {
                 return buildValueChart(state)
 
             case let .valueChartBuilt(source):
+                state.valueChartBuildError = nil
                 guard source != state.valueChartSource else { return .none }
                 state.valueChartSource = source
                 return .send(.delegate(.valueChartConversionNeeded))
+
+            case let .valueChartBuildFailed(message):
+                Self.logger.error("Value chart build failed: \(message, privacy: .public)")
+                state.valueChartBuildError = message
+                // A chart already shown stays; with none yet, retry as the first holdings build does.
+                guard state.valueChartSource == nil else { return .none }
+                return .run { [clock] send in
+                    try await clock.sleep(for: Self.firstBuildRetry)
+                    await send(.valueChartRebuildRequested)
+                }
+                .cancellable(id: CancelID.valueChartBuild, cancelInFlight: true)
 
             case let .valueChartConverted(chart):
                 if chart != state.valueChart {
@@ -209,7 +225,8 @@ struct PortfolioFeature {
     }
 
     /// The chart's latest build wins too. A failed build keeps the chart already shown (an empty or
-    /// wrongly converted month would misstate the history) and is logged; the next trigger retries.
+    /// wrongly converted month would misstate the history); with none yet, it retries after
+    /// `firstBuildRetry`, and any trigger retries sooner.
     private func buildValueChart(_ state: State) -> Effect<Action> {
         let request = PortfolioProjectionRequest(
             isHistoricalBackfillEnabled: state.settings.isHistoricalBackfillEnabled,
@@ -217,9 +234,8 @@ struct PortfolioFeature {
         return .run { [valueChartProjector] send in
             let source = try await valueChartProjector.build(request)
             await send(.valueChartBuilt(source))
-        } catch: { error, _ in
-            guard !(error is CancellationError) else { return }
-            Self.logger.error("Value chart build failed: \(String(describing: error), privacy: .public)")
+        } catch: { error, send in
+            await send(.valueChartBuildFailed(String(describing: error)))
         }
         .cancellable(id: CancelID.valueChartBuild, cancelInFlight: true)
     }

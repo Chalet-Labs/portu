@@ -162,17 +162,31 @@ extension ViewRenderSmokeTests {
         #expect(shown == nil)
     }
 
-    /// The chart is built on its own and a failure of its build is logged, so its dash has no error
-    /// to show: it carries no tooltip, nor after a failed holdings build.
-    @Test(.renderedTextReadable, arguments: [nil, "store unavailable"])
-    func `the chart carries no error tooltip even after a failed holdings build`(_ buildError: String?) {
-        let store = OverviewModelWiringTests.appStore(buildError: buildError)
+    /// The first tooltip of the chart rendered over `store`, nil if it has none.
+    private func chartTooltip(over store: StoreOf<AppFeature>) -> String? {
         let portfolio = store.scope(state: \.portfolio, action: \.portfolio)
+        return Self.helpText(render(PortfolioValueChart(store: portfolio), size: CGSize(width: 800, height: 300)))
+    }
 
-        let help = Self.helpText(render(PortfolioValueChart(store: portfolio), size: CGSize(width: 800, height: 300)))
+    /// The chart is built on its own, so its dash carries its own build error and never the holdings':
+    /// a failed first chart build says so; a failed holdings build leaves the dash plain, and with both
+    /// failed the dash shows only its own. A chart that shows carries no tooltip, even with the error of
+    /// a later failed rebuild recorded.
+    @Test(.renderedTextReadable) func `the chart's dash carries its own build error and never the holdings'`() {
+        let chartError = "chart store unavailable"
+        let shown = PortfolioFeatureTests.convertedChart(PortfolioFeatureTests.chartSource)
 
-        #expect(help == nil)
-        #expect(store.portfolio.valueChart == nil, "the chart is dashed")
+        let loading = chartTooltip(over: OverviewModelWiringTests.appStore())
+        let chartFailed = chartTooltip(over: OverviewModelWiringTests.appStore(valueChartBuildError: chartError))
+        let holdingsFailed = chartTooltip(over: OverviewModelWiringTests.appStore(buildError: "store unavailable"))
+        let bothFailed = chartTooltip(over: OverviewModelWiringTests.appStore(buildError: "store unavailable", valueChartBuildError: chartError))
+        let shownAfterFailure = chartTooltip(over: OverviewModelWiringTests.appStore(valueChart: shown, valueChartBuildError: chartError))
+
+        #expect(loading == nil)
+        #expect(chartFailed == "Value chart unavailable: chart store unavailable")
+        #expect(holdingsFailed == nil)
+        #expect(bothFailed == "Value chart unavailable: chart store unavailable")
+        #expect(shownAfterFailure == nil)
     }
 
     // MARK: - Fixtures

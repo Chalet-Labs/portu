@@ -168,16 +168,21 @@ extension OverviewModelWiringTests {
         return accessibilityTexts(hostingView)
     }
 
-    /// An `AppFeature` store holding `revaluation` in its portfolio state, and the failure of its last
-    /// build if `buildError` is given, for the views that take one; nothing is sent while they render.
+    /// An `AppFeature` store holding `revaluation` and `valueChart` in its portfolio state, and the
+    /// failures of the last holdings build and chart build if given, for the views that take one;
+    /// nothing is sent while they render.
     static func appStore(
         _ revaluation: PortfolioRevaluation? = nil,
         selectedCurrency: FiatCurrency = .usd,
-        buildError: String? = nil) -> StoreOf<AppFeature> {
+        buildError: String? = nil,
+        valueChart: PortfolioValueChartData? = nil,
+        valueChartBuildError: String? = nil) -> StoreOf<AppFeature> {
         var state = AppFeature.State()
         state.selectedCurrency = selectedCurrency
         state.portfolio.projection = .empty
         state.portfolio.buildError = buildError
+        state.portfolio.valueChart = valueChart
+        state.portfolio.valueChartBuildError = valueChartBuildError
         state.portfolio.store(revaluation)
         return StoreOf<AppFeature>(initialState: state) {
             AppFeature()

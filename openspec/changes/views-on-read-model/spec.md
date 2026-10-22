@@ -57,7 +57,8 @@ It equals what the chart's queries, month filter and estimate task produced on m
   `HistoricalPricePoint`, `TokenPricingOverride` or `Asset`, debounced by 300 ms; a
   backfill-flag change; each UTC midnight. The latest build wins.
 - A failed snapshot or rate fetch fails the build: the current source stays and the error is
-  logged. A failed override or price fetch for the estimate yields no estimate, logged.
+  recorded and logged; with no source yet, the build is retried after 30 s as well as on the
+  next trigger. A failed override or price fetch for the estimate yields no estimate, logged.
 - An equal source is not stored.
 - The `PortfolioValueChartBuild` signpost wraps each build; Debug serves its latest duration as
   `valueChartBuildMs` at `GET /state/portfolio/timings`.
@@ -70,7 +71,8 @@ It equals what the chart's queries, month filter and estimate task produced on m
   price tick. An equal result is not stored.
 
 ### C4: Rendering
-"—" before the first source; "No Data" when the month has no snapshot; the dashed segment
+"—" before the first source, carrying the chart's own build error (never the holdings') as its
+tooltip after a failed first build; "No Data" when the month has no snapshot; the dashed segment
 and its caption only when the estimate is non-empty.
 
 ## Watchlist

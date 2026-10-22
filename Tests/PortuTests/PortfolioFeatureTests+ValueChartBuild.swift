@@ -51,22 +51,19 @@ extension PortfolioFeatureTests {
         #expect(store.state.portfolio.valueChart == Self.convertedChart(newer))
     }
 
-    /// A failed chart build is logged and nothing more: the chart keeps the source it has, or stays
-    /// dashed when it has none; the headline and the holdings are untouched, no error is recorded for
-    /// the slice (the chart's failure is no portfolio failure), and no retry is scheduled.
-    @Test(arguments: [true, false])
-    func `a failed chart build changes nothing and schedules no retry`(keepsSource: Bool) async {
+    /// A failed chart build with a chart kept leaves what shows as it is: the source, the converted
+    /// chart, the headline and the holdings are untouched, and the holdings' error is not set. Only the
+    /// chart's own error is recorded, and no retry is scheduled: the next trigger builds again.
+    @Test func `a failed chart build with a chart kept records its error and changes nothing else`() async {
         let counts = Counts()
-        let log = ActionLog()
         let clock = TestClock()
         let store = Self.store(
             counts: counts,
             projection: Self.projection,
             built: Self.projection,
-            chart: keepsSource ? Self.chartSource : nil,
-            failingChart: true,
-            clock: clock,
-            log: log)
+            chart: Self.chartSource,
+            failingChartBuilds: .max,
+            clock: clock)
         store.exhaustivity = .off(showSkippedAssertions: false)
         let before = store.state.portfolio
 
@@ -77,43 +74,113 @@ extension PortfolioFeatureTests {
         await task.cancel()
 
         let portfolio = store.state.portfolio
+        var expected = before
+        expected.valueChartBuildError = Self.chartBuildError
+        #expect(portfolio == expected, "only the chart's error differs")
+        #expect(portfolio.valueChartSource == Self.chartSource)
+        #expect(portfolio.valueChart == before.valueChart)
+        #expect(portfolio.valued == before.valued)
+        #expect(portfolio.buildError == nil)
         #expect(counts.chartBuilds == 1, "no retry")
         #expect(counts.builds == 1, "the holdings build ran")
-        #expect(log.count(of: \.portfolio.valueChartBuilt) == 0)
-        #expect(portfolio.valueChartSource == (keepsSource ? Self.chartSource : nil))
-        #expect(portfolio.valueChart == before.valueChart)
-        #expect(portfolio.buildError == nil)
-        #expect(portfolio.valued == before.valued)
-        #expect(portfolio == before)
     }
 
-    /// A failure doesn't wedge the chart: the next trigger builds it again.
-    @Test func `the next chart trigger builds again after a failed one`() async {
-        let calls = Mutex(0)
-        let source = Self.chartSource
+    /// With no chart yet, a failed build retries as the first holdings build does, after
+    /// `firstBuildRetry`, and the build that lands clears the error and is converted. The error is the
+    /// chart's: the holdings' stays unset.
+    @Test func `a failed first chart build retries after the first build retry until one lands`() async {
+        let counts = Counts()
+        let clock = TestClock()
         let store = Self.store(
-            counts: Counts(),
+            counts: counts,
             projection: Self.projection,
-            dependencies: {
-                $0.portfolioValueChartProjector.build = { _ in
-                    let call = calls.withLock { value in
-                        value += 1
-                        return value
-                    }
-                    guard call > 1 else { throw PortfolioProjectorError(message: "chart store unavailable") }
-                    return source
-                }
-            })
+            built: Self.projection,
+            builtChart: Self.chartSource,
+            failingChartBuilds: 1,
+            clock: clock)
+        store.exhaustivity = .off(showSkippedAssertions: false)
+
+        let task = await store.send(.portfolio(.task))
+        await Self.settle(store)
+        #expect(counts.chartBuilds == 1)
+        #expect(store.state.portfolio.valueChartSource == nil)
+        #expect(store.state.portfolio.valueChart == nil)
+        #expect(store.state.portfolio.valueChartBuildError == Self.chartBuildError)
+        #expect(store.state.portfolio.buildError == nil)
+
+        await clock.advance(by: PortfolioFeature.firstBuildRetry - .seconds(1))
+        await Self.settle(store)
+        #expect(counts.chartBuilds == 1, "the retry waits its time")
+
+        await clock.advance(by: .seconds(1))
+        await Self.settle(store)
+        #expect(counts.chartBuilds == 2)
+        #expect(store.state.portfolio.valueChartSource == Self.chartSource)
+        #expect(store.state.portfolio.valueChart == Self.convertedChart(Self.chartSource))
+        #expect(store.state.portfolio.valueChartBuildError == nil)
+
+        await clock.advance(by: .seconds(3600))
+        await Self.settle(store)
+        await task.cancel()
+        #expect(counts.chartBuilds == 2, "no retry once a build has landed")
+    }
+
+    /// A trigger that comes before the retry builds sooner, and the retry it supersedes never runs.
+    @Test func `a chart save supersedes the pending first chart build retry`() async {
+        let counts = Counts()
+        let saves = AsyncStream.makeStream(of: ModelSaveEvent.self)
+        let clock = TestClock()
+        let store = Self.store(
+            counts: counts,
+            projection: Self.projection,
+            built: Self.projection,
+            builtChart: Self.chartSource,
+            failingChartBuilds: 1,
+            saves: saves.stream,
+            clock: clock)
+        store.exhaustivity = .off(showSkippedAssertions: false)
+        let task = await store.send(.portfolio(.task))
+        await Self.settle(store)
+        #expect(counts.chartBuilds == 1)
+
+        saves.continuation.yield(.entities(["PortfolioSnapshot"]))
+        await clock.advance(by: PortfolioFeature.saveDebounce)
+        await Self.settle(store)
+        #expect(counts.chartBuilds == 2)
+        #expect(store.state.portfolio.valueChartSource == Self.chartSource)
+        #expect(store.state.portfolio.valueChartBuildError == nil)
+
+        await clock.advance(by: PortfolioFeature.firstBuildRetry)
+        await Self.settle(store)
+        await task.cancel()
+        #expect(counts.chartBuilds == 2, "the superseded retry never ran")
+    }
+
+    /// A failure doesn't wedge the chart: the next trigger builds again, and a build that lands
+    /// clears the error even when its source is the one already kept.
+    @Test func `a chart build that lands clears the error even when its source is equal`() async {
+        let counts = Counts()
+        let log = ActionLog()
+        let store = Self.store(
+            counts: counts,
+            projection: Self.projection,
+            chart: Self.chartSource,
+            builtChart: Self.chartSource,
+            failingChartBuilds: 1,
+            log: log)
         store.exhaustivity = .off(showSkippedAssertions: false)
 
         await store.send(.portfolio(.valueChartRebuildRequested))
         await Self.settle(store)
-        #expect(store.state.portfolio.valueChartSource == nil)
+        #expect(store.state.portfolio.valueChartBuildError == Self.chartBuildError)
+        #expect(store.state.portfolio.valueChartSource == Self.chartSource)
+
         await store.send(.portfolio(.valueChartRebuildRequested))
         await Self.settle(store)
 
-        #expect(calls.withLock { $0 } == 2)
-        #expect(store.state.portfolio.valueChartSource == source)
-        #expect(store.state.portfolio.valueChart == Self.convertedChart(source))
+        #expect(counts.chartBuilds == 2)
+        #expect(store.state.portfolio.valueChartBuildError == nil)
+        #expect(store.state.portfolio.valueChartSource == Self.chartSource)
+        #expect(log.conversions == 0, "the source did not change")
     }
 }

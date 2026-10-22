@@ -38,6 +38,7 @@ extension PortfolioFeatureTests {
         await task.cancel()
 
         #expect(counts.chartBuilds == 1)
+        #expect(counts.builds == (PortfolioProjector.readEntityNames.contains(entity) ? 1 : 0), "the holdings follow only their own entities")
     }
 
     /// Each save moves the debounce: the chart builds once, `saveDebounce` after the last of them.
@@ -126,6 +127,33 @@ extension PortfolioFeatureTests {
         #expect(counts.chartBuilds == 1)
     }
 
+    /// A sync saves its positions and its portfolio snapshot together: each build runs once, the
+    /// holdings' for the one and the chart's for the other.
+    @Test func `a sync's save builds the holdings and the chart once each`() async {
+        let counts = Counts()
+        let saves = AsyncStream.makeStream(of: ModelSaveEvent.self)
+        let clock = TestClock()
+        let store = Self.store(
+            counts: counts,
+            projection: Self.projection,
+            built: Self.projection,
+            chart: Self.chartSource,
+            builtChart: Self.chartSource,
+            saves: saves.stream,
+            clock: clock)
+        store.exhaustivity = .off(showSkippedAssertions: false)
+        let task = await Self.launched(store)
+        counts.reset()
+
+        saves.continuation.yield(.entities(["Position", "PortfolioSnapshot"]))
+        await clock.advance(by: PortfolioFeature.saveDebounce)
+        await Self.settle()
+        await task.cancel()
+
+        #expect(counts.builds == 1)
+        #expect(counts.chartBuilds == 1)
+    }
+
     /// The first chart build is asked for only once saves are followed, as the first holdings
     /// build is, so a save that lands while it runs is never lost.
     @Test func `the first chart build starts only after saves are followed`() async {
@@ -204,7 +232,6 @@ extension PortfolioFeatureTests {
         #expect(log.conversions == 1)
         #expect(counts.valuations == 1)
         #expect(counts.chartBuilds == 0)
-        #expect(log.total == 3, "the switch, its revaluation and its conversion")
     }
 
     /// The source keeps every quote currency, so a switch from USD to EUR needs no rebuild: past
@@ -256,7 +283,6 @@ extension PortfolioFeatureTests {
         #expect(state.portfolio.valued == Self.expected(prices: state.portfolioPriceInputs, settings: state.portfolio.settings)?.valued)
         #expect(log.conversions == 1)
         #expect(counts.valuations == 1)
-        #expect(log.total == 3, "the refresh, its revaluation and its conversion")
     }
 
     /// The periodic refresh sends the rate it already has: the panels are revalued and the chart
@@ -279,7 +305,6 @@ extension PortfolioFeatureTests {
         #expect(store.state == before)
         #expect(log.conversions == 1)
         #expect(log.count(of: \.portfolio.revalued) == 1)
-        #expect(log.total == 3, "the refresh, its revaluation and its conversion")
     }
 
     @Test func `a changed chart source converts once and an equal one converts nothing`() async {

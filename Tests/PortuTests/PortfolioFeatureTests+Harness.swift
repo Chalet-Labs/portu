@@ -78,11 +78,6 @@ extension PortfolioFeatureTests {
             actions.withLock { $0.count { $0.is(keyPath) } }
         }
 
-        /// How many actions were sent in all.
-        var total: Int {
-            actions.withLock { $0.count }
-        }
-
         /// How many conversions of the value chart ran.
         var conversions: Int {
             count(of: \.portfolio.valueChartConverted)
@@ -160,8 +155,8 @@ extension PortfolioFeatureTests {
     }
 
     /// `chart` is the source the dashboard kept, with its conversion; `builtChart` is what the chart
-    /// projector returns. `initial` changes the starting state, `dependencies` the test's
-    /// dependencies, and `log` sees every action.
+    /// projector returns, after its first `failingChartBuilds` builds have thrown. `initial` changes
+    /// the starting state, `dependencies` the test's dependencies, and `log` sees every action.
     static func store(
         counts: Counts,
         projection: PortfolioProjection?,
@@ -169,7 +164,7 @@ extension PortfolioFeatureTests {
         chart: PortfolioValueChartSource? = nil,
         builtChart: PortfolioValueChartSource = .empty,
         failing: Bool = false,
-        failingChart: Bool = false,
+        failingChartBuilds: Int = 0,
         currency: FiatCurrency = .usd,
         rate: Decimal = 1,
         saves: AsyncStream<ModelSaveEvent> = AsyncStream { $0.finish() },
@@ -183,6 +178,7 @@ extension PortfolioFeatureTests {
         var initialState = Self.state(projection: projection, currency: currency, rate: rate, chart: chart)
         initial(&initialState)
         let fixedNow = Self.now
+        let chartCalls = Mutex(0)
         let logging = Reduce<AppFeature.State, AppFeature.Action> { _, action in
             log?.record(action)
             return .none
@@ -209,8 +205,12 @@ extension PortfolioFeatureTests {
             }
             $0.portfolioValueChartProjector.build = { request in
                 counts.chartBuilt(request)
-                if failingChart {
-                    throw PortfolioProjectorError(message: "chart store unavailable")
+                let call = chartCalls.withLock { value in
+                    value += 1
+                    return value
+                }
+                if call <= failingChartBuilds {
+                    throw Self.chartFailure
                 }
                 return builtChart
             }
@@ -224,6 +224,10 @@ extension PortfolioFeatureTests {
     }
 
     static let eurRate = Fixture.decimal("0.95")
+
+    /// What a failing chart build throws, and the text the reducer records for it.
+    nonisolated static let chartFailure = PortfolioProjectorError(message: "chart store unavailable")
+    static let chartBuildError = String(describing: chartFailure)
 
     /// A month of the chart in USD: three snapshots, an estimated day before them, and the EUR rows
     /// of the three days up to the last one. Today (noon) takes the live rate until its UTC day

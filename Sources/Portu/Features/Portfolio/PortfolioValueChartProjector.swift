@@ -88,8 +88,8 @@ actor PortfolioValueChartProjector {
 
     /// The estimated segment, which only backfill draws. The price fetch reads only the USD closes
     /// `PortfolioValueChartFeature.estimatedPoints` keeps, `[chartStartDay, firstRealSnapshotDate)`,
-    /// and only once there is an estimate to price. A failed fetch draws no estimate rather than a
-    /// wrong one (with ignored assets, or unpriced), and is logged.
+    /// and only once there is an estimate to price. A failed override or price fetch draws no
+    /// estimate rather than a wrong one (with ignored assets, or unpriced); every failure is logged.
     private func estimatedSegment(chartStart: Date) throws -> [HistoricalPortfolioValuePoint] {
         let overrides: [TokenPricingOverride]
         do {
@@ -130,9 +130,10 @@ actor PortfolioValueChartProjector {
     /// Steps: (1) limit-1 earliest row probe; (2) limit-1 earliest PortfolioSnapshot probe and
     /// parity guard; (3) single UTC-day fetch; (4) dedup by (accountId, assetId), keeping the
     /// earliest row per key; (5) targeted Asset fetch from winner ids only; (6) project to value
-    /// types. `try?` on any AssetSnapshot fetch → nil; a failed PortfolioSnapshot probe only
-    /// leaves the end where the holdings are. Both AssetSnapshot fetches leave out the assets
-    /// ignored now, old rows included (N2).
+    /// types. A failed AssetSnapshot fetch → nil; a failed PortfolioSnapshot probe only leaves the
+    /// end where the holdings are; a failed Asset fetch leaves the entries without coin IDs (all as
+    /// master's fetcher did, and logged). Both AssetSnapshot fetches leave out the assets ignored
+    /// now, old rows included (N2).
     func estimateSource(
         overrides: [TokenPricingOverrideSnapshot],
         chartStartDate: Date) -> PortfolioValueChartEstimateSource? {
@@ -143,12 +144,12 @@ actor PortfolioValueChartProjector {
             predicate: #Predicate<AssetSnapshot> { !ignoredIDs.contains($0.assetId) },
             sortBy: [SortDescriptor(\.timestamp, order: .forward)])
         earliestDescriptor.fetchLimit = 1
-        guard let earliest = (try? modelContext.fetch(earliestDescriptor))?.first else { return nil }
+        guard let earliest = loggedFetch(earliestDescriptor, "earliest asset snapshot")?.first else { return nil }
 
         var recordedDescriptor = FetchDescriptor<PortfolioSnapshot>(
             sortBy: [SortDescriptor(\.timestamp, order: .forward)])
         recordedDescriptor.fetchLimit = 1
-        let firstRecordedDate = (try? modelContext.fetch(recordedDescriptor))?.first?.timestamp
+        let firstRecordedDate = loggedFetch(recordedDescriptor, "first portfolio snapshot")?.first?.timestamp
         let estimateEndDate = HistoricalPortfolioEstimator.estimateEndDate(
             holdingsDate: earliest.timestamp,
             firstRecordedDate: firstRecordedDate)
@@ -167,7 +168,7 @@ actor PortfolioValueChartProjector {
                 $0.timestamp >= firstDay && $0.timestamp < dayEnd && !ignoredIDs.contains($0.assetId)
             },
             sortBy: [SortDescriptor(\.timestamp, order: .forward)])
-        guard let dayRows = try? modelContext.fetch(dayDescriptor) else { return nil }
+        guard let dayRows = loggedFetch(dayDescriptor, "first-day asset snapshots") else { return nil }
 
         // 3. Dedup: keep only the earliest row per (accountId, assetId) key.
         //    dayRows is sorted ascending by timestamp, so the first occurrence per key is earliest.
@@ -184,7 +185,7 @@ actor PortfolioValueChartProjector {
         if !assetIDs.isEmpty {
             let assetDescriptor = FetchDescriptor<Asset>(
                 predicate: #Predicate<Asset> { assetIDs.contains($0.id) })
-            if let assets = try? modelContext.fetch(assetDescriptor) {
+            if let assets = loggedFetch(assetDescriptor, "first-day assets") {
                 assetsById = Dictionary(uniqueKeysWithValues: assets.map { ($0.id, $0) })
             }
         }
@@ -211,6 +212,16 @@ actor PortfolioValueChartProjector {
             firstRealSnapshotDate: earliest.timestamp,
             firstDayEntries: entries,
             firstRecordedDate: firstRecordedDate)
+    }
+
+    /// `try?` with the failure logged: the estimate degrades as it always did, but not silently.
+    private func loggedFetch<Model: PersistentModel>(_ descriptor: FetchDescriptor<Model>, _ what: String) -> [Model]? {
+        do {
+            return try modelContext.fetch(descriptor)
+        } catch {
+            Self.logger.error("Value chart estimate: \(what, privacy: .public) fetch failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 
     #if DEBUG

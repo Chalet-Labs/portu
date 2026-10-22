@@ -73,11 +73,13 @@ struct PortfolioReadEntitiesTests {
         #expect(!ModelSaveEvent.entities([name]).touches(Self.chart))
     }
 
-    /// The model types a projector file names in a `FetchDescriptor<…>` or `#Predicate<…>`.
+    /// The schema's model types a projector file names in a `FetchDescriptor<…>` or `#Predicate<…>`.
+    /// A generic helper's signature (`FetchDescriptor<Model>`) names a placeholder, not an entity.
     private func fetchedEntities(in path: String) throws -> Set<String> {
         let source = try String(contentsOf: repoRoot.appending(path: path), encoding: .utf8)
         let descriptors = source.matches(of: /FetchDescriptor<\s*(\w+)\s*>/)
         let predicates = source.matches(of: /#Predicate<\s*(\w+)\s*>/)
-        return Set((descriptors + predicates).map { String($0.output.1) })
+        let named = Set((descriptors + predicates).map { String($0.output.1) })
+        return named.intersection(ModelContainerFactory.schema.entities.map(\.name))
     }
 }

@@ -39,7 +39,7 @@ struct ValuationContext {
     let prices: ValuationPriceInputs
     /// The inputs with their overrides and price IDs resolved, when the caller prepared them once
     /// per data change (the read model). They are `inputs` prepared with `overrides` and `mappings`.
-    var prepared: [PreparedValuationInput]?
+    let prepared: [PreparedValuationInput]?
     /// The valuation with `prices`, computed once by `memoized()`.
     private var memo: PortfolioValuation?
 

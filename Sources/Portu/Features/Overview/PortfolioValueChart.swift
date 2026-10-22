@@ -24,12 +24,13 @@ struct PortfolioValueChart: View {
                     content(chart)
                 }
             } else {
-                // No chart yet: the first build is loading, or failed and waits for the next
-                // trigger. Its error is logged, not shown: the holdings' tooltip is about the headline.
+                // No chart yet: the first build is loading, or failed and retries. Only the chart's
+                // own error labels it; the holdings' error is about the headline.
                 Text(OverviewPriceDisplay.unvaluedPlaceholder)
                     .font(.caption)
                     .foregroundStyle(PortuTheme.dashboardSecondaryText)
                     .frame(maxWidth: .infinity, minHeight: 172, alignment: .center)
+                    .help(store.valueChartBuildError.map { "Value chart unavailable: \($0)" } ?? "")
             }
         }
     }

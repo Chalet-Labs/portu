@@ -18,6 +18,9 @@ first build) and three timing points, all PR 1:
 - the panels' recent-window closes move at UTC midnight, as the headline's have since #123,
   not at the next navigation click.
 
+Panels follow a save after the 300 ms debounce and an off-main build (the headline has since
+#123), and a watchlist edit shows once the settings echo returns; both settle on master's values.
+
 It ships as three PRs:
 
 1. **The rest of Overview** (this change's first part): summary cards, position tabs,
@@ -71,9 +74,10 @@ Each is listed so it can be vetoed in review.
    (its own `@ModelActor`, model context and creation queue, so the headline never waits
    behind it) builds the month of snapshots, the month of FX rate rows for every quote
    currency and the USD estimated segment. A failed snapshot or rate fetch keeps the chart
-   already shown (logged); a failed estimate fetch draws no estimate (logged). The chart is converted to the display
-   currency off the main thread on a new chart source, a currency or rate change, every
-   UTC midnight and a reopened window, never on a price tick.
+   already shown, or retries after 30 s when there is none, and the chart's dash carries its
+   own error; a failed estimate fetch draws no estimate. Both are logged. The chart is
+   converted to the display currency off the main thread on a new chart source, a currency or
+   rate change, every UTC midnight and a reopened window, never on a price tick.
 8. **The watchlist writes through the reducer.** The Add and Remove buttons send an action
    that persists through `DashboardSettingsClient` (a locked read-modify-write on today's
    key). UserDefaults stays the one source of truth: the settings stream's echo updates

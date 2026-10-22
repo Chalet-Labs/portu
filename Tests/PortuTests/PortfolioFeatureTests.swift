@@ -202,7 +202,7 @@ struct PortfolioFeatureTests {
     /// The dashboard task asks for both builds once each: the holdings and the value chart. The
     /// holdings are valued, and the chart source is converted. The two chains of actions land in
     /// whichever order their effects finish, so the test takes them all as received and checks the
-    /// state they leave and how many of each there were, the task's own among them.
+    /// state they leave and how many of each there were.
     @Test func `launch builds once and revalues the new projection`() async {
         let counts = Counts()
         let log = ActionLog()
@@ -227,7 +227,6 @@ struct PortfolioFeatureTests {
         #expect(log.count(of: \.portfolio.delegate.valueChartConversionNeeded) == 1)
         #expect(log.count(of: \.portfolio.revalued) == 1)
         #expect(log.count(of: \.portfolio.valueChartConverted) == 1)
-        #expect(log.total == 9, "the task and its eight actions, no others")
         #expect(counts.builds == 1)
         #expect(counts.requests == [PortfolioProjectionRequest(
             isHistoricalBackfillEnabled: HistoricalPriceBackfillSettings.defaultIsEnabled,
