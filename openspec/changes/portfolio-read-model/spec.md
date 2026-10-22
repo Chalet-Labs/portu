@@ -61,7 +61,7 @@ It is **not** rebuilt on:
 
 ### B4: Latest build wins
 - A new build cancels a build in flight, so an older result never replaces a newer one.
-- A build that throws leaves the current projection in place; before the first build that is no projection, and the next trigger retries.
+- A build that throws leaves the current projection in place and records its error, which the next build that lands clears. With no projection yet nothing is valued or polled, so the build is retried after 30 s as well as on the next trigger.
 - A build equal to the current projection is not stored and triggers no revaluation.
 
 ## Valuation
@@ -91,7 +91,7 @@ A price tick never rebuilds the projection (B1). A non-USD price update changes 
 ### S1: Sidebar portfolio header and Overview top bar
 - Each renders only from `StoreOf<PortfolioFeature>`: no `@Query`, `@AppStorage`, `Environment<AppState>` or `ValuationSources`, at any depth.
 - For the same store, prices, rate and settings, each shows the same formatted strings as on master: total, 24h change and 24h percentage, in the display currency.
-- Before the first build each shows "—" for the total, the change and the percentage. This launch transient is the one visible difference from master.
+- Before the first build each shows "—" for the total, the change and the percentage. This launch transient is the one visible difference from master. When the first build failed, the dashed total carries the error as its tooltip.
 - A navigation click re-renders neither.
 
 ### S2: Polling

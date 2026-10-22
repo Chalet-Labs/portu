@@ -77,8 +77,9 @@ review.
    or fraction never outlives its day without a save. #124 removes the environment book.
 10. **Before the first build** the reducer has no projection: the slice shows "—" for
     the total, the change and the percentage, and nothing is polled. A first build
-    that fails leaves that state; the next trigger retries. Decided 2026-10-22; this is
-    the one visible difference from master (a launch transient) and the PR lists it.
+    that fails keeps that state, puts its error in the dashed total's tooltip and retries
+    after 30 s and on the next trigger. Decided 2026-10-22; the dashes are the one visible
+    difference from master (a launch transient) and the PR lists them.
 11. **Signposts** use one `OSSignposter` (subsystem `com.portu.app`, category
     `PortfolioReadModel`) with intervals `PortfolioProjectionBuild` and
     `PortfolioValuation`, read with xctrace on Release. In Debug, the debug server also
