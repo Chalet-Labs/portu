@@ -204,6 +204,7 @@ struct PortfolioFeatureTests {
         let store = Self.store(counts: counts, projection: nil, built: Self.projection)
 
         let task = await store.send(.portfolio(.task))
+        await store.receive(\.portfolio.rebuildRequested)
         await store.receive(\.portfolio.projectionBuilt) {
             $0.portfolio.projection = Self.projection
         }

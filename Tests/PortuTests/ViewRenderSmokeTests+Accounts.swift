@@ -63,7 +63,7 @@ extension ViewRenderSmokeTests {
     }
 
     /// The first tooltip in the element's subtree, read through `accessibilityHelp`.
-    private static func helpText(_ element: Any) -> String? {
+    static func helpText(_ element: Any) -> String? {
         let object = element as AnyObject
         let selector = NSSelectorFromString("accessibilityHelp")
         if

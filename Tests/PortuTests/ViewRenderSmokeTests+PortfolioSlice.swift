@@ -81,6 +81,35 @@ extension ViewRenderSmokeTests {
         #expect(store.portfolio.valued == nil)
     }
 
+    /// A failed first build says so on the dashed total of both views; the launch transient's
+    /// dashes and a shown total carry no tooltip, even with an older failure recorded.
+    @Test(.renderedTextReadable) func `the dashed slice carries a failed build's error`() {
+        let failed = sliceHelp(valued: nil, buildError: "store unavailable")
+        let loading = sliceHelp(valued: nil, buildError: nil)
+        let shown = sliceHelp(
+            valued: PortfolioValuedOutput(
+                headline: OverviewHeadline(total: 10, change24h: 1, changePercentage: nil),
+                currencyCode: "USD",
+                pricePollingIDs: []),
+            buildError: "store unavailable")
+
+        #expect(failed == ["Portfolio unavailable: store unavailable", "Portfolio unavailable: store unavailable"])
+        #expect(loading == [nil, nil])
+        #expect(shown == [nil, nil])
+    }
+
+    /// The tooltip of the Sidebar header and of the top bar over a portfolio store in this state.
+    private func sliceHelp(valued: PortfolioValuedOutput?, buildError: String?) -> [String?] {
+        var state = PortfolioFeature.State()
+        state.valued = valued
+        state.buildError = buildError
+        let store = StoreOf<PortfolioFeature>(initialState: state) { PortfolioFeature() }
+        return [
+            Self.helpText(render(SidebarPortfolioHeader(store: store), size: CGSize(width: 260, height: 80))),
+            Self.helpText(render(OverviewTopBar(store: store), size: CGSize(width: 260, height: 160)))
+        ]
+    }
+
     /// Whether `labels` appear in `texts` as one contiguous run, the order the view exposes them in.
     private static func shows(texts: [String], labels: [String]) -> Bool {
         guard !labels.isEmpty, labels.count <= texts.count else { return false }
