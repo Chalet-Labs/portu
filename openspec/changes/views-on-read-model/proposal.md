@@ -125,8 +125,8 @@ TopAssetsDonut, PortfolioHealthPanel, PriceWatchlist, PortfolioValueChart
 
 | Risk | Mitigation |
 |---|---|
-| More outputs per tick miss the off-main budget | Each input set valued once; tabs filter. Measured on Release with the real store (`valuationMs`). |
+| More outputs per tick miss the off-main budget | Each input set valued once; tabs filter. Measured 2026-10-22 on Release with the real store, `PortfolioValuation` signpost (xctrace, same host and session), the price tick and its onchain-fallback tick: master `ad561148` 82 and 65 ms, this change 236 and 375 ms. Still off the main thread, latest wins; the panels' own work used to run on the main thread in `body`. |
 | The chart build's first-day `AssetSnapshot` fetch (≈12k rows, #97) delays the headline | Its own actor and queue; spec'd that a chart build held open doesn't delay a holdings build. |
-| The chart window and "today" freeze between rebuilds | The chart rebuilds on every snapshot save and at each UTC midnight, and re-converts at each UTC midnight. Listed in the PR as the two timing-only differences. |
+| The chart window and "today" freeze between rebuilds | The chart rebuilds on every snapshot save and at each UTC midnight, and re-converts at each UTC midnight. Listed above with the other timing-only differences. |
 | A panel re-renders on every tick through a shared property | Per-panel fields written only when changed; `withObservationTracking` specs per panel. |
 | A wrong input set wired to a panel goes unnoticed | The valuator oracle uses a projection whose holdings and active tokens differ in content and order. |
