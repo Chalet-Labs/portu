@@ -70,18 +70,14 @@ struct PortfolioFeature {
         Reduce { state, action in
             switch action {
             case .task:
-                let previous = state.settings
                 state.settings = dashboardSettings.current()
-                // A re-run (the window reopened) values settings changed meanwhile, and a kept
-                // projection whose valuation the closing window cancelled: an equal rebuild would
-                // revalue neither.
-                let revalues = state.settings.dashboard != previous.dashboard
-                    || state.settings.watchlistIDs != previous.watchlistIDs
-                    || (state.projection != nil && state.valued == nil)
+                // A re-run (the window reopened) values the projection it kept: settings may have
+                // changed meanwhile, and the closing window may have cancelled its valuation, leaving
+                // no output or the previous projection's. An equal rebuild would revalue none of that.
                 return .merge(
                     observeThenBuild(from: state.settings),
                     followDayRollover(),
-                    revalues ? .send(.delegate(.revaluationNeeded)) : .none)
+                    state.projection != nil ? .send(.delegate(.revaluationNeeded)) : .none)
 
             case let .saveObserved(event):
                 guard event.touches(PortfolioProjector.readEntityNames) else { return .none }

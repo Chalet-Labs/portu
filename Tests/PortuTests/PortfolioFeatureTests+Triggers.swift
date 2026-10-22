@@ -90,26 +90,23 @@ extension PortfolioFeatureTests {
         #expect(store.state.portfolio.valued?.pricePollingIDs.last == "cardano")
     }
 
-    /// The window closed after the first build landed but while its valuation was still running, so
-    /// the task tree cancelled the valuation. Reopening with unchanged rows and settings rebuilds an
-    /// equal projection; the task still values the projection it kept, or the slice stays dashed and
-    /// Overview never polls.
-    @Test func `a re run of the task values a projection whose valuation was cancelled`() async {
+    /// The window closed after a build landed but while its valuation was still running, so the
+    /// task tree cancelled the valuation. Reopening with unchanged rows and settings rebuilds an equal
+    /// projection; the task still values the projection it kept. Without that the slice stays dashed
+    /// (no output yet) or shows the previous projection's figures and polls its IDs (stale output).
+    @Test(arguments: [false, true])
+    func `a re run of the task values a projection whose valuation was cancelled`(startsValued: Bool) async {
         let clock = TestClock()
-        let calls = Mutex(0)
-        let projection = Self.projection
-        let store = TestStore(initialState: Self.state(projection: nil)) {
+        let holding = Mutex(true)
+        let newer = PortfolioProjection.fixture(dropping: 1)
+        let store = TestStore(initialState: Self.state(projection: startsValued ? Self.projection : nil)) {
             AppFeature()
         } withDependencies: {
             $0.continuousClock = clock
             $0.currentDate.now = { Self.now }
-            $0.portfolioProjector.build = { _ in projection }
+            $0.portfolioProjector.build = { _ in newer }
             $0.portfolioValuator.value = { request in
-                let call = calls.withLock { value in
-                    value += 1
-                    return value
-                }
-                if call == 1 {
+                if holding.withLock({ $0 }) {
                     // Still valuing when the window closes.
                     try? await clock.sleep(for: .seconds(60))
                 }
@@ -117,20 +114,23 @@ extension PortfolioFeatureTests {
             }
         }
         store.exhaustivity = .off(showSkippedAssertions: false)
+        let before = store.state.portfolio.valued
 
         let first = await store.send(.portfolio(.task))
         await store.receive(\.portfolio.projectionBuilt)
-        await store.receive(\.portfolio.delegate.revaluationNeeded)
         await first.cancel()
-        #expect(store.state.portfolio.projection == projection)
-        #expect(store.state.portfolio.valued == nil)
+        #expect(store.state.portfolio.projection == newer)
+        #expect(store.state.portfolio.valued == before, "the cancelled valuation stored nothing")
 
+        holding.withLock { $0 = false }
         let second = await store.send(.portfolio(.task))
         await store.receive(\.portfolio.revalued)
         await second.cancel()
 
-        #expect(store.state.portfolio.valued != nil)
-        #expect(calls.withLock { $0 } == 2)
+        #expect(store.state.portfolio.valued == Self.expected(
+            prices: store.state.portfolioPriceInputs,
+            settings: store.state.portfolio.settings,
+            projection: newer))
     }
 
     @Test func `a backfill change rebuilds and revalues only through the new projection`() async {
