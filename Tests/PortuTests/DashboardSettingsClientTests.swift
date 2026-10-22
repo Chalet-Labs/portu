@@ -27,18 +27,45 @@ struct DashboardSettingsClientTests {
     @Test func `changes start with the current settings and follow each distinct write`() async throws {
         let (defaults, suite) = try Self.suite()
         defer { defaults.removePersistentDomain(forName: suite) }
-        let client = DashboardSettingsClient.live(defaults: defaults)
-        var iterator = client.changes().makeAsyncIterator()
-
-        #expect(await iterator.next() == .defaults)
+        let stream = DashboardSettingsClient.live(defaults: defaults).changes()
 
         defaults.set(true, forKey: TokenDashboardSettings.hideDustKey) // equal to the default: no change
         defaults.set("unrelated", forKey: "someOtherKey")
         defaults.set(false, forKey: TokenDashboardSettings.hideUnpricedKey)
+        defaults.set(true, forKey: HistoricalPriceBackfillSettings.isEnabledKey)
+        defaults.set(#"["cardano"]"#, forKey: OverviewWatchlistStore.key)
+        let values = await Self.first(4, of: stream)
 
-        let next = await iterator.next()
-        #expect(next?.dashboard.hideUnpriced == false)
-        #expect(next?.dashboard.hideDust == true)
+        try #require(values.count == 4, "\(values)")
+        #expect(values[0] == .defaults)
+        #expect(values[1].dashboard.hideUnpriced == false)
+        #expect(values[1].dashboard.hideDust == true)
+        #expect(values[2].isHistoricalBackfillEnabled)
+        #expect(values[3].watchlistIDs == ["cardano"])
+    }
+
+    /// The first `count` values, or fewer if they don't arrive within `timeout`.
+    private static func first(
+        _ count: Int,
+        of stream: AsyncStream<DashboardSettings>,
+        timeout: Duration = .seconds(5)) async -> [DashboardSettings] {
+        let collect = Task {
+            var values: [DashboardSettings] = []
+            for await value in stream {
+                values.append(value)
+                if values.count == count {
+                    break
+                }
+            }
+            return values
+        }
+        let timer = Task {
+            try await Task.sleep(for: timeout)
+            collect.cancel()
+        }
+        let values = await collect.value
+        timer.cancel()
+        return values
     }
 
     private static func suite() throws -> (UserDefaults, String) {

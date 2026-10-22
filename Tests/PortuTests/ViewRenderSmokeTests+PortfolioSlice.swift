@@ -5,6 +5,7 @@ import Foundation
 import PortuCore
 import SwiftData
 import SwiftUI
+import Synchronization
 import Testing
 
 /// The portfolio slice of the dashboard (the Sidebar header and the Overview top bar) rendered over
@@ -37,7 +38,7 @@ extension ViewRenderSmokeTests {
             size: CGSize(width: 1400, height: 900))
 
         var texts = Self.accessibilityLabels(hostingView)
-        let deadline = Date().addingTimeInterval(2)
+        let deadline = Date().addingTimeInterval(10)
         while
             !Self.shows(texts: texts, labels: Self.sidebarHeaderLabels)
             || !Self.shows(texts: texts, labels: Self.topBarLabels), Date() < deadline {
@@ -48,10 +49,13 @@ extension ViewRenderSmokeTests {
         #expect(Self.shows(texts: texts, labels: Self.topBarLabels), "top bar sequence missing in \(texts)")
     }
 
-    /// Before the first build lands there is nothing to value: both views show a dash for each figure.
-    @Test(.renderedTextReadable) func `the portfolio slice shows dashes until the first build`() throws {
+    /// Before the first build lands there is nothing to value: both views show a dash for each figure,
+    /// while the build the window started is still running.
+    @Test(.renderedTextReadable) func `the portfolio slice shows dashes until the first build`() async throws {
         let container = try makeContainer()
+        let started = Mutex(false)
         let store = Self.sliceStore(projector: PortfolioProjectorClient { _ in
+            started.withLock { $0 = true }
             try await Task.sleep(for: .seconds(3600))
             return .empty
         })
@@ -64,7 +68,12 @@ extension ViewRenderSmokeTests {
                 .environment(appState)
                 .frame(width: 1400, height: 900),
             size: CGSize(width: 1400, height: 900))
-        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        let deadline = Date().addingTimeInterval(10)
+        while !started.withLock({ $0 }), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(started.withLock { $0 }, "the window never started a build")
+        try await Task.sleep(for: .milliseconds(100))
         let texts = Self.accessibilityLabels(hostingView)
 
         #expect(Self.shows(texts: texts, labels: ["P", "—", "—", "24h", "—"]), "\(texts)")

@@ -151,6 +151,33 @@ struct PortfolioProjectorTests {
         #expect(await projector.isExecutingOnMainThread() == false)
     }
 
+    /// Production keeps one projector, and so one model context, for the app's life
+    /// (`PortfolioProjectorClient.live`). Edits other contexts save to rows it has already read
+    /// must show in its next build: an account turned off, a manual price changed, an asset renamed.
+    @Test func `one long lived projector sees rows another context updates`() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("PortfolioProjectorTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try Self.seededStore(at: directory.appendingPathComponent("Portu.store"))
+        let client = PortfolioProjectorClient.live(modelContainer: store.container)
+        let request = PortfolioProjectionRequest(isHistoricalBackfillEnabled: true, now: Self.now)
+        let before = try await client.build(request)
+
+        let context = store.container.mainContext
+        let accounts = try context.fetch(FetchDescriptor<Account>())
+        try #require(accounts.first { $0.id == store.activeID }).isActive = false
+        try #require(accounts.first { $0.id == store.inactiveID }).isActive = true
+        try #require(context.fetch(FetchDescriptor<TokenPricingOverride>()).first { $0.manualPriceUSD != nil }).manualPriceUSD = 9
+        try #require(context.fetch(FetchDescriptor<Asset>()).first { $0.symbol == "BTC" }).symbol = "XBT"
+        try context.save()
+        let after = try await client.build(request)
+
+        #expect(Set(before.holdings.map(\.input.token.symbol)) == ["ETH", "MNL", "SCAM", "DEGEN"])
+        #expect(after.holdings.map(\.input.token.symbol) == ["XBT"], "the account switch and the rename are seen")
+        #expect(after.accounts[store.activeID]?.isActive == false)
+        #expect(after.overrides.contains { $0.manualPriceUSD == 9 })
+    }
+
     // MARK: - Fixture
 
     private static func build(_ container: ModelContainer, isBackfillEnabled: Bool = true) async throws -> PortfolioProjection {
@@ -164,8 +191,15 @@ struct PortfolioProjectorTests {
         let inactiveID: UUID
     }
 
-    private static func seededStore() throws -> Store {
-        let container = try ModelContainerFactory().makeInMemory()
+    /// The seeded store, in memory, or in an SQLite file at `url` as production keeps it.
+    private static func seededStore(at url: URL? = nil) throws -> Store {
+        let container = if let url {
+            try ModelContainer(
+                for: ModelContainerFactory.schema,
+                configurations: [ModelConfiguration(schema: ModelContainerFactory.schema, url: url)])
+        } else {
+            try ModelContainerFactory().makeInMemory()
+        }
         let context = container.mainContext
         try PortfolioCategorySeeder.seedIfNeeded(in: context)
 

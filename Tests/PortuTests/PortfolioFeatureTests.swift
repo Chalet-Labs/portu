@@ -2,7 +2,6 @@ import ComposableArchitecture
 import Foundation
 @testable import Portu
 import PortuCore
-import PortuNetwork
 import Synchronization
 import Testing
 
@@ -11,10 +10,10 @@ import Testing
 /// counted, and the save and settings streams are driven by the test.
 @MainActor
 struct PortfolioFeatureTests {
-    private typealias Fixture = PortfolioValuationFixture
+    typealias Fixture = PortfolioValuationFixture
 
-    private static let now = Fixture.noon(0)
-    private static let projection = PortfolioProjection.fixture()
+    static let now = Fixture.noon(0)
+    static let projection = PortfolioProjection.fixture()
     private static let usdPrices = PortfolioPriceInputs(
         livePricesUSD: Fixture.livePricesUSD,
         liveChanges24h: Fixture.liveChanges24h,
@@ -23,19 +22,23 @@ struct PortfolioFeatureTests {
 
     // MARK: - V2: the valued output equals today's pipeline
 
+    /// The headline values the holdings and polling ranks the candidates; here the holdings leave out
+    /// the first token, so valuing the wrong list would show.
     @Test func `the headline and polling ids equal today's overview pipeline`() {
         let settings = DashboardSettings(dashboard: .defaults, isHistoricalBackfillEnabled: true, watchlistIDs: Fixture.watchlistIDs)
+        var projection = PortfolioProjection.fixture(historical: Fixture.historical)
+        projection.holdings = Array(projection.holdings.dropFirst())
 
         let output = PortfolioValuator.compute(PortfolioValuationRequest(
-            projection: .fixture(historical: Fixture.historical),
+            projection: projection,
             prices: Self.usdPrices,
             settings: settings))
 
-        let today = { (includingLiveChanges: Bool) in
-            Fixture.context(liveChanges24h: includingLiveChanges ? Fixture.liveChanges24h : [:])
-        }
-        #expect(output.headline == OverviewFeature.headline(today(true)))
-        #expect(output.pricePollingIDs == OverviewFeature.pricePollingIDs(today(false), watchlistIDs: Fixture.watchlistIDs))
+        let holdingsToday = Fixture.context(inputs: Array(Fixture.inputs.dropFirst()))
+        let candidatesToday = Fixture.context(liveChanges24h: [:])
+        #expect(output.headline == OverviewFeature.headline(holdingsToday))
+        #expect(output.headline != OverviewFeature.headline(Fixture.context()), "the dropped holding moves the headline")
+        #expect(output.pricePollingIDs == OverviewFeature.pricePollingIDs(candidatesToday, watchlistIDs: Fixture.watchlistIDs))
         #expect(output.currencyCode == FiatCurrency.usd.displayCode)
         #expect(output.pricePollingIDs.count > Fixture.watchlistIDs.count, "holdings are polled too")
     }
@@ -79,7 +82,7 @@ struct PortfolioFeatureTests {
 
     /// The bad onchain price stays implausible, so the output is unchanged: the tick still revalues
     /// once, and the equal result is not written.
-    @Test func `an onchain fallback tick revalues once and writes an unchanged result nowhere`() async {
+    @Test func `an onchain fallback tick revalues once and leaves an unchanged output alone`() async {
         let counts = Counts()
         let store = Self.store(counts: counts, projection: Self.projection)
         let identity = Fixture.badIdentity
@@ -95,6 +98,55 @@ struct PortfolioFeatureTests {
 
         #expect(counts.valuations == 1)
         #expect(counts.builds == 0)
+    }
+
+    /// A tick arrives while the previous revaluation is still running: the newer one cancels it, so
+    /// only the latest prices are ever stored.
+    @Test func `the latest revaluation wins`() async {
+        let clock = TestClock()
+        let calls = Mutex(0)
+        let store = TestStore(initialState: Self.state(projection: Self.projection)) {
+            AppFeature()
+        } withDependencies: {
+            $0.continuousClock = clock
+            $0.currentDate.now = { Self.now }
+            $0.portfolioValuator.value = { request in
+                let call = calls.withLock { value in
+                    value += 1
+                    return value
+                }
+                if call == 1 {
+                    // Still valuing when the next tick lands.
+                    try? await clock.sleep(for: .seconds(1))
+                }
+                return PortfolioValuator.compute(request)
+            }
+        }
+
+        await store.send(.pricesReceived(PriceUpdate(prices: ["ethereum": 3100], changes24h: [:]))) {
+            $0.livePricesUSD["ethereum"] = 3100
+            $0.lastPriceUpdate = Self.now
+        }
+        await store.send(.pricesReceived(PriceUpdate(prices: ["ethereum": 3200], changes24h: [:]))) {
+            $0.livePricesUSD["ethereum"] = 3200
+        }
+        await store.receive(\.portfolio.revalued) {
+            $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
+        }
+        await clock.advance(by: .seconds(1))
+
+        // Exhaustive: the first tick's `revalued`, had it been sent, would fail the test.
+        #expect(calls.withLock { $0 } == 2)
+    }
+
+    /// The book is USD; a price update in any other currency changes nothing, as before (V1).
+    @Test func `a non usd price update revalues nothing`() async {
+        let counts = Counts()
+        let store = Self.store(counts: counts, projection: Self.projection)
+
+        await store.send(.pricesReceived(PriceUpdate(currency: .chf, prices: ["ethereum": 2800], changes24h: [:])))
+
+        #expect(counts.valuations == 0)
     }
 
     @Test func `before the first build a price tick values nothing`() async {
@@ -162,7 +214,9 @@ struct PortfolioFeatureTests {
         await task.cancel()
 
         #expect(counts.builds == 1)
-        #expect(counts.requests == [PortfolioProjectionRequest(isHistoricalBackfillEnabled: false, now: Self.now)])
+        #expect(counts.requests == [PortfolioProjectionRequest(
+            isHistoricalBackfillEnabled: HistoricalPriceBackfillSettings.defaultIsEnabled,
+            now: Self.now)])
         #expect(counts.valuations == 1)
     }
 
@@ -218,26 +272,61 @@ struct PortfolioFeatureTests {
         #expect(counts.valuations == 0)
     }
 
-    @Test func `a failed build keeps the current projection`() async {
+    /// A failed rebuild keeps the projection the headline shows, records the failure for the slice,
+    /// and schedules no retry: the next save or setting change retries.
+    @Test func `a failed build keeps the current projection and records the failure`() async {
         let counts = Counts()
         let store = Self.store(counts: counts, projection: Self.projection, failing: true)
 
         await store.send(.portfolio(.rebuildRequested))
-        await store.receive(\.portfolio.projectionBuildFailed)
+        await store.receive(\.portfolio.projectionBuildFailed) {
+            $0.portfolio.buildError = #"PortfolioProjectorError(message: "store unavailable")"#
+        }
 
         #expect(store.state.portfolio.projection == Self.projection)
         #expect(counts.valuations == 0)
     }
 
-    @Test func `a failed first build leaves no projection until the next trigger`() async {
-        let counts = Counts()
-        let store = Self.store(counts: counts, projection: nil, failing: true)
+    /// With no projection nothing is valued or polled, so a failed first build retries on its own
+    /// after `firstBuildRetry`, and a build that lands clears the failure.
+    @Test func `a failed first build retries until one lands`() async {
+        let clock = TestClock()
+        let calls = Mutex(0)
+        let projection = Self.projection
+        let store = TestStore(initialState: Self.state(projection: nil)) {
+            AppFeature()
+        } withDependencies: {
+            $0.continuousClock = clock
+            $0.currentDate.now = { Self.now }
+            $0.portfolioProjector.build = { _ in
+                let call = calls.withLock { value in
+                    value += 1
+                    return value
+                }
+                guard call > 1 else { throw PortfolioProjectorError(message: "store unavailable") }
+                return projection
+            }
+        }
 
         await store.send(.portfolio(.rebuildRequested))
-        await store.receive(\.portfolio.projectionBuildFailed)
-
-        #expect(store.state.portfolio.projection == nil)
+        await store.receive(\.portfolio.projectionBuildFailed) {
+            $0.portfolio.buildError = #"PortfolioProjectorError(message: "store unavailable")"#
+        }
         #expect(store.state.portfolio.valued == nil)
+        await clock.advance(by: PortfolioFeature.firstBuildRetry - .seconds(1))
+        #expect(calls.withLock { $0 } == 1)
+
+        await clock.advance(by: .seconds(1))
+        await store.receive(\.portfolio.rebuildRequested)
+        await store.receive(\.portfolio.projectionBuilt) {
+            $0.portfolio.buildError = nil
+            $0.portfolio.projection = Self.projection
+        }
+        await store.receive(\.portfolio.delegate.revaluationNeeded)
+        await store.receive(\.portfolio.revalued) {
+            $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
+        }
+        #expect(calls.withLock { $0 } == 2)
     }
 
     @Test func `a newer build wins over a slower older one`() async {
@@ -292,79 +381,9 @@ struct PortfolioFeatureTests {
         #expect(counts.builds == 1)
     }
 
-    // MARK: - V1/B1: settings
-
-    @Test func `a dashboard setting change revalues once and rebuilds`() async {
-        let counts = Counts()
-        let settings = AsyncStream.makeStream(of: DashboardSettings.self)
-        let store = Self.store(counts: counts, projection: Self.projection, built: Self.projection, settings: settings.stream)
-        store.exhaustivity = .off(showSkippedAssertions: false)
-        let task = await store.send(.portfolio(.task))
-        await store.receive(\.portfolio.projectionBuilt)
-        counts.reset()
-
-        let showAll = DashboardSettings(dashboard: .showAll, isHistoricalBackfillEnabled: false, watchlistIDs: [])
-        settings.continuation.yield(showAll)
-        await store.receive(\.portfolio.settingsChanged)
-        await store.receive(\.portfolio.delegate.revaluationNeeded)
-        // Cancelling the task cancels the effects its actions started, the revaluation included.
-        await store.receive(\.portfolio.revalued)
-        await store.receive(\.portfolio.projectionBuilt)
-        await task.cancel()
-
-        #expect(store.state.portfolio.settings == showAll)
-        #expect(counts.builds == 1)
-        #expect(counts.valuations == 1, "the rebuild is equal, so it adds no revaluation")
-        #expect(store.state.portfolio.valued == Self.expected(prices: store.state.portfolioPriceInputs, settings: showAll))
-    }
-
-    @Test func `a watchlist change revalues once and rebuilds nothing`() async {
-        let counts = Counts()
-        let settings = AsyncStream.makeStream(of: DashboardSettings.self)
-        let store = Self.store(counts: counts, projection: Self.projection, built: Self.projection, settings: settings.stream)
-        store.exhaustivity = .off(showSkippedAssertions: false)
-        let task = await store.send(.portfolio(.task))
-        await store.receive(\.portfolio.projectionBuilt)
-        counts.reset()
-
-        let watching = DashboardSettings(dashboard: .defaults, isHistoricalBackfillEnabled: false, watchlistIDs: ["cardano"])
-        settings.continuation.yield(watching)
-        await store.receive(\.portfolio.settingsChanged)
-        await store.receive(\.portfolio.delegate.revaluationNeeded)
-        await store.receive(\.portfolio.revalued)
-        await task.cancel()
-
-        #expect(counts.builds == 0)
-        #expect(counts.valuations == 1)
-        #expect(store.state.portfolio.valued?.pricePollingIDs.last == "cardano")
-    }
-
-    @Test func `a backfill change rebuilds and revalues only through the new projection`() async {
-        let counts = Counts()
-        let settings = AsyncStream.makeStream(of: DashboardSettings.self)
-        let withBook = PortfolioProjection.fixture(historical: Fixture.historical)
-        let store = Self.store(counts: counts, projection: Self.projection, built: withBook, settings: settings.stream)
-        store.exhaustivity = .off(showSkippedAssertions: false)
-        let task = await store.send(.portfolio(.task))
-        await store.receive(\.portfolio.projectionBuilt)
-        await store.receive(\.portfolio.delegate.revaluationNeeded)
-        await store.receive(\.portfolio.revalued)
-        counts.reset()
-
-        let enabled = DashboardSettings(dashboard: .defaults, isHistoricalBackfillEnabled: true, watchlistIDs: [])
-        settings.continuation.yield(enabled)
-        await store.receive(\.portfolio.settingsChanged)
-        await store.receive(\.portfolio.projectionBuilt)
-        await task.cancel()
-
-        #expect(counts.builds == 1)
-        #expect(counts.requests.last?.isHistoricalBackfillEnabled == true)
-        #expect(counts.valuations == 0, "the rebuilt projection is equal to the one already stored")
-    }
-
     // MARK: - Harness
 
-    private final class Counts: Sendable {
+    final class Counts: Sendable {
         private let state = Mutex((builds: 0, valuations: 0, requests: [PortfolioProjectionRequest]()))
 
         var builds: Int {
@@ -395,7 +414,7 @@ struct PortfolioFeatureTests {
         }
     }
 
-    private static func state(
+    static func state(
         projection: PortfolioProjection?,
         currency: FiatCurrency = .usd,
         rate: Decimal = 1) -> AppFeature.State {
@@ -413,7 +432,7 @@ struct PortfolioFeatureTests {
         return state
     }
 
-    private static func store(
+    static func store(
         counts: Counts,
         projection: PortfolioProjection?,
         built: PortfolioProjection = .empty,
@@ -422,6 +441,7 @@ struct PortfolioFeatureTests {
         rate: Decimal = 1,
         saves: AsyncStream<ModelSaveEvent> = AsyncStream { $0.finish() },
         settings: AsyncStream<DashboardSettings>? = nil,
+        current: @escaping @Sendable () -> DashboardSettings = { .defaults },
         clock: TestClock<Duration> = TestClock()) -> TestStoreOf<AppFeature> {
         TestStore(initialState: state(projection: projection, currency: currency, rate: rate)) {
             AppFeature()
@@ -429,7 +449,7 @@ struct PortfolioFeatureTests {
             $0.continuousClock = clock
             $0.currentDate.now = { Self.now }
             $0.modelSave.saves = { saves }
-            $0.dashboardSettings.current = { .defaults }
+            $0.dashboardSettings.current = current
             if let settings {
                 $0.dashboardSettings.changes = { settings }
             }
@@ -448,7 +468,7 @@ struct PortfolioFeatureTests {
         }
     }
 
-    private static func expected(
+    static func expected(
         prices: PortfolioPriceInputs,
         settings: DashboardSettings,
         projection: PortfolioProjection? = projection) -> PortfolioValuedOutput? {
