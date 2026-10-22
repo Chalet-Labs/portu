@@ -37,6 +37,13 @@ enum OverviewPriceDisplay {
         return currency(value, currencyCode: currencyCode)
     }
 
+    /// The tooltip on a dashed headline whose read model failed to build; empty otherwise, so the
+    /// launch transient's dashes carry none.
+    static func unavailableHelp(valued: PortfolioValuedOutput?, buildError: String?) -> String {
+        guard valued == nil, let buildError else { return "" }
+        return "Portfolio unavailable: \(buildError)"
+    }
+
     static func axisCurrency(_ value: Double, currencyCode: String = "USD") -> String {
         let sign = value < 0 ? "-\(currencyPrefix(currencyCode)) " : "\(currencyPrefix(currencyCode)) "
         return sign + standardNumber(abs(value), maximumFractionDigits: 0)

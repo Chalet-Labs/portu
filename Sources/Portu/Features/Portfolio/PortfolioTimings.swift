@@ -27,8 +27,11 @@ enum PortfolioTimings {
         Interval(state: signposter.beginInterval("PortfolioProjectionBuild"), start: .now)
     }
 
-    static func endProjectionBuild(_ interval: Interval) {
+    /// Ends the signpost on every path; only a completed build replaces the latest duration, so a
+    /// cancelled or failed build never reports a truncated one.
+    static func endProjectionBuild(_ interval: Interval, completed: Bool) {
         signposter.endInterval("PortfolioProjectionBuild", interval.state)
+        guard completed else { return }
         let elapsed = ContinuousClock.now - interval.start
         latest.withLock { $0.projectionBuild = elapsed }
     }

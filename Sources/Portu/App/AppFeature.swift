@@ -544,7 +544,7 @@ private extension AppFeature {
     func revaluePortfolio(_ state: State) -> Effect<Action> {
         guard let request = state.portfolio.valuationRequest(state.portfolioPriceInputs) else { return .none }
         return .run { [portfolioValuator] send in
-            await send(.portfolio(.revalued(portfolioValuator.value(request))))
+            await send(.portfolio(.revalued(portfolioValuator.valueOffMain(request))))
         }
         .cancellable(id: CancelID.portfolioValuation, cancelInFlight: true)
     }

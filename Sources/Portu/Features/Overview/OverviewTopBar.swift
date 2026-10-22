@@ -4,7 +4,8 @@ import PortuUI
 import SwiftUI
 
 /// The Overview headline, from the portfolio read model only (#123). Before the first projection
-/// build there is nothing to value, so every figure is a dash and the label carries no currency.
+/// build there is nothing to value, so every figure is a dash and the label carries no currency; a
+/// failed build says so on the dash.
 struct OverviewTopBar: View {
     let store: StoreOf<PortfolioFeature>
 
@@ -19,6 +20,7 @@ struct OverviewTopBar: View {
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
+                .help(OverviewPriceDisplay.unavailableHelp(valued: valued, buildError: store.buildError))
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {

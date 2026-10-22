@@ -105,10 +105,10 @@ struct OverviewView: View {
 }
 
 /// Starts and stops polling with the portfolio read model's IDs (#123). Polling stays owned by the
-/// view until #101. It sits in its own view so only it re-renders when the IDs' ranking moves with
-/// a tick, and it polls nothing before the first projection build, so launch never starts a
-/// watchlist-only poll first.
-private struct OverviewPricePollingDriver: View {
+/// view until #101. It sits in its own view so a revaluation re-evaluates only this small body, not
+/// `OverviewView`'s; polling restarts only when the set of IDs changes. It polls nothing before the
+/// first projection build, so launch never starts a watchlist-only poll first.
+struct OverviewPricePollingDriver: View {
     let store: StoreOf<AppFeature>
 
     var body: some View {

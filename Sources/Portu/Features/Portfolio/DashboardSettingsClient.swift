@@ -64,23 +64,23 @@ extension DashboardSettingsClient {
             current: { DashboardSettings(defaults: defaults) },
             changes: {
                 AsyncStream { continuation in
-                    let initial = DashboardSettings(defaults: defaults)
-                    let last = Mutex(initial)
-                    continuation.yield(initial)
+                    // Reads and yields under one lock, so two notifications on different threads
+                    // can't deliver an older value last.
+                    let last = Mutex<DashboardSettings?>(nil)
+                    let publish: @Sendable () -> Void = {
+                        last.withLock { previous in
+                            let settings = DashboardSettings(defaults: defaults)
+                            guard previous != settings else { return }
+                            previous = settings
+                            continuation.yield(settings)
+                        }
+                    }
+                    // Observe first, then read the current value, so no write falls in between.
                     nonisolated(unsafe) let observer = NotificationCenter.default.addObserver(
                         forName: UserDefaults.didChangeNotification,
                         object: defaults,
-                        queue: nil) { _ in
-                            let settings = DashboardSettings(defaults: defaults)
-                            let isChange = last.withLock { previous in
-                                guard previous != settings else { return false }
-                                previous = settings
-                                return true
-                            }
-                            if isChange {
-                                continuation.yield(settings)
-                            }
-                        }
+                        queue: nil) { _ in publish() }
+                    publish()
                     continuation.onTermination = { _ in
                         NotificationCenter.default.removeObserver(observer)
                     }

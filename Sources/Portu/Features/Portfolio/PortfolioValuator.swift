@@ -27,10 +27,10 @@ struct PortfolioValuedOutput: Equatable, Sendable {
     var pricePollingIDs: [String]
 }
 
-/// Values the projection with the current prices (#123). A dependency so tests count revaluations,
-/// and so the per-tick budget's fallback (an off-main effect) has a seam.
+/// Values the projection with the current prices (#123). A dependency so tests count revaluations
+/// and hold one open to prove a newer one wins; the per-tick valuation itself is synchronous.
 struct PortfolioValuator {
-    var value: @Sendable (PortfolioValuationRequest) -> PortfolioValuedOutput
+    var value: @Sendable (PortfolioValuationRequest) async -> PortfolioValuedOutput
 }
 
 extension PortfolioValuator: DependencyKey {
@@ -38,13 +38,22 @@ extension PortfolioValuator: DependencyKey {
         PortfolioTimings.measureValuation { compute(request) }
     }
 
-    static let testValue = Self(value: compute)
+    static let testValue = Self { compute($0) }
 }
 
 extension DependencyValues {
     var portfolioValuator: PortfolioValuator {
         get { self[PortfolioValuator.self] }
         set { self[PortfolioValuator.self] = newValue }
+    }
+}
+
+extension PortfolioValuator {
+    /// Values on the concurrent executor whatever the caller's isolation: the per-tick valuation
+    /// misses its main-thread budget on the real store (#123 spec V3).
+    @concurrent
+    func valueOffMain(_ request: PortfolioValuationRequest) async -> PortfolioValuedOutput {
+        await value(request)
     }
 }
 

@@ -16,6 +16,9 @@ struct PortfolioFeature {
         var projection: PortfolioProjection?
         var settings = DashboardSettings.defaults
         var valued: PortfolioValuedOutput?
+        /// The last build's failure, cleared by the next build that lands. The slice shows it on its
+        /// dashes, so "unavailable" is not mistaken for "loading".
+        var buildError: String?
 
         /// What a revaluation with `prices` needs, or `nil` before the first build: nothing is valued
         /// then.
@@ -45,6 +48,8 @@ struct PortfolioFeature {
     }
 
     static let saveDebounce = Duration.milliseconds(300)
+    /// How long after a failed first build the read model tries again.
+    static let firstBuildRetry = Duration.seconds(30)
 
     private enum CancelID {
         case build
@@ -66,12 +71,18 @@ struct PortfolioFeature {
         Reduce { state, action in
             switch action {
             case .task:
+                let previous = state.settings
                 state.settings = dashboardSettings.current()
+                // A re-run (the window reopened) picks up settings changed meanwhile; values them.
+                let revalues = state.settings.dashboard != previous.dashboard
+                    || state.settings.watchlistIDs != previous.watchlistIDs
+                // Observers first, so a save or a settings change during the first build is seen.
                 return .merge(
-                    build(state),
                     observeSaves(),
                     observeSettings(from: state.settings),
-                    followDayRollover())
+                    followDayRollover(),
+                    revalues ? .send(.delegate(.revaluationNeeded)) : .none,
+                    build(state))
 
             case let .saveObserved(event):
                 guard event.touches(PortfolioProjector.readEntityNames) else { return .none }
@@ -85,13 +96,22 @@ struct PortfolioFeature {
                 return build(state)
 
             case let .projectionBuilt(projection):
+                state.buildError = nil
                 guard projection != state.projection else { return .none }
                 state.projection = projection
                 return .send(.delegate(.revaluationNeeded))
 
             case let .projectionBuildFailed(message):
-                Self.logger.error("Portfolio projection build failed: \(message, privacy: .public)")
-                return .none
+                Self.logger.error("Portfolio projection build failed: \(message)")
+                state.buildError = message
+                // With no projection yet nothing is valued or polled, so don't wait for a save that
+                // may be hours away; any newer build cancels the retry.
+                guard state.projection == nil else { return .none }
+                return .run { [clock] send in
+                    try await clock.sleep(for: Self.firstBuildRetry)
+                    await send(.rebuildRequested)
+                }
+                .cancellable(id: CancelID.build, cancelInFlight: true)
 
             case let .settingsChanged(settings):
                 let previous = state.settings
@@ -120,7 +140,7 @@ struct PortfolioFeature {
     }
 
     /// The latest build wins: a new one cancels the one in flight. A failure keeps the current
-    /// projection (none before the first build) until the next trigger.
+    /// projection; with none yet, it retries after `firstBuildRetry`, and any trigger retries sooner.
     private func build(_ state: State) -> Effect<Action> {
         let request = PortfolioProjectionRequest(
             isHistoricalBackfillEnabled: state.settings.isHistoricalBackfillEnabled,

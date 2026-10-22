@@ -20,8 +20,12 @@ actor PortfolioProjector {
     ]
 
     func build(_ request: PortfolioProjectionRequest) throws -> PortfolioProjection {
+        // A build cancelled while it waited behind another reads nothing.
+        try Task.checkCancellation()
         let interval = PortfolioTimings.beginProjectionBuild()
-        defer { PortfolioTimings.endProjectionBuild(interval) }
+        var completed = false
+        // Every path ends the signpost; only a completed build is the "latest" duration.
+        defer { PortfolioTimings.endProjectionBuild(interval, completed: completed) }
 
         let positions = try modelContext.fetch(FetchDescriptor<Position>())
         try Task.checkCancellation()
@@ -51,7 +55,7 @@ actor PortfolioProjector {
         }
         try Task.checkCancellation()
 
-        return PortfolioProjection(
+        let projection = PortfolioProjection(
             positions: positions,
             tokens: tokens,
             assets: assets,
@@ -61,6 +65,8 @@ actor PortfolioProjector {
             categoryResolver: .live(categories: categories, rules: rules),
             historicalRows: historicalRows,
             request: request)
+        completed = true
+        return projection
     }
 
     #if DEBUG

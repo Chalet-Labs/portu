@@ -68,7 +68,7 @@ struct SidebarView: View {
 
 /// The portfolio headline, from the portfolio read model only (#123): no query, no app storage and no
 /// `AppState`, so a navigation click or a save that changes no valued figure leaves it alone. Before
-/// the first projection build every figure is a dash.
+/// the first projection build every figure is a dash; a failed build says so on the dash.
 struct SidebarPortfolioHeader: View {
     let store: StoreOf<PortfolioFeature>
 
@@ -93,6 +93,7 @@ struct SidebarPortfolioHeader: View {
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
+                    .help(OverviewPriceDisplay.unavailableHelp(valued: valued, buildError: store.buildError))
                 Group {
                     HStack(spacing: 4) {
                         Text(OverviewPriceDisplay.currency(headline?.change24h, currencyCode: currencyCode))
