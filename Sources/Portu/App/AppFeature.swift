@@ -113,6 +113,7 @@ struct AppFeature {
         case updaterStatus
         case automaticChecksWrite
         case updateChannelWrite
+        case portfolioValuation
     }
 
     @Dependency(\.syncEngine) var syncEngine
@@ -335,8 +336,9 @@ struct AppFeature {
                 // render, nothing is cleared and polling keeps running.
                 guard currency == state.selectedCurrency else { return .none }
                 state.currentUSDToDisplayRate = rate
-                revaluePortfolio(&state)
-                return historicalFXTopUpEffect(&state, currency: currency)
+                return .merge(
+                    revaluePortfolio(state),
+                    historicalFXTopUpEffect(&state, currency: currency))
 
             case let .currentCurrencyConversionRateReceived(currency, .failure(error)):
                 if state.pendingCurrency == currency {
@@ -401,7 +403,7 @@ struct AppFeature {
                 // The book is USD; an update in any other currency would corrupt it.
                 guard update.currency == .usd else { return .none }
                 applyLivePrices(update, at: currentDate.now(), to: &state)
-                return .none
+                return revaluePortfolio(state)
 
             case let .onchainFallbackPricesReceived(update, identities):
                 guard update.currency == .usd else { return .none }
@@ -410,7 +412,7 @@ struct AppFeature {
                 for identity in identities {
                     state.onchainFallbackFetchedAt[identity] = now
                 }
-                return .none
+                return revaluePortfolio(state)
 
             case let .priceFetchFailed(failure):
                 state.connectionStatus = .error(failure.message)
@@ -440,8 +442,7 @@ struct AppFeature {
                 return .none
 
             case .portfolio(.delegate(.revaluationNeeded)):
-                revaluePortfolio(&state)
-                return .none
+                return revaluePortfolio(state)
 
             case .portfolio:
                 return .none
@@ -520,12 +521,12 @@ private extension AppFeature {
         displayCurrencyPreference.save(currency)
         state.selectedCurrency = currency
         state.currentUSDToDisplayRate = rate
-        revaluePortfolio(&state)
         if currency == .usd {
             state.historicalFXAvailability = .available
         }
 
         return .merge(
+            revaluePortfolio(state),
             armDisplayRateRefresh(currency: currency),
             .cancel(id: CancelID.historicalFXTopUp))
     }
@@ -535,13 +536,17 @@ private extension AppFeature {
         state.priceChanges24h.merge(update.changes24h) { _, new in new }
         state.lastPriceUpdate = date
         state.connectionStatus = .idle
-        revaluePortfolio(&state)
     }
 
-    /// One revaluation of the portfolio read model with the current prices, rate and currency.
-    /// A tick never rebuilds the projection.
-    func revaluePortfolio(_ state: inout State) {
-        state.portfolio.revalue(state.portfolioPriceInputs, using: portfolioValuator)
+    /// One revaluation of the portfolio read model with the current prices, rate and currency, in an
+    /// effect: on the real store it misses the 16 ms main-thread budget (#123 spec V3), so the reducer
+    /// stores only its result. The latest request wins. A tick never rebuilds the projection.
+    func revaluePortfolio(_ state: State) -> Effect<Action> {
+        guard let request = state.portfolio.valuationRequest(state.portfolioPriceInputs) else { return .none }
+        return .run { [portfolioValuator] send in
+            await send(.portfolio(.revalued(portfolioValuator.value(request))))
+        }
+        .cancellable(id: CancelID.portfolioValuation, cancelInFlight: true)
     }
 
     /// Starts price polling for the current `pricePollingIDs`, replacing any running

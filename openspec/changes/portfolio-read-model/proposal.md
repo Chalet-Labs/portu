@@ -37,7 +37,9 @@ review.
    currency and the polling IDs. Revaluing goes through a `PortfolioValuator`
    dependency, so tests count revaluations and the fallback of the per-tick budget
    (an off-main effect) has a seam. The 16 ms budget covers the whole call (two
-   valuation passes: headline and polling).
+   valuation passes: headline and polling). Measured on 2026-10-22 at 31–33 ms per tick
+   on the real store, so the fallback is in: `AppFeature` runs the valuator in a
+   cancel-in-flight effect and the child stores only the result.
 4. **Settings come from a `DashboardSettingsClient`, on today's keys.** The child holds
    the dashboard settings (`tokenSettings.*`), the historical-backfill flag and the
    watchlist as plain `Equatable` state, loaded and observed through a dependency client

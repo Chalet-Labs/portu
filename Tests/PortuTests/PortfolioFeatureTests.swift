@@ -55,15 +55,21 @@ struct PortfolioFeatureTests {
         #expect(output.pricePollingIDs.first == "pepe", "the larger live value ranks first")
     }
 
-    // MARK: - V1: one revaluation per price tick, no rebuild
+    // MARK: - V1/V3: one revaluation per price tick, in an effect, no rebuild
 
-    @Test func `a price tick revalues once and rebuilds nothing`() async {
+    /// The per-tick valuation missed its 16 ms main-thread budget on the real store (31–33 ms), so it
+    /// runs in an effect and the reducer stores only the result (spec V3's fallback). `TestStore`
+    /// runs effects on the main serial executor, so the thread itself is pinned by the Release
+    /// signposts, not here.
+    @Test func `a price tick revalues once in an effect and rebuilds nothing`() async {
         let counts = Counts()
         let store = Self.store(counts: counts, projection: Self.projection)
 
         await store.send(.pricesReceived(PriceUpdate(prices: ["ethereum": 3100], changes24h: [:]))) {
             $0.livePricesUSD["ethereum"] = 3100
             $0.lastPriceUpdate = Self.now
+        }
+        await store.receive(\.portfolio.revalued) {
             $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
         }
 
@@ -71,7 +77,9 @@ struct PortfolioFeatureTests {
         #expect(counts.builds == 0)
     }
 
-    @Test func `an onchain fallback tick revalues once`() async {
+    /// The bad onchain price stays implausible, so the output is unchanged: the tick still revalues
+    /// once, and the equal result is not written.
+    @Test func `an onchain fallback tick revalues once and writes an unchanged result nowhere`() async {
         let counts = Counts()
         let store = Self.store(counts: counts, projection: Self.projection)
         let identity = Fixture.badIdentity
@@ -82,8 +90,8 @@ struct PortfolioFeatureTests {
                 $0.livePricesUSD[identity.historicalPriceID] = 9000
                 $0.lastPriceUpdate = Self.now
                 $0.onchainFallbackFetchedAt[identity] = Self.now
-                $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
             }
+        await store.receive(\.portfolio.revalued)
 
         #expect(counts.valuations == 1)
         #expect(counts.builds == 0)
@@ -111,6 +119,8 @@ struct PortfolioFeatureTests {
         await store.send(.displayCurrencySelected(.usd)) {
             $0.selectedCurrency = .usd
             $0.currentUSDToDisplayRate = 1
+        }
+        await store.receive(\.portfolio.revalued) {
             $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
         }
 
@@ -126,6 +136,8 @@ struct PortfolioFeatureTests {
 
         await store.send(.currentCurrencyConversionRateReceived(.chf, .success(Fixture.decimal("0.95")))) {
             $0.currentUSDToDisplayRate = Fixture.decimal("0.95")
+        }
+        await store.receive(\.portfolio.revalued) {
             $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
         }
 
@@ -143,7 +155,8 @@ struct PortfolioFeatureTests {
         await store.receive(\.portfolio.projectionBuilt) {
             $0.portfolio.projection = Self.projection
         }
-        await store.receive(\.portfolio.delegate.revaluationNeeded) {
+        await store.receive(\.portfolio.delegate.revaluationNeeded)
+        await store.receive(\.portfolio.revalued) {
             $0.portfolio.valued = Self.expected(prices: $0.portfolioPriceInputs, settings: $0.portfolio.settings)
         }
         await task.cancel()
@@ -294,6 +307,8 @@ struct PortfolioFeatureTests {
         settings.continuation.yield(showAll)
         await store.receive(\.portfolio.settingsChanged)
         await store.receive(\.portfolio.delegate.revaluationNeeded)
+        // Cancelling the task cancels the effects its actions started, the revaluation included.
+        await store.receive(\.portfolio.revalued)
         await store.receive(\.portfolio.projectionBuilt)
         await task.cancel()
 
@@ -316,6 +331,7 @@ struct PortfolioFeatureTests {
         settings.continuation.yield(watching)
         await store.receive(\.portfolio.settingsChanged)
         await store.receive(\.portfolio.delegate.revaluationNeeded)
+        await store.receive(\.portfolio.revalued)
         await task.cancel()
 
         #expect(counts.builds == 0)
@@ -332,6 +348,7 @@ struct PortfolioFeatureTests {
         let task = await store.send(.portfolio(.task))
         await store.receive(\.portfolio.projectionBuilt)
         await store.receive(\.portfolio.delegate.revaluationNeeded)
+        await store.receive(\.portfolio.revalued)
         counts.reset()
 
         let enabled = DashboardSettings(dashboard: .defaults, isHistoricalBackfillEnabled: true, watchlistIDs: [])

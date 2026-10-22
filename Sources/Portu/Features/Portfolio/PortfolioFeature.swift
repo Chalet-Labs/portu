@@ -5,8 +5,9 @@ import PortuCore
 
 /// The portfolio read model (#123): the off-main projection, the settings it is valued with, and the
 /// valued output the Sidebar header, the Overview top bar and Overview's polling read. The prices
-/// stay with `AppFeature`, which revalues this state where they change; this reducer asks for a
-/// revaluation (`delegate(.revaluationNeeded)`) when the projection or a valued setting changes.
+/// stay with `AppFeature`, which revalues where they change, off the main thread, and sends the
+/// result back as `revalued`; this reducer asks for a revaluation (`delegate(.revaluationNeeded)`)
+/// when the projection or a valued setting changes.
 @Reducer
 struct PortfolioFeature {
     @ObservableState
@@ -16,14 +17,10 @@ struct PortfolioFeature {
         var settings = DashboardSettings.defaults
         var valued: PortfolioValuedOutput?
 
-        /// Values the projection with `prices`, once. A no-op before the first build; an unchanged
-        /// result is not written, so its readers are not invalidated.
-        mutating func revalue(_ prices: PortfolioPriceInputs, using valuator: PortfolioValuator) {
-            guard let projection else { return }
-            let output = valuator.value(PortfolioValuationRequest(projection: projection, prices: prices, settings: settings))
-            if output != valued {
-                valued = output
-            }
+        /// What a revaluation with `prices` needs, or `nil` before the first build: nothing is valued
+        /// then.
+        func valuationRequest(_ prices: PortfolioPriceInputs) -> PortfolioValuationRequest? {
+            projection.map { PortfolioValuationRequest(projection: $0, prices: prices, settings: settings) }
         }
     }
 
@@ -36,6 +33,8 @@ struct PortfolioFeature {
         case projectionBuildFailed(String)
         case settingsChanged(DashboardSettings)
         case dayRolledOver
+        /// A revaluation's result, computed off the main thread by the parent's effect.
+        case revalued(PortfolioValuedOutput)
         case delegate(Delegate)
 
         @CasePathable
@@ -106,6 +105,13 @@ struct PortfolioFeature {
                 return .merge(
                     revalues ? .send(.delegate(.revaluationNeeded)) : .none,
                     rebuilds ? build(state) : .none)
+
+            case let .revalued(output):
+                // An unchanged result is not written, so its readers are not invalidated.
+                if output != state.valued {
+                    state.valued = output
+                }
+                return .none
 
             case .delegate:
                 return .none

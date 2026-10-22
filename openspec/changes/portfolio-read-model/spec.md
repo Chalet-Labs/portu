@@ -83,8 +83,8 @@ A price tick never rebuilds the projection (B1). A non-USD price update changes 
 - Before the first build there is no projection and no valued output: nothing is revalued and nothing is polled.
 
 ### V3: Budget
-- One revaluation on a Release build with the real store takes at most 16 ms, measured by the `PortfolioValuation` signpost.
-- If it misses, revaluation runs in an off-main effect (its inputs are `Sendable` values) and the reducer stores only the result.
+- One revaluation on a Release build with the real store was to take at most 16 ms on the main thread, measured by the `PortfolioValuation` signpost.
+- It missed: 30.9 ms and 32.8 ms per tick on 2026-10-22 (branch `f2ef4ca0`, real store). So the named fallback applies: revaluation runs in an off-main effect (its inputs are `Sendable` values), the latest request wins, and the reducer stores only the result (`revalued`). A tick still causes exactly one revaluation and no rebuild.
 
 ## Slice
 
