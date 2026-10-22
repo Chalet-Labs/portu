@@ -53,9 +53,8 @@ struct PortfolioFeature {
 
     private enum CancelID {
         case build
-        case saveObservation
+        case observation
         case saveDebounce
-        case settingsObservation
         case dayRollover
     }
 
@@ -76,13 +75,10 @@ struct PortfolioFeature {
                 // A re-run (the window reopened) picks up settings changed meanwhile; values them.
                 let revalues = state.settings.dashboard != previous.dashboard
                     || state.settings.watchlistIDs != previous.watchlistIDs
-                // Observers first, so a save or a settings change during the first build is seen.
                 return .merge(
-                    observeSaves(),
-                    observeSettings(from: state.settings),
+                    observeThenBuild(from: state.settings),
                     followDayRollover(),
-                    revalues ? .send(.delegate(.revaluationNeeded)) : .none,
-                    build(state))
+                    revalues ? .send(.delegate(.revaluationNeeded)) : .none)
 
             case let .saveObserved(event):
                 guard event.touches(PortfolioProjector.readEntityNames) else { return .none }
@@ -102,7 +98,8 @@ struct PortfolioFeature {
                 return .send(.delegate(.revaluationNeeded))
 
             case let .projectionBuildFailed(message):
-                Self.logger.error("Portfolio projection build failed: \(message)")
+                // The same text the dashed total shows as its tooltip, so not worth redacting.
+                Self.logger.error("Portfolio projection build failed: \(message, privacy: .public)")
                 state.buildError = message
                 // With no projection yet nothing is valued or polled, so don't wait for a save that
                 // may be hours away; any newer build cancels the retry.
@@ -154,26 +151,30 @@ struct PortfolioFeature {
         .cancellable(id: CancelID.build, cancelInFlight: true)
     }
 
-    private func observeSaves() -> Effect<Action> {
-        .run { [modelSave] send in
-            for await event in modelSave.saves() {
-                await send(.saveObserved(event))
+    /// Subscribes to saves and settings, and only then asks for the first build, so a save or a
+    /// settings change that lands while it runs is seen. The settings stream starts with the current
+    /// settings; values equal to the last one sent are dropped.
+    private func observeThenBuild(from initial: DashboardSettings) -> Effect<Action> {
+        .run { [modelSave, dashboardSettings] send in
+            let saves = modelSave.saves()
+            let changes = dashboardSettings.changes()
+            await send(.rebuildRequested)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    for await event in saves {
+                        await send(.saveObserved(event))
+                    }
+                }
+                group.addTask {
+                    var last = initial
+                    for await settings in changes where settings != last {
+                        last = settings
+                        await send(.settingsChanged(settings))
+                    }
+                }
             }
         }
-        .cancellable(id: CancelID.saveObservation, cancelInFlight: true)
-    }
-
-    /// The stream starts with the current settings, so a change between `current()` and the
-    /// subscription is never missed; values equal to the last one sent are dropped.
-    private func observeSettings(from initial: DashboardSettings) -> Effect<Action> {
-        .run { [dashboardSettings] send in
-            var last = initial
-            for await settings in dashboardSettings.changes() where settings != last {
-                last = settings
-                await send(.settingsChanged(settings))
-            }
-        }
-        .cancellable(id: CancelID.settingsObservation, cancelInFlight: true)
+        .cancellable(id: CancelID.observation, cancelInFlight: true)
     }
 
     /// The historical window starts at a UTC day boundary, so the projection is rebuilt at each UTC

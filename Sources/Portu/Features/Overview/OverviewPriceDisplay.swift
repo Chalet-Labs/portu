@@ -37,11 +37,11 @@ enum OverviewPriceDisplay {
         return currency(value, currencyCode: currencyCode)
     }
 
-    /// The tooltip on a dashed headline whose read model failed to build; empty otherwise, so the
-    /// launch transient's dashes carry none.
-    static func unavailableHelp(valued: PortfolioValuedOutput?, buildError: String?) -> String {
-        guard valued == nil, let buildError else { return "" }
-        return "Portfolio unavailable: \(buildError)"
+    /// The tooltip on a dashed headline whose read model failed to build, or empty. Callers read the
+    /// error only while the headline is dashed, so a failed rebuild under a shown total re-renders
+    /// nothing.
+    static func unavailableHelp(buildError: String?) -> String {
+        buildError.map { "Portfolio unavailable: \($0)" } ?? ""
     }
 
     static func axisCurrency(_ value: Double, currencyCode: String = "USD") -> String {

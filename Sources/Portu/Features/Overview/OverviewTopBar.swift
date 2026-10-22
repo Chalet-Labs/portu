@@ -20,7 +20,7 @@ struct OverviewTopBar: View {
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
-                .help(OverviewPriceDisplay.unavailableHelp(valued: valued, buildError: store.buildError))
+                .help(valued == nil ? OverviewPriceDisplay.unavailableHelp(buildError: store.buildError) : "")
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {

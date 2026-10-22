@@ -93,7 +93,7 @@ struct SidebarPortfolioHeader: View {
                     .foregroundStyle(PortuTheme.dashboardText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
-                    .help(OverviewPriceDisplay.unavailableHelp(valued: valued, buildError: store.buildError))
+                    .help(valued == nil ? OverviewPriceDisplay.unavailableHelp(buildError: store.buildError) : "")
                 Group {
                     HStack(spacing: 4) {
                         Text(OverviewPriceDisplay.currency(headline?.change24h, currencyCode: currencyCode))
