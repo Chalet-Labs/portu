@@ -38,6 +38,9 @@ struct PortfolioSliceBehaviourTests {
         track()
         store.send(.sectionSelected(.exposure))
         store.send(.portfolio(.revalued(Self.valued)))
+        // A rebuild that fails under a shown total changes only `buildError`, which is read only
+        // while the totals are dashed.
+        store.send(.portfolio(.projectionBuildFailed("store unavailable")))
         #expect(changed.withLock { $0 } == false, "the slice re-rendered without a changed output")
 
         var moved = Self.valued
@@ -65,8 +68,15 @@ struct PortfolioSliceBehaviourTests {
         try await Self.redraw(view)
         #expect(starts.total == 1, "the driver restarted polling for the same set")
 
+        // A different set restarts it.
+        var widened = reranked
+        widened.pricePollingIDs.append("cardano")
+        store.send(.portfolio(.revalued(widened)))
+        try await Self.wait(redrawing: view) { starts.total == 2 }
+        #expect(store.pricePollingIDs.contains("cardano"))
+
         // An empty set stops it.
-        var empty = reranked
+        var empty = widened
         empty.pricePollingIDs = []
         store.send(.portfolio(.revalued(empty)))
         try await Self.wait(redrawing: view) { store.pricePollingIDs.isEmpty }
