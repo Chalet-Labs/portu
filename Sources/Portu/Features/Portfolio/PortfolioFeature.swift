@@ -72,9 +72,12 @@ struct PortfolioFeature {
             case .task:
                 let previous = state.settings
                 state.settings = dashboardSettings.current()
-                // A re-run (the window reopened) picks up settings changed meanwhile; values them.
+                // A re-run (the window reopened) values settings changed meanwhile, and a kept
+                // projection whose valuation the closing window cancelled: an equal rebuild would
+                // revalue neither.
                 let revalues = state.settings.dashboard != previous.dashboard
                     || state.settings.watchlistIDs != previous.watchlistIDs
+                    || (state.projection != nil && state.valued == nil)
                 return .merge(
                     observeThenBuild(from: state.settings),
                     followDayRollover(),

@@ -71,7 +71,8 @@ Exactly one revaluation follows each of:
 - a USD price update (`pricesReceived`, `onchainFallbackPricesReceived`);
 - a stored projection change (B4);
 - a display-rate change: a committed currency switch or a refreshed rate;
-- a change of a dashboard setting or the watchlist.
+- a change of a dashboard setting or the watchlist, including one made while the window was closed and picked up when it reopens;
+- a reopened window that kept a projection without a valued output (its valuation was cancelled when the window closed).
 
 A backfill-flag change revalues only through the projection change its rebuild stores, since the valuator never reads the flag.
 

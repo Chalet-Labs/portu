@@ -90,6 +90,49 @@ extension PortfolioFeatureTests {
         #expect(store.state.portfolio.valued?.pricePollingIDs.last == "cardano")
     }
 
+    /// The window closed after the first build landed but while its valuation was still running, so
+    /// the task tree cancelled the valuation. Reopening with unchanged rows and settings rebuilds an
+    /// equal projection; the task still values the projection it kept, or the slice stays dashed and
+    /// Overview never polls.
+    @Test func `a re run of the task values a projection whose valuation was cancelled`() async {
+        let clock = TestClock()
+        let calls = Mutex(0)
+        let projection = Self.projection
+        let store = TestStore(initialState: Self.state(projection: nil)) {
+            AppFeature()
+        } withDependencies: {
+            $0.continuousClock = clock
+            $0.currentDate.now = { Self.now }
+            $0.portfolioProjector.build = { _ in projection }
+            $0.portfolioValuator.value = { request in
+                let call = calls.withLock { value in
+                    value += 1
+                    return value
+                }
+                if call == 1 {
+                    // Still valuing when the window closes.
+                    try? await clock.sleep(for: .seconds(60))
+                }
+                return PortfolioValuator.compute(request)
+            }
+        }
+        store.exhaustivity = .off(showSkippedAssertions: false)
+
+        let first = await store.send(.portfolio(.task))
+        await store.receive(\.portfolio.projectionBuilt)
+        await store.receive(\.portfolio.delegate.revaluationNeeded)
+        await first.cancel()
+        #expect(store.state.portfolio.projection == projection)
+        #expect(store.state.portfolio.valued == nil)
+
+        let second = await store.send(.portfolio(.task))
+        await store.receive(\.portfolio.revalued)
+        await second.cancel()
+
+        #expect(store.state.portfolio.valued != nil)
+        #expect(calls.withLock { $0 } == 2)
+    }
+
     @Test func `a backfill change rebuilds and revalues only through the new projection`() async {
         let counts = Counts()
         let settings = AsyncStream.makeStream(of: DashboardSettings.self)
