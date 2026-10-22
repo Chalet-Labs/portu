@@ -20,10 +20,10 @@ struct ActivePortfolioBuilder {
     }
 }
 
-/// Owns the dashboard's one position query and publishes the active portfolio to the content,
-/// so the sidebar header, the Overview top bar and All Positions share one walk of the store
-/// per store change instead of each re-fetching and re-faulting it (#103: only values cross).
-/// It reads nothing else, so a price tick or a navigation click does not re-run it.
+/// Owns All Positions' one position query and publishes the active portfolio to it, walking the
+/// store once per store change (#103: only values cross). It reads nothing else, so a price tick does
+/// not re-run it. It is mounted only around All Positions, its last reader, because the walk runs on
+/// the main actor; #124 moves that page to the portfolio read model and deletes this provider.
 struct ActivePortfolioProvider<Content: View>: View {
     @Environment(\.activePortfolioBuilder) private var builder
     @Query private var positions: [Position]

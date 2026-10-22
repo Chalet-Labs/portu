@@ -103,8 +103,8 @@ extension ValuationContext {
     }
 
     /// The input over the active portfolio with the app's USD books, for the summary cards. The
-    /// headline (top bar and Sidebar header) values `ActivePortfolioProvider`'s projection instead,
-    /// which takes the same active accounts' tokens through the same `ValuationInput.activeAccounts`.
+    /// headline (top bar and Sidebar header) is the portfolio read model's, which takes the same
+    /// active accounts' tokens through the same `ValuationInput.activeAccounts` (#123).
     /// Inactive accounts' positions are skipped before their tokens are read;
     /// `ValuationInput.activeAccounts` still decides.
     static func activePortfolio( // swiftlint:disable:this function_parameter_count

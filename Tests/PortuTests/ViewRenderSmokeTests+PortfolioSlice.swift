@@ -21,9 +21,11 @@ extension ViewRenderSmokeTests {
         "€ 8,640", "€ 113", "EUR change 24h", "Triangle Arrow Up", "1.32%", "% change 24h"
     ]
 
-    @Test(.renderedTextReadable) func `the portfolio slice shows the headline in the display currency`() throws {
+    /// The projection builds off the main actor, so the test yields with `Task.sleep` while it waits:
+    /// spinning the run loop from a synchronous test never lets the build's result back onto it.
+    @Test(.renderedTextReadable) func `the portfolio slice shows the headline in the display currency`() async throws {
         let container = try makeContainer()
-        let store = Self.sliceStore()
+        let store = Self.sliceStore(projector: .live(modelContainer: container))
         let appState = AppState()
         appState.bridge(from: store)
 
@@ -39,11 +41,35 @@ extension ViewRenderSmokeTests {
         while
             !Self.shows(texts: texts, labels: Self.sidebarHeaderLabels)
             || !Self.shows(texts: texts, labels: Self.topBarLabels), Date() < deadline {
-            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            try await Task.sleep(for: .milliseconds(50))
             texts = Self.accessibilityLabels(hostingView)
         }
         #expect(Self.shows(texts: texts, labels: Self.sidebarHeaderLabels), "header sequence missing in \(texts)")
         #expect(Self.shows(texts: texts, labels: Self.topBarLabels), "top bar sequence missing in \(texts)")
+    }
+
+    /// Before the first build lands there is nothing to value: both views show a dash for each figure.
+    @Test(.renderedTextReadable) func `the portfolio slice shows dashes until the first build`() throws {
+        let container = try makeContainer()
+        let store = Self.sliceStore(projector: PortfolioProjectorClient { _ in
+            try await Task.sleep(for: .seconds(3600))
+            return .empty
+        })
+        let appState = AppState()
+        appState.bridge(from: store)
+
+        let hostingView = render(
+            ContentView(store: store)
+                .modelContainer(container)
+                .environment(appState)
+                .frame(width: 1400, height: 900),
+            size: CGSize(width: 1400, height: 900))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        let texts = Self.accessibilityLabels(hostingView)
+
+        #expect(Self.shows(texts: texts, labels: ["P", "—", "—", "24h", "—"]), "\(texts)")
+        #expect(Self.shows(texts: texts, labels: ["—", "—", "change 24h", "—", "% change 24h"]), "\(texts)")
+        #expect(store.portfolio.valued == nil)
     }
 
     /// Whether `labels` appear in `texts` as one contiguous run, the order the view exposes them in.
@@ -55,7 +81,7 @@ extension ViewRenderSmokeTests {
     }
 
     /// The dashboard store for the slice: EUR at 0.9 with the seeded portfolio priced live.
-    static func sliceStore() -> StoreOf<AppFeature> {
+    static func sliceStore(projector: PortfolioProjectorClient) -> StoreOf<AppFeature> {
         var state = AppFeature.State(selectedSection: .overview)
         state.selectedCurrency = .eur
         state.currentUSDToDisplayRate = PortfolioValuationFixture.decimal("0.9")
@@ -70,6 +96,7 @@ extension ViewRenderSmokeTests {
             $0.priceService.invalidateCache = {}
             $0.continuousClock = TestClock()
             $0.currentDate.now = { Date(timeIntervalSince1970: 1_000_000) }
+            $0.portfolioProjector = projector
         }
     }
 }

@@ -5,8 +5,8 @@ import PortuCore
 ///
 /// `SyncEngine` deletes and reinserts `Position` rows while SwiftUI may still be evaluating a body,
 /// and reading a deleted model's property terminates the process (#103). `ActivePortfolioProvider`
-/// builds this once per store change, at the top of its body pass; the sidebar header, the
-/// Overview top bar and All Positions hold only its values.
+/// builds this once per store change for All Positions, and `PortfolioProjector` builds it off the
+/// main actor for the portfolio read model (#123); readers hold only its values.
 struct ActivePortfolioProjection: Equatable, Sendable {
     /// The active accounts' valuation inputs.
     let inputs: [ValuationInput]

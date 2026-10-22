@@ -1,27 +1,13 @@
 import ComposableArchitecture
 import PortuCore
 import PortuUI
-import SwiftData
 import SwiftUI
 
 struct OverviewView: View {
     let store: StoreOf<AppFeature>
     @Environment(AppState.self) private var appState
-    @Query private var allTokens: [PositionToken]
-    @AppStorage(OverviewWatchlistStore.key) private var watchlistRaw = "[]"
-    var sources = ValuationSources()
-
-    private var watchlistIDs: [String] {
-        OverviewWatchlistStore.decode(watchlistRaw)
-    }
-
-    private var pricePollingIDs: [String] {
-        sources.pricePollingIDs(allTokens, watchlistIDs: watchlistIDs)
-    }
 
     var body: some View {
-        let pollingIDs = pricePollingIDs
-
         GeometryReader { proxy in
             let isWide = proxy.size.width >= 1080
 
@@ -58,14 +44,8 @@ struct OverviewView: View {
             .background(PortuTheme.dashboardBackground)
         }
         .dashboardPage()
-        // The IDs come ranked by value, so live prices reorder them. Polling is identified
-        // by the set, which only changes when a token really enters or leaves.
-        .task(id: Set(pollingIDs)) {
-            if pollingIDs.isEmpty {
-                store.send(.stopPricePolling)
-            } else {
-                store.send(.startPricePolling(pollingIDs))
-            }
+        .background {
+            OverviewPricePollingDriver(store: store)
         }
         .onDisappear {
             store.send(.stopPricePolling)
@@ -108,7 +88,7 @@ struct OverviewView: View {
         VStack(alignment: .leading, spacing: PortuTheme.dashboardContentSpacing) {
             DashboardCard {
                 HStack(alignment: .top, spacing: 22) {
-                    OverviewTopBar()
+                    OverviewTopBar(store: store.scope(state: \.portfolio, action: \.portfolio))
                         .frame(width: 260, alignment: .leading)
 
                     PortfolioValueChart()
@@ -121,6 +101,30 @@ struct OverviewView: View {
             OverviewPositionTabs()
                 .dashboardCard(horizontalPadding: 0, verticalPadding: 0)
         }
+    }
+}
+
+/// Starts and stops polling with the portfolio read model's IDs (#123). Polling stays owned by the
+/// view until #101. It sits in its own view so only it re-renders when the IDs' ranking moves with
+/// a tick, and it polls nothing before the first projection build, so launch never starts a
+/// watchlist-only poll first.
+private struct OverviewPricePollingDriver: View {
+    let store: StoreOf<AppFeature>
+
+    var body: some View {
+        let pollingIDs = store.portfolio.valued?.pricePollingIDs
+
+        Color.clear
+            // The IDs come ranked by value, so live prices reorder them. Polling is identified
+            // by the set, which only changes when a token really enters or leaves.
+            .task(id: pollingIDs.map(Set.init)) {
+                guard let pollingIDs else { return }
+                if pollingIDs.isEmpty {
+                    store.send(.stopPricePolling)
+                } else {
+                    store.send(.startPricePolling(pollingIDs))
+                }
+            }
     }
 }
 

@@ -1,25 +1,20 @@
+import ComposableArchitecture
 import PortuCore
 import PortuUI
 import SwiftUI
 
+/// The Overview headline, from the portfolio read model only (#123). Before the first projection
+/// build there is nothing to value, so every figure is a dash and the label carries no currency.
 struct OverviewTopBar: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.activePortfolio) private var portfolio
-    var sources = ValuationSources()
-
-    private var headline: OverviewHeadline {
-        sources.headline(portfolio)
-    }
-
-    private var currencyCode: String {
-        appState.selectedCurrency.displayCode
-    }
+    let store: StoreOf<PortfolioFeature>
 
     var body: some View {
-        let currentHeadline = headline
+        let valued = store.valued
+        let headline = valued?.headline
+        let currencyCode = valued?.currencyCode
 
         VStack(alignment: .leading, spacing: 18) {
-            Text(OverviewPriceDisplay.currency(currentHeadline.total, currencyCode: currencyCode))
+            Text(OverviewPriceDisplay.currency(headline?.total, currencyCode: currencyCode))
                 .font(DashboardStyle.heroValueFont)
                 .foregroundStyle(PortuTheme.dashboardText)
                 .lineLimit(1)
@@ -27,28 +22,28 @@ struct OverviewTopBar: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 4) {
-                    Text(OverviewPriceDisplay.currency(currentHeadline.change24h, currencyCode: currencyCode))
+                    Text(OverviewPriceDisplay.currency(headline?.change24h, currencyCode: currencyCode))
                         .lineLimit(1)
                     Spacer()
-                    Text("\(currencyCode) change 24h")
+                    Text(currencyCode.map { "\($0) change 24h" } ?? "change 24h")
                         .foregroundStyle(PortuTheme.dashboardTertiaryText)
                         .lineLimit(1)
                 }
-                .foregroundStyle(PortuTheme.changeColor(for: currentHeadline.change24h))
+                .foregroundStyle(PortuTheme.changeColor(for: headline?.change24h ?? 0))
 
                 HStack(spacing: 4) {
-                    if let changePercentage = currentHeadline.changePercentage {
+                    if let changePercentage = headline?.changePercentage {
                         Image(systemName: changePercentage >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
                             .font(.caption2)
                     }
-                    Text(OverviewPriceDisplay.changePercentage(currentHeadline.changePercentage))
+                    Text(OverviewPriceDisplay.changePercentage(headline?.changePercentage))
                         .lineLimit(1)
                     Spacer()
                     Text("% change 24h")
                         .foregroundStyle(PortuTheme.dashboardTertiaryText)
                         .lineLimit(1)
                 }
-                .foregroundStyle(PortuTheme.changeColor(for: currentHeadline.changePercentage ?? 0))
+                .foregroundStyle(PortuTheme.changeColor(for: headline?.changePercentage ?? 0))
             }
             .font(.system(size: 13, weight: .medium, design: .monospaced))
         }

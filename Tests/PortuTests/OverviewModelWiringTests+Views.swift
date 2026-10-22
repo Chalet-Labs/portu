@@ -9,24 +9,24 @@ import Testing
 
 /// The Overview views themselves, rendered over the in-memory store and read back through the
 /// accessibility tree, so a view that built its numbers some other way than through its
-/// `ValuationSources` method would show other text.
+/// `ValuationSources` method, or the read model's valued output, would show other text.
 extension OverviewModelWiringTests {
-    /// The mapping row values DEGEN at 100, ETH's +25% is only in `appState.priceChanges24h`, and
-    /// the ignore row (second case) drops DEGEN.
+    /// The mapping row values DEGEN at 100, ETH's +25% is only in the live fractions, and the ignore
+    /// row (second case) drops DEGEN.
     @Test(.renderedTextReadable, arguments: [false, true])
-    func `the top bar and sidebar header show the sources headline`(ignoringDegen: Bool) throws {
+    func `the top bar and sidebar header show the read model's headline`(ignoringDegen: Bool) throws {
         let store = try Store(ignoring: ignoringDegen ? ["DEGEN"] : [])
-        let expected = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(ActivePortfolioProjection(positions)) })
-        let currencyCode = store.appState.selectedCurrency.displayCode
+        let readModel = try Self.readModel(store)
+        let expected = readModel.headline
         let shown = [
-            OverviewPriceDisplay.currency(expected.total, currencyCode: currencyCode),
-            OverviewPriceDisplay.currency(expected.change24h, currencyCode: currencyCode),
+            OverviewPriceDisplay.currency(expected.total, currencyCode: readModel.currencyCode),
+            OverviewPriceDisplay.currency(expected.change24h, currencyCode: readModel.currencyCode),
             OverviewPriceDisplay.changePercentage(expected.changePercentage)
         ]
 
         #expect(expected.total == (ignoringDegen ? 6000 : 6100) * Self.rate)
         #expect(expected.change24h == 1200 * Self.rate)
-        for view in [AnyView(OverviewTopBar()), AnyView(SidebarPortfolioHeader())] {
+        for view in Self.sliceViews(readModel) {
             let texts = try Self.texts(of: view, over: store)
             #expect(shown.allSatisfy(texts.contains), "\(texts)")
         }
@@ -39,16 +39,31 @@ extension OverviewModelWiringTests {
         let wallet = try #require(store.positions.first { $0.account?.isActive == true })
         let eth = try #require(wallet.tokens.first { $0.asset?.symbol == "ETH" }?.asset)
         try store.insert([PositionToken(role: .borrow, amount: 3, usdValue: 8700, asset: eth, position: wallet)])
-        let headline = try #require(Self.probe(store) { sources, positions, _, _ in sources.headline(ActivePortfolioProjection(positions)) })
+        let readModel = try Self.readModel(store)
 
-        #expect(headline.changePercentage == nil)
-        for view in [AnyView(OverviewTopBar()), AnyView(SidebarPortfolioHeader())] {
+        #expect(readModel.headline.changePercentage == nil)
+        for view in Self.sliceViews(readModel) {
             let texts = try Self.texts(of: view, over: store)
             #expect(texts.contains("—"), "\(texts)")
         }
-        let arrows = try Self.images(of: OverviewTopBar(), over: Store())
+        let arrows = try Self.images(of: Self.topBar(Self.readModel(Store())), over: Store())
         #expect(!arrows.isEmpty, "the positive-prior top bar draws its arrow")
-        #expect(try Self.images(of: OverviewTopBar(), over: store).isEmpty)
+        #expect(try Self.images(of: Self.topBar(readModel), over: store).isEmpty)
+    }
+
+    private static func portfolioStore(_ valued: PortfolioValuedOutput) -> StoreOf<PortfolioFeature> {
+        var state = PortfolioFeature.State()
+        state.projection = .empty
+        state.valued = valued
+        return StoreOf<PortfolioFeature>(initialState: state) { PortfolioFeature() }
+    }
+
+    private static func topBar(_ valued: PortfolioValuedOutput) -> OverviewTopBar {
+        OverviewTopBar(store: portfolioStore(valued))
+    }
+
+    private static func sliceViews(_ valued: PortfolioValuedOutput) -> [AnyView] {
+        [AnyView(topBar(valued)), AnyView(SidebarPortfolioHeader(store: portfolioStore(valued)))]
     }
 
     /// The cards view builds its resolver from the store's categories and rules: renamed major

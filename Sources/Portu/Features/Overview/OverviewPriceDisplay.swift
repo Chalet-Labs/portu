@@ -31,6 +31,12 @@ enum OverviewPriceDisplay {
         return sign + formattedMagnitude(abs(number), compactFractionDigits: 1)
     }
 
+    /// A headline figure, or "—" while there is none to show (before the read model's first build).
+    static func currency(_ value: Decimal?, currencyCode: String?) -> String {
+        guard let value, let currencyCode else { return "—" }
+        return currency(value, currencyCode: currencyCode)
+    }
+
     static func axisCurrency(_ value: Double, currencyCode: String = "USD") -> String {
         let sign = value < 0 ? "-\(currencyPrefix(currencyCode)) " : "\(currencyPrefix(currencyCode)) "
         return sign + standardNumber(abs(value), maximumFractionDigits: 0)

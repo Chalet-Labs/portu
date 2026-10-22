@@ -2,16 +2,17 @@ import Foundation
 import Observation
 @testable import Portu
 import PortuCore
+import SwiftData
 import Testing
 
-/// Each Overview screen's method on `ValuationSources`, rendered over the in-memory store.
+/// Each Overview screen's method on `ValuationSources`, rendered over the in-memory store, and the
+/// headline and polling IDs the portfolio read model values from the same store (#123).
 /// The method fixes which books the screen reads, so these pin the overrides, mappings, live 24h
 /// fractions and category rules each screen sees. The store and rate are in `OverviewModelWiringTests`.
 extension OverviewModelWiringTests {
     /// Every screen at once, from one body pass.
     struct Screens {
         let settings: TokenDashboardSettings
-        let headline: OverviewHeadline
         let cards: [OverviewSummaryCard]
         let keyChanges: OverviewPositionTabData
         let idleStables: OverviewPositionTabData
@@ -19,7 +20,6 @@ extension OverviewModelWiringTests {
         let assetSlices: OverviewTopAssets
         let categorySlices: OverviewTopAssets
         let health: PortfolioHealthData
-        let pollingIDs: [String]
 
         func idle() throws -> [Decimal] {
             try #require(cards.first { $0.title == "Idle" }).rows.map(\.value)
@@ -37,16 +37,38 @@ extension OverviewModelWiringTests {
         probe(store) { sources, positions, tokens, assets in
             Screens(
                 settings: sources.settings,
-                headline: sources.headline(ActivePortfolioProjection(positions)),
                 cards: sources.summaryCards(positions, categoryResolver: categoryResolver),
                 keyChanges: sources.positionTab(.keyChanges, positions: positions, categoryResolver: categoryResolver),
                 idleStables: sources.positionTab(.idleStables, positions: positions, categoryResolver: categoryResolver),
                 watchlist: sources.watchlistRows(tokens, assets: assets, watchlistIDs: []),
                 assetSlices: sources.topAssets(.assets, tokens: tokens, categoryResolver: categoryResolver),
                 categorySlices: sources.topAssets(.category, tokens: tokens, categoryResolver: categoryResolver),
-                health: sources.health(tokens, categoryResolver: categoryResolver),
-                pollingIDs: sources.pricePollingIDs(tokens, watchlistIDs: []))
+                health: sources.health(tokens, categoryResolver: categoryResolver))
         }
+    }
+
+    /// What the read model values from the store: the projection the projector builds from these
+    /// rows, valued with the app state's books and rate under the default settings.
+    static func readModel(_ store: Store) throws -> PortfolioValuedOutput {
+        let context = store.container.mainContext
+        let projection = try PortfolioProjection(
+            positions: context.fetch(FetchDescriptor<Position>()),
+            tokens: context.fetch(FetchDescriptor<PositionToken>()),
+            assets: context.fetch(FetchDescriptor<Asset>()),
+            accounts: context.fetch(FetchDescriptor<Account>()),
+            overrides: context.fetch(FetchDescriptor<TokenPricingOverride>()),
+            mappings: context.fetch(FetchDescriptor<TokenIdentityMapping>()),
+            categoryResolver: .defaults,
+            historicalRows: [],
+            request: PortfolioProjectionRequest(isHistoricalBackfillEnabled: false, now: .now))
+        return PortfolioValuator.compute(PortfolioValuationRequest(
+            projection: projection,
+            prices: PortfolioPriceInputs(
+                livePricesUSD: store.appState.livePricesUSD,
+                liveChanges24h: store.appState.priceChanges24h,
+                usdToDisplayRate: store.appState.currentUSDToDisplayRate,
+                currency: store.appState.selectedCurrency),
+            settings: .defaults))
     }
 
     @Test func `the probe reads the default dashboard settings`() throws {
@@ -55,14 +77,15 @@ extension OverviewModelWiringTests {
         #expect(screens.settings == .defaults)
     }
 
-    /// ETH's +25% is only in `appState.priceChanges24h`, so only a screen that reads the live
-    /// fractions shows it.
+    /// ETH's +25% is only in the live fractions, so only a screen that reads them shows it.
     @Test func `the headline, tabs and watchlist read the live 24h fractions`() throws {
-        let screens = try #require(Self.screens(Store()))
+        let store = try Store()
+        let screens = try #require(Self.screens(store))
+        let headline = try Self.readModel(store).headline
         let keyChanges = screens.keyChanges.groups.flatMap(\.tokens)
 
-        #expect(screens.headline.total == 6100 * Self.rate)
-        #expect(screens.headline.change24h == 1200 * Self.rate)
+        #expect(headline.total == 6100 * Self.rate)
+        #expect(headline.change24h == 1200 * Self.rate)
         #expect(keyChanges.map(\.symbol) == ["ETH"])
         #expect(keyChanges.map(\.change24h) == [1200 * Self.rate])
         #expect(screens.watchlist.map(\.symbol) == ["ETH", "DEGEN"])
@@ -70,7 +93,8 @@ extension OverviewModelWiringTests {
     }
 
     @Test func `every screen values a mapped token through its identity mapping`() throws {
-        let screens = try #require(Self.screens(Store()))
+        let store = try Store()
+        let screens = try #require(Self.screens(store))
 
         #expect(try screens.idle() == [0, 6000 * Self.rate, 100 * Self.rate])
         #expect(screens.watchlist.map(\.price) == [3000 * Self.rate, PortfolioValuationFixture.decimal("0.01") * Self.rate])
@@ -78,7 +102,7 @@ extension OverviewModelWiringTests {
         #expect(screens.assetSlices.slices.map(\.value) == [6000 * Self.rate, 100 * Self.rate])
         #expect(screens.health.weights.map(\.usdValue) == [6000 * Self.rate, 100 * Self.rate])
         #expect(screens.health.metrics.assetCount == 2)
-        #expect(Set(screens.pollingIDs) == ["ethereum", "degen-base"])
+        #expect(try Set(Self.readModel(store).pricePollingIDs) == ["ethereum", "degen-base"])
     }
 
     @Test func `the cards, tabs, donut and health apply the view's category rules`() throws {
@@ -161,39 +185,39 @@ extension OverviewModelWiringTests {
     /// An ignore override row on DEGEN, which the category rule files under Stablecoins so the
     /// Idle Stables tab would show it.
     @Test func `every screen values the store's override rows`() throws {
-        let screens = try #require(Self.screens(Store(ignoring: ["DEGEN"]), categoryResolver: Self.degenIsStable))
+        let store = try Store(ignoring: ["DEGEN"])
+        let screens = try #require(Self.screens(store, categoryResolver: Self.degenIsStable))
+        let readModel = try Self.readModel(store)
 
-        #expect(screens.headline.total == 6000 * Self.rate)
+        #expect(readModel.headline.total == 6000 * Self.rate)
         #expect(try screens.idle() == [0, 6000 * Self.rate, 0])
         #expect(screens.idleStables.groups.isEmpty)
         #expect(screens.watchlist.map(\.symbol) == ["ETH"])
         #expect(screens.assetSlices.slices.map(\.label) == ["ETH"])
         #expect(screens.health.weights.map(\.symbol) == ["ETH"])
         #expect(screens.health.metrics.assetCount == 1)
-        #expect(screens.pollingIDs == ["ethereum"])
+        #expect(readModel.pricePollingIDs == ["ethereum"])
     }
 
-    /// The cards, donut, Health and polling show no 24h figure, so a change to the live fractions
-    /// alone must not re-render them (the Overview re-render costs seconds in Debug). A real poll
-    /// writes the prices too, and every view reads those, so this covers a fraction-only change,
-    /// not every tick.
-    @Test func `only the headline, tabs and watchlist observe a fraction only change`() throws {
+    /// The cards, donut and Health show no 24h figure, so a change to the live fractions alone must
+    /// not re-render them (the Overview re-render costs seconds in Debug). A real poll writes the
+    /// prices too, and every view reads those, so this covers a fraction-only change, not every
+    /// tick. The headline and polling are reducer state since #123 and observe no `AppState`.
+    @Test func `only the tabs and watchlist observe a fraction only change`() throws {
         let store = try Store()
 
         let flags = try #require(Self.probe(store) { sources, positions, tokens, assets in
             [
-                "headline": Self.observing { _ = sources.headline(ActivePortfolioProjection(positions)) },
                 "cards": Self.observing { _ = sources.summaryCards(positions, categoryResolver: .defaults) },
                 "tabs": Self.observing { _ = sources.positionTab(.keyChanges, positions: positions, categoryResolver: .defaults) },
                 "watchlist": Self.observing { _ = sources.watchlistRows(tokens, assets: assets, watchlistIDs: []) },
                 "donut": Self.observing { _ = sources.topAssets(.assets, tokens: tokens, categoryResolver: .defaults) },
-                "health": Self.observing { _ = sources.health(tokens, categoryResolver: .defaults) },
-                "polling": Self.observing { _ = sources.pricePollingIDs(tokens, watchlistIDs: []) }
+                "health": Self.observing { _ = sources.health(tokens, categoryResolver: .defaults) }
             ]
         })
         store.appState.priceChanges24h["solana"] = PortfolioValuationFixture.decimal("0.1")
 
-        #expect(flags.filter(\.value.changed).keys.sorted() == ["headline", "tabs", "watchlist"])
+        #expect(flags.filter(\.value.changed).keys.sorted() == ["tabs", "watchlist"])
     }
 
     final class ObservationFlag: @unchecked Sendable {

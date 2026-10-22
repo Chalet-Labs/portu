@@ -1,13 +1,8 @@
 import PortuCore
 
-/// The Overview screens, and the Sidebar header that shares the headline.
+/// The Overview screens. The headline (top bar and Sidebar header) and the polling IDs come from the
+/// portfolio read model (#123).
 extension ValuationSources {
-    /// The top bar and the Sidebar header: the net total and 24h change of the active portfolio
-    /// the provider published.
-    func headline(_ portfolio: ActivePortfolioProjection) -> OverviewHeadline {
-        OverviewFeature.headline(context(portfolio.inputs, includingLiveChanges: true))
-    }
-
     /// The summary cards show no 24h figure, so they do not read the live fractions: a change to
     /// the fractions alone leaves them be. A price tick still re-renders them.
     func summaryCards(_ positions: [Position], categoryResolver: PortfolioCategoryResolver) -> [OverviewSummaryCard] {
@@ -50,12 +45,6 @@ extension ValuationSources {
 
     func health(_ tokens: [PositionToken], categoryResolver: PortfolioCategoryResolver) -> PortfolioHealthData {
         PortfolioHealthFeature.health(activeAccounts(tokens, categoryResolver: categoryResolver, includingLiveChanges: false))
-    }
-
-    func pricePollingIDs(_ tokens: [PositionToken], watchlistIDs: [String]) -> [String] {
-        OverviewFeature.pricePollingIDs(
-            activeAccounts(tokens, categoryResolver: .defaults, includingLiveChanges: false),
-            watchlistIDs: watchlistIDs)
     }
 
     private func assetCandidates(_ assets: [Asset]) -> [OverviewAssetCandidate] {
