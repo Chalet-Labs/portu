@@ -53,4 +53,24 @@ struct ValuationPreparedTests {
         #expect(PortfolioValuation(prepared: prepared, market: later)
             == PortfolioValuation(inputs: Self.inputs, market: later, overrides: Self.overrides, mappings: Self.mappings))
     }
+
+    /// Each token is valued on its own, so a subset of a valuation is the valuation of that subset:
+    /// a screen showing part of the portfolio filters the one valuation instead of valuing again.
+    @Test(arguments: [
+        Set<String>(["ETH", "USDC"]),
+        Set<String>(["MNL", "SCAM", "DEGEN"]),
+        Set<String>(["OTC", "LINK", "OLD"]),
+        Set<String>()
+    ])
+    func `restricting a valuation equals valuing the subset`(symbols: Set<String>) {
+        let prepared = PortfolioValuation.prepare(Self.inputs, overrides: Self.overrides, mappings: Self.mappings)
+        let subset = prepared.filter { symbols.contains($0.input.token.symbol) }
+
+        let restricted = PortfolioValuation(prepared: prepared, market: Self.market)
+            .restricted { symbols.contains($0.token.symbol) }
+
+        let expected = PortfolioValuation(prepared: subset, market: Self.market)
+        #expect(restricted == expected)
+        #expect(restricted.keyChanges(settings: .defaults) == expected.keyChanges(settings: .defaults))
+    }
 }
